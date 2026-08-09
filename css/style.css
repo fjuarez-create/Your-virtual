@@ -21,7 +21,10 @@
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body { height: 100%; overflow: hidden; background: var(--bg); }
-body { font-family: var(--font); color: var(--text); -webkit-font-smoothing: antialiased; }
+body { font-family: var(--font); color: var(--text); -webkit-font-smoothing: antialiased;
+  /* sin selección ni detectores de direcciones en móvil (abrían Google Maps) */
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+input, textarea { -webkit-user-select: text; user-select: text; }
 #app { position: fixed; inset: 0; }
 #scene { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
 
