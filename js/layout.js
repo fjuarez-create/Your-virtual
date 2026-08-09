@@ -31,6 +31,30 @@ export const PATIOS = [
   { x: 30.6,  z: -0.5, w: 11.2, d: 12.0 },
 ];
 
+// ── Tramos del edificio (el terreno cae de O a E; cotas de forjado
+//    por planta medidas en el BIM, y rasante de acera aproximada
+//    según los alzados/secciones) ──
+export const SECTIONS = [
+  { x0: -60, x1: -31, floors: [-0.8, 2.1, 4.9, 7.7], street: 2.0 },
+  { x0: -31, x1: 3.6, floors: [-0.8, 2.7, 6.3, 9.3], street: 1.35 },
+  { x0: 3.6, x1: 31.6, floors: [-0.8, 1.3, 4.9, 7.9], street: 0.6 },
+  { x0: 31.6, x1: 60, floors: [-0.1, 3.5, 6.5, 9.5], street: -0.25 },
+];
+
+export function sectionAt(x) {
+  return SECTIONS.find((s) => x >= s.x0 && x < s.x1) || SECTIONS[x < 0 ? 0 : SECTIONS.length - 1];
+}
+
+/** Cota real (BIM) del forjado de la planta `level` en la posición x. */
+export function floorYAt(x, level) {
+  return sectionAt(x).floors[Math.min(level, 3)];
+}
+
+/** Rasante aproximada de la acera en x. */
+export function streetYAt(x) {
+  return sectionAt(x).street;
+}
+
 export const FLOOR_DEFS = [
   {
     key: 'baja', label: 'Planta Baja', short: 'PB', level: 0, y: 0, h: 3.4,

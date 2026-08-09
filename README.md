@@ -10,9 +10,8 @@ en Planta Baja, 1ª, 2ª y Ático, con patios ajardinados interiores y áticos c
 
 - **Intro cinematográfica**: la cámara desciende desde las nubes hasta el edificio
   (curva Catmull-Rom con easing y zoom de focal), con botón «Saltar intro».
-- **Entorno de atardecer**: cielo físico (shader Sky), capa de nubes, ciudad
-  circundante generada (edificios instanciados, arbolado, relieve y mar al NE)
-  y post-procesado con bloom (EffectComposer + UnrealBloomPass).
+- **Entorno de día** con cielo físico (shader Sky), capa de nubes y post-procesado
+  con bloom sutil (EffectComposer + UnrealBloomPass).
 - **Maqueta 3D navegable** del edificio (órbita, zoom, encuadres animados), generada
   proceduralmente a partir de las plantas reales del proyecto: dos crujías (Suroeste
   y Noreste), viviendas interiores a los 6 patios ajardinados y ático retranqueado
@@ -30,15 +29,20 @@ en Planta Baja, 1ª, 2ª y Ático, con patios ajardinados interiores y áticos c
 - **Selección de vivienda** con raycasting: tooltip al pasar el ratón y panel de
   detalle con tipología, dormitorios, orientación, superficies, terraza, precio,
   €/m² y estado comercial.
-- **Estados comerciales** con código de color: 🟢 disponible · 🟡 reservada · 🔴 vendida.
+- **Estados comerciales** con código de color: 🟢 disponible · 🟡 reservada · ⚪ vendida (gris, inactiva).
 - **Filtros en vivo**: dormitorios, estado, orientación, precio máximo y terraza.
 - **Listado completo** ordenable por cualquier columna, enlazado con el 3D.
 - **Datos reales** del listado de precios V.01 (agosto 2026): superficies y precios
   de las 166 viviendas.
-- **Modo BIM** (botón «BIM»): alterna entre el volumen comercial interactivo y el
-  **modelo real de Revit** (estructura, muros, fachadas y patios), separado por
-  plantas y compatible con el aislamiento de planta y la axonometría. La huella y
-  los tres patios del volumen comercial están calibrados con este modelo.
+- **El modelo de Revit es el edificio por defecto**: el BIM (estructura, muros,
+  fachadas y patios) se carga siempre y las viviendas se muestran como envolventes
+  translúcidas de color posadas sobre los forjados reales, a la cota de su tramo
+  (el edificio se escalona con la pendiente). Las **vendidas son grises e
+  inertes**: no reaccionan al ratón ni se pueden seleccionar.
+- **Entorno de Las Huesas**: aceras y rasante escalonadas siguiendo los portales
+  (según alzados/secciones), campo de fútbol junto a la parcela, parque con
+  palmeras, palmeras de alineación en las calles, barrio residencial bajo
+  simplificado y solares con vegetación.
 
 ## 🚀 Ejecutar en local
 

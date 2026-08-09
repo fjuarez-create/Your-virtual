@@ -24,7 +24,6 @@ const app = {
   filters: { dorms: new Set(), estados: new Set(), orients: new Set(), priceMax: 481000, terraza: false },
   floor: 'all',
   mode: '3d',
-  bim: false,
   selected: null,
   hover: null,
   explode: 0,
@@ -50,22 +49,22 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.08;
+renderer.toneMappingExposure = 0.9;
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0xd8c7b2, 620, 1750);
+scene.fog = new THREE.Fog(0xd6dde3, 750, 2100);
 
 // ── Cielo físico (hora dorada) ──
 const sky = new Sky();
 sky.scale.setScalar(4000);
 scene.add(sky);
 const sunDir = new THREE.Vector3().setFromSphericalCoords(
-  1, THREE.MathUtils.degToRad(90 - 17), THREE.MathUtils.degToRad(38)
+  1, THREE.MathUtils.degToRad(90 - 44), THREE.MathUtils.degToRad(42)
 );
 Object.assign(sky.material.uniforms, {});
-sky.material.uniforms.turbidity.value = 6;
-sky.material.uniforms.rayleigh.value = 1.9;
-sky.material.uniforms.mieCoefficient.value = 0.006;
+sky.material.uniforms.turbidity.value = 4.5;
+sky.material.uniforms.rayleigh.value = 1.15;
+sky.material.uniforms.mieCoefficient.value = 0.004;
 sky.material.uniforms.mieDirectionalG.value = 0.82;
 sky.material.uniforms.sunPosition.value.copy(sunDir);
 
@@ -118,8 +117,8 @@ controls.target.set(0, 40, 0);
 controls.enabled = false; // se habilita al terminar la intro
 
 // Luces (atardecer)
-scene.add(new THREE.HemisphereLight(0xfde6cc, 0x6e6a60, 1.3));
-const sun = new THREE.DirectionalLight(0xffc98d, 3.1);
+scene.add(new THREE.HemisphereLight(0xe3edf8, 0x8b9080, 1.1));
+const sun = new THREE.DirectionalLight(0xfff1dc, 2.5);
 sun.position.copy(sunDir).multiplyScalar(180);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
@@ -128,14 +127,14 @@ sun.shadow.camera.top = 120; sun.shadow.camera.bottom = -120;
 sun.shadow.camera.far = 400;
 sun.shadow.bias = -0.0004;
 scene.add(sun);
-const fill = new THREE.DirectionalLight(0xa8c4e8, 0.55);
+const fill = new THREE.DirectionalLight(0xa8c4e8, 0.4);
 fill.position.set(-90, 60, -70);
 scene.add(fill);
 
 // ── Post-procesado: bloom sutil ──
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
-const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.32, 0.55, 0.88);
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.14, 0.5, 0.92);
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
 
@@ -253,18 +252,15 @@ function animateFloors(dt) {
   }
   if (fading) repaint(); // los materiales de vivienda heredan el fundido de su planta
 
-  // El BIM sigue la misma coreografía que las plantas lógicas
+  // El BIM (modelo por defecto) sigue la misma coreografía que las plantas
   if (bim) {
-    bim.group.visible = app.bim;
-    if (app.bim) {
-      for (const [bimKey, animKey] of Object.entries(BIM_KEY)) {
-        const lvl = bim.levels.get(bimKey);
-        const src = animKey === 'roof' ? B.roofGroup : B.floorGroups.get(animKey);
-        if (!lvl || !src) continue;
-        lvl.mesh.position.y = src.position.y - src.userData.baseY; // mismo desplazamiento (explosión/aislado)
-        lvl.mat.opacity = src.userData.fade;
-        lvl.mesh.visible = src.userData.fade > 0.02;
-      }
+    for (const [bimKey, animKey] of Object.entries(BIM_KEY)) {
+      const lvl = bim.levels.get(bimKey);
+      const src = animKey === 'roof' ? B.roofGroup : B.floorGroups.get(animKey);
+      if (!lvl || !src) continue;
+      lvl.mesh.position.y = src.position.y - src.userData.baseY; // mismo desplazamiento (explosión/aislado)
+      lvl.mat.opacity = src.userData.fade;
+      lvl.mesh.visible = src.userData.fade > 0.02;
     }
   }
 }
@@ -279,7 +275,7 @@ function repaint() {
     app.selected,
     app.hover,
     fadeOf,
-    (floorKey) => floorKey === app.floor && !app.bim // dollhouse en la planta aislada
+    (floorKey) => floorKey === app.floor // dollhouse en la planta aislada
   );
 }
 
@@ -373,33 +369,18 @@ app.onFiltersChanged = () => {
 
 app.requestInfo = (unit) => { sendLead({ unitId: unit.id }); };
 
-/* ─────────────────────────── Modo BIM ─────────────────────────── */
-async function ensureBIM() {
-  if (bim) return bim;
+/* ──────────── Modelo BIM: siempre cargado, modelo por defecto ──────────── */
+function ensureBIM() {
+  if (bim) return Promise.resolve(bim);
   if (!bimLoading) {
-    bimLoading = loadBIM(scene).then((b) => { bim = b; return b; })
-      .catch((e) => { console.error('[apolo] BIM no disponible:', e); bimLoading = null; });
+    bimLoading = loadBIM(scene).then((b) => {
+      bim = b;
+      b.group.visible = true;
+      return b;
+    }).catch((e) => { console.error('[apolo] BIM no disponible:', e); bimLoading = null; });
   }
   return bimLoading;
 }
-
-app.toggleBIM = async () => {
-  const btn = $('#modoBim');
-  if (!bim) {
-    btn.classList.add('loading');
-    await ensureBIM();
-    btn.classList.remove('loading');
-    if (!bim) return; // fallo de carga
-  }
-  app.bim = !app.bim;
-  btn.classList.toggle('on', app.bim);
-  if (app.bim) {
-    app.select(null);
-    app.hover = null;
-    UI.hideTooltip();
-    if (app.mode === 'lista') app.setMode('3d');
-  }
-};
 
 /* ─────────────────────────── Picking ─────────────────────────── */
 const raycaster = new THREE.Raycaster();
@@ -424,11 +405,6 @@ canvas.addEventListener('pointerup', (e) => {
 
 function updateHover() {
   if (!B) return;
-  if (app.bim) {
-    if (app.hover) { app.hover = null; canvas.style.cursor = 'grab'; repaint(); }
-    UI.hideTooltip();
-    return;
-  }
   raycaster.setFromCamera(pointer, camera);
   const hits = raycaster.intersectObjects(B.pickables, false);
   let id = null;
@@ -437,6 +413,7 @@ function updateHover() {
     if (g.userData.fade < 0.6) continue; // planta oculta
     const hid = h.object.userData.unitId;
     if (!app.passesFilters(app.unitsById.get(hid))) continue; // descartada por filtros
+    if (app.estadoDe(hid) === 'vendida') continue;            // vendida: inerte
     id = hid;
     break;
   }
@@ -512,6 +489,7 @@ async function boot() {
     app.unitsById = new Map(units.map((u) => [u.id, u]));
 
     B = buildBuilding(scene, app.unitsById);
+    ensureBIM(); // el modelo real es el edificio por defecto
     updateFloorTargets();
     repaint();
 
@@ -539,8 +517,6 @@ async function boot() {
   });
   $('#skipIntro').addEventListener('click', finishIntro);
 
-  // Precarga silenciosa del modelo BIM cuando la app ya está en marcha
-  setTimeout(ensureBIM, 4000);
 }
 
 loop();

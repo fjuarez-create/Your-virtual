@@ -5,12 +5,13 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { BUILDING, FLOOR_DEFS, ROOF_Y, PATIOS, computeLayout } from './layout.js';
+import { BUILDING, FLOOR_DEFS, ROOF_Y, PATIOS, SECTIONS, floorYAt, streetYAt, computeLayout } from './layout.js';
+import { buildContext } from './context.js';
 
 export const ESTADO_COLORS = {
   disponible: new THREE.Color(0x35d69a),
-  reservada:  new THREE.Color(0xf2b93b),
-  vendida:    new THREE.Color(0xe35d5d),
+  reservada:  new THREE.Color(0xf2c04a),
+  vendida:    new THREE.Color(0x8d949e), // gris: inactiva, no ensucia
 };
 const BASE_UNIT = new THREE.Color(0xe9e7e1);
 const DIM_COLOR = new THREE.Color(0x3a4356);
@@ -67,24 +68,6 @@ function makeLabelSprite(text) {
   const sp = new THREE.Sprite(mat);
   sp.scale.set(4.6, 2.3, 1);
   return sp;
-}
-
-function groundText(text, w = 46) {
-  const cv = document.createElement('canvas');
-  cv.width = 1024; cv.height = 128;
-  const ctx = cv.getContext('2d');
-  ctx.fillStyle = 'rgba(200,214,236,0.5)';
-  ctx.font = '500 58px Inter, sans-serif';
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.letterSpacing = '14px';
-  ctx.fillText(text.toUpperCase(), 512, 64);
-  const tex = new THREE.CanvasTexture(cv);
-  const m = new THREE.Mesh(
-    new THREE.PlaneGeometry(w, w / 8),
-    new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false })
-  );
-  m.rotation.x = -Math.PI / 2;
-  return m;
 }
 
 function tree(x, z, s = 1) {
@@ -220,8 +203,6 @@ export function buildBuilding(scene, unitsById) {
   const unitMeshes = new Map();
   const pickables = [];
 
-  const slabGeo = slabGeometry(layout.courts, slab);
-
   for (const F of FLOOR_DEFS) {
     const g = new THREE.Group();
     g.name = `floor-${F.key}`;
@@ -232,13 +213,7 @@ export function buildBuilding(scene, unitsById) {
     const M = mkFloorMats();
     g.userData.fadeMats = M.all;
 
-    // Forjado
-    const slabMesh = new THREE.Mesh(slabGeo, M.slabM);
-    slabMesh.position.y = slab;
-    slabMesh.castShadow = slabMesh.receiveShadow = true;
-    g.add(slabMesh);
-
-    // Viviendas
+    // Viviendas (envolventes translúcidas sobre el modelo BIM)
     const labels = new THREE.Group();
     labels.name = 'labels';
     labels.visible = false;
@@ -250,15 +225,16 @@ export function buildBuilding(scene, unitsById) {
       const r = layout.rects.get(id);
       if (!u || !r) continue;
       const gap = 0.34;
-      const h = F.h - slab - 0.22;
+      const h = 2.7;
+      // cota real del forjado de este tramo, relativa al grupo de planta
+      const yBase = floorYAt(r.x, F.level) - F.y + 0.16;
       const geo = new THREE.BoxGeometry(r.w - gap, h, r.d - gap);
       const mat = new THREE.MeshStandardMaterial({
-        color: BASE_UNIT.clone(), roughness: 0.65, metalness: 0.05,
-        emissive: 0x000000, transparent: true, opacity: 1,
+        color: BASE_UNIT.clone(), roughness: 0.55, metalness: 0.0,
+        emissive: 0x000000, transparent: true, opacity: 0.3, depthWrite: false,
       });
       const mesh = new THREE.Mesh(geo, mat);
-      mesh.position.set(r.x, slab + h / 2, r.z);
-      mesh.castShadow = mesh.receiveShadow = true;
+      mesh.position.set(r.x, yBase + h / 2, r.z);
       mesh.userData = { unitId: id, floorKey: F.key };
       g.add(mesh);
 
@@ -267,23 +243,9 @@ export function buildBuilding(scene, unitsById) {
       edges.raycast = () => {};
       g.add(edges);
 
-      // Terraza de ático
-      if (r.terrace) {
-        const t = r.terrace;
-        const tSlab = new THREE.Mesh(new THREE.BoxGeometry(t.w - gap, 0.14, t.d - 0.2), M.terrM);
-        tSlab.position.set(t.x, slab + 0.1, t.z);
-        tSlab.receiveShadow = true;
-        tSlab.raycast = () => {};
-        g.add(tSlab);
-        const rail = new THREE.Mesh(new THREE.BoxGeometry(t.w - gap, 1.05, t.d - 0.2), M.glassM);
-        rail.position.set(t.x, slab + 0.7, t.z);
-        rail.raycast = () => {};
-        g.add(rail);
-      }
-
       // Etiqueta con el número de vivienda
       const sp = makeLabelSprite(id);
-      sp.position.set(r.x, slab + h + 1.3, r.z);
+      sp.position.set(r.x, yBase + h + 1.6, r.z);
       labels.add(sp);
 
       // ── Vivienda dollhouse (visible al aislar la planta) ──
@@ -296,25 +258,22 @@ export function buildBuilding(scene, unitsById) {
         rot = P.x > r.x ? Math.PI / 2 : -Math.PI / 2;
         aw = r.d - gap; ad = r.w - gap;
       }
-      const { walls, furn } = buildApartment(u, aw, ad);
+      const { furn } = buildApartment(u, aw, ad);
       const aptG = new THREE.Group();
       const floorM = new THREE.MeshStandardMaterial({ color: APT.colFloor, roughness: 0.9, transparent: true });
-      const wallM = new THREE.MeshStandardMaterial({ color: APT.colWall, roughness: 0.85, transparent: true });
       const furnM = new THREE.MeshStandardMaterial({ color: APT.colWood, roughness: 0.8, transparent: true });
       const floorMesh = new THREE.Mesh(new THREE.BoxGeometry(aw, 0.1, ad), floorM);
       floorMesh.position.y = 0.05;
       floorMesh.receiveShadow = true;
-      const wallMesh = new THREE.Mesh(mergeGeometries(walls), wallM);
-      wallMesh.position.y = 0.1;
       const furnMesh = new THREE.Mesh(mergeGeometries(furn), furnM);
       furnMesh.position.y = 0.1;
-      for (const m of [floorMesh, wallMesh, furnMesh]) m.raycast = () => {};
-      aptG.add(floorMesh, wallMesh, furnMesh);
-      aptG.position.set(r.x, slab, r.z);
+      for (const m of [floorMesh, furnMesh]) m.raycast = () => {};
+      aptG.add(floorMesh, furnMesh);
+      aptG.position.set(r.x, yBase, r.z);
       aptG.rotation.y = rot;
       aptG.visible = false;
       g.add(aptG);
-      mesh.userData.apt = { group: aptG, floorM, wallM, furnM };
+      mesh.userData.apt = { group: aptG, floorM, furnM };
 
       unitMeshes.set(id, mesh);
       pickables.push(mesh);
@@ -330,22 +289,7 @@ export function buildBuilding(scene, unitsById) {
   roofGroup.userData.baseY = ROOF_Y;
   roofGroup.userData.fade = 1;
   roofGroup.position.y = ROOF_Y;
-  const RM = mkFloorMats();
-  const matCore = new THREE.MeshStandardMaterial({ color: 0xb9bdc4, roughness: 0.9, transparent: true, opacity: 1 });
-  matCore.userData.baseOpacity = 1;
-  RM.all.push(matCore);
-  roofGroup.userData.fadeMats = RM.all;
-  const roofMesh = new THREE.Mesh(slabGeo, RM.slabM);
-  roofMesh.position.y = slab;
-  roofMesh.castShadow = roofMesh.receiveShadow = true;
-  roofGroup.add(roofMesh);
-  // casetones de escalera
-  [-38, -12, 14, 40].forEach((x) => {
-    const core = new THREE.Mesh(new THREE.BoxGeometry(6, 2.2, 4.4), matCore);
-    core.position.set(x, slab + 1.1, -1.5);
-    core.castShadow = true;
-    roofGroup.add(core);
-  });
+  roofGroup.userData.fadeMats = [];
   scene.add(roofGroup);
 
   // ─── Patios ajardinados (planta baja) ───
@@ -355,7 +299,7 @@ export function buildBuilding(scene, unitsById) {
       new THREE.BoxGeometry(ct.w - 1.2, 0.16, ct.d - 1.2),
       new THREE.MeshStandardMaterial({ color: 0x4d9a66, roughness: 1 })
     );
-    lawn.position.set(ct.x, BUILDING.slab + 0.08, ct.z);
+    lawn.position.set(ct.x, 0.08, ct.z);
     lawn.receiveShadow = true;
     gardens.add(lawn);
     gardens.add(tree(ct.x - ct.w / 4, ct.z - ct.d / 5, 0.9));
@@ -363,7 +307,7 @@ export function buildBuilding(scene, unitsById) {
     gardens.add(tree(ct.x - ct.w / 6, ct.z + ct.d / 4, 1.0));
     gardens.add(tree(ct.x + ct.w / 5, ct.z + ct.d / 5, 0.85));
   }
-  gardens.position.y = 0;
+  gardens.position.y = -0.72; // patios sobre el podio del garaje (BIM)
   scene.add(gardens);
   const pbGroup = floorGroups.get('baja');
   pbGroup.userData.gardens = gardens;
@@ -371,127 +315,6 @@ export function buildBuilding(scene, unitsById) {
   buildContext(scene);
 
   return { floorGroups, roofGroup, unitMeshes, pickables, layout };
-}
-
-// ─── Entorno: ciudad de maqueta a la luz del atardecer ───
-function buildContext(scene) {
-  // Generador determinista
-  let seed = 20260809;
-  const rnd = () => { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; };
-
-  const ground = new THREE.Mesh(
-    new THREE.CircleGeometry(950, 80),
-    new THREE.MeshStandardMaterial({ color: 0xa39b89, roughness: 1 })
-  );
-  ground.rotation.x = -Math.PI / 2;
-  ground.position.y = -0.4;
-  ground.receiveShadow = true;
-  scene.add(ground);
-
-  // Parcela y calles con nombre
-  const parcel = new THREE.Mesh(
-    new THREE.BoxGeometry(BUILDING.length + 26, 0.3, BUILDING.depth + 26),
-    new THREE.MeshStandardMaterial({ color: 0x8b8574, roughness: 1 })
-  );
-  parcel.position.y = -0.15;
-  parcel.receiveShadow = true;
-  scene.add(parcel);
-
-  const streetMat = new THREE.MeshStandardMaterial({ color: 0x5b5b60, roughness: 1 });
-  const mkStreet = (w, d, x, z) => {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.22, d), streetMat);
-    m.position.set(x, -0.18, z);
-    m.receiveShadow = true;
-    scene.add(m);
-  };
-  mkStreet(1200, 12, 0, BUILDING.depth / 2 + 22);    // SO — C/ Numancia
-  mkStreet(1200, 12, 0, -BUILDING.depth / 2 - 22);   // NE — C/ Sagunto
-  mkStreet(12, 1200, -BUILDING.length / 2 - 22, 0);  // O  — C/ Íñigo López de Mendoza
-  mkStreet(12, 1200, BUILDING.length / 2 + 22, 0);   // E
-
-  const t1 = groundText('Calle Numancia', 52);
-  t1.position.set(0, 0.06, BUILDING.depth / 2 + 22);
-  scene.add(t1);
-  const t2 = groundText('Calle Sagunto', 52);
-  t2.position.set(0, 0.06, -BUILDING.depth / 2 - 22);
-  t2.rotation.z = Math.PI;
-  scene.add(t2);
-  const t3 = groundText('C/ Íñigo López de Mendoza', 62);
-  t3.position.set(-BUILDING.length / 2 - 22, 0.06, 0);
-  t3.rotation.z = Math.PI / 2;
-  scene.add(t3);
-
-  // ── Manzanas de la ciudad (instanciadas: 1 draw call) ──
-  const palette = [0xe6dfd0, 0xd9cdb4, 0xcbb59a, 0xc2a184, 0xbdb6a6, 0xd4c8b0];
-  const boxGeo = new THREE.BoxGeometry(1, 1, 1);
-  boxGeo.translate(0, 0.5, 0);
-  const cityMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95 });
-  const items = [];
-  const GRID = 58;
-  for (let gx = -750; gx <= 750; gx += GRID) {
-    for (let gz = -750; gz <= 750; gz += GRID) {
-      // hueco para nuestra parcela y sus calles
-      if (Math.abs(gx) < 110 && Math.abs(gz) < 60) continue;
-      const r2 = gx * gx + gz * gz;
-      if (r2 > 800 * 800) continue;
-      const n = 1 + Math.floor(rnd() * 3);
-      for (let i = 0; i < n; i++) {
-        const bw = 13 + rnd() * 16, bd = 12 + rnd() * 14;
-        const tall = rnd() < 0.07;
-        const bh = tall ? 16 + rnd() * 14 : 3.5 + rnd() * 8.5;
-        const x = gx + (rnd() - 0.5) * (GRID - bw - 10);
-        const z = gz + (rnd() - 0.5) * (GRID - bd - 10);
-        items.push({ x, z, bw, bd, bh, c: palette[Math.floor(rnd() * palette.length)] });
-      }
-    }
-  }
-  const city = new THREE.InstancedMesh(boxGeo, cityMat, items.length);
-  const m4 = new THREE.Matrix4();
-  const col = new THREE.Color();
-  items.forEach((it, i) => {
-    m4.makeScale(it.bw, it.bh, it.bd);
-    m4.setPosition(it.x, -0.3, it.z);
-    city.setMatrixAt(i, m4);
-    city.setColorAt(i, col.setHex(it.c));
-  });
-  city.castShadow = city.receiveShadow = true;
-  scene.add(city);
-
-  // ── Arbolado urbano ──
-  const treeGeo = new THREE.IcosahedronGeometry(1, 1);
-  const treeMat = new THREE.MeshStandardMaterial({ color: 0x5b8a54, roughness: 1, flatShading: true });
-  const nTrees = 420;
-  const trees = new THREE.InstancedMesh(treeGeo, treeMat, nTrees);
-  for (let i = 0; i < nTrees; i++) {
-    const a = rnd() * Math.PI * 2;
-    const r = 90 + rnd() * 640;
-    const s = 1.6 + rnd() * 1.8;
-    m4.makeScale(s, s * 1.2, s);
-    m4.setPosition(Math.cos(a) * r, s, Math.sin(a) * r);
-    trees.setMatrixAt(i, m4);
-    trees.setColorAt(i, col.setHSL(0.29 + rnd() * 0.06, 0.35, 0.32 + rnd() * 0.12));
-  }
-  scene.add(trees);
-
-  // ── Relieve lejano (medianías de Gran Canaria) ──
-  const hillMat = new THREE.MeshStandardMaterial({ color: 0x8d7d67, roughness: 1 });
-  for (let i = 0; i < 12; i++) {
-    const a = Math.PI * (0.62 + rnd() * 0.75); // arco oeste-sur (interior de la isla)
-    const r = 1050 + rnd() * 320;
-    const h = 45 + rnd() * 75;
-    const hill = new THREE.Mesh(new THREE.ConeGeometry(280 + rnd() * 260, h, 6), hillMat);
-    hill.position.set(Math.cos(a) * r, h / 2 - 22, Math.abs(Math.sin(a)) * r * 0.8);
-    hill.rotation.y = rnd() * Math.PI;
-    scene.add(hill);
-  }
-  // ── Mar al noreste ──
-  const sea = new THREE.Mesh(
-    new THREE.PlaneGeometry(2600, 900),
-    new THREE.MeshStandardMaterial({ color: 0x4d7488, roughness: 0.35, metalness: 0.1 })
-  );
-  sea.rotation.x = -Math.PI / 2;
-  sea.position.set(250, -2.5, -1250);
-  scene.add(sea);
 }
 
 /**
@@ -553,45 +376,41 @@ export function paintUnits(unitMeshes, estadoDe, dimmedDe, selectedId, hoverId, 
     const estado = estadoDe(id);
     const col = ESTADO_COLORS[estado] || ESTADO_COLORS.disponible;
     const mat = mesh.material;
+    const vendida = estado === 'vendida';
     const dimmed = dimmedDe(id);
     const fade = fadeOf(mesh.userData.floorKey);
     const doll = dollOf(mesh.userData.floorKey);
     const apt = mesh.userData.apt;
 
-    if (apt) apt.group.visible = doll && fade > 0.02;
-
-    if (doll && apt) {
-      // La caja pasa a ser una envolvente de cristal; el estado se
-      // muestra en el suelo de la vivienda y en el brillo al interactuar.
-      mat.color.copy(col);
-      mat.emissive.copy(col).multiplyScalar(id === selectedId ? 0.5 : id === hoverId ? 0.3 : 0);
-      mat.opacity = (dimmed ? 0.02 : id === selectedId ? 0.26 : id === hoverId ? 0.16 : 0.05) * fade;
-      const o = dimmed ? 0.12 : 1;
-      apt.floorM.opacity = o * fade;
-      apt.wallM.opacity = o * fade;
-      apt.furnM.opacity = o * fade;
-      tmp.copy(PARQUET).lerp(col, dimmed ? 0.08 : 0.58);
-      apt.floorM.color.copy(tmp);
-      continue;
+    if (apt) {
+      apt.group.visible = doll && fade > 0.02 && !dimmed && !vendida;
+      if (apt.group.visible) {
+        apt.floorM.opacity = fade;
+        apt.furnM.opacity = fade;
+        tmp.copy(PARQUET).lerp(col, 0.55);
+        apt.floorM.color.copy(tmp);
+      }
     }
 
-    if (dimmed) {
-      mat.color.copy(DIM_COLOR);
-      mat.opacity = 0.16 * fade;
+    // Envolvente translúcida sobre el BIM
+    mat.color.copy(col);
+    if (vendida) {
+      // vendida: gris, casi invisible e inerte
+      mat.opacity = 0.05 * fade;
+      mat.emissive.setHex(0x000000);
+    } else if (dimmed) {
+      mat.opacity = 0.04 * fade;
       mat.emissive.setHex(0x000000);
     } else if (id === selectedId) {
-      mat.color.copy(col);
-      mat.opacity = fade;
-      mat.emissive.copy(col).multiplyScalar(0.45);
+      mat.opacity = 0.62 * fade;
+      mat.emissive.copy(col).multiplyScalar(0.5);
     } else if (id === hoverId) {
-      mat.color.copy(col);
-      mat.opacity = fade;
-      mat.emissive.copy(col).multiplyScalar(0.25);
+      mat.opacity = 0.5 * fade;
+      mat.emissive.copy(col).multiplyScalar(0.3);
     } else {
-      tmp.copy(BASE_UNIT).lerp(col, 0.62);
-      mat.color.copy(tmp);
-      mat.opacity = fade;
+      mat.opacity = (doll ? 0.2 : 0.3) * fade;
       mat.emissive.setHex(0x000000);
     }
   }
 }
+
