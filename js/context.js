@@ -112,8 +112,11 @@ function makeSidewalkTex() {
       Al cargar la primera tesela se oculta el suelo procedural. ── */
 function addSatellite(scene, fallback) {
   const qs = new URLSearchParams(location.search);
+  // La capa satélite requiere calibración (lat/lon/bearing exactos), así
+  // que solo se activa si se pide explícitamente.
+  const explicit = !!window.APOLO_GEO || qs.get('sat') === '1' || !!qs.get('lat');
   const GEO = Object.assign(
-    { lat: 27.9741, lon: -15.3894, bearing: 70, zoom: 18, span: 9, enabled: true },
+    { lat: 27.9741, lon: -15.3894, bearing: 70, zoom: 18, span: 9, enabled: explicit },
     window.APOLO_GEO || {},
     qs.get('lat') ? { lat: +qs.get('lat') } : {},
     qs.get('lon') ? { lon: +qs.get('lon') } : {},
@@ -301,7 +304,7 @@ export function buildContext(scene) {
   // ── Campo de fútbol Las Huesas al norte ──
   const field = footballField();
   field.position.set(-8, -0.3, -72);
-  scene.add(field);
+  fallback.add(field);
 
   // ── Adosados existentes al sur (cubiertas claras, 2 plantas) ──
   {
@@ -314,13 +317,13 @@ export function buildContext(scene) {
       const casa = new THREE.Mesh(new THREE.BoxGeometry(8.4, 5.8, 11.5), rowMat);
       casa.position.set(x, y + 2.9, 38);
       casa.castShadow = casa.receiveShadow = true;
-      scene.add(casa);
+      fallback.add(casa);
       const roof = new THREE.Mesh(new THREE.BoxGeometry(7.6, 0.5, 6), roofMat);
       roof.position.set(x, y + 6.0, 35.8);
-      scene.add(roof);
+      fallback.add(roof);
       const patio = new THREE.Mesh(new THREE.BoxGeometry(7.6, 0.3, 5), patioMat);
       patio.position.set(x, y + 0.4, 48);
-      scene.add(patio);
+      fallback.add(patio);
     }
   }
 
@@ -344,7 +347,7 @@ export function buildContext(scene) {
       const gz = z0 + 8 + rnd() * (z1 - z0 - 16);
       const patch = new THREE.Mesh(new THREE.CylinderGeometry(4 + rnd() * 5, 4 + rnd() * 5, 0.1, 9), greenMat);
       patch.position.set(gx, terrainY(gx, gz) + 0.05, gz);
-      scene.add(patch);
+      fallback.add(patch);
       const nt = 2 + Math.floor(rnd() * 3);
       for (let t = 0; t < nt; t++) {
         treeSpots.push([gx + (rnd() - 0.5) * 8, gz + (rnd() - 0.5) * 8, 0.9 + rnd() * 1.3]);
@@ -388,7 +391,7 @@ export function buildContext(scene) {
     city.setColorAt(i, col.setHex(it.c));
   });
   city.castShadow = city.receiveShadow = true;
-  scene.add(city);
+  fallback.add(city);
 
   // solares verdes del barrio
   const lotGeo = new THREE.CylinderGeometry(1, 1, 0.12, 10);
@@ -400,7 +403,7 @@ export function buildContext(scene) {
     lotsIM.setColorAt(i, col.setHSL(0.25 + rnd() * 0.07, 0.3, 0.32 + rnd() * 0.08));
   });
   lotsIM.receiveShadow = true;
-  scene.add(lotsIM);
+  fallback.add(lotsIM);
 
   // ── Arbolado (copas redondas) ──
   for (const [gx, gz] of greens) {
