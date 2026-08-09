@@ -37,7 +37,8 @@ en Planta Baja, 1ª, 2ª y Ático, con patios ajardinados interiores y áticos c
 - **El modelo de Revit es el edificio por defecto**: el BIM (estructura, muros,
   fachadas y patios) se carga siempre y las viviendas se muestran como envolventes
   translúcidas de color posadas sobre los forjados reales, a la cota de su tramo
-  (el edificio se escalona con la pendiente). Las **vendidas son grises e
+  (el edificio se escalona con la pendiente) y con los límites de cada vivienda
+  ajustados a los muros medianeros reales medidos en el BIM. Las **vendidas son grises e
   inertes**: no reaccionan al ratón ni se pueden seleccionar.
 - **Entorno de Las Huesas**: aceras y rasante escalonadas siguiendo los portales
   (según alzados/secciones), campo de fútbol junto a la parcela, parque con

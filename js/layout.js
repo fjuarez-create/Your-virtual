@@ -24,11 +24,25 @@ export const BUILDING = {
   slab: 0.32,         // canto de forjado
 };
 
-// Patios reales extraídos del BIM (centro y dimensiones, coords de escena)
+// Patios reales: límites tomados de los muros del BIM (coords de escena)
 export const PATIOS = [
-  { x: -30.2, z: -0.5, w: 11.2, d: 12.0 },
-  { x: 0.2,   z: -0.5, w: 11.2, d: 12.0 },
-  { x: 30.6,  z: -0.5, w: 11.2, d: 12.0 },
+  { x: -30.65, z: -0.5, w: 12.3, d: 12.0 },
+  { x: 0.15,   z: -0.5, w: 12.3, d: 12.0 },
+  { x: 31.95,  z: -0.5, w: 10.1, d: 12.0 },
+];
+
+// ── Muros medianeros reales (posición X, medidos en el BIM: muros
+//    finos perpendiculares a fachada repetidos en ≥3 plantas). Los
+//    límites de vivienda se ajustan al muro real más próximo. ──
+export const WALLS_NE = [-55.3, -48.0, -37.8, -30.0, -22.1, -14.4, -6.6, 1.3, 9.2, 17.0, 24.8, 32.6, 40.5, 48.2, 55.4];
+export const WALLS_SW = [-55.0, -48.0, -42.0, -36.0, -30.0, -24.1, -18.2, -12.4, -6.6, 1.3, 9.2, 17.0, 24.8, 32.6, 40.5, 48.2, 53.5];
+
+// Pares de viviendas interiores: crujías reales entre muros del BIM,
+// flanqueando cada patio (orden de fichas: L1,R1,L2,R2,L3,R3)
+export const INNER_PAIRS = [
+  [-44.0, -36.8], [-24.5, -17.3],
+  [-13.3, -6.0],  [6.3, 13.5],
+  [19.6, 26.9],   [37.0, 44.3],
 ];
 
 // ── Tramos del edificio (el terreno cae de O a E; cotas de forjado
@@ -122,32 +136,46 @@ export function computeLayout(unitsById) {
   const zInN = -B.innerDepth / 2;                     // interior norte
   const zInS = B.innerDepth / 2;                      // interior sur
 
-  const distributeRow = (ids, zCenter, depth, floorKey, aticoInset = 0) => {
+  const distributeRow = (ids, zCenter, depth, floorKey, aticoInset = 0, walls = null) => {
     // Anchura proporcional a la superficie real de cada vivienda
     const widths = ids.map((id) => {
       const u = unitsById.get(id);
       return Math.max((u ? u.supViv : 50) / depth, 4.0);
     });
     const total = widths.reduce((a, b) => a + b, 0);
-    const scale = usable / total;
-    let x = -halfL + B.margin;
+    const x0 = walls ? walls[0] : -halfL + B.margin;
+    const x1 = walls ? walls[walls.length - 1] : halfL - B.margin;
+    const scale = (x1 - x0) / total;
+
+    // límites acumulados y ajuste al muro medianero real más próximo
+    const cuts = [x0];
+    let acc = x0;
+    for (let i = 0; i < ids.length - 1; i++) { acc += widths[i] * scale; cuts.push(acc); }
+    cuts.push(x1);
+    if (walls) {
+      for (let i = 1; i < cuts.length - 1; i++) {
+        let best = null, bd = 2.6;
+        for (const w of walls) {
+          const d = Math.abs(w - cuts[i]);
+          if (d < bd && w > cuts[i - 1] + 2.8 && w < x1 - 2.8) { bd = d; best = w; }
+        }
+        if (best !== null) cuts[i] = best;
+      }
+      // garantizar monotonicidad tras el ajuste
+      for (let i = 1; i < cuts.length; i++) if (cuts[i] < cuts[i - 1] + 2.6) cuts[i] = cuts[i - 1] + 2.6;
+    }
+
     ids.forEach((id, i) => {
-      const w = widths[i] * scale;
-      const u = unitsById.get(id);
+      const w = cuts[i + 1] - cuts[i];
       let d = depth;
       let z = zCenter;
-      let terrace = null;
-      if (aticoInset > 0 && u) {
-        // Ático: la vivienda se retranquea y la terraza ocupa el borde
+      if (aticoInset > 0) {
+        // Ático: la vivienda se retranquea (terraza al borde en el BIM)
         d = depth - aticoInset;
         const sign = zCenter > 0 ? 1 : -1;
         z = zCenter - sign * (aticoInset / 2);
-        if (u.terraza > 4) {
-          terrace = { x: x + w / 2, z: zCenter + sign * (depth / 2 - aticoInset / 2), w: w, d: aticoInset };
-        }
       }
-      rects.set(id, { x: x + w / 2, z, w, d, floor: floorKey, terrace });
-      x += w;
+      rects.set(id, { x: (cuts[i] + cuts[i + 1]) / 2, z, w, d, floor: floorKey, terrace: null });
     });
   };
 
@@ -156,18 +184,16 @@ export function computeLayout(unitsById) {
 
   for (const F of FLOOR_DEFS) {
     const inset = F.atico ? 3.2 : 0;
-    distributeRow(F.rows.ne, zNE, B.rowDepth, F.key, inset);
-    distributeRow(F.rows.sw, zSW, B.rowDepth, F.key, inset);
+    distributeRow(F.rows.ne, zNE, B.rowDepth, F.key, inset, WALLS_NE);
+    distributeRow(F.rows.sw, zSW, B.rowDepth, F.key, inset, WALLS_SW);
 
-    // ── Banda interior: cada patio tiene un par de viviendas a cada
-    //    lado (orden de las fichas: L0,R0,L1,R1,L2,R2) ──
+    // ── Banda interior: crujías reales del BIM flanqueando cada patio ──
     const pairs = F.rows.inN.map((idN, i) => [idN, F.rows.inS[i]]);
     pairs.forEach(([idN, idS], i) => {
+      const [px0, px1] = INNER_PAIRS[i];
       const P = PATIOS[Math.floor(i / 2)];
-      const u = unitsById.get(idN);
-      const w = Math.max((u ? u.supViv : 44) / B.innerDepth, 6.0);
-      const side = i % 2 === 0 ? -1 : 1; // izquierda / derecha del patio
-      const x = P.x + side * (P.w / 2 + w / 2 + 0.7);
+      const x = (px0 + px1) / 2;
+      const w = px1 - px0;
       const zN = P.z - B.innerDepth / 2 - 0.3;
       const zS = P.z + B.innerDepth / 2 + 0.3;
       rects.set(idN, { x, z: zN, w, d: B.innerDepth, floor: F.key, terrace: null });
