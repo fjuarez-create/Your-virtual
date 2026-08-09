@@ -1,14 +1,17 @@
 name: Deploy showroom (GitHub Pages)
 
+# Publica el sitio en la rama gh-pages (fuente de GitHub Pages).
+# Se usa esta vía porque el GITHUB_TOKEN no puede crear el sitio de
+# Pages mediante la API (actions/configure-pages falla con
+# "Resource not accessible by integration").
+
 on:
   push:
     branches: [claude/virtual-real-estate-showroom-cnb7kx]
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
   group: pages
@@ -17,16 +20,16 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/configure-pages@v5
-        with:
-          enablement: true
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: .
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Publicar en gh-pages
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan gh-pages
+          git rm -rf --cached . >/dev/null
+          rm -rf .github
+          touch .nojekyll
+          git add -A
+          git commit -m "Deploy ${GITHUB_SHA::7}"
+          git push -f origin gh-pages
