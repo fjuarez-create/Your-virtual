@@ -28,6 +28,7 @@ export function initUI(app) {
   $('#modo3d').addEventListener('click', () => app.setMode('3d'));
   $('#modoPlano').addEventListener('click', () => app.setMode('plano'));
   $('#modoLista').addEventListener('click', () => app.setMode('lista'));
+  $('#modoBim').addEventListener('click', () => app.toggleBIM());
 
   // ── Axonometría ──
   $('#explodeRange').addEventListener('input', (e) => app.setExplode(e.target.value / 100));

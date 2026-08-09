@@ -3,6 +3,7 @@
    (volumen esquemático fiel a plantas, patios y ático del proyecto)
    ═══════════════════════════════════════════════════════════════ */
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { BUILDING, FLOOR_DEFS, ROOF_Y, computeLayout } from './layout.js';
 
 export const ESTADO_COLORS = {
@@ -231,14 +232,16 @@ export function buildBuilding(scene, unitsById) {
   const gardens = new THREE.Group();
   for (const ct of layout.courts) {
     const lawn = new THREE.Mesh(
-      new THREE.BoxGeometry(ct.w, 0.16, ct.d),
+      new THREE.BoxGeometry(ct.w - 1.2, 0.16, ct.d - 1.2),
       new THREE.MeshStandardMaterial({ color: 0x4d9a66, roughness: 1 })
     );
     lawn.position.set(ct.x, BUILDING.slab + 0.08, ct.z);
     lawn.receiveShadow = true;
     gardens.add(lawn);
-    gardens.add(tree(ct.x - ct.w / 5, ct.z - 1.6, 0.9));
-    gardens.add(tree(ct.x + ct.w / 5, ct.z + 1.6, 1.1));
+    gardens.add(tree(ct.x - ct.w / 4, ct.z - ct.d / 5, 0.9));
+    gardens.add(tree(ct.x + ct.w / 4, ct.z - ct.d / 6, 1.15));
+    gardens.add(tree(ct.x - ct.w / 6, ct.z + ct.d / 4, 1.0));
+    gardens.add(tree(ct.x + ct.w / 5, ct.z + ct.d / 5, 0.85));
   }
   gardens.position.y = 0;
   scene.add(gardens);
@@ -316,6 +319,52 @@ function buildContext(scene) {
  * estadoDe: (id) => 'disponible'|'reservada'|'vendida'
  * dimmedDe: (id) => boolean (no pasa los filtros)
  */
+/**
+ * Carga el modelo BIM real (Revit → glTF, fusionado por plantas).
+ * Devuelve { group, levels: Map<key, {mesh, mat}> } donde key ∈
+ * sotano|baja|p1|p2|atico|cubierta.
+ */
+export function loadBIM(scene, url = 'assets/apolo_levels.glb') {
+  return new Promise((resolve, reject) => {
+    new GLTFLoader().load(
+      url,
+      (gltf) => {
+        const group = new THREE.Group();
+        group.name = 'bim';
+        group.visible = false;
+        const levels = new Map();
+        const meshes = [];
+        gltf.scene.traverse((o) => { if (o.isMesh) meshes.push(o); });
+        for (const o of meshes) {
+          const key = o.name;
+          const mat = new THREE.MeshStandardMaterial({
+            color: key === 'sotano' ? 0xb8bcc4 : 0xe9e7e1,
+            roughness: 0.88, metalness: 0.02,
+            transparent: true, opacity: 1,
+            side: THREE.DoubleSide,
+          });
+          mat.userData.baseOpacity = 1;
+          o.material = mat;
+          o.castShadow = o.receiveShadow = true;
+          o.raycast = () => {}; // sin picking sobre el BIM
+          // Envoltorio animable que preserva la transformación del nodo
+          // (la cuantización del GLB guarda ahí su escala/offset)
+          const holder = new THREE.Group();
+          holder.name = `bim-${key}`;
+          holder.add(o);
+          if (key === 'sotano') holder.visible = false; // bajo rasante
+          levels.set(key, { mesh: holder, mat });
+          group.add(holder);
+        }
+        scene.add(group);
+        resolve({ group, levels });
+      },
+      undefined,
+      reject
+    );
+  });
+}
+
 export function paintUnits(unitMeshes, estadoDe, dimmedDe, selectedId, hoverId, fadeOf = () => 1) {
   const tmp = new THREE.Color();
   for (const [id, mesh] of unitMeshes) {

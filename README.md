@@ -25,6 +25,10 @@ en Planta Baja, 1ª, 2ª y Ático, con patios ajardinados interiores y áticos c
 - **Listado completo** ordenable por cualquier columna, enlazado con el 3D.
 - **Datos reales** del listado de precios V.01 (agosto 2026): superficies y precios
   de las 166 viviendas.
+- **Modo BIM** (botón «BIM»): alterna entre el volumen comercial interactivo y el
+  **modelo real de Revit** (estructura, muros, fachadas y patios), separado por
+  plantas y compatible con el aislamiento de planta y la axonometría. La huella y
+  los tres patios del volumen comercial están calibrados con este modelo.
 
 ## 🚀 Ejecutar en local
 
@@ -76,6 +80,21 @@ definir las URLs antes de cargar la app (p. ej. en `index.html`):
 ```
 
 Sin `leadUrl`, el CTA "Solicitar información" abre el correo (mailto).
+
+## 🏗️ Modelo BIM (Revit)
+
+`assets/apolo_levels.glb` procede del FBX exportado de Revit
+(`SERENEA_APOLO_3D.fbx`), procesado con `tools/build_levels.js`:
+
+1. Convierte el FBX a glTF: `npx fbx2gltf -b -i SERENEA_APOLO_3D.fbx -o apolo_raw.glb`
+2. `node tools/build_levels.js` (requiere `@gltf-transform/core` y `gl-matrix`):
+   asigna cada elemento a su planta lógica según los forjados de su tramo
+   (el edificio se escalona con la pendiente), fusiona la geometría por planta
+   (sotano/baja/p1/p2/atico/cubierta) y genera `levels.json`.
+3. Optimización: `weld` + `quantize` con `@gltf-transform/functions`.
+
+Cuando el modelo de Revit avance (le faltan plantas altas en la zona este),
+basta repetir estos pasos y sustituir `assets/apolo_levels.glb`.
 
 ## 🖼️ Renders
 

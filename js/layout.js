@@ -10,17 +10,26 @@
    superficies reales de cada vivienda.
    ═══════════════════════════════════════════════════════════════ */
 
-// Dimensiones generales del volumen (metros, esquemáticas)
+// Dimensiones generales del volumen (metros). Huella y patios calibrados
+// con el modelo BIM de Revit (SERENEA_APOLO_3D): barra de ~112×30 m con
+// tres grandes patios pasantes de ~11×12 m.
 export const BUILDING = {
   length: 112,        // eje X (dirección NO–SE)
   depth: 30,          // eje Z (NE → SO)
   chamfer: 3.5,       // chaflán de esquinas
   rowDepth: 8,        // profundidad crujías perimetrales
-  innerDepth: 5.2,    // profundidad viviendas interiores
+  innerDepth: 5.6,    // profundidad viviendas interiores
   corridor: 1.5,      // pasillo entre crujías
   margin: 2.2,        // margen en testeros
   slab: 0.32,         // canto de forjado
 };
+
+// Patios reales extraídos del BIM (centro y dimensiones, coords de escena)
+export const PATIOS = [
+  { x: -30.2, z: -0.5, w: 11.2, d: 12.0 },
+  { x: 0.2,   z: -0.5, w: 11.2, d: 12.0 },
+  { x: 30.6,  z: -0.5, w: 11.2, d: 12.0 },
+];
 
 export const FLOOR_DEFS = [
   {
@@ -118,37 +127,28 @@ export function computeLayout(unitsById) {
     });
   };
 
+  // Patios reales del BIM (los mismos huecos en todas las plantas)
+  for (const P of PATIOS) courts.push({ x: P.x, z: P.z, w: P.w, d: P.d });
+
   for (const F of FLOOR_DEFS) {
     const inset = F.atico ? 3.2 : 0;
     distributeRow(F.rows.ne, zNE, B.rowDepth, F.key, inset);
     distributeRow(F.rows.sw, zSW, B.rowDepth, F.key, inset);
 
-    // ── Banda interior: alternancia patio → par de viviendas ──
+    // ── Banda interior: cada patio tiene un par de viviendas a cada
+    //    lado (orden de las fichas: L0,R0,L1,R1,L2,R2) ──
     const pairs = F.rows.inN.map((idN, i) => [idN, F.rows.inS[i]]);
-    const pairWidths = pairs.map(([idN]) => {
-      const u = unitsById.get(idN);
-      return Math.max((u ? u.supViv : 44) / B.innerDepth, 6.0);
-    });
-    const totalPairs = pairWidths.reduce((a, b) => a + b, 0);
-    const courtW = (usable - totalPairs) / (pairs.length + 0.6);
-    let x = -halfL + B.margin;
     pairs.forEach(([idN, idS], i) => {
-      // patio a la izquierda de cada par
-      const cw = courtW * (i === 0 ? 0.8 : 1);
-      if (F.level === 0) {
-        courts.push({ x: x + cw / 2, z: 0, w: cw - 1.6, d: B.innerDepth * 2 - 1.2 });
-      }
-      x += cw;
-      const w = pairWidths[i];
-      rects.set(idN, { x: x + w / 2, z: zInN, w, d: B.innerDepth, floor: F.key, terrace: null });
-      rects.set(idS, { x: x + w / 2, z: zInS, w, d: B.innerDepth, floor: F.key, terrace: null });
-      x += w;
+      const P = PATIOS[Math.floor(i / 2)];
+      const u = unitsById.get(idN);
+      const w = Math.max((u ? u.supViv : 44) / B.innerDepth, 6.0);
+      const side = i % 2 === 0 ? -1 : 1; // izquierda / derecha del patio
+      const x = P.x + side * (P.w / 2 + w / 2 + 0.7);
+      const zN = P.z - B.innerDepth / 2 - 0.3;
+      const zS = P.z + B.innerDepth / 2 + 0.3;
+      rects.set(idN, { x, z: zN, w, d: B.innerDepth, floor: F.key, terrace: null });
+      rects.set(idS, { x, z: zS, w, d: B.innerDepth, floor: F.key, terrace: null });
     });
-    if (F.level === 0) {
-      // patio final tras el último par
-      const rest = halfL - B.margin - x;
-      if (rest > 3) courts.push({ x: x + rest / 2, z: 0, w: rest - 1.2, d: B.innerDepth * 2 - 1.2 });
-    }
   }
 
   return { rects, courts };

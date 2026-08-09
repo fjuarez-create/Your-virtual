@@ -12,7 +12,8 @@
 {
   "imports": {
     "three": "./vendor/three.module.min.js",
-    "three/addons/controls/OrbitControls.js": "./vendor/OrbitControls.js"
+    "three/addons/controls/OrbitControls.js": "./vendor/OrbitControls.js",
+    "three/addons/loaders/GLTFLoader.js": "./vendor/GLTFLoader.js"
   }
 }
 </script>
@@ -47,6 +48,9 @@
       <button id="modoPlano" class="mode-btn" title="Vista cenital de la planta">Plano</button>
       <button id="modoLista" class="mode-btn" title="Listado de viviendas">Listado</button>
     </nav>
+    <button id="modoBim" class="bim-btn" title="Alternar entre volumen comercial y estructura BIM real (modelo Revit)">
+      <span class="bim-dot"></span> BIM
+    </button>
   </header>
 
   <!-- ══════════ FLOOR NAV ══════════ -->

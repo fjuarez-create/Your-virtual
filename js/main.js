@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { FLOOR_DEFS, ROOF_Y, floorOf } from './layout.js';
-import { buildBuilding, paintUnits } from './building.js';
+import { buildBuilding, paintUnits, loadBIM } from './building.js';
 import { fetchUnits, fetchAvailability, pollAvailability, sendLead } from './api.js';
 import * as UI from './ui.js';
 
@@ -19,6 +19,7 @@ const app = {
   filters: { dorms: new Set(), estados: new Set(), orients: new Set(), priceMax: 481000, terraza: false },
   floor: 'all',
   mode: '3d',
+  bim: false,
   selected: null,
   hover: null,
   explode: 0,
@@ -103,7 +104,9 @@ function tweenCamera(pos, target, dur = 1.4) {
 controls.addEventListener('start', () => { camTween = null; });
 
 /* ─────────────────────────── Construcción ─────────────────────────── */
-let B = null; // { floorGroups, roofGroup, unitMeshes, pickables, layout }
+let B = null;   // { floorGroups, roofGroup, unitMeshes, pickables, layout }
+let bim = null; // { group, levels } — modelo Revit (carga diferida)
+let bimLoading = null;
 const floorAnim = new Map(); // key → { yTarget, fadeTarget }
 
 function allGroups() {
@@ -133,6 +136,9 @@ function updateFloorTargets() {
   // jardines de patios siguen a la planta baja
 }
 
+// Correspondencia niveles BIM ↔ plantas lógicas
+const BIM_KEY = { baja: 'baja', p1: 'p1', p2: 'p2', atico: 'atico', cubierta: 'roof' };
+
 function animateFloors(dt) {
   const k = Math.min(1, dt * 4.5);
   let fading = false;
@@ -143,12 +149,27 @@ function animateFloors(dt) {
     if (Math.abs(a.fadeTarget - g.userData.fade) > 0.002) fading = true;
     const f = g.userData.fade + (a.fadeTarget - g.userData.fade) * k;
     g.userData.fade = f;
-    const vis = f > 0.02;
+    const vis = f > 0.02 && !app.bim;
     g.visible = vis;
     for (const m of g.userData.fadeMats) m.opacity = m.userData.baseOpacity * f;
     if (key === 'baja' && g.userData.gardens) g.userData.gardens.visible = vis;
   }
   if (fading) repaint(); // los materiales de vivienda heredan el fundido de su planta
+
+  // El BIM sigue la misma coreografía que las plantas lógicas
+  if (bim) {
+    bim.group.visible = app.bim;
+    if (app.bim) {
+      for (const [bimKey, animKey] of Object.entries(BIM_KEY)) {
+        const lvl = bim.levels.get(bimKey);
+        const src = animKey === 'roof' ? B.roofGroup : B.floorGroups.get(animKey);
+        if (!lvl || !src) continue;
+        lvl.mesh.position.y = src.position.y - src.userData.baseY; // mismo desplazamiento (explosión/aislado)
+        lvl.mat.opacity = src.userData.fade;
+        lvl.mesh.visible = src.userData.fade > 0.02;
+      }
+    }
+  }
 }
 
 const fadeOf = (floorKey) => B.floorGroups.get(floorKey)?.userData.fade ?? 1;
@@ -254,6 +275,34 @@ app.onFiltersChanged = () => {
 
 app.requestInfo = (unit) => { sendLead({ unitId: unit.id }); };
 
+/* ─────────────────────────── Modo BIM ─────────────────────────── */
+async function ensureBIM() {
+  if (bim) return bim;
+  if (!bimLoading) {
+    bimLoading = loadBIM(scene).then((b) => { bim = b; return b; })
+      .catch((e) => { console.error('[apolo] BIM no disponible:', e); bimLoading = null; });
+  }
+  return bimLoading;
+}
+
+app.toggleBIM = async () => {
+  const btn = $('#modoBim');
+  if (!bim) {
+    btn.classList.add('loading');
+    await ensureBIM();
+    btn.classList.remove('loading');
+    if (!bim) return; // fallo de carga
+  }
+  app.bim = !app.bim;
+  btn.classList.toggle('on', app.bim);
+  if (app.bim) {
+    app.select(null);
+    app.hover = null;
+    UI.hideTooltip();
+    if (app.mode === 'lista') app.setMode('3d');
+  }
+};
+
 /* ─────────────────────────── Picking ─────────────────────────── */
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2(-2, -2);
@@ -277,6 +326,11 @@ canvas.addEventListener('pointerup', (e) => {
 
 function updateHover() {
   if (!B) return;
+  if (app.bim) {
+    if (app.hover) { app.hover = null; canvas.style.cursor = 'grab'; repaint(); }
+    UI.hideTooltip();
+    return;
+  }
   raycaster.setFromCamera(pointer, camera);
   const hits = raycaster.intersectObjects(B.pickables, false);
   let id = null;
@@ -376,6 +430,9 @@ async function boot() {
     document.querySelectorAll('.hidden-ui').forEach((el) => el.classList.remove('hidden-ui'));
     goOverview(2.2);
   });
+
+  // Precarga silenciosa del modelo BIM cuando la app ya está en marcha
+  setTimeout(ensureBIM, 4000);
 }
 
 loop();
