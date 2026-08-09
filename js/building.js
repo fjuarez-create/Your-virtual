@@ -4,7 +4,8 @@
    ═══════════════════════════════════════════════════════════════ */
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { BUILDING, FLOOR_DEFS, ROOF_Y, computeLayout } from './layout.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { BUILDING, FLOOR_DEFS, ROOF_Y, PATIOS, computeLayout } from './layout.js';
 
 export const ESTADO_COLORS = {
   disponible: new THREE.Color(0x35d69a),
@@ -104,6 +105,95 @@ function tree(x, z, s = 1) {
   return g;
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   Vivienda "dollhouse": suelo, muros en corte y mobiliario,
+   generados según el esquema real de las fichas comerciales:
+   baño junto a la entrada (lado pasillo), cocina abierta con
+   barra en la zona de acceso, salón-comedor central y dormitorios
+   con armario hacia la fachada.
+   ═══════════════════════════════════════════════════════════════ */
+const APT = {
+  wallPerim: 0.13, wallPart: 0.09,
+  hPerim: 1.6, hFacade: 0.85, hPart: 1.35,
+  colWall: 0xf2efe8, colFloor: 0xd9c9a8, colWood: 0xbfa887, colSoft: 0x93a3b8,
+};
+
+function boxAt(list, cx, cz, w, d, h, y0 = 0) {
+  if (w < 0.04 || d < 0.04 || h < 0.02) return;
+  const g = new THREE.BoxGeometry(w, h, d);
+  g.translate(cx, y0 + h / 2, cz);
+  list.push(g);
+}
+
+/**
+ * Genera la vivienda en coordenadas locales:
+ * x ∈ [-w/2, w/2], z ∈ [-d/2 (pasillo/acceso), +d/2 (fachada)].
+ */
+function buildApartment(u, w, d) {
+  const walls = [], furn = [];
+  const hw = w / 2, hd = d / 2;
+  const t = APT.wallPerim, p = APT.wallPart;
+
+  // ── Perímetro (fachada más baja para ver el interior) ──
+  boxAt(walls, 0, -hd + t / 2, w, t, APT.hPerim);              // trasera (acceso)
+  boxAt(walls, 0, hd - t / 2, w, t, APT.hFacade);              // fachada
+  boxAt(walls, -hw + t / 2, 0, t, d - 2 * t, APT.hPerim);      // lateral izq
+  boxAt(walls, hw - t / 2, 0, t, d - 2 * t, APT.hPerim);       // lateral dcha
+
+  // ── Banda de acceso: baño + cocina ──
+  const bb = Math.min(2.0, d * 0.30);            // fondo banda acceso
+  const bw = Math.min(2.15, w * 0.38);           // ancho baño
+  const zBack = -hd + bb;
+  // muro del baño (con hueco de puerta hacia el interior)
+  boxAt(walls, -hw + bw, -hd + bb / 2, p, bb, APT.hPart);           // vertical
+  boxAt(walls, -hw + (bw - 0.8) / 2, zBack, bw - 0.8, p, APT.hPart); // horizontal con hueco a la dcha
+  // aparatos del baño
+  boxAt(furn, -hw + 0.42, -hd + 0.5, 0.55, 0.42, 0.42);        // inodoro
+  boxAt(furn, -hw + bw - 0.55, -hd + 0.55, 0.85, 0.85, 0.12);  // plato de ducha
+  boxAt(furn, -hw + 0.45, -hd + bb - 0.35, 0.62, 0.45, 0.8);   // lavabo
+  // cocina: barra en la pared trasera
+  const kx0 = -hw + bw + 0.5, kx1 = Math.min(kx0 + 2.9, hw - 0.4);
+  if (kx1 - kx0 > 1.0) boxAt(furn, (kx0 + kx1) / 2, -hd + t + 0.32, kx1 - kx0, 0.6, 0.92);
+
+  // ── Dormitorios en fachada ──
+  const fb = Math.max(2.2, Math.min(3.1, (d - bb) * 0.55));    // fondo dormitorios
+  const zPart = hd - fb;                                       // línea de tabique
+  const maxFacade = Math.max(1, Math.floor((w - 2.5) / 2.75));
+  const nFacade = Math.min(u.dorm, maxFacade);
+  const bedW = Math.min(3.3, Math.max(2.55, (w - 2.5) / nFacade));
+  for (let i = 0; i < nFacade; i++) {
+    const x0 = -hw + i * bedW, x1 = x0 + bedW;
+    // tabique horizontal (hueco de puerta de 0.75 junto al borde dcho)
+    boxAt(walls, (x0 + x1 - 0.85) / 2, zPart, x1 - x0 - 0.85, p, APT.hPart);
+    // tabique vertical entre dormitorios / con el salón
+    boxAt(walls, x1, zPart + fb / 2, p, fb, APT.hPart);
+    // cama contra la fachada + armario contra el tabique
+    const bedD = Math.min(1.9, fb - 0.7);
+    boxAt(furn, x0 + bedW / 2, hd - t - bedD / 2 - 0.12, Math.min(1.4, bedW - 1.0), bedD, 0.45);
+    boxAt(furn, x0 + bedW / 2 - 0.2, zPart + 0.34, Math.min(1.5, bedW - 1.2), 0.55, 1.15);
+  }
+
+  // ── Salón-comedor ──
+  const lx0 = -hw + nFacade * bedW, lx1 = hw;                  // zona de salón en fachada
+  const lw = lx1 - lx0;
+  if (lw > 1.6) {
+    boxAt(furn, lx0 + lw / 2, hd - 1.15, Math.min(1.95, lw - 0.7), 0.8, 0.42);   // sofá
+    boxAt(furn, lx0 + lw / 2, hd - 2.05, Math.min(0.95, lw - 1.2), 0.5, 0.2);    // mesa baja
+  }
+  // mesa de comedor en zona central
+  if (d - bb - fb > 1.6) boxAt(furn, 0.4, (zBack + zPart) / 2, 1.25, 0.8, 0.55);
+
+  // dormitorio extra (3D o anchura escasa): junto al baño
+  const rest = u.dorm - nFacade;
+  if (rest > 0) {
+    const rw = Math.min(2.9, w - bw - 1.2);
+    boxAt(walls, hw - rw, -hd + bb / 2 + 0.4, p, bb + 0.8, APT.hPart);
+    boxAt(walls, hw - rw / 2 - 0.45, zBack + 0.8, rw - 0.9, p, APT.hPart);
+    boxAt(furn, hw - rw / 2, -hd + 1.15, Math.min(1.35, rw - 0.9), 1.85, 0.45);
+  }
+  return { walls, furn };
+}
+
 /**
  * Construye toda la escena. Devuelve:
  * { floorGroups, roofGroup, unitMeshes, pickables, layout }
@@ -154,8 +244,8 @@ export function buildBuilding(scene, unitsById) {
     labels.visible = false;
     g.add(labels);
 
-    const ids = [...F.rows.ne, ...F.rows.sw, ...F.rows.inN, ...F.rows.inS];
-    for (const id of ids) {
+    const rowsSpec = [['ne', F.rows.ne], ['sw', F.rows.sw], ['in', F.rows.inN], ['in', F.rows.inS]];
+    for (const [rowType, ids] of rowsSpec) for (const id of ids) {
       const u = unitsById.get(id);
       const r = layout.rects.get(id);
       if (!u || !r) continue;
@@ -195,6 +285,36 @@ export function buildBuilding(scene, unitsById) {
       const sp = makeLabelSprite(id);
       sp.position.set(r.x, slab + h + 1.3, r.z);
       labels.add(sp);
+
+      // ── Vivienda dollhouse (visible al aislar la planta) ──
+      let rot = 0;
+      let aw = r.w - gap, ad = r.d - gap;
+      if (rowType === 'ne') rot = Math.PI;
+      else if (rowType === 'in') {
+        // la fachada mira al patio más próximo
+        const P = PATIOS.reduce((a, b) => (Math.abs(b.x - r.x) < Math.abs(a.x - r.x) ? b : a));
+        rot = P.x > r.x ? Math.PI / 2 : -Math.PI / 2;
+        aw = r.d - gap; ad = r.w - gap;
+      }
+      const { walls, furn } = buildApartment(u, aw, ad);
+      const aptG = new THREE.Group();
+      const floorM = new THREE.MeshStandardMaterial({ color: APT.colFloor, roughness: 0.9, transparent: true });
+      const wallM = new THREE.MeshStandardMaterial({ color: APT.colWall, roughness: 0.85, transparent: true });
+      const furnM = new THREE.MeshStandardMaterial({ color: APT.colWood, roughness: 0.8, transparent: true });
+      const floorMesh = new THREE.Mesh(new THREE.BoxGeometry(aw, 0.1, ad), floorM);
+      floorMesh.position.y = 0.05;
+      floorMesh.receiveShadow = true;
+      const wallMesh = new THREE.Mesh(mergeGeometries(walls), wallM);
+      wallMesh.position.y = 0.1;
+      const furnMesh = new THREE.Mesh(mergeGeometries(furn), furnM);
+      furnMesh.position.y = 0.1;
+      for (const m of [floorMesh, wallMesh, furnMesh]) m.raycast = () => {};
+      aptG.add(floorMesh, wallMesh, furnMesh);
+      aptG.position.set(r.x, slab, r.z);
+      aptG.rotation.y = rot;
+      aptG.visible = false;
+      g.add(aptG);
+      mesh.userData.apt = { group: aptG, floorM, wallM, furnM };
 
       unitMeshes.set(id, mesh);
       pickables.push(mesh);
@@ -365,7 +485,9 @@ export function loadBIM(scene, url = 'assets/apolo_levels.glb') {
   });
 }
 
-export function paintUnits(unitMeshes, estadoDe, dimmedDe, selectedId, hoverId, fadeOf = () => 1) {
+const PARQUET = new THREE.Color(0xd9c9a8);
+
+export function paintUnits(unitMeshes, estadoDe, dimmedDe, selectedId, hoverId, fadeOf = () => 1, dollOf = () => false) {
   const tmp = new THREE.Color();
   for (const [id, mesh] of unitMeshes) {
     const estado = estadoDe(id);
@@ -373,6 +495,26 @@ export function paintUnits(unitMeshes, estadoDe, dimmedDe, selectedId, hoverId, 
     const mat = mesh.material;
     const dimmed = dimmedDe(id);
     const fade = fadeOf(mesh.userData.floorKey);
+    const doll = dollOf(mesh.userData.floorKey);
+    const apt = mesh.userData.apt;
+
+    if (apt) apt.group.visible = doll && fade > 0.02;
+
+    if (doll && apt) {
+      // La caja pasa a ser una envolvente de cristal; el estado se
+      // muestra en el suelo de la vivienda y en el brillo al interactuar.
+      mat.color.copy(col);
+      mat.emissive.copy(col).multiplyScalar(id === selectedId ? 0.5 : id === hoverId ? 0.3 : 0);
+      mat.opacity = (dimmed ? 0.02 : id === selectedId ? 0.26 : id === hoverId ? 0.16 : 0.05) * fade;
+      const o = dimmed ? 0.12 : 1;
+      apt.floorM.opacity = o * fade;
+      apt.wallM.opacity = o * fade;
+      apt.furnM.opacity = o * fade;
+      tmp.copy(PARQUET).lerp(col, dimmed ? 0.08 : 0.5);
+      apt.floorM.color.copy(tmp);
+      continue;
+    }
+
     if (dimmed) {
       mat.color.copy(DIM_COLOR);
       mat.opacity = 0.16 * fade;

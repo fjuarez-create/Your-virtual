@@ -181,7 +181,8 @@ function repaint() {
     (id) => !app.passesFilters(app.unitsById.get(id)),
     app.selected,
     app.hover,
-    fadeOf
+    fadeOf,
+    (floorKey) => floorKey === app.floor && !app.bim // dollhouse en la planta aislada
   );
 }
 

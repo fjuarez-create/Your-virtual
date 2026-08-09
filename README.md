@@ -14,6 +14,11 @@ en Planta Baja, 1ª, 2ª y Ático, con patios ajardinados interiores y áticos c
   con terrazas.
 - **Navegación por plantas**: al seleccionar una planta, las superiores se elevan y
   desvanecen y la cámara encuadra la planta con las **etiquetas de cada vivienda**.
+- **Viviendas "dollhouse"**: en la planta aislada, cada vivienda se muestra con
+  muros en corte, tabiques y mobiliario (baño junto al acceso, cocina abierta,
+  salón-comedor y dormitorios con armarios), generados según la tipología real
+  de cada unidad e imitando el esquema de distribución de las fichas
+  comerciales. El estado comercial tiñe el suelo de cada vivienda.
 - **Vista axonométrica** (deslizador que separa las plantas en altura).
 - **Modo Plano** (vista cenital de la planta activa) y acceso al **plano comercial
   real** de cada nivel (fichas A3) desde el panel de detalle.
