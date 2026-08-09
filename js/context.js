@@ -36,7 +36,7 @@ const inReserved = (x, z, m = 0) =>
 /** Cinta inclinada que sigue el terreno (acera/calzada en rampa).
     Con carve=true, el terreno se rebaja bajo la huella del edificio
     hasta la cota del podio (la parcela está excavada). */
-function ribbon(x0, x1, z0, z1, lift, mat, segsX = 36, segsZ = 2, carve = false) {
+function ribbon(x0, x1, z0, z1, lift, mat, segsX = 36, segsZ = 2, carve = false, tex = null, texScale = 4) {
   const g = new THREE.PlaneGeometry(x1 - x0, z1 - z0, segsX, segsZ);
   g.rotateX(-Math.PI / 2);
   const pos = g.attributes.position;
@@ -51,10 +51,121 @@ function ribbon(x0, x1, z0, z1, lift, mat, segsX = 36, segsZ = 2, carve = false)
     pos.setY(i, y);
   }
   g.computeVertexNormals();
-  const m = new THREE.Mesh(g, mat);
+  let useMat = mat;
+  if (tex) {
+    const t = tex.clone();
+    t.needsUpdate = true;
+    t.repeat.set((x1 - x0) / texScale, (z1 - z0) / texScale);
+    useMat = mat.clone();
+    useMat.map = t;
+  }
+  const m = new THREE.Mesh(g, useMat);
   m.position.set(cx, 0, cz);
   m.receiveShadow = true;
   return m;
+}
+
+function makeAsphaltTex() {
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 256;
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#606267';
+  ctx.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 2600; i++) {
+    const v = 84 + Math.random() * 40;
+    ctx.fillStyle = `rgba(${v},${v},${v + 4},${0.16 + Math.random() * 0.2})`;
+    ctx.fillRect(Math.random() * 256, Math.random() * 256, 1.6, 1.6);
+  }
+  const t = new THREE.CanvasTexture(cv);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+function makeSidewalkTex() {
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 256;
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#c3beb2';
+  ctx.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 1500; i++) {
+    const v = 168 + Math.random() * 40;
+    ctx.fillStyle = `rgba(${v},${v - 4},${v - 10},0.25)`;
+    ctx.fillRect(Math.random() * 256, Math.random() * 256, 1.4, 1.4);
+  }
+  ctx.strokeStyle = 'rgba(120,115,105,0.5)';
+  ctx.lineWidth = 2;
+  for (let i = 0; i <= 4; i++) {
+    ctx.beginPath(); ctx.moveTo(i * 64, 0); ctx.lineTo(i * 64, 256); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, i * 64); ctx.lineTo(256, i * 64); ctx.stroke();
+  }
+  const t = new THREE.CanvasTexture(cv);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+/* ── Imagen satélite real (Esri World Imagery) proyectada sobre la
+      rasante. Calibrable sin tocar código:
+        window.APOLO_GEO = { lat, lon, bearing }  o por URL:
+        ?lat=27.97&lon=-15.39&bearing=70
+      Al cargar la primera tesela se oculta el suelo procedural. ── */
+function addSatellite(scene, fallback) {
+  const qs = new URLSearchParams(location.search);
+  const GEO = Object.assign(
+    { lat: 27.9741, lon: -15.3894, bearing: 70, zoom: 18, span: 9, enabled: true },
+    window.APOLO_GEO || {},
+    qs.get('lat') ? { lat: +qs.get('lat') } : {},
+    qs.get('lon') ? { lon: +qs.get('lon') } : {},
+    qs.get('bearing') ? { bearing: +qs.get('bearing') } : {},
+    qs.get('sat') === '0' ? { enabled: false } : {}
+  );
+  if (!GEO.enabled) return;
+  const n = 2 ** GEO.zoom;
+  const latR = (GEO.lat * Math.PI) / 180;
+  const xt = ((GEO.lon + 180) / 360) * n;
+  const yt = ((1 - Math.log(Math.tan(latR) + 1 / Math.cos(latR)) / Math.PI) / 2) * n;
+  const tileM = (Math.cos(latR) * 2 * Math.PI * 6378137) / n; // metros por tesela
+  const S = GEO.span;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = S * 256;
+  const ctx = cv.getContext('2d');
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+
+  const size = S * tileM;
+  const geo = new THREE.PlaneGeometry(size, size, 110, 110);
+  geo.rotateX(-Math.PI / 2);
+  const rot = THREE.MathUtils.degToRad(GEO.bearing - 90); // alinear la calle con +X
+  const cosR = Math.cos(rot), sinR = Math.sin(rot);
+  const pos = geo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), z = pos.getZ(i);
+    const wx = x * cosR + z * sinR, wz = -x * sinR + z * cosR;
+    pos.setY(i, terrainY(wx, wz) - 0.16);
+  }
+  geo.computeVertexNormals();
+  const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: tex, roughness: 1 }));
+  mesh.rotation.y = rot;
+  mesh.receiveShadow = true;
+  mesh.visible = false;
+  scene.add(mesh);
+
+  let first = true;
+  const tx0 = xt - S / 2, ty0 = yt - S / 2;
+  for (let i = 0; i < S; i++) for (let j = 0; j < S; j++) {
+    const tx = Math.floor(tx0) + i, ty = Math.floor(ty0) + j;
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      ctx.drawImage(img, (tx - tx0) * 256, (ty - ty0) * 256);
+      tex.needsUpdate = true;
+      mesh.visible = true;
+      if (first) { first = false; if (fallback) fallback.visible = false; }
+    };
+    img.src = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${GEO.zoom}/${ty}/${tx}`;
+  }
 }
 
 function groundText(text, w = 46) {
@@ -149,26 +260,31 @@ export function buildContext(scene) {
   ground.receiveShadow = true;
   scene.add(ground);
 
-  // ── Terreno en rampa alrededor de la parcela ──
+  // ── Terreno en rampa alrededor de la parcela (fallback si no hay satélite) ──
+  const fallback = new THREE.Group();
+  scene.add(fallback);
   const dirtMat = new THREE.MeshStandardMaterial({ color: 0xa89e88, roughness: 1 });
-  scene.add(ribbon(-190, 190, -60, 110, -0.06, dirtMat, 96, 32, true));
+  fallback.add(ribbon(-190, 190, -60, 110, -0.06, dirtMat, 96, 32, true));
+  addSatellite(scene, fallback);
 
   // ── Aceras y calzadas en rampa continua ──
-  const sidewalkMat = new THREE.MeshStandardMaterial({ color: 0xbcb7ac, roughness: 0.95 });
-  const asphaltMat = new THREE.MeshStandardMaterial({ color: 0x5e6065, roughness: 1 });
+  const sidewalkTex = makeSidewalkTex();
+  const asphaltTex = makeAsphaltTex();
+  const sidewalkMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95 });
+  const asphaltMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1 });
   // acera norte (Íñigo López de Mendoza) y sur
-  scene.add(ribbon(-64, 64, -20.8, -16.6, 0.1, sidewalkMat));
-  scene.add(ribbon(-64, 64, 16.6, 20.8, 0.1, sidewalkMat));
+  scene.add(ribbon(-64, 64, -20.8, -16.6, 0.1, sidewalkMat, 36, 2, false, sidewalkTex, 3.2));
+  scene.add(ribbon(-64, 64, 16.6, 20.8, 0.1, sidewalkMat, 36, 2, false, sidewalkTex, 3.2));
   // calzada Íñigo López de Mendoza (norte, larga)
-  scene.add(ribbon(-260, 260, -31.5, -21, 0.02, asphaltMat, 90));
+  scene.add(ribbon(-260, 260, -31.5, -21, 0.02, asphaltMat, 90, 2, false, asphaltTex, 7));
   // vial de servicio sur (entre parcela y adosados)
-  scene.add(ribbon(-90, 90, 21, 29.5, 0.02, asphaltMat, 48));
+  scene.add(ribbon(-90, 90, 21, 29.5, 0.02, asphaltMat, 48, 2, false, asphaltTex, 7));
   // testeros: C/ Sagunto (oeste) y C/ Numancia (este)
-  scene.add(ribbon(-72, -62, -140, 130, 0.02, asphaltMat, 4, 60));
-  scene.add(ribbon(62, 72, -140, 130, 0.02, asphaltMat, 4, 60));
+  scene.add(ribbon(-72, -62, -140, 130, 0.02, asphaltMat, 4, 60, false, asphaltTex, 7));
+  scene.add(ribbon(62, 72, -140, 130, 0.02, asphaltMat, 4, 60, false, asphaltTex, 7));
   // aceras de testeros
-  scene.add(ribbon(-61.8, -58, -30, 25, 0.1, sidewalkMat, 3, 20));
-  scene.add(ribbon(58, 61.8, -30, 25, 0.1, sidewalkMat, 3, 20));
+  scene.add(ribbon(-61.8, -58, -30, 25, 0.1, sidewalkMat, 3, 20, false, sidewalkTex, 3.2));
+  scene.add(ribbon(58, 61.8, -30, 25, 0.1, sidewalkMat, 3, 20, false, sidewalkTex, 3.2));
 
   const t1 = groundText('C/ Íñigo López de Mendoza', 58);
   t1.position.set(0, terrainY(0, -26) + 0.12, -26);
@@ -220,7 +336,7 @@ export function buildContext(scene) {
   const treeSpots = [];
   for (const [x0, x1, z0, z1] of lots) {
     const lot = ribbon(x0, x1, z0, z1, -0.02, lotMat, 12, 6);
-    scene.add(lot);
+    fallback.add(lot);
     // manchas de verde + arbolitos (los garabatos verdes del plano)
     const n = 3 + Math.floor(rnd() * 3);
     for (let i = 0; i < n; i++) {

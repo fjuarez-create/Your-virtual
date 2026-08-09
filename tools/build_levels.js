@@ -97,17 +97,29 @@ const BIN = 4; // ancho de bin en X (m)
   }
   BUCKETS.forEach(k => console.log(k, byBucket[k].length, 'elementos'));
 
-  // ── 4. Fusión de geometría por planta (posiciones en mundo, centradas) ──
+  // categoría de material por el nombre del elemento de Revit
+  const catOf = (name) => {
+    if (/^(VEN-|Puerta)/.test(name)) return 'glass';   // carpinterías/vidrio
+    if (/^(Muro|Fachada|UNIK|ICV)/.test(name)) return 'wall';
+    return 'struct';                                    // forjados, pilares, escaleras…
+  };
+
+  // ── 4. Fusión de geometría por planta y material (mundo, centrado) ──
   const { mat4, vec3, vec4 } = require('gl-matrix');
   const out = new Document();
   const buffer = out.createBuffer();
   const outScene = out.createScene('apolo');
-  const mat = out.createMaterial('hormigon').setBaseColorFactor([1, 1, 1, 1]).setRoughnessFactor(0.9).setMetallicFactor(0);
+  const MATS = {
+    struct: out.createMaterial('struct').setBaseColorFactor([1, 1, 1, 1]).setRoughnessFactor(0.9).setMetallicFactor(0),
+    wall: out.createMaterial('wall').setBaseColorFactor([1, 1, 1, 1]).setRoughnessFactor(0.85).setMetallicFactor(0),
+    glass: out.createMaterial('glass').setBaseColorFactor([1, 1, 1, 1]).setRoughnessFactor(0.2).setMetallicFactor(0),
+  };
 
-  for (const bucket of BUCKETS) {
+  for (const bucket of BUCKETS) for (const cat of ['struct', 'wall', 'glass']) {
     const pos = [], norm = [], idxArr = [];
     let base = 0;
     for (const it of byBucket[bucket]) {
+      if (catOf(it.name) !== cat) continue;
       const world = it.node.getWorldMatrix();
       const nrmMat = mat4.create();
       mat4.invert(nrmMat, world); mat4.transpose(nrmMat, nrmMat);
@@ -136,14 +148,15 @@ const BIN = 4; // ancho de bin en X (m)
       }
     }
     if (!pos.length) continue;
+    const name = `${bucket}__${cat}`;
     const pAcc = out.createAccessor().setType('VEC3').setArray(new Float32Array(pos)).setBuffer(buffer);
     const nAcc = out.createAccessor().setType('VEC3').setArray(new Float32Array(norm)).setBuffer(buffer);
     const iAcc = out.createAccessor().setType('SCALAR').setArray(new Uint32Array(idxArr)).setBuffer(buffer);
-    const prim = out.createPrimitive().setAttribute('POSITION', pAcc).setAttribute('NORMAL', nAcc).setIndices(iAcc).setMaterial(mat);
-    const mesh = out.createMesh(bucket).addPrimitive(prim);
-    const node = out.createNode(bucket).setMesh(mesh);
+    const prim = out.createPrimitive().setAttribute('POSITION', pAcc).setAttribute('NORMAL', nAcc).setIndices(iAcc).setMaterial(MATS[cat]);
+    const mesh = out.createMesh(name).addPrimitive(prim);
+    const node = out.createNode(name).setMesh(mesh);
     outScene.addChild(node);
-    console.log('mesh', bucket, (pos.length / 3).toLocaleString(), 'vértices');
+    console.log('mesh', name, (pos.length / 3).toLocaleString(), 'vértices');
   }
 
   await io.write('apolo_levels.glb', out);

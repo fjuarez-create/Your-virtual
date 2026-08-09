@@ -96,6 +96,21 @@ definir las URLs antes de cargar la app (p. ej. en `index.html`):
 
 Sin `leadUrl`, el CTA "Solicitar información" abre el correo (mailto).
 
+## 🛰️ Imagen satélite del entorno
+
+El suelo alrededor de la parcela usa teselas de **Esri World Imagery**
+proyectadas sobre la rasante en pendiente (con atribución en pantalla). Si las
+teselas no cargan, se mantiene el suelo procedural. Para calibrar la posición
+exacta y la orientación sin tocar código:
+
+```
+?lat=27.9741&lon=-15.3894&bearing=70     (parámetros de URL)
+```
+
+o `window.APOLO_GEO = { lat, lon, bearing }` antes de cargar la app. `bearing`
+es el rumbo (grados desde el norte) de la C/ Íñigo López de Mendoza.
+`?sat=0` desactiva la capa.
+
 ## 🏗️ Modelo BIM (Revit)
 
 `assets/apolo_levels.glb` procede del FBX exportado de Revit
@@ -105,7 +120,8 @@ Sin `leadUrl`, el CTA "Solicitar información" abre el correo (mailto).
 2. `node tools/build_levels.js` (requiere `@gltf-transform/core` y `gl-matrix`):
    asigna cada elemento a su planta lógica según los forjados de su tramo
    (el edificio se escalona con la pendiente), fusiona la geometría por planta
-   (sotano/baja/p1/p2/atico/cubierta) y genera `levels.json`.
+   **y por material** (estructura / muro / vidrio, según la categoría de Revit)
+   y genera `levels.json`.
 3. Optimización: `weld` + `quantize` con `@gltf-transform/functions`.
 
 Cuando el modelo de Revit avance (le faltan plantas altas en la zona este),

@@ -49,7 +49,7 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 0.9;
+renderer.toneMappingExposure = 0.85;
 
 const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(0xd6dde3, 750, 2100);
@@ -67,6 +67,17 @@ sky.material.uniforms.rayleigh.value = 1.15;
 sky.material.uniforms.mieCoefficient.value = 0.004;
 sky.material.uniforms.mieDirectionalG.value = 0.82;
 sky.material.uniforms.sunPosition.value.copy(sunDir);
+
+// IBL: el cielo se convierte en mapa de entorno (reflejos reales en el vidrio)
+{
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const envScene = new THREE.Scene();
+  envScene.add(sky);
+  scene.environment = pmrem.fromScene(envScene, 0.04).texture;
+  scene.add(sky); // devolver el cielo a la escena principal
+  pmrem.dispose();
+  scene.environmentIntensity = 0.55;
+}
 
 // ── Capa de nubes (billboards suaves) ──
 const clouds = new THREE.Group();
@@ -117,7 +128,7 @@ controls.target.set(0, 40, 0);
 controls.enabled = false; // se habilita al terminar la intro
 
 // Luces (atardecer)
-scene.add(new THREE.HemisphereLight(0xe3edf8, 0x8b9080, 1.1));
+scene.add(new THREE.HemisphereLight(0xe3edf8, 0x8b9080, 0.7));
 const sun = new THREE.DirectionalLight(0xfff1dc, 2.5);
 sun.position.copy(sunDir).multiplyScalar(180);
 sun.castShadow = true;
@@ -258,9 +269,10 @@ function animateFloors(dt) {
       const lvl = bim.levels.get(bimKey);
       const src = animKey === 'roof' ? B.roofGroup : B.floorGroups.get(animKey);
       if (!lvl || !src) continue;
-      lvl.mesh.position.y = src.position.y - src.userData.baseY; // mismo desplazamiento (explosión/aislado)
-      lvl.mat.opacity = src.userData.fade;
-      lvl.mesh.visible = src.userData.fade > 0.02;
+      const dy = src.position.y - src.userData.baseY; // desplazamiento (explosión/aislado)
+      const f = src.userData.fade;
+      for (const h of lvl.holders) { h.position.y = dy; h.visible = f > 0.02; }
+      for (const m of lvl.mats) m.opacity = m.userData.baseOpacity * f;
     }
   }
 }

@@ -335,28 +335,37 @@ export function loadBIM(scene, url = 'assets/apolo_levels.glb') {
         const group = new THREE.Group();
         group.name = 'bim';
         group.visible = false;
-        const levels = new Map();
+        // materiales reales por categoría (el vidrio refleja el entorno)
+        const mkMats = () => ({
+          struct: Object.assign(new THREE.MeshStandardMaterial({
+            color: 0xd8d7d2, roughness: 0.92, metalness: 0.02, transparent: true,
+          }), { userData: { baseOpacity: 1 } }),
+          wall: Object.assign(new THREE.MeshStandardMaterial({
+            color: 0xf1efe8, roughness: 0.8, metalness: 0.0, transparent: true,
+          }), { userData: { baseOpacity: 1 } }),
+          glass: Object.assign(new THREE.MeshStandardMaterial({
+            color: 0x88b4cc, roughness: 0.12, metalness: 0.4, transparent: true,
+            opacity: 0.55, envMapIntensity: 1.6, side: THREE.DoubleSide,
+          }), { userData: { baseOpacity: 0.55 } }),
+        });
+        const levels = new Map(); // bucket → { holders: [], mats: [] }
         const meshes = [];
         gltf.scene.traverse((o) => { if (o.isMesh) meshes.push(o); });
         for (const o of meshes) {
-          const key = o.name;
-          const mat = new THREE.MeshStandardMaterial({
-            color: key === 'sotano' ? 0xb8bcc4 : 0xe9e7e1,
-            roughness: 0.88, metalness: 0.02,
-            transparent: true, opacity: 1,
-            side: THREE.DoubleSide,
-          });
-          mat.userData.baseOpacity = 1;
+          const [bucket, cat] = o.name.split('__');
+          if (!levels.has(bucket)) levels.set(bucket, { holders: [], mats: [], byCat: mkMats() });
+          const L = levels.get(bucket);
+          const mat = L.byCat[cat] || L.byCat.struct;
           o.material = mat;
-          o.castShadow = o.receiveShadow = true;
+          o.castShadow = cat !== 'glass';
+          o.receiveShadow = true;
           o.raycast = () => {}; // sin picking sobre el BIM
-          // Envoltorio animable que preserva la transformación del nodo
-          // (la cuantización del GLB guarda ahí su escala/offset)
+          if (!L.mats.includes(mat)) L.mats.push(mat);
           const holder = new THREE.Group();
-          holder.name = `bim-${key}`;
+          holder.name = `bim-${o.name}`;
           holder.add(o);
-          if (key === 'sotano') holder.visible = false; // bajo rasante
-          levels.set(key, { mesh: holder, mat });
+          if (bucket === 'sotano') holder.visible = false; // bajo rasante
+          L.holders.push(holder);
           group.add(holder);
         }
         scene.add(group);
