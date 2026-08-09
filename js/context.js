@@ -306,25 +306,39 @@ export function buildContext(scene) {
   field.position.set(-8, -0.3, -72);
   fallback.add(field);
 
-  // ── Adosados existentes al sur (cubiertas claras, 2 plantas) ──
+  // ── Edificio vecino al sur: manzana cerrada con gran patio central ──
   {
-    const rowMat = new THREE.MeshStandardMaterial({ color: 0xd8d1c0, roughness: 0.95 });
-    const roofMat = new THREE.MeshStandardMaterial({ color: 0xf4f2ec, roughness: 0.8 });
-    const patioMat = new THREE.MeshStandardMaterial({ color: 0xcdc4b0, roughness: 1 });
-    for (let i = 0; i < 13; i++) {
-      const x = -54 + i * 9;
-      const y = terrainY(x, 38);
-      const casa = new THREE.Mesh(new THREE.BoxGeometry(8.4, 5.8, 11.5), rowMat);
-      casa.position.set(x, y + 2.9, 38);
-      casa.castShadow = casa.receiveShadow = true;
-      fallback.add(casa);
-      const roof = new THREE.Mesh(new THREE.BoxGeometry(7.6, 0.5, 6), roofMat);
-      roof.position.set(x, y + 6.0, 35.8);
-      fallback.add(roof);
-      const patio = new THREE.Mesh(new THREE.BoxGeometry(7.6, 0.3, 5), patioMat);
-      patio.position.set(x, y + 0.4, 48);
-      fallback.add(patio);
+    const y0 = terrainY(50, 44); // apoyado en la cota baja; al oeste queda semienterrado
+    const wallMat2 = new THREE.MeshStandardMaterial({ color: 0xddd6c6, roughness: 0.92 });
+    const outer = new THREE.Shape();
+    outer.moveTo(-56, 31); outer.lineTo(56, 31); outer.lineTo(56, 57); outer.lineTo(-56, 57); outer.closePath();
+    const hole = new THREE.Path();
+    hole.moveTo(-45, 38.5); hole.lineTo(45, 38.5); hole.lineTo(45, 49.5); hole.lineTo(-45, 49.5); hole.closePath();
+    outer.holes.push(hole);
+    const ringGeo = new THREE.ExtrudeGeometry(outer, { depth: 7.6, bevelEnabled: false });
+    ringGeo.rotateX(Math.PI / 2);
+    const ring = new THREE.Mesh(ringGeo, wallMat2);
+    ring.position.y = y0 + 6.2; // extrusión hacia abajo: corona a +6.2, faldón enterrado
+    ring.castShadow = ring.receiveShadow = true;
+    fallback.add(ring);
+    // casetones de cubierta (los rectángulos blancos de la foto aérea)
+    const capMat = new THREE.MeshStandardMaterial({ color: 0xf4f2ec, roughness: 0.8 });
+    for (let x = -50; x <= 50; x += 8.6) {
+      for (const zz of [34.6, 53.4]) {
+        const cap = new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.9, 4.6), capMat);
+        cap.position.set(x, y0 + 6.7, zz);
+        cap.castShadow = true;
+        fallback.add(cap);
+      }
     }
+    // patio central ajardinado con palmeras
+    const patio = new THREE.Mesh(
+      new THREE.BoxGeometry(88, 0.3, 10),
+      new THREE.MeshStandardMaterial({ color: 0x6f8a5e, roughness: 1 })
+    );
+    patio.position.set(0, y0 + 0.5, 44);
+    patio.receiveShadow = true;
+    fallback.add(patio);
   }
 
   // ── Solares de tierra con arbolitos (zonas verdes del plano) ──
@@ -451,6 +465,8 @@ export function buildContext(scene) {
   }
   // algunas entre la calle y la valla del campo
   for (let i = 0; i < 8; i++) palmSpots.push([-64 + rnd() * 120, -35.5 + rnd() * 2.2, 4 + rnd() * 2.5]);
+  // y en el patio central del edificio vecino del sur
+  for (let i = 0; i < 4; i++) palmSpots.push([-34 + rnd() * 68, 42 + rnd() * 4, 3.5 + rnd() * 2]);
   for (let i = 0; i < 55; i++) {
     const a = rnd() * Math.PI * 2, r = 130 + rnd() * 520;
     const x = Math.cos(a) * r, z = Math.sin(a) * r;
