@@ -4,6 +4,11 @@
    ═══════════════════════════════════════════════════════════════ */
 import { FLOOR_DEFS } from './layout.js';
 
+/** Inserta separadores invisibles (U+2060) para que los detectores de
+    direcciones de iOS/Chrome no conviertan "Vivienda 116" en un enlace
+    a Google Maps. Visualmente idéntico. */
+export const nd = (v) => String(v).split('').join('⁠');
+
 export const fmtEUR = (n) =>
   n.toLocaleString('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
 export const fmtM2 = (n) =>
@@ -132,7 +137,7 @@ export function showTooltip(app, unit, x, y) {
   const estado = app.estadoDe(unit.id);
   tt.innerHTML = `
     <div class="tt-head">
-      <span class="tt-id">Viv. ${unit.id}</span>
+      <span class="tt-id">Viv.&#8288; ${nd(unit.id)}</span>
       <span class="tt-estado" style="color:var(--${estado === 'disponible' ? 'disp' : estado === 'reservada' ? 'res' : 'ven'})">${estado}</span>
     </div>
     <div class="tt-row">${unit.planta} · ${unit.dorm}D · ${unit.orientacion}</div>
@@ -154,8 +159,8 @@ export function renderPanel(app, unit) {
   const ppm2 = unit.precio / unit.supTotal;
   const disponible = estado === 'disponible';
   $('#panelBody').innerHTML = `
-    <p class="p-kicker">Serenea · Edificio Apolo</p>
-    <h2 class="p-title">Vivienda <b>${unit.id}</b></h2>
+    <p class="p-kicker">Serenea · Edificio&#8288; Apolo</p>
+    <h2 class="p-title">Vivienda&#8288; <b>${nd(unit.id)}</b></h2>
     <p class="p-sub">${F.label} · ${unit.orientacion}</p>
     <span class="badge ${estado}">${estado}</span>
     <div class="p-price">${fmtEUR(unit.precio)}
@@ -214,7 +219,7 @@ export function renderTable(app) {
   tbody.innerHTML = rows.map((u) => {
     const e = app.estadoDe(u.id);
     return `<tr data-id="${u.id}">
-      <td class="u-id">${u.id}</td><td>${u.planta}</td><td>${u.dorm}D</td>
+      <td class="u-id">${nd(u.id)}</td><td>${u.planta}</td><td>${u.dorm}D</td>
       <td>${u.orientacion}</td><td>${fmtM2(u.supViv)}</td>
       <td>${u.terraza ? fmtM2(u.terraza) : '—'}</td><td>${fmtM2(u.supTotal)}</td>
       <td><strong>${fmtEUR(u.precio)}</strong></td>
