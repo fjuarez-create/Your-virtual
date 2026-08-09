@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Serenea · Edificio Apolo — Showroom Virtual</title>
+<meta name="description" content="Showroom virtual interactivo del Edificio Apolo (Serenea by Unik) en Las Huesas, Telde. Explora las 166 viviendas planta a planta en 3D.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏛️</text></svg>">
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three.module.min.js",
+    "three/addons/controls/OrbitControls.js": "./vendor/OrbitControls.js"
+  }
+}
+</script>
+</head>
+<body>
+<div id="app">
+  <canvas id="scene"></canvas>
+
+  <!-- ══════════ HERO / LANDING ══════════ -->
+  <div id="hero">
+    <div class="hero-inner">
+      <p class="hero-kicker">Serenea by Unik · Las Huesas, Telde</p>
+      <h1>Edificio <em>Apolo</em></h1>
+      <p class="hero-sub">166 viviendas de 1, 2 y 3 dormitorios · Áticos con terraza · Jardines interiores</p>
+      <button id="btnEnter" class="btn-hero">Explorar el edificio <span class="arrow">→</span></button>
+      <p class="hero-hint">Gira con el ratón · Zoom con la rueda · Haz clic en una vivienda</p>
+    </div>
+  </div>
+
+  <!-- ══════════ TOP BAR ══════════ -->
+  <header id="topbar" class="ui hidden-ui">
+    <div class="brand">
+      <span class="brand-mark">◈</span>
+      <div class="brand-text">
+        <strong>SERENEA</strong>
+        <span>Edificio Apolo · Las Huesas</span>
+      </div>
+    </div>
+    <div class="top-stats" id="topStats"></div>
+    <nav class="mode-nav">
+      <button id="modo3d" class="mode-btn active" title="Vista 3D orbital">3D</button>
+      <button id="modoPlano" class="mode-btn" title="Vista cenital de la planta">Plano</button>
+      <button id="modoLista" class="mode-btn" title="Listado de viviendas">Listado</button>
+    </nav>
+  </header>
+
+  <!-- ══════════ FLOOR NAV ══════════ -->
+  <nav id="floorNav" class="ui hidden-ui">
+    <p class="floornav-title">Plantas</p>
+    <div id="floorBtns"></div>
+    <button class="floor-btn floor-all active" data-floor="all">
+      <span class="fb-name">Edificio<br>completo</span>
+    </button>
+    <div class="explode-row">
+      <label for="explodeRange" title="Separar plantas">Axonometría</label>
+      <input type="range" id="explodeRange" min="0" max="100" value="0">
+    </div>
+  </nav>
+
+  <!-- ══════════ FILTERS ══════════ -->
+  <aside id="filters" class="ui hidden-ui">
+    <button id="filtersToggle"><span class="ft-ico">⌕</span> Filtrar viviendas <span class="ft-count" id="filterCount"></span></button>
+    <div id="filtersBody">
+      <div class="f-group">
+        <p>Dormitorios</p>
+        <div class="chips" id="chipsDorm">
+          <button class="chip" data-dorm="1">1D</button>
+          <button class="chip" data-dorm="2">2D</button>
+          <button class="chip" data-dorm="3">3D</button>
+        </div>
+      </div>
+      <div class="f-group">
+        <p>Estado</p>
+        <div class="chips" id="chipsEstado">
+          <button class="chip" data-estado="disponible"><i class="dot d-disp"></i>Disponible</button>
+          <button class="chip" data-estado="reservada"><i class="dot d-res"></i>Reservada</button>
+          <button class="chip" data-estado="vendida"><i class="dot d-ven"></i>Vendida</button>
+        </div>
+      </div>
+      <div class="f-group">
+        <p>Orientación</p>
+        <div class="chips" id="chipsOrient">
+          <button class="chip" data-orient="Suroeste">Suroeste</button>
+          <button class="chip" data-orient="Noreste">Noreste</button>
+          <button class="chip" data-orient="Jardín interior">Jardín int.</button>
+        </div>
+      </div>
+      <div class="f-group">
+        <p>Precio máximo <strong id="priceMaxLabel"></strong></p>
+        <input type="range" id="priceMax" min="121000" max="481000" step="5000" value="481000">
+      </div>
+      <div class="f-group">
+        <p>Con terraza</p>
+        <div class="chips"><button class="chip" id="chipTerraza">Sólo con terraza</button></div>
+      </div>
+      <button id="filtersReset">Limpiar filtros</button>
+    </div>
+  </aside>
+
+  <!-- ══════════ LEGEND + COMPASS ══════════ -->
+  <div id="legend" class="ui hidden-ui">
+    <span><i class="dot d-disp"></i>Disponible</span>
+    <span><i class="dot d-res"></i>Reservada</span>
+    <span><i class="dot d-ven"></i>Vendida</span>
+  </div>
+  <div id="compass" class="ui hidden-ui" title="Norte"><div id="needle">N</div></div>
+
+  <!-- ══════════ TOOLTIP ══════════ -->
+  <div id="tooltip"></div>
+
+  <!-- ══════════ DETAIL PANEL ══════════ -->
+  <aside id="panel" class="ui">
+    <button id="panelClose" title="Cerrar">✕</button>
+    <div id="panelBody"></div>
+  </aside>
+
+  <!-- ══════════ LISTADO ══════════ -->
+  <section id="listado" class="ui">
+    <header>
+      <h2>Listado de viviendas <span id="listCount"></span></h2>
+      <button id="listClose">✕</button>
+    </header>
+    <div class="table-wrap">
+      <table id="unitsTable">
+        <thead>
+          <tr>
+            <th data-k="id">Vivienda</th><th data-k="planta">Planta</th><th data-k="dorm">Dorm.</th>
+            <th data-k="orientacion">Orientación</th><th data-k="supViv">Sup. viv.</th>
+            <th data-k="terraza">Terraza</th><th data-k="supTotal">Total</th>
+            <th data-k="precio">Precio</th><th data-k="estado">Estado</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ══════════ LIGHTBOX (planos) ══════════ -->
+  <div id="lightbox">
+    <button id="lbClose">✕</button>
+    <figure><img id="lbImg" alt="Plano de planta"><figcaption id="lbCap"></figcaption></figure>
+  </div>
+
+  <div id="loader"><div class="spin"></div><p>Construyendo el Edificio Apolo…</p></div>
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
