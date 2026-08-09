@@ -8,6 +8,11 @@ en Planta Baja, 1ª, 2ª y Ático, con patios ajardinados interiores y áticos c
 
 ## ✨ Funcionalidades
 
+- **Intro cinematográfica**: la cámara desciende desde las nubes hasta el edificio
+  (curva Catmull-Rom con easing y zoom de focal), con botón «Saltar intro».
+- **Entorno de atardecer**: cielo físico (shader Sky), capa de nubes, ciudad
+  circundante generada (edificios instanciados, arbolado, relieve y mar al NE)
+  y post-procesado con bloom (EffectComposer + UnrealBloomPass).
 - **Maqueta 3D navegable** del edificio (órbita, zoom, encuadres animados), generada
   proceduralmente a partir de las plantas reales del proyecto: dos crujías (Suroeste
   y Noreste), viviendas interiores a los 6 patios ajardinados y ático retranqueado

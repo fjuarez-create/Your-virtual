@@ -14,7 +14,12 @@
     "three": "./vendor/three.module.min.js",
     "three/addons/controls/OrbitControls.js": "./vendor/OrbitControls.js",
     "three/addons/loaders/GLTFLoader.js": "./vendor/GLTFLoader.js",
-    "three/addons/utils/BufferGeometryUtils.js": "./vendor/BufferGeometryUtils.js"
+    "three/addons/utils/BufferGeometryUtils.js": "./vendor/BufferGeometryUtils.js",
+    "three/addons/objects/Sky.js": "./vendor/Sky.js",
+    "three/addons/postprocessing/EffectComposer.js": "./vendor/EffectComposer.js",
+    "three/addons/postprocessing/RenderPass.js": "./vendor/RenderPass.js",
+    "three/addons/postprocessing/UnrealBloomPass.js": "./vendor/UnrealBloomPass.js",
+    "three/addons/postprocessing/OutputPass.js": "./vendor/OutputPass.js"
   }
 }
 </script>
@@ -150,6 +155,8 @@
     <button id="lbClose">✕</button>
     <figure><img id="lbImg" alt="Plano de planta"><figcaption id="lbCap"></figcaption></figure>
   </div>
+
+  <button id="skipIntro">Saltar intro ›</button>
 
   <div id="loader"><div class="spin"></div><p>Construyendo el Edificio Apolo…</p></div>
 </div>

@@ -4,6 +4,11 @@
    ═══════════════════════════════════════════════════════════════ */
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { Sky } from 'three/addons/objects/Sky.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { FLOOR_DEFS, ROOF_Y, floorOf } from './layout.js';
 import { buildBuilding, paintUnits, loadBIM } from './building.js';
 import { fetchUnits, fetchAvailability, pollAvailability, sendLead } from './api.js';
@@ -45,41 +50,77 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.3;
+renderer.toneMappingExposure = 1.08;
 
 const scene = new THREE.Scene();
-{
-  // Cielo degradado
-  const cv = document.createElement('canvas');
-  cv.width = 4; cv.height = 256;
-  const ctx = cv.getContext('2d');
-  const gr = ctx.createLinearGradient(0, 0, 0, 256);
-  gr.addColorStop(0, '#1c2c4f');
-  gr.addColorStop(0.55, '#131e38');
-  gr.addColorStop(1, '#0a0f1c');
-  ctx.fillStyle = gr;
-  ctx.fillRect(0, 0, 4, 256);
-  const tex = new THREE.CanvasTexture(cv);
-  tex.mapping = THREE.EquirectangularReflectionMapping;
-  scene.background = tex;
-}
-scene.fog = new THREE.Fog(0x0d1424, 260, 520);
+scene.fog = new THREE.Fog(0xd8c7b2, 620, 1750);
 
-const camera = new THREE.PerspectiveCamera(46, innerWidth / innerHeight, 0.5, 1200);
-camera.position.set(120, 95, 155);
+// ── Cielo físico (hora dorada) ──
+const sky = new Sky();
+sky.scale.setScalar(4000);
+scene.add(sky);
+const sunDir = new THREE.Vector3().setFromSphericalCoords(
+  1, THREE.MathUtils.degToRad(90 - 17), THREE.MathUtils.degToRad(38)
+);
+Object.assign(sky.material.uniforms, {});
+sky.material.uniforms.turbidity.value = 6;
+sky.material.uniforms.rayleigh.value = 1.9;
+sky.material.uniforms.mieCoefficient.value = 0.006;
+sky.material.uniforms.mieDirectionalG.value = 0.82;
+sky.material.uniforms.sunPosition.value.copy(sunDir);
+
+// ── Capa de nubes (billboards suaves) ──
+const clouds = new THREE.Group();
+{
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 256;
+  const ctx = cv.getContext('2d');
+  for (const [cx, cy, r, a] of [[128, 140, 100, 0.85], [80, 150, 66, 0.7], [180, 150, 70, 0.7], [128, 120, 55, 0.55]]) {
+    const g = ctx.createRadialGradient(cx, cy, 6, cx, cy, r);
+    g.addColorStop(0, `rgba(255,247,238,${a})`);
+    g.addColorStop(1, 'rgba(255,247,238,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 256, 256);
+  }
+  const tex = new THREE.CanvasTexture(cv);
+  let cseed = 77;
+  const crnd = () => { cseed = (cseed * 1664525 + 1013904223) % 4294967296; return cseed / 4294967296; };
+  for (let i = 0; i < 26; i++) {
+    const cluster = new THREE.Group();
+    const n = 3 + Math.floor(crnd() * 3);
+    for (let j = 0; j < n; j++) {
+      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: false, opacity: 0.55 + crnd() * 0.3 });
+      const sp = new THREE.Sprite(mat);
+      const w = 90 + crnd() * 150;
+      sp.scale.set(w, w * (0.3 + crnd() * 0.18), 1);
+      sp.position.set((crnd() - 0.5) * 160, (crnd() - 0.5) * 34, (crnd() - 0.5) * 90);
+      cluster.add(sp);
+    }
+    const a = crnd() * Math.PI * 2;
+    const r = 180 + crnd() * 950;
+    cluster.position.set(Math.cos(a) * r, 300 + crnd() * 170, Math.sin(a) * r);
+    cluster.userData.speed = 2.2 + crnd() * 2.6;
+    clouds.add(cluster);
+  }
+}
+scene.add(clouds);
+
+const camera = new THREE.PerspectiveCamera(46, innerWidth / innerHeight, 0.5, 4200);
+camera.position.set(540, 480, 820);
 
 const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true;
 controls.dampingFactor = 0.06;
 controls.maxPolarAngle = Math.PI / 2 - 0.04;
 controls.minDistance = 18;
-controls.maxDistance = 340;
-controls.target.set(0, 5, 0);
+controls.maxDistance = 420;
+controls.target.set(0, 40, 0);
+controls.enabled = false; // se habilita al terminar la intro
 
-// Luces
-scene.add(new THREE.HemisphereLight(0xc9d9f7, 0x4a5262, 1.5));
-const sun = new THREE.DirectionalLight(0xffe3b3, 2.6);
-sun.position.set(85, 110, 55);
+// Luces (atardecer)
+scene.add(new THREE.HemisphereLight(0xfde6cc, 0x6e6a60, 1.3));
+const sun = new THREE.DirectionalLight(0xffc98d, 3.1);
+sun.position.copy(sunDir).multiplyScalar(180);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 sun.shadow.camera.left = -120; sun.shadow.camera.right = 120;
@@ -87,9 +128,16 @@ sun.shadow.camera.top = 120; sun.shadow.camera.bottom = -120;
 sun.shadow.camera.far = 400;
 sun.shadow.bias = -0.0004;
 scene.add(sun);
-const fill = new THREE.DirectionalLight(0x9db8e8, 0.9);
+const fill = new THREE.DirectionalLight(0xa8c4e8, 0.55);
 fill.position.set(-90, 60, -70);
 scene.add(fill);
+
+// ── Post-procesado: bloom sutil ──
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.32, 0.55, 0.88);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
 
 /* ─────────────────────────── Tween de cámara ─────────────────────────── */
 let camTween = null;
@@ -102,6 +150,55 @@ function tweenCamera(pos, target, dur = 1.4) {
   };
 }
 controls.addEventListener('start', () => { camTween = null; });
+
+/* ─────────────────── Intro cinematográfica ─────────────────── */
+const INTRO = {
+  curve: new THREE.CatmullRomCurve3([
+    new THREE.Vector3(540, 480, 820),
+    new THREE.Vector3(300, 330, 560),
+    new THREE.Vector3(40, 190, 380),
+    new THREE.Vector3(-150, 96, 220),
+    new THREE.Vector3(-90, 56, 130),
+    new THREE.Vector3(64, 48, 92),
+  ], false, 'centripetal', 0.4),
+  t0: new THREE.Vector3(0, 140, -60),
+  t1: new THREE.Vector3(0, 5, 0),
+  dur: 8.5,
+};
+let intro = null;
+
+function startIntro() {
+  intro = { t: 0 };
+  camTween = null;
+  controls.enabled = false;
+  $('#skipIntro').classList.add('show');
+  camera.fov = 58;
+  camera.updateProjectionMatrix();
+}
+
+function finishIntro() {
+  intro = null;
+  $('#skipIntro').classList.remove('show');
+  camera.fov = 46;
+  camera.updateProjectionMatrix();
+  camera.position.copy(INTRO.curve.points[INTRO.curve.points.length - 1]);
+  controls.target.copy(INTRO.t1);
+  controls.enabled = true;
+  document.querySelectorAll('.hidden-ui').forEach((el) => el.classList.remove('hidden-ui'));
+}
+
+function updateIntro(dt) {
+  if (!intro) return;
+  intro.t += dt / INTRO.dur;
+  if (intro.t >= 1) { finishIntro(); return; }
+  const e = easeInOut(intro.t);
+  camera.position.copy(INTRO.curve.getPoint(e));
+  const et = Math.pow(e, 1.35);
+  controls.target.lerpVectors(INTRO.t0, INTRO.t1, et);
+  camera.lookAt(controls.target);
+  camera.fov = 58 - 12 * e;
+  camera.updateProjectionMatrix();
+}
 
 /* ─────────────────────────── Construcción ─────────────────────────── */
 let B = null;   // { floorGroups, roofGroup, unitMeshes, pickables, layout }
@@ -366,7 +463,8 @@ controls.addEventListener('start', () => { autoRotate = false; });
 
 function loop() {
   requestAnimationFrame(loop);
-  const dt = Math.min(clock.getDelta(), 0.05);
+  const rawDt = clock.getDelta();
+  const dt = Math.min(rawDt, 0.05);
 
   if (camTween) {
     camTween.t += dt / camTween.dur;
@@ -374,17 +472,25 @@ function loop() {
     camera.position.lerpVectors(camTween.p0, camTween.p1, t);
     controls.target.lerpVectors(camTween.t0, camTween.t1, t);
     if (camTween.t >= 1) camTween = null;
-  } else if (autoRotate && app.floor === 'all' && !document.getElementById('hero').classList.contains('gone')) {
+  } else if (autoRotate && !intro && app.floor === 'all' && !document.getElementById('hero').classList.contains('gone')) {
     // rotación suave de cortesía mientras está la portada
-    const a = 0.05 * dt;
+    const a = 0.018 * dt;
     camera.position.applyAxisAngle(new THREE.Vector3(0, 1, 0), a);
+    camera.lookAt(controls.target);
   }
 
+  // deriva lenta de las nubes
+  for (const c of clouds.children) {
+    c.position.x += c.userData.speed * dt;
+    if (c.position.x > 1150) c.position.x = -1150;
+  }
+
+  updateIntro(Math.min(rawDt, 0.6)); // tiempo real: la intro dura lo mismo en cualquier dispositivo
   if (B) animateFloors(dt);
   updateHover();
   updateCompass();
-  controls.update();
-  renderer.render(scene, camera);
+  if (!intro) controls.update();
+  composer.render();
 }
 
 /* ─────────────────────────── Resize ─────────────────────────── */
@@ -392,6 +498,7 @@ function onResize() {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
+  composer.setSize(innerWidth, innerHeight);
 }
 window.addEventListener('resize', onResize);
 onResize();
@@ -428,9 +535,9 @@ async function boot() {
 
   $('#btnEnter').addEventListener('click', () => {
     $('#hero').classList.add('gone');
-    document.querySelectorAll('.hidden-ui').forEach((el) => el.classList.remove('hidden-ui'));
-    goOverview(2.2);
+    startIntro();
   });
+  $('#skipIntro').addEventListener('click', finishIntro);
 
   // Precarga silenciosa del modelo BIM cuando la app ya está en marcha
   setTimeout(ensureBIM, 4000);

@@ -373,65 +373,125 @@ export function buildBuilding(scene, unitsById) {
   return { floorGroups, roofGroup, unitMeshes, pickables, layout };
 }
 
-// ─── Entorno: parcela, calles, edificación colindante ───
+// ─── Entorno: ciudad de maqueta a la luz del atardecer ───
 function buildContext(scene) {
+  // Generador determinista
+  let seed = 20260809;
+  const rnd = () => { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; };
+
   const ground = new THREE.Mesh(
-    new THREE.CircleGeometry(420, 72),
-    new THREE.MeshStandardMaterial({ color: 0x1a2438, roughness: 1 })
+    new THREE.CircleGeometry(950, 80),
+    new THREE.MeshStandardMaterial({ color: 0xa39b89, roughness: 1 })
   );
   ground.rotation.x = -Math.PI / 2;
-  ground.position.y = -0.35;
+  ground.position.y = -0.4;
   ground.receiveShadow = true;
   scene.add(ground);
 
-  // Parcela
+  // Parcela y calles con nombre
   const parcel = new THREE.Mesh(
     new THREE.BoxGeometry(BUILDING.length + 26, 0.3, BUILDING.depth + 26),
-    new THREE.MeshStandardMaterial({ color: 0x243049, roughness: 1 })
+    new THREE.MeshStandardMaterial({ color: 0x8b8574, roughness: 1 })
   );
   parcel.position.y = -0.15;
   parcel.receiveShadow = true;
   scene.add(parcel);
 
-  // Calles
-  const streetMat = new THREE.MeshStandardMaterial({ color: 0x2e3c5c, roughness: 1 });
+  const streetMat = new THREE.MeshStandardMaterial({ color: 0x5b5b60, roughness: 1 });
   const mkStreet = (w, d, x, z) => {
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.22, d), streetMat);
-    m.position.set(x, -0.16, z);
+    m.position.set(x, -0.18, z);
     m.receiveShadow = true;
     scene.add(m);
   };
-  mkStreet(240, 12, 0, BUILDING.depth / 2 + 22);    // SO — C/ Numancia
-  mkStreet(240, 12, 0, -BUILDING.depth / 2 - 22);   // NE — C/ Sagunto
-  mkStreet(12, 120, -BUILDING.length / 2 - 22, 0);  // O  — C/ Íñigo López de Mendoza
+  mkStreet(1200, 12, 0, BUILDING.depth / 2 + 22);    // SO — C/ Numancia
+  mkStreet(1200, 12, 0, -BUILDING.depth / 2 - 22);   // NE — C/ Sagunto
+  mkStreet(12, 1200, -BUILDING.length / 2 - 22, 0);  // O  — C/ Íñigo López de Mendoza
+  mkStreet(12, 1200, BUILDING.length / 2 + 22, 0);   // E
 
   const t1 = groundText('Calle Numancia', 52);
-  t1.position.set(0, 0.02, BUILDING.depth / 2 + 22);
+  t1.position.set(0, 0.06, BUILDING.depth / 2 + 22);
   scene.add(t1);
   const t2 = groundText('Calle Sagunto', 52);
-  t2.position.set(0, 0.02, -BUILDING.depth / 2 - 22);
+  t2.position.set(0, 0.06, -BUILDING.depth / 2 - 22);
   t2.rotation.z = Math.PI;
   scene.add(t2);
   const t3 = groundText('C/ Íñigo López de Mendoza', 62);
-  t3.position.set(-BUILDING.length / 2 - 22, 0.02, 0);
+  t3.position.set(-BUILDING.length / 2 - 22, 0.06, 0);
   t3.rotation.z = Math.PI / 2;
   scene.add(t3);
 
-  // Edificación vecina (volúmenes fantasma)
-  const ghostMat = new THREE.MeshStandardMaterial({
-    color: 0x2a3555, roughness: 1, transparent: true, opacity: 0.9,
-  });
-  const ghosts = [
-    [70, 9, 26, -60, 42], [50, 6, 22, 30, 46], [40, 12, 24, 108, 40],
-    [56, 7, 24, -60, -46], [44, 10, 22, 20, -50], [38, 5, 20, 96, -44],
-    [26, 8, 30, -92, 6], [30, 6, 26, 98, 2],
-  ];
-  for (const [w, h, d, x, z] of ghosts) {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), ghostMat);
-    m.position.set(x, h / 2 - 0.3, z);
-    m.castShadow = m.receiveShadow = true;
-    scene.add(m);
+  // ── Manzanas de la ciudad (instanciadas: 1 draw call) ──
+  const palette = [0xe6dfd0, 0xd9cdb4, 0xcbb59a, 0xc2a184, 0xbdb6a6, 0xd4c8b0];
+  const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+  boxGeo.translate(0, 0.5, 0);
+  const cityMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95 });
+  const items = [];
+  const GRID = 58;
+  for (let gx = -750; gx <= 750; gx += GRID) {
+    for (let gz = -750; gz <= 750; gz += GRID) {
+      // hueco para nuestra parcela y sus calles
+      if (Math.abs(gx) < 110 && Math.abs(gz) < 60) continue;
+      const r2 = gx * gx + gz * gz;
+      if (r2 > 800 * 800) continue;
+      const n = 1 + Math.floor(rnd() * 3);
+      for (let i = 0; i < n; i++) {
+        const bw = 13 + rnd() * 16, bd = 12 + rnd() * 14;
+        const tall = rnd() < 0.07;
+        const bh = tall ? 16 + rnd() * 14 : 3.5 + rnd() * 8.5;
+        const x = gx + (rnd() - 0.5) * (GRID - bw - 10);
+        const z = gz + (rnd() - 0.5) * (GRID - bd - 10);
+        items.push({ x, z, bw, bd, bh, c: palette[Math.floor(rnd() * palette.length)] });
+      }
+    }
   }
+  const city = new THREE.InstancedMesh(boxGeo, cityMat, items.length);
+  const m4 = new THREE.Matrix4();
+  const col = new THREE.Color();
+  items.forEach((it, i) => {
+    m4.makeScale(it.bw, it.bh, it.bd);
+    m4.setPosition(it.x, -0.3, it.z);
+    city.setMatrixAt(i, m4);
+    city.setColorAt(i, col.setHex(it.c));
+  });
+  city.castShadow = city.receiveShadow = true;
+  scene.add(city);
+
+  // ── Arbolado urbano ──
+  const treeGeo = new THREE.IcosahedronGeometry(1, 1);
+  const treeMat = new THREE.MeshStandardMaterial({ color: 0x5b8a54, roughness: 1, flatShading: true });
+  const nTrees = 420;
+  const trees = new THREE.InstancedMesh(treeGeo, treeMat, nTrees);
+  for (let i = 0; i < nTrees; i++) {
+    const a = rnd() * Math.PI * 2;
+    const r = 90 + rnd() * 640;
+    const s = 1.6 + rnd() * 1.8;
+    m4.makeScale(s, s * 1.2, s);
+    m4.setPosition(Math.cos(a) * r, s, Math.sin(a) * r);
+    trees.setMatrixAt(i, m4);
+    trees.setColorAt(i, col.setHSL(0.29 + rnd() * 0.06, 0.35, 0.32 + rnd() * 0.12));
+  }
+  scene.add(trees);
+
+  // ── Relieve lejano (medianías de Gran Canaria) ──
+  const hillMat = new THREE.MeshStandardMaterial({ color: 0x8d7d67, roughness: 1 });
+  for (let i = 0; i < 12; i++) {
+    const a = Math.PI * (0.62 + rnd() * 0.75); // arco oeste-sur (interior de la isla)
+    const r = 1050 + rnd() * 320;
+    const h = 45 + rnd() * 75;
+    const hill = new THREE.Mesh(new THREE.ConeGeometry(280 + rnd() * 260, h, 6), hillMat);
+    hill.position.set(Math.cos(a) * r, h / 2 - 22, Math.abs(Math.sin(a)) * r * 0.8);
+    hill.rotation.y = rnd() * Math.PI;
+    scene.add(hill);
+  }
+  // ── Mar al noreste ──
+  const sea = new THREE.Mesh(
+    new THREE.PlaneGeometry(2600, 900),
+    new THREE.MeshStandardMaterial({ color: 0x4d7488, roughness: 0.35, metalness: 0.1 })
+  );
+  sea.rotation.x = -Math.PI / 2;
+  sea.position.set(250, -2.5, -1250);
+  scene.add(sea);
 }
 
 /**
@@ -510,7 +570,7 @@ export function paintUnits(unitMeshes, estadoDe, dimmedDe, selectedId, hoverId, 
       apt.floorM.opacity = o * fade;
       apt.wallM.opacity = o * fade;
       apt.furnM.opacity = o * fade;
-      tmp.copy(PARQUET).lerp(col, dimmed ? 0.08 : 0.5);
+      tmp.copy(PARQUET).lerp(col, dimmed ? 0.08 : 0.58);
       apt.floorM.color.copy(tmp);
       continue;
     }
@@ -528,7 +588,7 @@ export function paintUnits(unitMeshes, estadoDe, dimmedDe, selectedId, hoverId, 
       mat.opacity = fade;
       mat.emissive.copy(col).multiplyScalar(0.25);
     } else {
-      tmp.copy(BASE_UNIT).lerp(col, 0.52);
+      tmp.copy(BASE_UNIT).lerp(col, 0.62);
       mat.color.copy(tmp);
       mat.opacity = fade;
       mat.emissive.setHex(0x000000);
