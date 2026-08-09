@@ -1,29 +1,67 @@
 /* ═══════════════════════════════════════════════════════════════
-   context.js — Entorno urbano de Las Huesas (Telde):
-   rasante en pendiente con aceras escalonadas siguiendo los
-   portales, campo de fútbol junto a la parcela, parque con
-   palmeras, barrio residencial bajo y vegetación en los solares.
+   context.js — Entorno real de la parcela (Las Huesas, Telde):
+
+   · C/ Íñigo López de Mendoza al NORTE (fachada larga, con el
+     campo de fútbol Las Huesas enfrente)
+   · C/ Sagunto al OESTE (testero alto) · C/ Numancia al ESTE
+     (testero bajo) — como en los alzados
+   · Hilera de adosados existente al SUR
+   · Rasante en RAMPA CONTINUA: pendiente longitudinal O→E (~2,9 m,
+     +81,3 → +75,8 según secciones) y transversal N→S. El edificio
+     se escalona; la acera acompaña la pendiente sin escalones.
    ═══════════════════════════════════════════════════════════════ */
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { BUILDING, SECTIONS, streetYAt } from './layout.js';
 
-// zonas reservadas (sin manzanas de relleno): [x0, x1, z0, z1]
+const clamp01 = (v) => Math.max(0, Math.min(1, v));
+const smooth = (v) => { const t = clamp01(v); return t * t * (3 - 2 * t); };
+
+/** Rasante continua: pendiente longitudinal O→E + transversal N→S,
+    fundida con el llano (-0.42) lejos de la parcela. */
+export function terrainY(x, z) {
+  const slopeX = 2.55 - 2.9 * clamp01((x + 60) / 120); // O alto → E bajo
+  const slopeZ = -0.0095 * z;                          // N alto → S bajo
+  const core = smooth(1 - (Math.abs(x) - 85) / 90) * smooth(1 - (Math.abs(z) - 45) / 80);
+  return (slopeX + slopeZ) * core + -0.42 * (1 - core);
+}
+
+// zonas reservadas (sin manzanas genéricas): [x0, x1, z0, z1]
 const RESERVED = [
-  [-135, 135, -70, 70],   // parcela + calles perimetrales
-  [-45, 80, -145, -72],   // campo de fútbol
-  [-215, -120, -55, 55],  // parque
+  [-300, 300, -170, 60],   // parcela, calles, campo y solares próximos
+  [-80, 80, 60, 110],      // adosados del sur
 ];
+const inReserved = (x, z, m = 0) =>
+  RESERVED.some(([x0, x1, z0, z1]) => x > x0 - m && x < x1 + m && z > z0 - m && z < z1 + m);
 
-function inReserved(x, z, m = 0) {
-  return RESERVED.some(([x0, x1, z0, z1]) => x > x0 - m && x < x1 + m && z > z0 - m && z < z1 + m);
+/** Cinta inclinada que sigue el terreno (acera/calzada en rampa).
+    Con carve=true, el terreno se rebaja bajo la huella del edificio
+    hasta la cota del podio (la parcela está excavada). */
+function ribbon(x0, x1, z0, z1, lift, mat, segsX = 36, segsZ = 2, carve = false) {
+  const g = new THREE.PlaneGeometry(x1 - x0, z1 - z0, segsX, segsZ);
+  g.rotateX(-Math.PI / 2);
+  const pos = g.attributes.position;
+  const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i) + cx, z = pos.getZ(i) + cz;
+    let y = terrainY(x, z) + lift;
+    if (carve) {
+      const inside = smooth(1 - (Math.abs(x) - 52) / 10) * smooth(1 - (Math.abs(z) - 13) / 6);
+      y = y * (1 - inside) + -0.95 * inside;
+    }
+    pos.setY(i, y);
+  }
+  g.computeVertexNormals();
+  const m = new THREE.Mesh(g, mat);
+  m.position.set(cx, 0, cz);
+  m.receiveShadow = true;
+  return m;
 }
 
 function groundText(text, w = 46) {
   const cv = document.createElement('canvas');
   cv.width = 1024; cv.height = 128;
   const ctx = cv.getContext('2d');
-  ctx.fillStyle = 'rgba(245,248,252,0.6)';
+  ctx.fillStyle = 'rgba(248,250,253,0.62)';
   ctx.font = '500 58px Inter, sans-serif';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.letterSpacing = '14px';
@@ -37,7 +75,7 @@ function groundText(text, w = 46) {
   return m;
 }
 
-// ─── Campo de fútbol con marcaje pintado ───
+// ─── Campo de fútbol Las Huesas (al norte, cruzando Íñigo López) ───
 function footballField() {
   const g = new THREE.Group();
   const W = 100, H = 62;
@@ -46,9 +84,7 @@ function footballField() {
   const ctx = cv.getContext('2d');
   ctx.fillStyle = '#3e7a46';
   ctx.fillRect(0, 0, 1024, 640);
-  // bandas de siega
-  for (let i = 0; i < 10; i++) {
-    if (i % 2) continue;
+  for (let i = 0; i < 10; i += 2) {
     ctx.fillStyle = 'rgba(255,255,255,0.045)';
     ctx.fillRect(i * 102.4, 0, 102.4, 640);
   }
@@ -57,8 +93,8 @@ function footballField() {
   ctx.strokeRect(40, 40, 944, 560);
   ctx.beginPath(); ctx.moveTo(512, 40); ctx.lineTo(512, 600); ctx.stroke();
   ctx.beginPath(); ctx.arc(512, 320, 72, 0, Math.PI * 2); ctx.stroke();
-  ctx.strokeRect(40, 190, 130, 260);  // área izq
-  ctx.strokeRect(854, 190, 130, 260); // área dcha
+  ctx.strokeRect(40, 190, 130, 260);
+  ctx.strokeRect(854, 190, 130, 260);
   const tex = new THREE.CanvasTexture(cv);
   tex.anisotropy = 8;
   const pitch = new THREE.Mesh(
@@ -68,7 +104,6 @@ function footballField() {
   pitch.rotation.x = -Math.PI / 2;
   pitch.receiveShadow = true;
   g.add(pitch);
-  // porterías
   const goalMat = new THREE.MeshStandardMaterial({ color: 0xf5f5f5, roughness: 0.5 });
   for (const sx of [-1, 1]) {
     const goal = new THREE.Group();
@@ -81,13 +116,12 @@ function footballField() {
     goal.position.set(sx * (W / 2 - 4.2), 0, 0);
     g.add(goal);
   }
-  // valla perimetral ligera
   const fenceMat = new THREE.MeshStandardMaterial({
-    color: 0xadb8bd, transparent: true, opacity: 0.4, roughness: 0.6,
+    color: 0xadb8bd, transparent: true, opacity: 0.38, roughness: 0.6,
   });
   const mkFence = (w, d, x, z) => {
-    const f = new THREE.Mesh(new THREE.BoxGeometry(w, 2.4, d), fenceMat);
-    f.position.set(x, 1.2, z);
+    const f = new THREE.Mesh(new THREE.BoxGeometry(w, 3, d), fenceMat);
+    f.position.set(x, 1.5, z);
     g.add(f);
   };
   mkFence(W + 6, 0.1, 0, -H / 2 - 3);
@@ -103,116 +137,125 @@ export function buildContext(scene) {
   const m4 = new THREE.Matrix4();
   const q = new THREE.Quaternion();
   const col = new THREE.Color();
-  const vS = new THREE.Vector3();
+  const up = new THREE.Vector3(0, 1, 0);
 
-  // ── Suelo general ──
+  // ── Suelo llano lejano ──
   const ground = new THREE.Mesh(
     new THREE.CircleGeometry(950, 80),
-    new THREE.MeshStandardMaterial({ color: 0x8e9077, roughness: 1 })
+    new THREE.MeshStandardMaterial({ color: 0x9c9884, roughness: 1 })
   );
   ground.rotation.x = -Math.PI / 2;
-  ground.position.y = -0.45;
+  ground.position.y = -0.46;
   ground.receiveShadow = true;
   scene.add(ground);
 
-  // ── Explanada de la parcela + aceras escalonadas por tramos ──
-  const apronMat = new THREE.MeshStandardMaterial({ color: 0x9a958a, roughness: 1 });
-  const sidewalkMat = new THREE.MeshStandardMaterial({ color: 0xb9b4a9, roughness: 0.95 });
-  const curbMat = new THREE.MeshStandardMaterial({ color: 0x84807a, roughness: 1 });
-  const D2 = BUILDING.depth / 2;
-  for (const sec of SECTIONS) {
-    const w = sec.x1 - sec.x0, cx = (sec.x0 + sec.x1) / 2;
-    // explanada bajo el edificio (del sótano a la rasante del tramo)
-    const apron = new THREE.Mesh(new THREE.BoxGeometry(w, sec.street + 1.6, BUILDING.depth + 9), apronMat);
-    apron.position.set(cx, (sec.street + 1.6) / 2 - 1.5, 0);
-    apron.receiveShadow = true;
-    scene.add(apron);
-    // aceras SO y NE siguiendo la rasante del tramo
-    for (const sz of [1, -1]) {
-      const sw = new THREE.Mesh(new THREE.BoxGeometry(w, 0.3, 3.6), sidewalkMat);
-      sw.position.set(cx, sec.street + 0.02, sz * (D2 + 6.4));
-      sw.castShadow = sw.receiveShadow = true;
-      scene.add(sw);
-      const curb = new THREE.Mesh(new THREE.BoxGeometry(w, 0.42, 0.35), curbMat);
-      curb.position.set(cx, sec.street - 0.05, sz * (D2 + 8.3));
-      scene.add(curb);
+  // ── Terreno en rampa alrededor de la parcela ──
+  const dirtMat = new THREE.MeshStandardMaterial({ color: 0xa89e88, roughness: 1 });
+  scene.add(ribbon(-190, 190, -60, 110, -0.06, dirtMat, 96, 32, true));
+
+  // ── Aceras y calzadas en rampa continua ──
+  const sidewalkMat = new THREE.MeshStandardMaterial({ color: 0xbcb7ac, roughness: 0.95 });
+  const asphaltMat = new THREE.MeshStandardMaterial({ color: 0x5e6065, roughness: 1 });
+  // acera norte (Íñigo López de Mendoza) y sur
+  scene.add(ribbon(-64, 64, -20.8, -16.6, 0.1, sidewalkMat));
+  scene.add(ribbon(-64, 64, 16.6, 20.8, 0.1, sidewalkMat));
+  // calzada Íñigo López de Mendoza (norte, larga)
+  scene.add(ribbon(-260, 260, -31.5, -21, 0.02, asphaltMat, 90));
+  // vial de servicio sur (entre parcela y adosados)
+  scene.add(ribbon(-90, 90, 21, 29.5, 0.02, asphaltMat, 48));
+  // testeros: C/ Sagunto (oeste) y C/ Numancia (este)
+  scene.add(ribbon(-72, -62, -140, 130, 0.02, asphaltMat, 4, 60));
+  scene.add(ribbon(62, 72, -140, 130, 0.02, asphaltMat, 4, 60));
+  // aceras de testeros
+  scene.add(ribbon(-61.8, -58, -30, 25, 0.1, sidewalkMat, 3, 20));
+  scene.add(ribbon(58, 61.8, -30, 25, 0.1, sidewalkMat, 3, 20));
+
+  const t1 = groundText('C/ Íñigo López de Mendoza', 58);
+  t1.position.set(0, terrainY(0, -26) + 0.12, -26);
+  scene.add(t1);
+  const t2 = groundText('Calle Sagunto', 40);
+  t2.position.set(-67, terrainY(-67, -15) + 0.12, -15);
+  t2.rotation.z = Math.PI / 2;
+  scene.add(t2);
+  const t3 = groundText('Calle Numancia', 40);
+  t3.position.set(67, terrainY(67, -15) + 0.12, -15);
+  t3.rotation.z = -Math.PI / 2;
+  scene.add(t3);
+
+  // ── Campo de fútbol Las Huesas al norte ──
+  const field = footballField();
+  field.position.set(-8, -0.3, -72);
+  scene.add(field);
+
+  // ── Adosados existentes al sur (cubiertas claras, 2 plantas) ──
+  {
+    const rowMat = new THREE.MeshStandardMaterial({ color: 0xd8d1c0, roughness: 0.95 });
+    const roofMat = new THREE.MeshStandardMaterial({ color: 0xf4f2ec, roughness: 0.8 });
+    const patioMat = new THREE.MeshStandardMaterial({ color: 0xcdc4b0, roughness: 1 });
+    for (let i = 0; i < 13; i++) {
+      const x = -54 + i * 9;
+      const y = terrainY(x, 38);
+      const casa = new THREE.Mesh(new THREE.BoxGeometry(8.4, 5.8, 11.5), rowMat);
+      casa.position.set(x, y + 2.9, 38);
+      casa.castShadow = casa.receiveShadow = true;
+      scene.add(casa);
+      const roof = new THREE.Mesh(new THREE.BoxGeometry(7.6, 0.5, 6), roofMat);
+      roof.position.set(x, y + 6.0, 35.8);
+      scene.add(roof);
+      const patio = new THREE.Mesh(new THREE.BoxGeometry(7.6, 0.3, 5), patioMat);
+      patio.position.set(x, y + 0.4, 48);
+      scene.add(patio);
     }
   }
 
-  // ── Calles en pendiente junto al edificio, planas a lo lejos ──
-  const streetMat = new THREE.MeshStandardMaterial({ color: 0x5f6166, roughness: 1 });
-  const mkStreetSeg = (w, d, x, z, y) => {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.24, d), streetMat);
-    m.position.set(x, y, z);
-    m.receiveShadow = true;
-    scene.add(m);
-  };
-  // tramos frente al edificio a la cota de cada sección
-  for (const sec of SECTIONS) {
-    const w = sec.x1 - sec.x0, cx = (sec.x0 + sec.x1) / 2;
-    mkStreetSeg(w, 9.5, cx, D2 + 13, sec.street - 0.14);   // Numancia
-    mkStreetSeg(w, 9.5, cx, -(D2 + 13), sec.street - 0.14); // Sagunto
+  // ── Solares de tierra con arbolitos (zonas verdes del plano) ──
+  const lotMat = new THREE.MeshStandardMaterial({ color: 0xb0a488, roughness: 1 });
+  const greenMat = new THREE.MeshStandardMaterial({ color: 0x6a835a, roughness: 1 });
+  const lots = [
+    [-160, -95, -55, 40],   // O de Sagunto (grande)
+    [80, 150, -50, 30],     // E de Numancia
+    [95, 190, -110, -60],   // NE, cruzando Mendoza
+    [-190, -80, -130, -75], // NO, junto al campo
+  ];
+  const treeSpots = [];
+  for (const [x0, x1, z0, z1] of lots) {
+    const lot = ribbon(x0, x1, z0, z1, -0.02, lotMat, 12, 6);
+    scene.add(lot);
+    // manchas de verde + arbolitos (los garabatos verdes del plano)
+    const n = 3 + Math.floor(rnd() * 3);
+    for (let i = 0; i < n; i++) {
+      const gx = x0 + 8 + rnd() * (x1 - x0 - 16);
+      const gz = z0 + 8 + rnd() * (z1 - z0 - 16);
+      const patch = new THREE.Mesh(new THREE.CylinderGeometry(4 + rnd() * 5, 4 + rnd() * 5, 0.1, 9), greenMat);
+      patch.position.set(gx, terrainY(gx, gz) + 0.05, gz);
+      scene.add(patch);
+      const nt = 2 + Math.floor(rnd() * 3);
+      for (let t = 0; t < nt; t++) {
+        treeSpots.push([gx + (rnd() - 0.5) * 8, gz + (rnd() - 0.5) * 8, 0.9 + rnd() * 1.3]);
+      }
+    }
   }
-  // prolongaciones planas
-  mkStreetSeg(1100, 9.5, -60 - 550, D2 + 13, SECTIONS[0].street - 0.14);
-  mkStreetSeg(1100, 9.5, 60 + 550, D2 + 13, SECTIONS[3].street - 0.14);
-  mkStreetSeg(1100, 9.5, -60 - 550, -(D2 + 13), SECTIONS[0].street - 0.14);
-  mkStreetSeg(1100, 9.5, 60 + 550, -(D2 + 13), SECTIONS[3].street - 0.14);
-  // transversales O y E
-  mkStreetSeg(10, 1200, -66, 0, SECTIONS[0].street - 0.14);
-  mkStreetSeg(10, 1200, 66, 0, SECTIONS[3].street - 0.14);
 
-  const t1 = groundText('Calle Numancia', 46);
-  t1.position.set(0, streetYAt(0) + 0.02, D2 + 13);
-  scene.add(t1);
-  const t2 = groundText('Calle Sagunto', 46);
-  t2.position.set(0, streetYAt(0) + 0.02, -(D2 + 13));
-  t2.rotation.z = Math.PI;
-  scene.add(t2);
-  const t3 = groundText('C/ Íñigo López de Mendoza', 56);
-  t3.position.set(-66, SECTIONS[0].street + 0.02, 0);
-  t3.rotation.z = Math.PI / 2;
-  scene.add(t3);
-
-  // ── Campo de fútbol junto a la parcela (al NE, cruzando Sagunto) ──
-  const field = footballField();
-  field.position.set(16, -0.28, -108);
-  scene.add(field);
-
-  // ── Parque al oeste ──
-  const park = new THREE.Mesh(
-    new THREE.PlaneGeometry(92, 106),
-    new THREE.MeshStandardMaterial({ color: 0x557a4b, roughness: 1 })
-  );
-  park.rotation.x = -Math.PI / 2;
-  park.position.set(-166, -0.32, 0);
-  park.receiveShadow = true;
-  scene.add(park);
-  const pathMat = new THREE.MeshStandardMaterial({ color: 0xc7bda9, roughness: 1 });
-  const path1 = new THREE.Mesh(new THREE.BoxGeometry(88, 0.1, 3), pathMat);
-  path1.position.set(-166, -0.26, 0);
-  scene.add(path1);
-  const path2 = new THREE.Mesh(new THREE.BoxGeometry(3, 0.1, 100), pathMat);
-  path2.position.set(-166, -0.26, 0);
-  scene.add(path2);
-
-  // ── Barrio residencial bajo y simplificado ──
-  const palette = [0xe9e4d8, 0xded5c2, 0xd3c3ab, 0xcbb49a, 0xd8d2c4, 0xc9beb0];
+  // ── Barrio genérico (al sur y lejos), bajo y simplificado ──
+  const palette = [0xe9e4d8, 0xded5c2, 0xd3c3ab, 0xcbb49a, 0xd8d2c4, 0xc9beb0, 0xd9825f];
   const boxGeo = new THREE.BoxGeometry(1, 1, 1);
   boxGeo.translate(0, 0.5, 0);
   const cityMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95 });
   const houses = [];
   const greens = [];
-  const GRID = 62;
+  const GRID = 58;
   for (let gx = -750; gx <= 750; gx += GRID) {
     for (let gz = -750; gz <= 750; gz += GRID) {
-      if (inReserved(gx, gz, 18)) continue;
+      if (inReserved(gx, gz, 20)) continue;
       if (gx * gx + gz * gz > 780 * 780) continue;
-      if (rnd() < 0.2) { greens.push([gx, gz]); continue; } // solar con vegetación
+      // el casco está sobre todo al S-SE (como en el plano)
+      const density = gz > 40 ? 0.95 : 0.55;
+      if (rnd() > density) { if (rnd() < 0.5) greens.push([gx, gz]); continue; }
+      if (rnd() < 0.16) { greens.push([gx, gz]); continue; }
       const n = 1 + Math.floor(rnd() * 3);
       for (let i = 0; i < n; i++) {
         const bw = 11 + rnd() * 13, bd = 10 + rnd() * 12;
-        const bh = rnd() < 0.06 ? 12 + rnd() * 6 : 3.2 + rnd() * 5.4; // 1-3 plantas
+        const bh = rnd() < 0.05 ? 11 + rnd() * 5 : 3.2 + rnd() * 5.2;
         houses.push({
           x: gx + (rnd() - 0.5) * (GRID - bw - 12),
           z: gz + (rnd() - 0.5) * (GRID - bd - 12),
@@ -231,48 +274,42 @@ export function buildContext(scene) {
   city.castShadow = city.receiveShadow = true;
   scene.add(city);
 
-  // ── Solares verdes ──
+  // solares verdes del barrio
   const lotGeo = new THREE.CylinderGeometry(1, 1, 0.12, 10);
-  const lotMat = new THREE.MeshStandardMaterial({ color: 0x5f7d4e, roughness: 1 });
-  const lots = new THREE.InstancedMesh(lotGeo, lotMat, greens.length);
+  const lotsIM = new THREE.InstancedMesh(lotGeo, greenMat, greens.length);
   greens.forEach(([gx, gz], i) => {
-    m4.makeScale(16 + rnd() * 9, 1, 13 + rnd() * 7);
-    m4.setPosition(gx, -0.36, gz);
-    lots.setMatrixAt(i, m4);
-    lots.setColorAt(i, col.setHSL(0.26 + rnd() * 0.06, 0.32, 0.3 + rnd() * 0.08));
+    m4.makeScale(15 + rnd() * 9, 1, 12 + rnd() * 7);
+    m4.setPosition(gx, -0.38, gz);
+    lotsIM.setMatrixAt(i, m4);
+    lotsIM.setColorAt(i, col.setHSL(0.25 + rnd() * 0.07, 0.3, 0.32 + rnd() * 0.08));
   });
-  lots.receiveShadow = true;
-  scene.add(lots);
+  lotsIM.receiveShadow = true;
+  scene.add(lotsIM);
 
-  // ── Arbolado: copas redondas (árboles y arbustos) ──
-  const treeGeo = new THREE.IcosahedronGeometry(1, 1);
-  const treeMat = new THREE.MeshStandardMaterial({ color: 0x5b8a54, roughness: 1, flatShading: true });
-  const treeSpots = [];
-  // en solares
+  // ── Arbolado (copas redondas) ──
   for (const [gx, gz] of greens) {
     const n = 3 + Math.floor(rnd() * 4);
-    for (let i = 0; i < n; i++) treeSpots.push([gx + (rnd() - 0.5) * 22, gz + (rnd() - 0.5) * 16, 1.1 + rnd() * 1.6]);
+    for (let i = 0; i < n; i++) treeSpots.push([gx + (rnd() - 0.5) * 20, gz + (rnd() - 0.5) * 15, 1 + rnd() * 1.6]);
   }
-  // dispersos por el barrio
-  for (let i = 0; i < 260; i++) {
-    const a = rnd() * Math.PI * 2, r = 95 + rnd() * 620;
+  for (let i = 0; i < 240; i++) {
+    const a = rnd() * Math.PI * 2, r = 120 + rnd() * 600;
     const x = Math.cos(a) * r, z = Math.sin(a) * r;
     if (inReserved(x, z, 4)) continue;
-    treeSpots.push([x, z, 1.3 + rnd() * 1.7]);
+    treeSpots.push([x, z, 1.2 + rnd() * 1.7]);
   }
-  // en el parque
-  for (let i = 0; i < 26; i++) treeSpots.push([-166 + (rnd() - 0.5) * 80, (rnd() - 0.5) * 92, 1.5 + rnd() * 1.6]);
+  const treeGeo = new THREE.IcosahedronGeometry(1, 1);
+  const treeMat = new THREE.MeshStandardMaterial({ color: 0x5b8a54, roughness: 1, flatShading: true });
   const trees = new THREE.InstancedMesh(treeGeo, treeMat, treeSpots.length);
   treeSpots.forEach(([x, z, s], i) => {
     m4.makeScale(s, s * 1.15, s);
-    m4.setPosition(x, s, z);
+    m4.setPosition(x, terrainY(x, z) + s, z);
     trees.setMatrixAt(i, m4);
     trees.setColorAt(i, col.setHSL(0.27 + rnd() * 0.07, 0.38, 0.3 + rnd() * 0.12));
   });
   trees.castShadow = true;
   scene.add(trees);
 
-  // ── Palmeras (canarias): tronco + corona de frondas ──
+  // ── Palmeras (tronco + corona de frondas) ──
   const trunkGeo = new THREE.CylinderGeometry(0.16, 0.3, 1, 6);
   trunkGeo.translate(0, 0.5, 0);
   const trunkMat = new THREE.MeshStandardMaterial({ color: 0x8a6f52, roughness: 1 });
@@ -289,26 +326,24 @@ export function buildContext(scene) {
   const crownMat = new THREE.MeshStandardMaterial({ color: 0x4f7d3f, roughness: 0.9, flatShading: true });
 
   const palmSpots = [];
-  // hileras en las calles del edificio (a cota de acera)
-  for (let x = -52; x <= 52; x += 14.5) {
-    palmSpots.push([x, D2 + 8.6, streetYAt(x) + 0.05, 4.6 + rnd() * 1.4]);
-    palmSpots.push([x + 7, -(D2 + 8.6), streetYAt(x + 7) + 0.05, 4.4 + rnd() * 1.6]);
+  // alineación en la acera norte (Íñigo López de Mendoza)
+  for (let x = -56; x <= 56; x += 13.5) {
+    palmSpots.push([x, -19.6, 4.4 + rnd() * 1.6]);
   }
-  // parque y campo
-  for (let i = 0; i < 22; i++) palmSpots.push([-166 + (rnd() - 0.5) * 84, (rnd() - 0.5) * 96, -0.3, 4 + rnd() * 3]);
-  for (let i = 0; i < 8; i++) palmSpots.push([-42 + rnd() * 130, -140 + rnd() * 6, -0.3, 4 + rnd() * 2.5]);
-  // salpicadas por el barrio
-  for (let i = 0; i < 70; i++) {
-    const a = rnd() * Math.PI * 2, r = 110 + rnd() * 560;
+  // algunas entre la calle y la valla del campo
+  for (let i = 0; i < 8; i++) palmSpots.push([-64 + rnd() * 120, -35.5 + rnd() * 2.2, 4 + rnd() * 2.5]);
+  for (let i = 0; i < 55; i++) {
+    const a = rnd() * Math.PI * 2, r = 130 + rnd() * 520;
     const x = Math.cos(a) * r, z = Math.sin(a) * r;
     if (inReserved(x, z, 2)) continue;
-    palmSpots.push([x, z, -0.35, 3.6 + rnd() * 3.4]);
+    palmSpots.push([x, z, 3.6 + rnd() * 3.2]);
   }
   const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, palmSpots.length);
   const crowns = new THREE.InstancedMesh(crownGeo, crownMat, palmSpots.length);
-  palmSpots.forEach(([x, z, y, h], i) => {
-    q.setFromAxisAngle(vS.set(0, 1, 0), rnd() * Math.PI * 2);
-    m4.compose(vS.clone().set(x, y, z), q, new THREE.Vector3(1, h, 1));
+  palmSpots.forEach(([x, z, h], i) => {
+    const y = terrainY(x, z);
+    q.setFromAxisAngle(up, rnd() * Math.PI * 2);
+    m4.compose(new THREE.Vector3(x, y, z), q, new THREE.Vector3(1, h, 1));
     trunks.setMatrixAt(i, m4);
     m4.compose(new THREE.Vector3(x, y + h - 0.4, z), q, new THREE.Vector3(1.1, 1, 1.1));
     crowns.setMatrixAt(i, m4);
