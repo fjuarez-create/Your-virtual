@@ -30,6 +30,10 @@ jobs:
           git rm -rf --cached . >/dev/null
           rm -rf .github
           touch .nojekyll
+          # Versionado de módulos: el importmap referencia js/*.js con
+          # ?v=__BUILD__; al fijarlo al SHA, HTML y JS cachean en versiones
+          # consistentes (evita mezclas tras cada deploy).
+          sed -i "s/__BUILD__/${GITHUB_SHA::8}/g" index.html
           git add -A
           git commit -m "Deploy ${GITHUB_SHA::7}"
           git push -f origin gh-pages

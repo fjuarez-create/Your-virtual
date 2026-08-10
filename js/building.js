@@ -5,8 +5,8 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { BUILDING, FLOOR_DEFS, ROOF_Y, PATIOS, SECTIONS, floorYAt, streetYAt, computeLayout } from './layout.js';
-import { buildContext } from './context.js';
+import { BUILDING, FLOOR_DEFS, ROOF_Y, PATIOS, SECTIONS, floorYAt, streetYAt, computeLayout } from 'app/layout.js';
+import { buildContext } from 'app/context.js';
 
 export const ESTADO_COLORS = {
   disponible: new THREE.Color(0x35d69a),

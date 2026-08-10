@@ -20,7 +20,15 @@
     "three/addons/postprocessing/EffectComposer.js": "./vendor/EffectComposer.js",
     "three/addons/postprocessing/RenderPass.js": "./vendor/RenderPass.js",
     "three/addons/postprocessing/UnrealBloomPass.js": "./vendor/UnrealBloomPass.js",
-    "three/addons/postprocessing/OutputPass.js": "./vendor/OutputPass.js"
+    "three/addons/postprocessing/OutputPass.js": "./vendor/OutputPass.js",
+
+    "app/main.js": "./js/main.js?v=__BUILD__",
+    "app/ui.js": "./js/ui.js?v=__BUILD__",
+    "app/building.js": "./js/building.js?v=__BUILD__",
+    "app/context.js": "./js/context.js?v=__BUILD__",
+    "app/layout.js": "./js/layout.js?v=__BUILD__",
+    "app/api.js": "./js/api.js?v=__BUILD__",
+    "app/promotions.js": "./js/promotions.js?v=__BUILD__"
   }
 }
 </script>
@@ -185,6 +193,6 @@
   <div id="loader"><div class="spin"></div><p>Preparando el showroom…</p></div>
 </div>
 
-<script type="module" src="js/main.js"></script>
+<script type="module">import 'app/main.js';</script>
 </body>
 </html>

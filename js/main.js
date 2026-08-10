@@ -9,11 +9,11 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { FLOOR_DEFS, ROOF_Y, floorOf } from './layout.js';
-import { buildBuilding, paintUnits, loadBIM } from './building.js';
-import { fetchUnits, fetchAvailability, pollAvailability, sendLead } from './api.js';
-import * as UI from './ui.js';
-import { ACTIVE_DEV, ACTIVE_BUILDING } from './promotions.js';
+import { FLOOR_DEFS, ROOF_Y, floorOf } from 'app/layout.js';
+import { buildBuilding, paintUnits, loadBIM } from 'app/building.js';
+import { fetchUnits, fetchAvailability, pollAvailability, sendLead } from 'app/api.js';
+import * as UI from 'app/ui.js';
+import { ACTIVE_DEV, ACTIVE_BUILDING } from 'app/promotions.js';
 
 const $ = (s) => document.querySelector(s);
 

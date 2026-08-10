@@ -2,8 +2,8 @@
    ui.js — Interfaz DOM: filtros, panel de detalle, listado,
    tooltip, selector de plantas y estadísticas.
    ═══════════════════════════════════════════════════════════════ */
-import { FLOOR_DEFS, plantaNum } from './layout.js';
-import { DEVELOPMENTS } from './promotions.js';
+import { FLOOR_DEFS, plantaNum } from 'app/layout.js';
+import { DEVELOPMENTS } from 'app/promotions.js';
 
 /** Inserta separadores invisibles (U+2060) para que los detectores de
     direcciones de iOS/Chrome no conviertan "Vivienda 116" en un enlace
