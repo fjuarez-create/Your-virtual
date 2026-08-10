@@ -45,9 +45,8 @@ export function initUI(app) {
   }
   sel.addEventListener('change', () => app.setBuilding(sel.value));
 
-  // ── Día / noche ──
-  $('#dnDay').addEventListener('click', () => app.setNight(false));
-  $('#dnNight').addEventListener('click', () => app.setNight(true));
+  // ── Día / noche (switch) ──
+  $('#dnToggle').addEventListener('click', () => app.setNight(!app.night));
 
   // ── Selector de plantas ──
   const wrap = $('#floorBtns');
@@ -55,7 +54,7 @@ export function initUI(app) {
     const b = document.createElement('button');
     b.className = 'floor-btn';
     b.dataset.floor = F.key;
-    b.innerHTML = `<span class="fb-name">${F.label}</span><span class="fb-sub"></span>`;
+    b.innerHTML = `<span class="fb-name">${F.label}</span><span class="fb-short">${F.short}</span><span class="fb-sub"></span>`;
     b.addEventListener('click', () => app.setFloor(F.key));
     wrap.appendChild(b);
   }
@@ -129,8 +128,9 @@ export function initUI(app) {
 }
 
 export function markDayNight(night) {
-  $('#dnDay').classList.toggle('on', !night);
-  $('#dnNight').classList.toggle('on', night);
+  const t = $('#dnToggle');
+  t.classList.toggle('night', night);
+  t.setAttribute('aria-checked', night ? 'true' : 'false');
 }
 
 export function markFloorButtons(floorKey) {

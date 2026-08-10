@@ -26,6 +26,14 @@
 </script>
 </head>
 <body>
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-cube" viewBox="0 0 24 24"><path d="M12 2.5 20.5 7v10L12 21.5 3.5 17V7L12 2.5Zm0 0V12m0 0 8.5-5M12 12 3.5 7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></symbol>
+  <symbol id="i-plan" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="3" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M9.5 3.5v8m0 0h11m-11 0v9M15 11.5V21" fill="none" stroke="currentColor" stroke-width="1.7"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M8.5 6h12M8.5 12h12M8.5 18h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="4" cy="6" r="1.4" fill="currentColor"/><circle cx="4" cy="12" r="1.4" fill="currentColor"/><circle cx="4" cy="18" r="1.4" fill="currentColor"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 2.5v2.6M12 18.9v2.6M2.5 12h2.6M18.9 12h2.6M5 5l1.9 1.9M17.1 17.1 19 19M19 5l-1.9 1.9M6.9 17.1 5 19" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></symbol>
+  <symbol id="i-filter" viewBox="0 0 24 24"><path d="M3.5 7h17M6.5 12h11M9.5 17h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+</svg>
 <div id="app">
   <canvas id="scene"></canvas>
 
@@ -59,15 +67,24 @@
       </div>
     </div>
     <div class="top-stats" id="topStats"></div>
-    <div class="dn" id="dayNight" title="Modo día / noche">
-      <button id="dnDay" class="on" aria-label="Día">☀</button>
-      <button id="dnNight" aria-label="Noche">☾</button>
+    <div id="actionBar">
+      <nav class="mode-nav">
+        <button id="modo3d" class="mode-btn active" title="Vista 3D orbital">
+          <svg><use href="#i-cube"/></svg><span>3D</span>
+        </button>
+        <button id="modoPlano" class="mode-btn" title="Vista cenital de la planta">
+          <svg><use href="#i-plan"/></svg><span>Plano</span>
+        </button>
+        <button id="modoLista" class="mode-btn" title="Listado de viviendas">
+          <svg><use href="#i-list"/></svg><span>Listado</span>
+        </button>
+      </nav>
+      <button id="dnToggle" class="dn-switch" role="switch" aria-checked="false" aria-label="Modo día / noche">
+        <span class="dn-ico dn-sun"><svg><use href="#i-sun"/></svg></span>
+        <span class="dn-ico dn-moon"><svg><use href="#i-moon"/></svg></span>
+        <span class="dn-knob"></span>
+      </button>
     </div>
-    <nav class="mode-nav">
-      <button id="modo3d" class="mode-btn active" title="Vista 3D orbital">3D</button>
-      <button id="modoPlano" class="mode-btn" title="Vista cenital de la planta">Plano</button>
-      <button id="modoLista" class="mode-btn" title="Listado de viviendas">Listado</button>
-    </nav>
   </header>
 
   <!-- ══════════ FLOOR NAV ══════════ -->
@@ -75,7 +92,7 @@
     <p class="floornav-title">Plantas</p>
     <div id="floorBtns"></div>
     <button class="floor-btn floor-all active" data-floor="all">
-      <span class="fb-name">Edificio<br>completo</span>
+      <span class="fb-name">Edificio<br>completo</span><span class="fb-short">Todo</span>
     </button>
     <div class="explode-row">
       <label for="explodeRange" title="Separar plantas">Axonometría</label>
@@ -85,7 +102,7 @@
 
   <!-- ══════════ FILTERS ══════════ -->
   <aside id="filters" class="ui hidden-ui">
-    <button id="filtersToggle"><span class="ft-ico">⌕</span> Filtrar viviendas <span class="ft-count" id="filterCount"></span></button>
+    <button id="filtersToggle"><svg class="ft-svg"><use href="#i-filter"/></svg> Filtrar viviendas <span class="ft-count" id="filterCount"></span></button>
     <div id="filtersBody">
       <div class="f-group">
         <p>Dormitorios</p>

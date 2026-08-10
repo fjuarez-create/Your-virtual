@@ -165,7 +165,7 @@ function addSatellite(scene, fallback) {
       ctx.drawImage(img, (tx - tx0) * 256, (ty - ty0) * 256);
       tex.needsUpdate = true;
       mesh.visible = true;
-      if (first) { first = false; if (fallback) fallback.visible = false; }
+      if (first) { first = false; if (fallback) fallback.visible = false; document.body.classList.add('sat-on'); }
     };
     img.src = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${GEO.zoom}/${ty}/${tx}`;
   }
