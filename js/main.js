@@ -370,9 +370,16 @@ function animateFloors(dt) {
       const f = src.userData.fade;
       for (const h of lvl.holders) { h.position.y = dy; h.visible = f > 0.02; }
       for (const m of lvl.mats) m.opacity = m.userData.baseOpacity * f;
+      // corte pocito: en la planta aislada los muros se oscurecen
+      if (lvl.byCat?.wall) {
+        const cut = app.floor !== 'all' && animKey === app.floor;
+        lvl.byCat.wall.color.lerp(cut ? WALL_CUT : WALL_BASE, k);
+      }
     }
   }
 }
+const WALL_BASE = new THREE.Color(0xf1efe8);
+const WALL_CUT = new THREE.Color(0x34383f);
 
 const fadeOf = (floorKey) => B.floorGroups.get(floorKey)?.userData.fade ?? 1;
 
@@ -699,6 +706,18 @@ function loop() {
   for (const c of clouds.children) {
     c.position.x += c.userData.speed * dt;
     if (c.position.x > 1150) c.position.x = -1150;
+  }
+
+  // latido de los destellos de viviendas libres (solo planta activa)
+  if (B && app.floor !== 'all') {
+    const t = clock.elapsedTime;
+    for (const f of B.flares) {
+      if (!f.visible || !f.parent.visible) continue;
+      const w = Math.sin(t * 2.1 + f.userData.phase);
+      const s = 1.5 + 0.4 * w;
+      f.scale.set(s, s, 1);
+      f.material.opacity = 0.6 + 0.3 * w;
+    }
   }
 
   updateIntro(Math.min(rawDt, 0.6)); // tiempo real: la intro dura lo mismo en cualquier dispositivo

@@ -46,29 +46,73 @@ function slabGeometry(courts, depthY) {
   return g;
 }
 
-/* Etiqueta de vivienda: píldora blanca plana con el número en negro,
-   coherente con la UI (solo se muestra en viviendas disponibles). */
+/* Etiqueta de vivienda estilo pocito: píldora blanca con bolita verde y
+   el número (solo se muestra en viviendas disponibles). */
 function makeLabelSprite(text) {
   const cv = document.createElement('canvas');
-  cv.width = 192; cv.height = 96;
+  cv.width = 256; cv.height = 96;
   const ctx = cv.getContext('2d');
-  ctx.shadowColor = 'rgba(17,17,18,0.22)';
+  ctx.shadowColor = 'rgba(17,17,18,0.25)';
   ctx.shadowBlur = 10;
   ctx.shadowOffsetY = 4;
-  ctx.fillStyle = 'rgba(255,255,255,0.97)';
+  ctx.fillStyle = 'rgba(255,255,255,0.98)';
   ctx.beginPath();
-  ctx.roundRect(20, 16, 152, 60, 30);
+  ctx.roundRect(34, 18, 188, 60, 30);
   ctx.fill();
   ctx.shadowColor = 'transparent';
+  // bolita verde con aura suave
+  const glow = ctx.createRadialGradient(70, 48, 4, 70, 48, 24);
+  glow.addColorStop(0, 'rgba(53,214,154,0.55)');
+  glow.addColorStop(1, 'rgba(53,214,154,0)');
+  ctx.fillStyle = glow;
+  ctx.beginPath(); ctx.arc(70, 48, 24, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#2ecc90';
+  ctx.beginPath(); ctx.arc(70, 48, 12, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = '#111112';
-  ctx.font = '600 32px "Open Sans", "Segoe UI", sans-serif';
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(text, 96, 47);
+  ctx.font = '600 31px "Open Sans", "Segoe UI", sans-serif';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillText(text, 94, 49);
   const tex = new THREE.CanvasTexture(cv);
   tex.anisotropy = 8;
   const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true });
   const sp = new THREE.Sprite(mat);
-  sp.scale.set(3.4, 1.7, 1);
+  sp.scale.set(4.3, 1.61, 1);
+  return sp;
+}
+
+/* Destello suave (como un pequeño sol) que late sobre cada vivienda libre. */
+const FLARE_TEX = (() => {
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 128;
+  const ctx = cv.getContext('2d');
+  const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+  g.addColorStop(0, 'rgba(255,255,255,0.95)');
+  g.addColorStop(0.18, 'rgba(120,240,190,0.55)');
+  g.addColorStop(0.5, 'rgba(53,214,154,0.16)');
+  g.addColorStop(1, 'rgba(53,214,154,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 128, 128);
+  // destellos en cruz, muy sutiles
+  const ray = ctx.createLinearGradient(0, 64, 128, 64);
+  ray.addColorStop(0, 'rgba(255,255,255,0)');
+  ray.addColorStop(0.5, 'rgba(255,255,255,0.5)');
+  ray.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = ray;
+  ctx.fillRect(0, 62, 128, 4);
+  const ray2 = ctx.createLinearGradient(64, 0, 64, 128);
+  ray2.addColorStop(0, 'rgba(255,255,255,0)');
+  ray2.addColorStop(0.5, 'rgba(255,255,255,0.5)');
+  ray2.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = ray2;
+  ctx.fillRect(62, 0, 4, 128);
+  return cv;
+})();
+function makeFlareSprite() {
+  const tex = new THREE.CanvasTexture(FLARE_TEX);
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false,
+    blending: THREE.AdditiveBlending, opacity: 0.85 });
+  const sp = new THREE.Sprite(mat);
+  sp.scale.set(1.6, 1.6, 1);
   return sp;
 }
 
@@ -202,6 +246,7 @@ export function buildBuilding(scene, unitsById) {
 
   const floorGroups = new Map();
   const unitMeshes = new Map();
+  const flares = [];
   const pickables = [];
 
   for (const F of FLOOR_DEFS) {
@@ -239,11 +284,17 @@ export function buildBuilding(scene, unitsById) {
       mesh.userData = { unitId: id, floorKey: F.key };
       g.add(mesh);
 
-      // Etiqueta con el número de vivienda (visible solo si está disponible)
+      // Etiqueta con el número + destello (visibles solo si está disponible)
       const sp = makeLabelSprite(id);
-      sp.position.set(r.x, yBase + h + 1.6, r.z);
+      sp.position.set(r.x, yBase + h + 1.8, r.z);
       mesh.userData.label = sp;
       labels.add(sp);
+      const flare = makeFlareSprite();
+      flare.position.set(r.x, yBase + h + 0.45, r.z);
+      flare.userData.phase = (r.x * 7.13 + r.z * 3.71) % (Math.PI * 2);
+      mesh.userData.flare = flare;
+      flares.push(flare);
+      labels.add(flare);
 
       // ── Vivienda dollhouse (visible al aislar la planta) ──
       let rot = 0;
@@ -311,7 +362,7 @@ export function buildBuilding(scene, unitsById) {
 
   buildContext(scene);
 
-  return { floorGroups, roofGroup, unitMeshes, pickables, layout };
+  return { floorGroups, roofGroup, unitMeshes, pickables, layout, flares };
 }
 
 /**
@@ -419,9 +470,10 @@ export function paintUnits(unitMeshes, estadoDe, dimmedDe, selectedId, hoverId, 
       mat.emissive.setHex(0x000000);
     }
 
-    // Número visible solo en viviendas disponibles (y no filtradas)
-    const lb = mesh.userData.label;
-    if (lb) lb.visible = estado === 'disponible' && !dimmed && fade > 0.5;
+    // Número y destello visibles solo en viviendas disponibles (y no filtradas)
+    const showMark = estado === 'disponible' && !dimmed && fade > 0.5;
+    if (mesh.userData.label) mesh.userData.label.visible = showMark;
+    if (mesh.userData.flare) mesh.userData.flare.visible = showMark;
   }
 }
 
