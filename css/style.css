@@ -171,7 +171,7 @@ body:has(#listado.open) .dn-switch { display: none; }
 /* Esquinas continuas al estilo Apple (curvatura "squircle"/superelipse)
    donde el radio sigue vivo. Mejora progresiva. */
 @supports (corner-shape: squircle) {
-  #filtersBody, .chip, .price-pill, #filtersApply, #listClose { corner-shape: squircle; }
+  #filtersBody, .chip, .price-pill, #filtersApply, .u-plan { corner-shape: squircle; }
 }
 
 input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; height: 3px; border-radius: 2px;
@@ -295,35 +295,21 @@ body.sat-on #attrib { display: block; }
 #listado h2 span { display: inline-flex; align-items: center; justify-content: center; min-width: 30px; height: 30px;
   padding: 0 8px; background: var(--ink); color: #fff; font-size: 13px; font-weight: 750; border-radius: 15px;
   margin-left: 10px; vertical-align: middle; }
-#listClose { width: 50px; height: 50px; border-radius: 17px; border: 1px solid var(--line);
-  background: var(--panel-solid); color: var(--ink); cursor: pointer; font-size: 17px;
-  box-shadow: 0 4px 14px rgba(17,17,18,0.07); flex: none; }
-.table-wrap { overflow-y: auto; overflow-x: hidden; flex: 1; }
-/* hueco final para que la píldora de modos no tape las últimas filas */
-.table-wrap::after { content: ""; display: block; height: 110px; }
-#unitsTable { width: 100%; max-width: 920px; margin: 0 auto; border-collapse: collapse; font-size: 13.5px;
-  table-layout: fixed; }
-#unitsTable th:nth-child(1) { width: 17%; }
-#unitsTable th:nth-child(2) { width: 18%; }
-#unitsTable th:nth-child(3) { width: 15%; }
-#unitsTable th:nth-child(4) { width: 26%; }
-#unitsTable th:nth-child(5) { width: 24%; }
-.u-terr { display: block; font-style: normal; font-size: 10px; color: var(--disp); font-weight: 650;
-  text-transform: uppercase; letter-spacing: 0.05em; }
-.u-precio { font-weight: 750; color: var(--ink); }
-#unitsTable th { position: sticky; top: 0; background: var(--panel-solid); text-align: left; padding: 11px 16px;
-  font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); cursor: pointer;
-  user-select: none; white-space: nowrap; border-bottom: 1px solid var(--line); }
-#unitsTable th:hover { color: var(--ink); }
-#unitsTable td { padding: 12px 14px; border-bottom: 1px solid rgba(17, 17, 18, 0.06); white-space: nowrap;
-  overflow: hidden; text-overflow: ellipsis; }
-#unitsTable tbody tr { cursor: pointer; transition: background 0.15s ease; }
-#unitsTable tbody tr:hover { background: var(--lime-soft); }
-#unitsTable .u-id { font-weight: 750; color: var(--ink); }
-.tag { padding: 3px 10px; border-radius: 12px; font-size: 10.5px; font-weight: 750; text-transform: uppercase; letter-spacing: 0.06em; }
-.tag.disponible { color: var(--disp); background: rgba(24, 178, 119, 0.12); }
-.tag.reservada { color: var(--res); background: rgba(232, 169, 15, 0.14); }
-.tag.vendida { color: var(--ven); background: rgba(151, 160, 168, 0.18); }
+#unitsList { flex: 1; overflow-y: auto; }
+/* hueco final para que la píldora de modos no tape las últimas tarjetas */
+#unitsList::after { content: ""; display: block; height: 110px; }
+.u-card { display: flex; align-items: stretch; gap: 18px; width: 100%; max-width: 920px; margin: 0 auto;
+  padding: 16px 20px; background: none; border: none; border-bottom: 1px solid rgba(17, 17, 18, 0.08);
+  text-align: left; cursor: pointer; font-family: var(--font); transition: background 0.15s ease; }
+.u-card:hover { background: var(--lime-soft); }
+.u-plan { width: 96px; height: 116px; object-fit: cover; border: 1px solid var(--line); border-radius: 8px;
+  background: #fff; flex: none; }
+.u-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.u-title { font-size: 16px; font-weight: 700; color: var(--ink); }
+.u-line { font-size: 12.5px; color: var(--muted); font-weight: 500; }
+.u-price { margin-top: auto; padding-top: 6px; font-size: 16px; font-weight: 700; color: var(--ink); }
+.u-icons { display: flex; align-items: flex-end; gap: 12px; color: #b6b9be; flex: none; }
+.u-icons svg { width: 21px; height: 21px; display: block; }
 
 /* ─── Lightbox ─── */
 #lightbox { position: absolute; inset: 0; z-index: 70; background: rgba(10, 20, 15, 0.9); display: none;
@@ -362,9 +348,11 @@ body.sat-on #attrib { display: block; }
   #panel { width: 100vw; padding-top: 52px; }
 
   /* Listado a pantalla completa */
-  #unitsTable { font-size: 12.5px; }
-  #unitsTable td { padding: 11px 8px; }
-  #unitsTable th { padding: 10px 8px; font-size: 9.5px; }
+  .u-card { gap: 14px; padding: 14px; }
+  .u-plan { width: 84px; height: 102px; }
+  .u-title, .u-price { font-size: 15px; }
+  .u-icons { gap: 10px; }
+  .u-icons svg { width: 19px; height: 19px; }
 
   /* Portada */
   .hero-inner { padding: calc(env(safe-area-inset-top) + 5vh) 7vw calc(env(safe-area-inset-bottom) + 4.5vh); }

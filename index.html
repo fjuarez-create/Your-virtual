@@ -43,6 +43,10 @@
   <symbol id="i-filter" viewBox="0 0 24 24"><path d="M3.5 7h17M6.5 12h11M9.5 17h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
   <symbol id="i-back" viewBox="0 0 24 24"><path d="M20 12H4.5m0 0L11 5.5M4.5 12 11 18.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-chev" viewBox="0 0 24 24"><path d="m6 9.5 6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-car" viewBox="0 0 24 24"><path d="M5.1 16.4H3.9v-2.9l1.5-4.9A1.8 1.8 0 0 1 7.1 7.3h9.8a1.8 1.8 0 0 1 1.7 1.3l1.5 4.9v2.9h-1.2M6 12.5h12M8.7 16.4a1.85 1.85 0 1 1-3.7 0 1.85 1.85 0 0 1 3.7 0Zm10.3 0a1.85 1.85 0 1 1-3.7 0 1.85 1.85 0 0 1 3.7 0Zm-10.3 0h6.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-store" viewBox="0 0 24 24"><rect x="4" y="9.8" width="16" height="9.4" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4.6 9.8 6 5.9a1.6 1.6 0 0 1 1.5-1h9a1.6 1.6 0 0 1 1.5 1l1.4 3.9M12 4.9v4.9M9.2 13.6h5.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-gym" viewBox="0 0 24 24"><path d="M7.2 8.2v7.6M3.9 9.9v4.2M16.8 8.2v7.6m3.3-5.9v4.2M7.2 12h9.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+  <symbol id="i-terr" viewBox="0 0 24 24"><path d="M12 3.2c4.6 0 8.2 3.2 8.6 7.2H3.4c.4-4 4-7.2 8.6-7.2Zm0 0v1m0 6.2v8a1.9 1.9 0 0 0 3.8 0M12 10.4c0-4 0-7.2 0-7.2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 5 5L19.5 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
 </svg>
 <div id="app">
@@ -161,23 +165,12 @@
     <div id="panelBody"></div>
   </aside>
 
-  <!-- ══════════ LISTADO ══════════ -->
+  <!-- ══════════ LISTADO (tarjetas con plano) ══════════ -->
   <section id="listado">
     <header>
       <h2>Viviendas disponibles <span id="listCount"></span></h2>
-      <button id="listClose" title="Cerrar">✕</button>
     </header>
-    <div class="table-wrap">
-      <table id="unitsTable">
-        <thead>
-          <tr>
-            <th data-k="id">Viv.</th><th data-k="planta">Planta</th><th data-k="dorm">Dorm.</th>
-            <th data-k="supTotal">m²</th><th data-k="precio">Precio</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-    </div>
+    <div id="unitsList"></div>
   </section>
 
   <!-- ══════════ LIGHTBOX (planos) ══════════ -->

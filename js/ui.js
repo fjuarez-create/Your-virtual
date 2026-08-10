@@ -120,7 +120,6 @@ export function initUI(app) {
 
   // ── Panel / listado / lightbox ──
   $('#panelClose').addEventListener('click', () => app.select(null));
-  $('#listClose').addEventListener('click', () => app.setMode('3d'));
   $('#lbClose').addEventListener('click', () => $('#lightbox').classList.remove('open'));
   $('#lightbox').addEventListener('click', (e) => {
     if (e.target.id === 'lightbox') $('#lightbox').classList.remove('open');
@@ -133,14 +132,6 @@ export function initUI(app) {
     }
   });
 
-  // ── Ordenación del listado ──
-  document.querySelectorAll('#unitsTable th').forEach((th) =>
-    th.addEventListener('click', () => {
-      const k = th.dataset.k;
-      app.sort = app.sort?.k === k ? { k, dir: -app.sort.dir } : { k, dir: 1 };
-      renderTable(app);
-    })
-  );
 }
 
 export function markDayNight(night) {
@@ -242,28 +233,35 @@ export function renderPanel(app, unit) {
   panel.classList.add('open');
 }
 
-// ── Listado (solo viviendas disponibles, a pantalla completa) ──
+// ── Listado: tarjetas con plano, datos y equipamiento ──
 export function renderTable(app) {
-  const tbody = $('#unitsTable tbody');
-  let rows = app.units.filter((u) => app.estadoDe(u.id) === 'disponible' && app.passesFilters(u) &&
+  const list = $('#unitsList');
+  const rows = app.units.filter((u) => app.estadoDe(u.id) === 'disponible' && app.passesFilters(u) &&
     (app.floor === 'all' || app.floorOf(u) === app.floor));
-  if (app.sort) {
-    const { k, dir } = app.sort;
-    rows = [...rows].sort((a, b) => (a[k] > b[k] ? 1 : a[k] < b[k] ? -1 : 0) * dir);
-  }
   $('#listCount').textContent = `${rows.length}`;
-  tbody.innerHTML = rows.map((u) => `
-    <tr data-id="${u.id}">
-      <td class="u-id">${nd(u.id)}</td>
-      <td>${plantaNum(u)}</td>
-      <td>${u.dorm}D</td>
-      <td>${fmtM2(u.supTotal)}${u.terraza ? ' <em class="u-terr">terraza</em>' : ''}</td>
-      <td class="u-precio">${fmtEUR(u.precio)}</td>
-    </tr>`).join('');
-  tbody.querySelectorAll('tr').forEach((tr) =>
-    tr.addEventListener('click', () => {
+  list.innerHTML = rows.map((u) => {
+    const F = FLOOR_DEFS.find((f) => f.key === app.floorOf(u));
+    return `
+    <button class="u-card" data-id="${u.id}">
+      <img class="u-plan" src="${F.plan}" alt="Plano — pendiente del plano individual" loading="lazy">
+      <div class="u-info">
+        <p class="u-title">${u.dorm}D&ensp;|&ensp;${fmtM2(u.supTotal)}</p>
+        <p class="u-line">Vivienda&#8288; ${nd(u.id)}</p>
+        <p class="u-line">Planta ${plantaNum(u)} · ${u.orientacion}</p>
+        <p class="u-price">${fmtEUR(u.precio)}</p>
+      </div>
+      <div class="u-icons">
+        ${u.terraza ? '<span title="Terraza"><svg><use href="#i-terr"/></svg></span>' : ''}
+        <span title="Plaza de garaje opcional"><svg><use href="#i-car"/></svg></span>
+        <span title="Trastero opcional"><svg><use href="#i-store"/></svg></span>
+        <span title="Gimnasio"><svg><use href="#i-gym"/></svg></span>
+      </div>
+    </button>`;
+  }).join('');
+  list.querySelectorAll('.u-card').forEach((c) =>
+    c.addEventListener('click', () => {
       app.setMode('3d');
-      app.select(tr.dataset.id, { focus: true });
+      app.select(c.dataset.id, { focus: true });
     })
   );
 }
