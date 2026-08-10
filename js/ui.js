@@ -18,16 +18,12 @@ export const fmtM2 = (n) =>
 const $ = (s) => document.querySelector(s);
 
 export function initUI(app) {
-  // ── Tarjetas de promoción en la portada ──
+  // ── CTA por promoción en la portada ──
   const cards = $('#promoCards');
   for (const dev of DEVELOPMENTS) {
     const b = document.createElement('button');
-    b.className = 'promo-card';
-    b.innerHTML = `
-      <span class="pc-name">${dev.name}</span>
-      <span class="pc-loc">${dev.location}</span>
-      <span class="pc-meta">${dev.tagline}</span>
-      <span class="pc-go">Explorar <i>→</i></span>`;
+    b.className = 'promo-cta';
+    b.textContent = dev.name;
     b.addEventListener('click', () => app.enter(dev));
     cards.appendChild(b);
   }
