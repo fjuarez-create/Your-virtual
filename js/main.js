@@ -726,6 +726,13 @@ function loop() {
   updateCompass();
   if (!intro) controls.update();
   composer.render();
+  // pasada de cartelas (capa 1): sin bloom ni tone mapping, siempre visibles
+  renderer.autoClear = false;
+  renderer.clearDepth();
+  camera.layers.set(1);
+  renderer.render(scene, camera);
+  camera.layers.set(0);
+  renderer.autoClear = true;
 }
 
 /* ─────────────────────────── Resize ─────────────────────────── */

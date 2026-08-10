@@ -80,6 +80,9 @@ function makeLabelSprite(text, bg = '#24873f') {
   const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true, toneMapped: false });
   const sp = new THREE.Sprite(mat);
   sp.scale.set(3.2, 1.83, 1);
+  // capa 1: las cartelas se dibujan en una pasada aparte, tras el
+  // post-procesado (sin bloom/glowing) y por encima de toda la geometría
+  sp.layers.set(1);
   return sp;
 }
 
