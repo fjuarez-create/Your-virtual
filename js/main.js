@@ -370,16 +370,16 @@ function animateFloors(dt) {
       const f = src.userData.fade;
       for (const h of lvl.holders) { h.position.y = dy; h.visible = f > 0.02; }
       for (const m of lvl.mats) m.opacity = m.userData.baseOpacity * f;
-      // corte pocito: en la planta aislada los muros se oscurecen
-      if (lvl.byCat?.wall) {
-        const cut = app.floor !== 'all' && animKey === app.floor;
-        lvl.byCat.wall.color.lerp(cut ? WALL_CUT : WALL_BASE, k);
+      // corte pocito: en la planta aislada, la cara horizontal del corte
+      // del muro se oscurece (uniform del shader, transición suave)
+      const uCut = lvl.byCat?.wall?.userData.uCut;
+      if (uCut) {
+        const target = app.floor !== 'all' && animKey === app.floor ? 1 : 0;
+        uCut.value += (target - uCut.value) * k;
       }
     }
   }
 }
-const WALL_BASE = new THREE.Color(0xf1efe8);
-const WALL_CUT = new THREE.Color(0x34383f);
 
 const fadeOf = (floorKey) => B.floorGroups.get(floorKey)?.userData.fade ?? 1;
 

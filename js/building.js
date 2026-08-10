@@ -46,50 +46,58 @@ function slabGeometry(courts, depthY) {
   return g;
 }
 
-/* Etiqueta de vivienda estilo pocito: píldora blanca con bolita verde y
-   el número (solo se muestra en viviendas disponibles). */
+/* Cartelito de vivienda disponible: globo verde con el número en blanco
+   y rabito hacia la vivienda (proporciones cuidadas). */
 function makeLabelSprite(text) {
   const cv = document.createElement('canvas');
-  cv.width = 256; cv.height = 96;
+  cv.width = 224; cv.height = 128;
   const ctx = cv.getContext('2d');
-  ctx.shadowColor = 'rgba(17,17,18,0.25)';
-  ctx.shadowBlur = 10;
-  ctx.shadowOffsetY = 4;
-  ctx.fillStyle = 'rgba(255,255,255,0.98)';
+  ctx.shadowColor = 'rgba(17,17,18,0.28)';
+  ctx.shadowBlur = 12;
+  ctx.shadowOffsetY = 5;
+  ctx.fillStyle = '#1fb586';
+  // globo redondeado + rabito integrado en el mismo trazado
+  const x0 = 32, y0 = 16, x1 = 192, y1 = 88, r = 18;
   ctx.beginPath();
-  ctx.roundRect(34, 18, 188, 60, 30);
+  ctx.moveTo(x0 + r, y0);
+  ctx.lineTo(x1 - r, y0);
+  ctx.arcTo(x1, y0, x1, y0 + r, r);
+  ctx.lineTo(x1, y1 - r);
+  ctx.arcTo(x1, y1, x1 - r, y1, r);
+  ctx.lineTo(124, y1);           // rabito centrado, corto y elegante
+  ctx.lineTo(112, y1 + 18);
+  ctx.lineTo(100, y1);
+  ctx.lineTo(x0 + r, y1);
+  ctx.arcTo(x0, y1, x0, y1 - r, r);
+  ctx.lineTo(x0, y0 + r);
+  ctx.arcTo(x0, y0, x0 + r, y0, r);
+  ctx.closePath();
   ctx.fill();
   ctx.shadowColor = 'transparent';
-  // bolita verde con aura suave
-  const glow = ctx.createRadialGradient(70, 48, 4, 70, 48, 24);
-  glow.addColorStop(0, 'rgba(53,214,154,0.55)');
-  glow.addColorStop(1, 'rgba(53,214,154,0)');
-  ctx.fillStyle = glow;
-  ctx.beginPath(); ctx.arc(70, 48, 24, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#2ecc90';
-  ctx.beginPath(); ctx.arc(70, 48, 12, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#111112';
-  ctx.font = '600 31px "Open Sans", "Segoe UI", sans-serif';
-  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-  ctx.fillText(text, 94, 49);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '700 40px "Open Sans", "Segoe UI", sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(text, 112, 53);
   const tex = new THREE.CanvasTexture(cv);
   tex.anisotropy = 8;
   const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true });
   const sp = new THREE.Sprite(mat);
-  sp.scale.set(4.3, 1.61, 1);
+  sp.scale.set(3.5, 2.0, 1);
   return sp;
 }
 
-/* Destello suave (como un pequeño sol) que late sobre cada vivienda libre. */
+/* Destello suave (pequeño sol) sobre cada vivienda: verde si está libre,
+   amarillo si está reservada. La textura es neutra y el color lo pone
+   el material. */
 const FLARE_TEX = (() => {
   const cv = document.createElement('canvas');
   cv.width = cv.height = 128;
   const ctx = cv.getContext('2d');
   const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
   g.addColorStop(0, 'rgba(255,255,255,0.95)');
-  g.addColorStop(0.18, 'rgba(120,240,190,0.55)');
-  g.addColorStop(0.5, 'rgba(53,214,154,0.16)');
-  g.addColorStop(1, 'rgba(53,214,154,0)');
+  g.addColorStop(0.18, 'rgba(255,255,255,0.5)');
+  g.addColorStop(0.5, 'rgba(255,255,255,0.14)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, 128, 128);
   // destellos en cruz, muy sutiles
@@ -286,7 +294,7 @@ export function buildBuilding(scene, unitsById) {
 
       // Etiqueta con el número + destello (visibles solo si está disponible)
       const sp = makeLabelSprite(id);
-      sp.position.set(r.x, yBase + h + 1.8, r.z);
+      sp.position.set(r.x, yBase + h + 2.1, r.z);
       mesh.userData.label = sp;
       labels.add(sp);
       const flare = makeFlareSprite();
@@ -384,13 +392,33 @@ export function loadBIM(scene, url = 'assets/apolo_levels.glb') {
         group.name = 'bim';
         group.visible = false;
         // materiales reales por categoría (el vidrio refleja el entorno)
+        const mkWall = () => {
+          const m = new THREE.MeshStandardMaterial({
+            color: 0xf1efe8, roughness: 0.8, metalness: 0.0, transparent: true,
+          });
+          m.userData.baseOpacity = 1;
+          // Corte estilo pocito: cuando uCut→1 (planta aislada), SOLO las
+          // caras horizontales superiores del muro (la superficie donde se
+          // practica el corte) se oscurecen a antracita.
+          m.userData.uCut = { value: 0 };
+          m.onBeforeCompile = (sh) => {
+            sh.uniforms.uCut = m.userData.uCut;
+            sh.vertexShader = sh.vertexShader
+              .replace('#include <common>', '#include <common>\nvarying vec3 vWNormal;')
+              .replace('#include <defaultnormal_vertex>',
+                '#include <defaultnormal_vertex>\nvWNormal = normalize(mat3(modelMatrix) * objectNormal);');
+            sh.fragmentShader = sh.fragmentShader
+              .replace('#include <common>', '#include <common>\nvarying vec3 vWNormal;\nuniform float uCut;')
+              .replace('#include <color_fragment>',
+                '#include <color_fragment>\n\tdiffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.045, 0.048, 0.056), uCut * smoothstep(0.55, 0.85, vWNormal.y));');
+          };
+          return m;
+        };
         const mkMats = () => ({
           struct: Object.assign(new THREE.MeshStandardMaterial({
             color: 0xd8d7d2, roughness: 0.92, metalness: 0.02, transparent: true,
           }), { userData: { baseOpacity: 1 } }),
-          wall: Object.assign(new THREE.MeshStandardMaterial({
-            color: 0xf1efe8, roughness: 0.8, metalness: 0.0, transparent: true,
-          }), { userData: { baseOpacity: 1 } }),
+          wall: mkWall(),
           glass: Object.assign(new THREE.MeshStandardMaterial({
             color: 0x88b4cc, roughness: 0.12, metalness: 0.4, transparent: true,
             opacity: 0.55, envMapIntensity: 1.6, side: THREE.DoubleSide,
@@ -428,7 +456,6 @@ export function loadBIM(scene, url = 'assets/apolo_levels.glb') {
 const PARQUET = new THREE.Color(0xd9c9a8);
 
 export function paintUnits(unitMeshes, estadoDe, dimmedDe, selectedId, hoverId, fadeOf = () => 1, dollOf = () => false) {
-  const tmp = new THREE.Color();
   for (const [id, mesh] of unitMeshes) {
     const estado = estadoDe(id);
     const col = ESTADO_COLORS[estado] || ESTADO_COLORS.disponible;
@@ -444,36 +471,32 @@ export function paintUnits(unitMeshes, estadoDe, dimmedDe, selectedId, hoverId, 
       if (apt.group.visible) {
         apt.floorM.opacity = fade;
         apt.furnM.opacity = fade;
-        tmp.copy(PARQUET).lerp(col, 0.55);
-        apt.floorM.color.copy(tmp);
+        apt.floorM.color.copy(PARQUET); // suelo neutro: el estado lo marcan bolita y destello
       }
     }
 
-    // Envolvente translúcida sobre el BIM: muy sutil en reposo, el color
-    // solo toma cuerpo al pasar el ratón o seleccionar (vista limpia)
+    // Envolvente: invisible en reposo (nada de prismas de color);
+    // solo aparece como realce al pasar el ratón o al seleccionar
     mat.color.copy(col);
-    if (vendida) {
-      // vendida: gris, casi invisible e inerte
-      mat.opacity = 0.04 * fade;
-      mat.emissive.setHex(0x000000);
-    } else if (dimmed) {
-      mat.opacity = 0.03 * fade;
-      mat.emissive.setHex(0x000000);
-    } else if (id === selectedId) {
-      mat.opacity = 0.5 * fade;
+    if (id === selectedId && !vendida && !dimmed) {
+      mat.opacity = 0.45 * fade;
       mat.emissive.copy(col).multiplyScalar(0.35);
-    } else if (id === hoverId) {
-      mat.opacity = 0.38 * fade;
-      mat.emissive.copy(col).multiplyScalar(0.22);
+    } else if (id === hoverId && !vendida && !dimmed) {
+      mat.opacity = 0.32 * fade;
+      mat.emissive.copy(col).multiplyScalar(0.2);
     } else {
-      mat.opacity = (doll ? 0.16 : 0.1) * fade;
+      mat.opacity = 0;
       mat.emissive.setHex(0x000000);
     }
 
-    // Número y destello visibles solo en viviendas disponibles (y no filtradas)
-    const showMark = estado === 'disponible' && !dimmed && fade > 0.5;
-    if (mesh.userData.label) mesh.userData.label.visible = showMark;
-    if (mesh.userData.flare) mesh.userData.flare.visible = showMark;
+    // Cartelito solo en disponibles; destello verde (libre) o amarillo (reservada)
+    const markable = !dimmed && fade > 0.5;
+    if (mesh.userData.label) mesh.userData.label.visible = markable && estado === 'disponible';
+    if (mesh.userData.flare) {
+      const f = mesh.userData.flare;
+      f.visible = markable && (estado === 'disponible' || estado === 'reservada');
+      if (f.visible) f.material.color.setHex(estado === 'reservada' ? 0xe8a90f : 0x2ecc90);
+    }
   }
 }
 
