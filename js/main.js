@@ -574,7 +574,7 @@ app.setNight = (on) => {
   renderer.toneMappingExposure = on ? 0.8 : 0.85;
   scene.fog.color.setHex(on ? 0x0b111c : 0xd6dde3);
   bloom.strength = on ? 0.5 : 0.14;
-  bloom.threshold = on ? 0.55 : 0.92;
+  bloom.threshold = on ? 0.72 : 0.92;
   // cielo nocturno: estrellas + luna, y nubes escasas teñidas de noche
   nightSky.visible = on;
   clouds.children.forEach((cluster, i) => {
@@ -591,7 +591,7 @@ app.setNight = (on) => {
       const glass = lvl.byCat?.glass;
       if (glass) {
         glass.emissive.setHex(on ? 0xffd9a0 : 0x000000);
-        glass.emissiveIntensity = on ? 0.55 : 0;
+        glass.emissiveIntensity = on ? 0.8 : 0;
       }
     }
   }
@@ -709,18 +709,6 @@ function loop() {
   for (const c of clouds.children) {
     c.position.x += c.userData.speed * dt;
     if (c.position.x > 1150) c.position.x = -1150;
-  }
-
-  // latido de los destellos de viviendas libres (solo planta activa)
-  if (B && app.floor !== 'all') {
-    const t = clock.elapsedTime;
-    for (const f of B.flares) {
-      if (!f.visible || !f.parent.visible) continue;
-      const w = Math.sin(t * 2.1 + f.userData.phase);
-      const s = 1.5 + 0.4 * w;
-      f.scale.set(s, s, 1);
-      f.material.opacity = 0.6 + 0.3 * w;
-    }
   }
 
   updateIntro(Math.min(rawDt, 0.6)); // tiempo real: la intro dura lo mismo en cualquier dispositivo

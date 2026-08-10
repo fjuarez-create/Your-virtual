@@ -48,7 +48,7 @@ function slabGeometry(courts, depthY) {
 /* Cartela de vivienda: caja cuadrada (sin radios) con rabito hacia la
    vivienda y el número en blanco. Verde intenso si está libre; amarillo
    anaranjado intenso si está reservada. */
-function makeLabelSprite(text, bg = '#00a36c') {
+function makeLabelSprite(text, bg = '#24873f') {
   const cv = document.createElement('canvas');
   cv.width = 224; cv.height = 128;
   const ctx = cv.getContext('2d');
@@ -77,44 +77,6 @@ function makeLabelSprite(text, bg = '#00a36c') {
   const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true });
   const sp = new THREE.Sprite(mat);
   sp.scale.set(3.2, 1.83, 1);
-  return sp;
-}
-
-/* Destello suave (pequeño sol) sobre cada vivienda: verde si está libre,
-   amarillo si está reservada. La textura es neutra y el color lo pone
-   el material. */
-const FLARE_TEX = (() => {
-  const cv = document.createElement('canvas');
-  cv.width = cv.height = 128;
-  const ctx = cv.getContext('2d');
-  const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
-  g.addColorStop(0, 'rgba(255,255,255,0.95)');
-  g.addColorStop(0.18, 'rgba(255,255,255,0.5)');
-  g.addColorStop(0.5, 'rgba(255,255,255,0.14)');
-  g.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, 128, 128);
-  // destellos en cruz, muy sutiles
-  const ray = ctx.createLinearGradient(0, 64, 128, 64);
-  ray.addColorStop(0, 'rgba(255,255,255,0)');
-  ray.addColorStop(0.5, 'rgba(255,255,255,0.5)');
-  ray.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = ray;
-  ctx.fillRect(0, 62, 128, 4);
-  const ray2 = ctx.createLinearGradient(64, 0, 64, 128);
-  ray2.addColorStop(0, 'rgba(255,255,255,0)');
-  ray2.addColorStop(0.5, 'rgba(255,255,255,0.5)');
-  ray2.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = ray2;
-  ctx.fillRect(62, 0, 4, 128);
-  return cv;
-})();
-function makeFlareSprite() {
-  const tex = new THREE.CanvasTexture(FLARE_TEX);
-  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false,
-    blending: THREE.AdditiveBlending, opacity: 0.85 });
-  const sp = new THREE.Sprite(mat);
-  sp.scale.set(1.6, 1.6, 1);
   return sp;
 }
 
@@ -159,7 +121,6 @@ export function buildBuilding(scene, unitsById) {
 
   const floorGroups = new Map();
   const unitMeshes = new Map();
-  const flares = [];
   const pickables = [];
 
   for (const F of FLOOR_DEFS) {
@@ -198,21 +159,14 @@ export function buildBuilding(scene, unitsById) {
       g.add(mesh);
 
       // Cartelas (verde libre / amarilla reservada) + destello
-      const sp = makeLabelSprite(id, '#00a36c');
+      const sp = makeLabelSprite(id, '#24873f');
       sp.position.set(r.x, yBase + h + 2.1, r.z);
       mesh.userData.label = sp;
       labels.add(sp);
-      const spR = makeLabelSprite(id, '#f39200');
+      const spR = makeLabelSprite(id, '#e0862b');
       spR.position.copy(sp.position);
       mesh.userData.labelR = spR;
       labels.add(spR);
-      const flare = makeFlareSprite();
-      flare.position.set(r.x, yBase + h + 0.45, r.z);
-      flare.userData.phase = (r.x * 7.13 + r.z * 3.71) % (Math.PI * 2);
-      mesh.userData.flare = flare;
-      flares.push(flare);
-      labels.add(flare);
-
       unitMeshes.set(id, mesh);
       pickables.push(mesh);
     }
@@ -252,7 +206,7 @@ export function buildBuilding(scene, unitsById) {
 
   buildContext(scene);
 
-  return { floorGroups, roofGroup, unitMeshes, pickables, layout, flares };
+  return { floorGroups, roofGroup, unitMeshes, pickables, layout };
 }
 
 /**
@@ -358,15 +312,10 @@ export function paintUnits(unitMeshes, estadoDe, dimmedDe, selectedId, hoverId, 
       mat.emissive.setHex(0x000000);
     }
 
-    // Cartelas: verde en disponibles, amarilla en reservadas; destello a juego
+    // Cartelas: verde en disponibles, amarilla en reservadas
     const markable = !dimmed && fade > 0.5;
     if (mesh.userData.label) mesh.userData.label.visible = markable && estado === 'disponible';
     if (mesh.userData.labelR) mesh.userData.labelR.visible = markable && estado === 'reservada';
-    if (mesh.userData.flare) {
-      const f = mesh.userData.flare;
-      f.visible = markable && (estado === 'disponible' || estado === 'reservada');
-      if (f.visible) f.material.color.setHex(estado === 'reservada' ? 0xf39200 : 0x00a36c);
-    }
   }
 }
 
