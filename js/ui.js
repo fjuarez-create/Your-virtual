@@ -3,6 +3,7 @@
    tooltip, selector de plantas y estadísticas.
    ═══════════════════════════════════════════════════════════════ */
 import { FLOOR_DEFS } from './layout.js';
+import { DEVELOPMENTS } from './promotions.js';
 
 /** Inserta separadores invisibles (U+2060) para que los detectores de
     direcciones de iOS/Chrome no conviertan "Vivienda 116" en un enlace
@@ -17,6 +18,37 @@ export const fmtM2 = (n) =>
 const $ = (s) => document.querySelector(s);
 
 export function initUI(app) {
+  // ── Tarjetas de promoción en la portada ──
+  const cards = $('#promoCards');
+  for (const dev of DEVELOPMENTS) {
+    const b = document.createElement('button');
+    b.className = 'promo-card';
+    b.innerHTML = `
+      <span class="pc-name">${dev.name}</span>
+      <span class="pc-loc">${dev.location}</span>
+      <span class="pc-meta">${dev.tagline}</span>
+      <span class="pc-go">Explorar <i>→</i></span>`;
+    b.addEventListener('click', () => app.enter(dev));
+    cards.appendChild(b);
+  }
+
+  // ── Marca + selector de edificio ──
+  $('#brandName').textContent = app.dev.name;
+  $('#brandLoc').textContent = app.dev.location;
+  const sel = $('#buildingSelect');
+  for (const bld of app.dev.buildings) {
+    const o = document.createElement('option');
+    o.value = bld.id;
+    o.textContent = `Edificio ${bld.name}${bld.active ? '' : ' · próximamente'}`;
+    o.disabled = !bld.active;
+    sel.appendChild(o);
+  }
+  sel.addEventListener('change', () => app.setBuilding(sel.value));
+
+  // ── Día / noche ──
+  $('#dnDay').addEventListener('click', () => app.setNight(false));
+  $('#dnNight').addEventListener('click', () => app.setNight(true));
+
   // ── Selector de plantas ──
   const wrap = $('#floorBtns');
   for (const F of FLOOR_DEFS) {
@@ -96,6 +128,11 @@ export function initUI(app) {
   );
 }
 
+export function markDayNight(night) {
+  $('#dnDay').classList.toggle('on', !night);
+  $('#dnNight').classList.toggle('on', night);
+}
+
 export function markFloorButtons(floorKey) {
   document.querySelectorAll('#floorNav .floor-btn').forEach((b) =>
     b.classList.toggle('active', b.dataset.floor === floorKey)
@@ -159,7 +196,7 @@ export function renderPanel(app, unit) {
   const ppm2 = unit.precio / unit.supTotal;
   const disponible = estado === 'disponible';
   $('#panelBody').innerHTML = `
-    <p class="p-kicker">Serenea · Edificio&#8288; Apolo</p>
+    <p class="p-kicker">${app.dev.name} · Edificio&#8288; ${app.building.name}</p>
     <h2 class="p-title">Vivienda&#8288; <b>${nd(unit.id)}</b></h2>
     <p class="p-sub">${F.label} · ${unit.orientacion}</p>
     <span class="badge ${estado}">${estado}</span>

@@ -13,6 +13,7 @@ import { FLOOR_DEFS, ROOF_Y, floorOf } from './layout.js';
 import { buildBuilding, paintUnits, loadBIM } from './building.js';
 import { fetchUnits, fetchAvailability, pollAvailability, sendLead } from './api.js';
 import * as UI from './ui.js';
+import { ACTIVE_DEV, ACTIVE_BUILDING } from './promotions.js';
 
 const $ = (s) => document.querySelector(s);
 
@@ -24,6 +25,9 @@ const app = {
   filters: { dorms: new Set(), estados: new Set(), orients: new Set(), priceMax: 481000, terraza: false },
   floor: 'all',
   mode: '3d',
+  dev: ACTIVE_DEV,
+  building: ACTIVE_BUILDING,
+  night: false,
   selected: null,
   hover: null,
   explode: 0,
@@ -121,14 +125,21 @@ camera.position.set(540, 480, 820);
 const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true;
 controls.dampingFactor = 0.06;
+// Gestos como Google Earth: 1 dedo mueve, 2 dedos zoom+giro;
+// ratón: izquierdo mueve, derecho gira, rueda zoom.
+controls.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_ROTATE };
+controls.mouseButtons = { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
+controls.screenSpacePanning = false; // el arrastre desliza sobre el plano del suelo
+controls.panSpeed = 1.15;
 controls.maxPolarAngle = Math.PI / 2 - 0.04;
 controls.minDistance = 18;
 controls.maxDistance = 420;
 controls.target.set(0, 40, 0);
 controls.enabled = false; // se habilita al terminar la intro
 
-// Luces (atardecer)
-scene.add(new THREE.HemisphereLight(0xe3edf8, 0x8b9080, 0.7));
+// Luces
+const hemi = new THREE.HemisphereLight(0xe3edf8, 0x8b9080, 0.7);
+scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xfff1dc, 2.5);
 sun.position.copy(sunDir).multiplyScalar(180);
 sun.castShadow = true;
@@ -295,9 +306,11 @@ function repaint() {
 function goOverview(dur = 1.6) {
   // El encuadre crece con la axonometría para abarcar las plantas separadas
   const e = app.explode;
+  const [cx, cy, cz] = app.building.camera;
+  const [tx, ty, tz] = app.building.center;
   tweenCamera(
-    new THREE.Vector3(64 + e * 38, 48 + e * 42, 92 + e * 48),
-    new THREE.Vector3(0, 5 + e * 26, 0),
+    new THREE.Vector3(cx + e * 38, cy + e * 42, cz + e * 48),
+    new THREE.Vector3(tx, ty + e * 26, tz),
     dur
   );
 }
@@ -381,6 +394,57 @@ app.onFiltersChanged = () => {
 
 app.requestInfo = (unit) => { sendLead({ unitId: unit.id }); };
 
+app.setBuilding = (id) => {
+  const b = app.dev.buildings.find((x) => x.id === id && x.active);
+  if (!b) return;
+  app.building = b;
+  goOverview(1.4);
+};
+
+/* ─────────────────────────── Día / Noche ─────────────────────────── */
+function rebuildEnvironment() {
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const envScene = new THREE.Scene();
+  envScene.add(sky);
+  scene.environment = pmrem.fromScene(envScene, 0.04).texture;
+  scene.add(sky);
+  pmrem.dispose();
+}
+
+app.setNight = (on) => {
+  app.night = on;
+  const elev = on ? -12 : 44;
+  sunDir.setFromSphericalCoords(1, THREE.MathUtils.degToRad(90 - elev), THREE.MathUtils.degToRad(42));
+  sky.material.uniforms.sunPosition.value.copy(sunDir);
+  sky.material.uniforms.turbidity.value = on ? 8 : 4.5;
+  sky.material.uniforms.rayleigh.value = on ? 0.6 : 1.15;
+  rebuildEnvironment();
+  sun.intensity = on ? 0.0 : 2.5;
+  sun.position.copy(sunDir).multiplyScalar(180);
+  if (on) sun.position.set(60, 120, -40);
+  hemi.color.setHex(on ? 0x223252 : 0xe3edf8);
+  hemi.groundColor.setHex(on ? 0x0c1016 : 0x8b9080);
+  hemi.intensity = on ? 0.42 : 0.7;
+  fill.color.setHex(on ? 0x8fa8d8 : 0xa8c4e8);
+  fill.intensity = on ? 0.5 : 0.4;
+  renderer.toneMappingExposure = on ? 0.8 : 0.85;
+  scene.fog.color.setHex(on ? 0x0b111c : 0xd6dde3);
+  bloom.strength = on ? 0.5 : 0.14;
+  bloom.threshold = on ? 0.55 : 0.92;
+  for (const c of clouds.children) c.visible = !on;
+  // las ventanas del BIM se encienden por la noche
+  if (bim) {
+    for (const [, lvl] of bim.levels) {
+      const glass = lvl.byCat?.glass;
+      if (glass) {
+        glass.emissive.setHex(on ? 0xffd9a0 : 0x000000);
+        glass.emissiveIntensity = on ? 0.55 : 0;
+      }
+    }
+  }
+  UI.markDayNight(on);
+};
+
 /* ──────────── Modelo BIM: siempre cargado, modelo por defecto ──────────── */
 function ensureBIM() {
   if (bim) return Promise.resolve(bim);
@@ -410,10 +474,27 @@ canvas.addEventListener('pointerup', (e) => {
   if (!downPos) return;
   const moved = Math.hypot(e.clientX - downPos.x, e.clientY - downPos.y);
   downPos = null;
-  if (moved > 6) return; // era un arrastre de órbita
-  if (app.hover) app.select(app.hover, { focus: false });
-  else app.select(null);
+  if (moved > 8) return; // era un arrastre
+  // raycast fresco en la posición exacta del toque (en móvil el hover
+  // podía apuntar a una posición antigua y abrir otra vivienda)
+  const id = pickAt(e.clientX, e.clientY);
+  app.select(id, { focus: false });
 });
+
+function pickAt(cx, cy) {
+  if (!B) return null;
+  const p = new THREE.Vector2((cx / innerWidth) * 2 - 1, -(cy / innerHeight) * 2 + 1);
+  raycaster.setFromCamera(p, camera);
+  const hits = raycaster.intersectObjects(B.pickables, false);
+  for (const h of hits) {
+    if (h.object.parent.userData.fade < 0.6) continue;
+    const hid = h.object.userData.unitId;
+    if (!app.passesFilters(app.unitsById.get(hid))) continue;
+    if (app.estadoDe(hid) === 'vendida') continue;
+    return hid;
+  }
+  return null;
+}
 
 function updateHover() {
   if (!B) return;
@@ -493,6 +574,11 @@ window.addEventListener('resize', onResize);
 onResize();
 
 /* ─────────────────────────── Arranque ─────────────────────────── */
+app.enter = () => {
+  $('#hero').classList.add('gone');
+  startIntro();
+};
+
 async function boot() {
   try {
     const [units, estados] = await Promise.all([fetchUnits(), fetchAvailability()]);
@@ -523,10 +609,6 @@ async function boot() {
     return;
   }
 
-  $('#btnEnter').addEventListener('click', () => {
-    $('#hero').classList.add('gone');
-    startIntro();
-  });
   $('#skipIntro').addEventListener('click', finishIntro);
 
 }

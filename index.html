@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no">
-<title>Serenea · Edificio Apolo — Showroom Virtual</title>
-<meta name="description" content="Showroom virtual interactivo del Edificio Apolo (Serenea by Unik) en Las Huesas, Telde. Explora las 166 viviendas planta a planta en 3D.">
+<title>UNIK · Showroom Virtual — SERENEA</title>
+<meta name="description" content="Showroom virtual de las promociones de UNIK. SERENEA (Las Huesas, Telde): explora el Edificio Apolo planta a planta en 3D.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="css/style.css">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏛️</text></svg>">
@@ -29,27 +29,40 @@
 <div id="app">
   <canvas id="scene"></canvas>
 
-  <!-- ══════════ HERO / LANDING ══════════ -->
+  <!-- ══════════ HERO / LANDING (UNIK → promociones) ══════════ -->
   <div id="hero">
     <div class="hero-inner">
-      <p class="hero-kicker">Serenea by Unik · Las Huesas, Telde</p>
-      <h1>Edificio <em>Apolo</em></h1>
-      <p class="hero-sub">166 viviendas de 1, 2 y 3 dormitorios · Áticos con terraza · Jardines interiores</p>
-      <button id="btnEnter" class="btn-hero">Explorar el edificio <span class="arrow">→</span></button>
-      <p class="hero-hint">Gira con el ratón · Zoom con la rueda · Haz clic en una vivienda</p>
+      <div class="unik-logo" aria-label="UNIK">
+        <svg viewBox="0 0 560 130" fill="none" stroke="currentColor" stroke-width="17">
+          <path d="M12 8 v70 a45 45 0 0 0 45 45 h6 a45 45 0 0 0 45-45 V8"/>
+          <path d="M168 122 V10 l92 110 V8"/>
+          <path d="M316 8 v114"/>
+          <path d="M382 8 v114 M545 6 L382 88 M441 62 l102 62"/>
+        </svg>
+      </div>
+      <p class="hero-kicker">Promociones inmobiliarias</p>
+      <h1>Visita la promoción<br>que quieras explorar</h1>
+      <div id="promoCards"></div>
+      <p class="hero-hint">1 dedo: mover · 2 dedos: zoom y girar · Toca una vivienda para verla</p>
     </div>
   </div>
 
   <!-- ══════════ TOP BAR ══════════ -->
   <header id="topbar" class="ui hidden-ui">
     <div class="brand">
-      <span class="brand-mark">◈</span>
       <div class="brand-text">
-        <strong>SERENEA</strong>
-        <span>Edificio Apolo · Las Huesas</span>
+        <strong id="brandName">SERENEA</strong>
+        <span id="brandLoc">Las Huesas · Telde</span>
+      </div>
+      <div class="bld-sel" title="Elegir edificio">
+        <select id="buildingSelect" aria-label="Edificio"></select>
       </div>
     </div>
     <div class="top-stats" id="topStats"></div>
+    <div class="dn" id="dayNight" title="Modo día / noche">
+      <button id="dnDay" class="on" aria-label="Día">☀</button>
+      <button id="dnNight" aria-label="Noche">☾</button>
+    </div>
     <nav class="mode-nav">
       <button id="modo3d" class="mode-btn active" title="Vista 3D orbital">3D</button>
       <button id="modoPlano" class="mode-btn" title="Vista cenital de la planta">Plano</button>
@@ -157,7 +170,7 @@
 
   <button id="skipIntro">Saltar intro ›</button>
 
-  <div id="loader"><div class="spin"></div><p>Construyendo el Edificio Apolo…</p></div>
+  <div id="loader"><div class="spin"></div><p>Preparando el showroom…</p></div>
 </div>
 
 <script type="module" src="js/main.js"></script>

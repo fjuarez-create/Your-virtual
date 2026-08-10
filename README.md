@@ -1,4 +1,4 @@
-# Serenea · Edificio Apolo — Showroom Virtual
+# UNIK · Showroom Virtual — SERENEA
 
 Showroom inmobiliario interactivo en WebGL (Three.js) para el **Edificio Apolo**
 (Serenea by Unik, C/ Íñigo López de Mendoza, Las Huesas, Telde): **166 viviendas**
@@ -8,6 +8,14 @@ en Planta Baja, 1ª, 2ª y Ático, con patios ajardinados interiores y áticos c
 
 ## ✨ Funcionalidades
 
+- **Multi-promoción / multi-edificio**: portada UNIK con tarjetas por desarrollo
+  (`js/promotions.js`), selector de edificio en la cabecera y encuadres por
+  edificio. Preparado para los próximos edificios de SERENEA y futuros
+  desarrollos: basta añadir entradas al catálogo con su GLB y su listado.
+- **Modo día / noche** (conmutador ☀/☾): sol y cielo recalculados, entorno
+  IBL regenerado y las ventanas del BIM se encienden de noche.
+- **Gestos tipo Google Earth**: un dedo mueve, dos dedos hacen zoom y giran;
+  con ratón, izquierdo mueve, derecho gira y rueda hace zoom.
 - **Intro cinematográfica**: la cámara desciende desde las nubes hasta el edificio
   (curva Catmull-Rom con easing y zoom de focal), con botón «Saltar intro».
 - **Entorno de día** con cielo físico (shader Sky), capa de nubes y post-procesado
