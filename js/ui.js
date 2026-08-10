@@ -32,18 +32,36 @@ export function initUI(app) {
     cards.appendChild(b);
   }
 
-  // ── Marca + volver + selector de edificio ──
+  // ── Marca + volver + selector de edificio (desplegable propio) ──
   $('#brandName').textContent = app.dev.name;
   $('#backHome').addEventListener('click', () => app.exitToHome());
-  const sel = $('#buildingSelect');
+  const bldSel = $('#bldSel');
+  const bldBtn = $('#bldBtn');
+  const bldMenu = $('#bldMenu');
+  const closeBld = () => { bldSel.classList.remove('open'); bldBtn.setAttribute('aria-expanded', 'false'); };
+  const refreshBld = () => {
+    $('#bldLabel').textContent = `Edificio ${app.building.name}`;
+    bldMenu.querySelectorAll('.bld-item').forEach((i) =>
+      i.classList.toggle('sel', i.dataset.id === app.building.id));
+  };
   for (const bld of app.dev.buildings) {
-    const o = document.createElement('option');
-    o.value = bld.id;
-    o.textContent = `Edificio ${bld.name}${bld.active ? '' : ' · próximamente'}`;
+    const o = document.createElement('button');
+    o.className = 'bld-item';
+    o.dataset.id = bld.id;
     o.disabled = !bld.active;
-    sel.appendChild(o);
+    o.setAttribute('role', 'option');
+    o.innerHTML = `<svg><use href="#i-check"/></svg>
+      <span>Edificio ${bld.name}${bld.active ? '' : ' · próximamente'}</span>`;
+    o.addEventListener('click', () => { app.setBuilding(bld.id); refreshBld(); closeBld(); });
+    bldMenu.appendChild(o);
   }
-  sel.addEventListener('change', () => app.setBuilding(sel.value));
+  refreshBld();
+  bldBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const open = bldSel.classList.toggle('open');
+    bldBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+  document.addEventListener('pointerdown', (e) => { if (!bldSel.contains(e.target)) closeBld(); });
 
   // ── Día / noche (switch) ──
   $('#dnToggle').addEventListener('click', () => app.setNight(!app.night));
@@ -231,7 +249,8 @@ export function renderPanel(app, unit) {
 // ── Listado (solo viviendas disponibles, a pantalla completa) ──
 export function renderTable(app) {
   const tbody = $('#unitsTable tbody');
-  let rows = app.units.filter((u) => app.estadoDe(u.id) === 'disponible' && app.passesFilters(u));
+  let rows = app.units.filter((u) => app.estadoDe(u.id) === 'disponible' && app.passesFilters(u) &&
+    (app.floor === 'all' || app.floorOf(u) === app.floor));
   if (app.sort) {
     const { k, dir } = app.sort;
     rows = [...rows].sort((a, b) => (a[k] > b[k] ? 1 : a[k] < b[k] ? -1 : 0) * dir);

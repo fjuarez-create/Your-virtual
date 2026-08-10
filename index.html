@@ -42,6 +42,8 @@
   <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></symbol>
   <symbol id="i-filter" viewBox="0 0 24 24"><path d="M3.5 7h17M6.5 12h11M9.5 17h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
   <symbol id="i-back" viewBox="0 0 24 24"><path d="M20 12H4.5m0 0L11 5.5M4.5 12 11 18.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="m6 9.5 6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 5 5L19.5 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
 </svg>
 <div id="app">
   <canvas id="scene"></canvas>
@@ -70,8 +72,11 @@
       <button id="backHome" title="Volver a las promociones"><svg><use href="#i-back"/></svg></button>
       <strong id="brandName">SERENEA</strong>
       <div class="tb-spacer"></div>
-      <div class="bld-sel" title="Elegir edificio">
-        <select id="buildingSelect" aria-label="Edificio"></select>
+      <div class="bld-sel" id="bldSel" title="Elegir edificio">
+        <button id="bldBtn" aria-haspopup="listbox" aria-expanded="false">
+          <span id="bldLabel"></span><svg><use href="#i-chev"/></svg>
+        </button>
+        <div id="bldMenu" role="listbox"></div>
       </div>
     </div>
     <div class="tb-row tb-row2">
@@ -109,7 +114,6 @@
   <!-- ══════════ FILTERS ══════════ -->
   <aside id="filters" class="ui">
     <div id="filtersBody">
-      <h3 class="f-title">Filtros</h3>
       <div class="f-scroll">
       <div class="f-group">
         <p>Dormitorios</p>

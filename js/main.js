@@ -340,6 +340,7 @@ app.setFloor = (key) => {
   } else {
     goFloor(key);
   }
+  if ($('#listado').classList.contains('open')) UI.renderTable(app);
   repaint();
 };
 
