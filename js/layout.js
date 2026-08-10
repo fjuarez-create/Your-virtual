@@ -71,8 +71,8 @@ export function streetYAt(x) {
 
 export const FLOOR_DEFS = [
   {
-    key: 'baja', label: 'Planta Baja', short: 'PB', level: 0, y: 0, h: 3.4,
-    plan: 'assets/plans/nivel-1.png', planLabel: 'Nivel 1 · Planta Baja',
+    key: 'baja', label: 'Planta 1', short: '1', level: 0, y: 0, h: 3.4,
+    plan: 'assets/plans/nivel-1.png', planLabel: 'Planta 1',
     rows: {
       ne:  ['128', '127', '126', '125', '120', '119', '118', '113', '112', '111', '110', '109'],
       sw:  ['129', '132', '133', '134', '135', '136', '137', '138', '101', '102', '103', '104', '105', '106'],
@@ -81,8 +81,8 @@ export const FLOOR_DEFS = [
     },
   },
   {
-    key: 'p1', label: 'Planta 1ª', short: '1ª', level: 1, y: 3.4, h: 3.0,
-    plan: 'assets/plans/nivel-2.png', planLabel: 'Nivel 2 · Planta Primera',
+    key: 'p1', label: 'Planta 2', short: '2', level: 1, y: 3.4, h: 3.0,
+    plan: 'assets/plans/nivel-2.png', planLabel: 'Planta 2',
     rows: {
       ne:  ['233', '232', '231', '230', '229', '224', '223', '222', '221', '216', '215', '214', '213', '212', '211', '208', '207'],
       sw:  ['234', '237', '238', '239', '240', '241', '242', '243', '244', '245', '246', '201', '202', '203', '204', '205', '206'],
@@ -91,8 +91,8 @@ export const FLOOR_DEFS = [
     },
   },
   {
-    key: 'p2', label: 'Planta 2ª', short: '2ª', level: 2, y: 6.4, h: 3.0,
-    plan: 'assets/plans/nivel-3.png', planLabel: 'Nivel 3 · Planta Segunda',
+    key: 'p2', label: 'Planta 3', short: '3', level: 2, y: 6.4, h: 3.0,
+    plan: 'assets/plans/nivel-3.png', planLabel: 'Planta 3',
     rows: {
       ne:  ['333', '332', '331', '330', '329', '324', '323', '322', '321', '316', '315', '314', '313', '312', '311', '308', '307'],
       sw:  ['334', '337', '338', '339', '340', '341', '342', '343', '344', '345', '346', '301', '302', '303', '304', '305', '306'],
@@ -101,8 +101,8 @@ export const FLOOR_DEFS = [
     },
   },
   {
-    key: 'atico', label: 'Ático', short: 'AT', level: 3, y: 9.4, h: 3.0, atico: true,
-    plan: 'assets/plans/nivel-4.png', planLabel: 'Nivel 4 · Ático',
+    key: 'atico', label: 'Planta 4', short: '4', level: 3, y: 9.4, h: 3.0, atico: true,
+    plan: 'assets/plans/nivel-4.png', planLabel: 'Planta 4',
     rows: {
       ne:  ['426', '425', '424', '423', '418', '417', '412', '411', '410', '409', '406'],
       sw:  ['427', '428', '431', '432', '433', '434', '435', '436', '401', '402', '403', '404', '405'],
@@ -117,6 +117,13 @@ export const ROOF_Y = 12.4;
 const PLANTA_KEY = { 'Baja': 'baja', '1ª': 'p1', '2ª': 'p2', 'Ático': 'atico' };
 
 export function floorOf(unit) { return PLANTA_KEY[unit.planta]; }
+
+// Numeración pública de plantas: coincide con el primer dígito de cada
+// vivienda (1xx → planta 1 … 4xx → planta 4). Los datos de units.json
+// conservan la nomenclatura del listado de precios; aquí se traduce.
+const PLANTA_NUM = { 'Baja': '1', '1ª': '2', '2ª': '3', 'Ático': '4' };
+
+export function plantaNum(unit) { return PLANTA_NUM[unit.planta] || unit.planta; }
 
 /**
  * Calcula la geometría (rectángulos XZ) de cada vivienda y de los

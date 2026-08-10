@@ -106,6 +106,8 @@
   <!-- ══════════ FILTERS ══════════ -->
   <aside id="filters" class="ui">
     <div id="filtersBody">
+      <h3 class="f-title">Filtros</h3>
+      <div class="f-scroll">
       <div class="f-group">
         <p>Dormitorios</p>
         <div class="chips" id="chipsDorm">
@@ -131,14 +133,17 @@
         </div>
       </div>
       <div class="f-group">
-        <p>Precio máximo <strong id="priceMaxLabel"></strong></p>
+        <p>Precio máximo</p>
         <input type="range" id="priceMax" min="121000" max="481000" step="5000" value="481000">
+        <div class="price-pill" id="priceMaxLabel"></div>
       </div>
       <div class="f-group">
         <p>Con terraza</p>
         <div class="chips"><button class="chip" id="chipTerraza">Sólo con terraza</button></div>
       </div>
       <button id="filtersReset">Limpiar filtros</button>
+      </div>
+      <button id="filtersApply">Aplicar filtros</button>
     </div>
   </aside>
 

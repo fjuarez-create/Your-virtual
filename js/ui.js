@@ -2,7 +2,7 @@
    ui.js — Interfaz DOM: filtros, panel de detalle, listado,
    tooltip, selector de plantas y estadísticas.
    ═══════════════════════════════════════════════════════════════ */
-import { FLOOR_DEFS } from './layout.js';
+import { FLOOR_DEFS, plantaNum } from './layout.js';
 import { DEVELOPMENTS } from './promotions.js';
 
 /** Inserta separadores invisibles (U+2060) para que los detectores de
@@ -93,6 +93,7 @@ export function initUI(app) {
     app.onFiltersChanged();
   });
   $('#priceMaxLabel').textContent = fmtEUR(+priceMax.value);
+  $('#filtersApply').addEventListener('click', () => $('#filters').classList.remove('open'));
   $('#filtersReset').addEventListener('click', () => {
     app.filters.dorms.clear(); app.filters.estados.clear(); app.filters.orients.clear();
     app.filters.terraza = false; app.filters.priceMax = +priceMax.max;
@@ -179,7 +180,7 @@ export function showTooltip(app, unit, x, y) {
       <span class="tt-id">Viv.&#8288; ${nd(unit.id)}</span>
       <span class="tt-estado" style="color:var(--${estado === 'disponible' ? 'disp' : estado === 'reservada' ? 'res' : 'ven'})">${estado}</span>
     </div>
-    <div class="tt-row">${unit.planta} · ${unit.dorm}D · ${unit.orientacion}</div>
+    <div class="tt-row">Planta ${plantaNum(unit)} · ${unit.dorm}D · ${unit.orientacion}</div>
     <div class="tt-row">${fmtM2(unit.supTotal)}${unit.terraza ? ` (terraza ${fmtM2(unit.terraza)})` : ''}</div>
     <div class="tt-precio">${fmtEUR(unit.precio)}</div>`;
   const px = Math.min(x, window.innerWidth - 220);
@@ -254,7 +255,7 @@ export function renderTable(app) {
   tbody.innerHTML = rows.map((u) => `
     <tr data-id="${u.id}">
       <td class="u-id">${nd(u.id)}</td>
-      <td>${u.planta}</td>
+      <td>${plantaNum(u)}</td>
       <td>${u.dorm}D</td>
       <td>${fmtM2(u.supTotal)}${u.terraza ? ' <em class="u-terr">terraza</em>' : ''}</td>
       <td class="u-precio">${fmtEUR(u.precio)}</td>
