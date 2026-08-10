@@ -32,9 +32,9 @@ export function initUI(app) {
     cards.appendChild(b);
   }
 
-  // ── Marca + selector de edificio ──
+  // ── Marca + volver + selector de edificio ──
   $('#brandName').textContent = app.dev.name;
-  $('#brandLoc').textContent = app.dev.location;
+  $('#backHome').addEventListener('click', () => app.exitToHome());
   const sel = $('#buildingSelect');
   for (const bld of app.dev.buildings) {
     const o = document.createElement('option');
@@ -54,7 +54,7 @@ export function initUI(app) {
     const b = document.createElement('button');
     b.className = 'floor-btn';
     b.dataset.floor = F.key;
-    b.innerHTML = `<span class="fb-name">${F.label}</span><span class="fb-short">${F.short}</span><span class="fb-sub"></span>`;
+    b.innerHTML = `<span class="fb-short">${F.short}</span>`;
     b.addEventListener('click', () => app.setFloor(F.key));
     wrap.appendChild(b);
   }
@@ -65,8 +65,9 @@ export function initUI(app) {
   $('#modoPlano').addEventListener('click', () => app.setMode('plano'));
   $('#modoLista').addEventListener('click', () => app.setMode('lista'));
 
-  // ── Axonometría ──
-  $('#explodeRange').addEventListener('input', (e) => app.setExplode(e.target.value / 100));
+  // ── Axonometría (control retirado de la UI; se conserva por si vuelve) ──
+  const exR = $('#explodeRange');
+  if (exR) exR.addEventListener('input', (e) => app.setExplode(e.target.value / 100));
 
   // ── Filtros ──
   $('#filtersToggle').addEventListener('click', () => $('#filters').classList.toggle('open'));
@@ -147,22 +148,6 @@ export function markModeButtons(mode) {
 }
 
 export function updateStats(app) {
-  const disp = app.units.filter((u) => app.estadoDe(u.id) === 'disponible');
-  const min = disp.length ? Math.min(...disp.map((u) => u.precio)) : 0;
-  $('#topStats').innerHTML = `
-    <div class="stat"><b>${app.units.length}</b><span>Viviendas</span></div>
-    <div class="stat avail"><b>${disp.length}</b><span>Disponibles</span></div>
-    <div class="stat"><b>${min ? 'desde ' + fmtEUR(min) : '—'}</b><span>Precio</span></div>
-    <div class="stat"><b>1 · 2 · 3</b><span>Dormitorios</span></div>`;
-
-  // nº de disponibles por planta en el selector
-  for (const F of FLOOR_DEFS) {
-    const btn = document.querySelector(`.floor-btn[data-floor="${F.key}"] .fb-sub`);
-    if (!btn) continue;
-    const n = app.units.filter((u) => app.floorOf(u) === F.key && app.estadoDe(u.id) === 'disponible').length;
-    btn.textContent = `${n} disponibles`;
-  }
-
   const passing = app.units.filter((u) => app.passesFilters(u)).length;
   const active = app.filters.dorms.size || app.filters.estados.size || app.filters.orients.size ||
     app.filters.terraza || app.filters.priceMax < 481000;

@@ -1,6 +1,14 @@
 /* ═══════════════════════════════════════════════════════════════
    UNIK · Showroom Virtual — tema monocromo (blanco / negro / grises)
    ═══════════════════════════════════════════════════════════════ */
+@font-face {
+  font-family: 'Open Sans';
+  src: url('../vendor/fonts/opensans-var.woff2') format('woff2');
+  font-weight: 300 800;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   /* Monocromo estilo referencia: blanco, negro y grises suaves */
   --bg: #f1f1ef;
@@ -20,7 +28,8 @@
   --radius: 20px;
   --shadow: 0 12px 36px rgba(17, 17, 18, 0.1);
   --blur: blur(14px) saturate(1.1);
-  --font: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font: "Open Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --tb-h: 48px;              /* altura de cada fila del header (iguales) */
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -81,90 +90,77 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .pc-go i { font-style: normal; transition: transform 0.2s ease; }
 .promo-card:hover .pc-go i { transform: translateX(4px); }
 
-/* ─── Topbar ─── */
-#topbar { top: 0; left: 0; right: 0; z-index: 50; display: flex; align-items: center; gap: 18px; padding: 12px 20px;
-  background: linear-gradient(to bottom, rgba(241, 241, 239, 0.92), rgba(238, 240, 234, 0)); }
-.brand { display: flex; align-items: center; gap: 14px; }
-.brand-text { display: flex; flex-direction: column; line-height: 1.15; }
-.brand-text strong { letter-spacing: 0.3em; font-size: 15px; font-weight: 800; color: var(--ink); }
-.brand-text span { color: var(--muted); font-size: 11px; letter-spacing: 0.05em; }
-.bld-sel select { appearance: none; -webkit-appearance: none; padding: 8px 30px 8px 14px; font-size: 12.5px;
-  font-weight: 650; color: var(--ink); background: var(--panel-solid); border: 1px solid var(--line);
-  border-radius: 22px; cursor: pointer; font-family: var(--font); box-shadow: 0 3px 12px rgba(17,17,18,0.06);
-  background-image: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23111112' stroke-width='1.6' fill='none'/%3E%3C/svg%3E");
-  background-repeat: no-repeat; background-position: right 12px center; }
-.top-stats { flex: 1; display: flex; gap: 26px; justify-content: center; flex-wrap: wrap; }
-.stat { text-align: center; }
-.stat b { display: block; font-size: 16px; font-weight: 700; color: var(--ink); }
-.stat.avail b { color: var(--disp); }
-.stat span { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; }
-#actionBar { display: flex; align-items: center; gap: 12px; }
+/* ─── Topbar flat: dos filas de altura idéntica, celdas separadas
+       por líneas de 1px, sin sombras ─── */
+#topbar { top: 0; left: 0; right: 0; z-index: 50; }
+#topbar.hidden-ui { transform: translateY(-8px); }
+.tb-row { display: flex; align-items: stretch; height: var(--tb-h);
+  background: var(--panel-solid); border-bottom: 1px solid var(--line); }
+.tb-spacer { flex: 1; }
 
-/* botón-tarjeta cuadrado (radio generoso), solo icono */
-.sq-card { position: relative; display: flex; align-items: center; justify-content: center;
-  width: 62px; height: 62px; background: var(--panel-solid); border: 1px solid var(--line);
-  border-radius: 20px; cursor: pointer; box-shadow: 0 4px 14px rgba(17,17,18,0.07);
-  color: var(--ink); transition: transform 0.2s ease; }
-.sq-card:active { transform: scale(0.95); }
-.sq-card svg { width: 24px; height: 24px; }
-.ft-count { position: absolute; top: -6px; right: -6px; min-width: 22px; height: 22px; padding: 0 6px;
-  display: none; align-items: center; justify-content: center; background: var(--ink); color: #fff;
-  border-radius: 11px; font-size: 11px; font-weight: 750; }
+#backHome { width: auto; aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+  background: none; border: none; border-right: 1px solid var(--line); color: var(--ink);
+  cursor: pointer; transition: background 0.2s ease; }
+#backHome:hover { background: var(--lime-soft); }
+#backHome svg { width: 20px; height: 20px; }
+#brandName { display: flex; align-items: center; padding: 0 18px; font-size: 15px; font-weight: 700;
+  letter-spacing: 0.28em; color: var(--ink); }
+.bld-sel { display: flex; align-items: stretch; border-left: 1px solid var(--line); }
+.bld-sel select { appearance: none; -webkit-appearance: none; border: none; height: 100%;
+  padding: 0 36px 0 16px; font-family: var(--font); font-size: 13px; font-weight: 500; color: var(--ink);
+  background: transparent; cursor: pointer;
+  background-image: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23111112' stroke-width='1.6' fill='none'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 14px center; }
+
+/* Fila 2: plantas (celdas cuadradas) + Filtrar */
+#floorNav { display: flex; align-items: stretch; }
+#floorBtns { display: flex; }
+.floor-btn { width: auto; aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+  background: var(--panel-solid); color: var(--ink); border: none; border-right: 1px solid var(--line);
+  cursor: pointer; font-family: var(--font); transition: background 0.2s ease, color 0.2s ease; padding: 0; }
+.floor-btn:hover { background: var(--lime-soft); }
+.floor-btn.active { background: var(--ink); color: #fff; }
+.floor-btn .fb-short { font-size: 14px; font-weight: 600; }
+.floor-all { width: auto; padding: 0 18px; }
+
+#filtersToggle { display: flex; align-items: center; gap: 9px; padding: 0 18px; position: relative;
+  background: var(--panel-solid); border: none; border-left: 1px solid var(--line); color: var(--ink);
+  font-family: var(--font); font-size: 12.5px; font-weight: 600; letter-spacing: 0.09em;
+  text-transform: uppercase; cursor: pointer; transition: background 0.2s ease; }
+#filtersToggle:hover { background: var(--lime-soft); }
+#filtersToggle svg { width: 18px; height: 18px; }
+.ft-count { display: none; align-items: center; justify-content: center; min-width: 20px; height: 20px;
+  padding: 0 6px; background: var(--ink); color: #fff; border-radius: 10px;
+  font-size: 11px; font-weight: 700; letter-spacing: 0; }
 .ft-count.show { display: inline-flex; }
 
-.mode-nav { display: flex; background: var(--panel-solid); border: 1px solid var(--line);
-  border-radius: 20px; box-shadow: 0 4px 14px rgba(17,17,18,0.07); padding: 5px; gap: 4px; }
-.mode-btn { display: flex; align-items: center; justify-content: center;
-  width: 54px; height: 52px; background: transparent; color: var(--muted); border: none;
-  border-radius: 15px; cursor: pointer; transition: all 0.25s ease; font-family: var(--font); }
-.mode-btn span { display: none; }
-.mode-btn svg { width: 24px; height: 24px; }
-.mode-btn.active { background: var(--ink); color: #fff; }
-.mode-btn:not(.active):hover { color: var(--ink); }
+/* Switch día/noche colgante bajo el header: dos casillas cuadradas */
+.dn-switch { position: absolute; top: calc(100% + 12px); right: 12px; display: flex; padding: 0;
+  background: var(--panel-solid); border: 1px solid var(--line); cursor: pointer; }
+.dn-ico { width: 42px; height: 41px; display: flex; align-items: center; justify-content: center;
+  color: var(--muted); transition: background 0.25s ease, color 0.25s ease; }
+.dn-ico + .dn-ico { border-left: 1px solid var(--line); }
+.dn-ico svg { width: 20px; height: 20px; }
+.dn-switch:not(.night) .dn-sun,
+.dn-switch.night .dn-moon { background: var(--ink); color: #fff; }
 
-/* switch día/noche (misma familia: tarjeta con radio) */
-.dn-switch { position: relative; display: flex; align-items: center; width: 118px; height: 62px;
-  background: var(--panel-solid); border: 1px solid var(--line); border-radius: 20px; cursor: pointer;
-  box-shadow: 0 4px 14px rgba(17,17,18,0.07); padding: 5px; }
-.dn-ico { position: relative; z-index: 2; flex: 1; display: flex; align-items: center; justify-content: center;
-  color: var(--muted); transition: color 0.3s ease; }
-.dn-ico svg { width: 23px; height: 23px; }
-.dn-switch:not(.night) .dn-sun { color: #fff; }
-.dn-switch.night .dn-moon { color: #fff; }
-.dn-knob { position: absolute; z-index: 1; top: 5px; bottom: 5px; left: 5px; width: calc(50% - 5px);
-  background: var(--ink); border-radius: 15px; transition: transform 0.3s cubic-bezier(0.3, 0.8, 0.3, 1); }
-.dn-switch.night .dn-knob { transform: translateX(100%); }
+/* ─── Píldora de modos (referencia: cápsula oscura, botones circulares,
+       el activo en blanco) ─── */
+#modeBar { left: 20px; bottom: 20px; z-index: 34; display: flex; gap: 8px; padding: 8px;
+  background: #17171a; border-radius: 999px; }
+.mode-btn { width: 52px; height: 52px; border-radius: 50%; border: none; display: flex;
+  align-items: center; justify-content: center; background: #2b2b30; color: #fff;
+  cursor: pointer; transition: background 0.25s ease, color 0.25s ease; font-family: var(--font); }
+.mode-btn svg { width: 22px; height: 22px; }
+.mode-btn.active { background: #fff; color: #17171a; }
+.mode-btn:not(.active):hover { background: #3a3a40; }
 
-/* Esquinas continuas al estilo Apple (curvatura "squircle"/superelipse):
-   la curva se funde con los lados rectos en vez de arrancar de golpe.
-   Mejora progresiva: donde corner-shape no exista queda el radio clásico. */
+/* Esquinas continuas al estilo Apple (curvatura "squircle"/superelipse)
+   donde el radio sigue vivo. Mejora progresiva. */
 @supports (corner-shape: squircle) {
-  .sq-card, .mode-nav, .mode-btn, .dn-switch, .dn-knob, #floorNav, .floor-btn,
-  #filtersBody, .chip, .price-pill, #filtersApply, .bld-sel select,
-  #listClose, .promo-card, .ft-count { corner-shape: squircle; }
+  #filtersBody, .chip, .price-pill, #filtersApply, #listClose, .promo-card { corner-shape: squircle; }
 }
 
-/* ─── Floor nav ─── */
-#floorNav { left: 20px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 8px;
-  padding: 16px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
-  backdrop-filter: var(--blur); box-shadow: var(--shadow); width: 132px; }
-#floorNav.hidden-ui { transform: translateY(-50%) translateX(-16px); }
-.floornav-title { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.22em; color: var(--muted); margin-bottom: 2px; }
-#floorBtns { display: flex; flex-direction: column-reverse; gap: 6px; }
-.floor-btn { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
-  padding: 9px 12px; background: rgba(17, 17, 18, 0.05); color: var(--text); border: 1px solid transparent;
-  border-radius: 12px; cursor: pointer; text-align: left; transition: all 0.22s ease; font-family: var(--font); }
-.floor-btn:hover { background: rgba(17, 17, 18, 0.09); }
-.floor-btn.active { background: var(--ink); border-color: var(--ink); color: #fff; }
-.floor-btn .fb-name { font-size: 12.5px; font-weight: 650; line-height: 1.2; }
-.floor-btn .fb-short { display: none; font-size: 14px; font-weight: 700; }
-.floor-btn .fb-sub { font-size: 10px; color: var(--muted); }
-.floor-btn.active .fb-sub { color: #cfcfd2; }
-.floor-all { margin-top: 2px; align-items: center; }
-.floor-all .fb-name { text-align: center; width: 100%; }
-.explode-row { margin-top: 8px; padding-top: 10px; border-top: 1px solid var(--line);
-  display: flex; flex-direction: column; gap: 6px; }
-.explode-row label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--muted); }
 input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; height: 3px; border-radius: 2px;
   background: rgba(17, 17, 18, 0.18); outline: none; cursor: pointer; }
 input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
@@ -174,7 +170,7 @@ input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; border-radius
 
 /* ─── Filters (hoja estilo referencia: título, secciones en negrita,
        slider con píldora de valor y CTA negro "Aplicar filtros") ─── */
-#filters { right: 20px; top: 86px; width: 330px; z-index: 46; }
+#filters { right: 12px; top: calc(var(--tb-h) * 2 + 10px); width: 330px; z-index: 51; }
 #filtersBody { display: none; padding: 24px 22px 18px; background: var(--panel-solid);
   border: 1px solid var(--line); border-radius: 26px; box-shadow: var(--shadow);
   max-height: calc(100vh - 180px); flex-direction: column; }
@@ -208,14 +204,10 @@ input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; border-radius
   font-size: 13px; font-weight: 600; cursor: pointer; transition: color 0.2s ease; font-family: var(--font); }
 #filtersReset:hover { color: var(--ink); }
 
-/* ─── Legend, compass, attrib ─── */
-#legend { right: 20px; bottom: 20px; display: flex; gap: 16px; padding: 10px 18px; background: var(--panel);
-  border: 1px solid var(--line); border-radius: 30px; backdrop-filter: var(--blur); font-size: 12px; color: var(--muted);
-  box-shadow: var(--shadow); }
-#legend span { display: inline-flex; align-items: center; gap: 7px; }
-#compass { right: 28px; bottom: 74px; width: 46px; height: 46px; border-radius: 50%; background: var(--panel);
-  border: 1px solid var(--line); backdrop-filter: var(--blur); display: flex; align-items: center; justify-content: center;
-  box-shadow: var(--shadow); }
+/* ─── Compass (retirada del rediseño flat), attrib ─── */
+#compass { display: none; right: 28px; bottom: 74px; width: 46px; height: 46px; border-radius: 50%;
+  background: var(--panel); border: 1px solid var(--line);
+  align-items: center; justify-content: center; }
 #needle { font-size: 13px; font-weight: 800; color: var(--ink); transition: transform 0.1s linear;
   display: flex; flex-direction: column; align-items: center; }
 #needle::before { content: "▲"; font-size: 9px; line-height: 0.8; }
@@ -334,50 +326,27 @@ body.sat-on #attrib { display: block; }
 
 /* ─── Responsive (móvil) ─── */
 @media (max-width: 760px) {
-  /* Cabecera compacta: marca + selector de edificio */
-  #topbar { gap: 10px; padding: 10px 12px calc(10px); align-items: center; }
-  .brand { flex: 1; justify-content: space-between; }
-  .brand-text strong { letter-spacing: 0.18em; font-size: 14px; }
-  .brand-text span { display: none; }
-  .bld-sel select { min-height: 44px; font-size: 13px; }
-  .top-stats { display: none; }
+  /* Fila 1: ← SERENEA | Edificio Apolo ∨ */
+  #brandName { flex: 1; padding: 0 14px; font-size: 13.5px; letter-spacing: 0.2em; }
+  .bld-sel select { font-size: 12.5px; padding: 0 32px 0 12px; max-width: 46vw; }
 
-  /* Barra de acciones inferior: aprovecha todo el ancho de pantalla */
-  #actionBar { position: fixed; left: 10px; right: 10px; transform: none;
-    bottom: calc(12px + env(safe-area-inset-bottom)); z-index: 34; gap: 8px;
-    justify-content: space-between; }
-  .hidden-ui #actionBar, #topbar.hidden-ui #actionBar { opacity: 0; pointer-events: none; }
-  .sq-card { width: 66px; height: 66px; flex: none; }
-  .sq-card svg { width: 27px; height: 27px; }
-  .mode-nav { flex: 1; padding: 6px; gap: 5px; border-radius: 22px; }
-  .mode-btn { flex: 1; width: auto; height: 54px; border-radius: 16px; }
-  .mode-btn svg { width: 26px; height: 26px; }
-  .dn-switch { width: 122px; height: 66px; flex: none; border-radius: 22px; }
-  .dn-knob { border-radius: 16px; }
+  /* Fila 2: 1|2|3|4|Todo + icono de filtrar (sin texto) */
+  #filtersToggle { width: auto; aspect-ratio: 1; padding: 0; justify-content: center; }
+  #filtersToggle .ft-label { display: none; }
+  .ft-count { position: absolute; top: 4px; right: 4px; min-width: 17px; height: 17px;
+    font-size: 9.5px; padding: 0 4px; }
 
-  /* Plantas: botones cuadrados grandes 1·2·3·4·Todo, a ancho completo */
-  #floorNav { top: calc(env(safe-area-inset-top) + 64px); left: 10px; right: 10px; bottom: auto;
-    transform: none; width: auto; flex-direction: row; align-items: stretch; gap: 6px;
-    padding: 7px; border-radius: 22px; }
-  #floorNav.hidden-ui { transform: translateY(-10px); }
-  .floornav-title { display: none; }
-  #floorBtns { flex: 4; flex-direction: row; gap: 6px; }
-  .floor-btn { flex: 1; min-height: 58px; padding: 0; align-items: center; justify-content: center;
-    border-radius: 16px; }
-  .floor-btn .fb-name, .floor-btn .fb-sub { display: none; }
-  .floor-btn .fb-short { display: block; font-size: 19px; font-weight: 750; }
-  .floor-all { margin-top: 0; flex: 1.3; min-width: 62px; }
-  .floor-all .fb-name { display: none; }
-  .floor-all .fb-short { font-size: 14px; }
-  .explode-row { display: none; }
+  /* Píldora de modos centrada abajo */
+  #modeBar { left: 50%; transform: translateX(-50%); bottom: calc(14px + env(safe-area-inset-bottom)); }
+  #modeBar.hidden-ui { transform: translateX(-50%) translateY(10px); }
+  .mode-btn { width: 56px; height: 56px; }
+  .mode-btn svg { width: 24px; height: 24px; }
 
-  /* Filtros: hoja inferior a ancho completo, sobre la barra de acciones */
-  #filters { left: 10px; right: 10px; top: auto; bottom: calc(98px + env(safe-area-inset-bottom)); width: auto; z-index: 33; }
-  #filtersBody { max-height: min(62vh, calc(100vh - 200px)); padding: 20px 18px 14px; }
-  .f-title { font-size: 19px; margin-bottom: 14px; }
+  /* Filtros: hoja que baja desde el header, casi a pantalla completa */
+  #filters { left: 10px; right: 10px; top: calc(var(--tb-h) * 2 + 10px); bottom: auto; width: auto; }
+  #filtersBody { max-height: calc(100vh - var(--tb-h) * 2 - 120px); padding: 20px 18px 14px; }
+  .f-title { font-size: 18px; margin-bottom: 14px; }
 
-  /* Leyenda y brújula fuera en móvil (los colores viven en los filtros y tooltips) */
-  #legend, #compass { display: none; }
   #attrib { bottom: auto; top: calc(env(safe-area-inset-top) + 116px); font-size: 8.5px; }
 
   /* Panel de detalle a pantalla completa */

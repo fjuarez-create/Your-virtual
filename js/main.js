@@ -579,6 +579,19 @@ app.enter = () => {
   startIntro();
 };
 
+/* Vuelta a la portada (selector de promociones) desde la flecha ← */
+app.exitToHome = () => {
+  app.select(null);
+  app.setMode('3d');
+  app.setFloor('all');
+  $('#filters').classList.remove('open');
+  for (const id of ['topbar', 'modeBar', 'compass', 'attrib']) {
+    document.getElementById(id)?.classList.add('hidden-ui');
+  }
+  $('#hero').classList.remove('gone');
+  goOverview(1.4);
+};
+
 async function boot() {
   try {
     const [units, estados] = await Promise.all([fetchUnits(), fetchAvailability()]);

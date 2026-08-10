@@ -33,6 +33,7 @@
   <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 2.5v2.6M12 18.9v2.6M2.5 12h2.6M18.9 12h2.6M5 5l1.9 1.9M17.1 17.1 19 19M19 5l-1.9 1.9M6.9 17.1 5 19" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></symbol>
   <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></symbol>
   <symbol id="i-filter" viewBox="0 0 24 24"><path d="M3.5 7h17M6.5 12h11M9.5 17h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M20 12H4.5m0 0L11 5.5M4.5 12 11 18.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></symbol>
 </svg>
 <div id="app">
   <canvas id="scene"></canvas>
@@ -55,52 +56,46 @@
     </div>
   </div>
 
-  <!-- ══════════ TOP BAR ══════════ -->
+  <!-- ══════════ TOP BAR (2 filas planas + switch día/noche colgante) ══════════ -->
   <header id="topbar" class="ui hidden-ui">
-    <div class="brand">
-      <div class="brand-text">
-        <strong id="brandName">SERENEA</strong>
-        <span id="brandLoc">Las Huesas · Telde</span>
-      </div>
+    <div class="tb-row tb-row1">
+      <button id="backHome" title="Volver a las promociones"><svg><use href="#i-back"/></svg></button>
+      <strong id="brandName">SERENEA</strong>
+      <div class="tb-spacer"></div>
       <div class="bld-sel" title="Elegir edificio">
         <select id="buildingSelect" aria-label="Edificio"></select>
       </div>
     </div>
-    <div class="top-stats" id="topStats"></div>
-    <div id="actionBar">
-      <button id="filtersToggle" class="sq-card" title="Filtrar viviendas">
-        <svg><use href="#i-filter"/></svg><span class="ft-count" id="filterCount"></span>
-      </button>
-      <nav class="mode-nav">
-        <button id="modo3d" class="mode-btn active" title="Vista 3D orbital">
-          <svg><use href="#i-cube"/></svg>
-        </button>
-        <button id="modoPlano" class="mode-btn" title="Vista cenital de la planta">
-          <svg><use href="#i-plan"/></svg>
-        </button>
-        <button id="modoLista" class="mode-btn" title="Listado de viviendas">
-          <svg><use href="#i-list"/></svg>
+    <div class="tb-row tb-row2">
+      <nav id="floorNav" aria-label="Plantas">
+        <div id="floorBtns"></div>
+        <button class="floor-btn floor-all active" data-floor="all">
+          <span class="fb-short">Todo</span>
         </button>
       </nav>
-      <button id="dnToggle" class="dn-switch" role="switch" aria-checked="false" aria-label="Modo día / noche">
-        <span class="dn-ico dn-sun"><svg><use href="#i-sun"/></svg></span>
-        <span class="dn-ico dn-moon"><svg><use href="#i-moon"/></svg></span>
-        <span class="dn-knob"></span>
+      <div class="tb-spacer"></div>
+      <button id="filtersToggle" title="Filtrar viviendas">
+        <svg><use href="#i-filter"/></svg><span class="ft-label">Filtrar</span>
+        <span class="ft-count" id="filterCount"></span>
       </button>
     </div>
+    <button id="dnToggle" class="dn-switch" role="switch" aria-checked="false" aria-label="Modo día / noche">
+      <span class="dn-ico dn-sun"><svg><use href="#i-sun"/></svg></span>
+      <span class="dn-ico dn-moon"><svg><use href="#i-moon"/></svg></span>
+    </button>
   </header>
 
-  <!-- ══════════ FLOOR NAV ══════════ -->
-  <nav id="floorNav" class="ui hidden-ui">
-    <p class="floornav-title">Plantas</p>
-    <div id="floorBtns"></div>
-    <button class="floor-btn floor-all active" data-floor="all">
-      <span class="fb-name">Edificio<br>completo</span><span class="fb-short">Todo</span>
+  <!-- ══════════ MODOS (píldora inferior) ══════════ -->
+  <nav id="modeBar" class="ui hidden-ui" aria-label="Modo de vista">
+    <button id="modo3d" class="mode-btn active" title="Vista 3D orbital">
+      <svg><use href="#i-cube"/></svg>
     </button>
-    <div class="explode-row">
-      <label for="explodeRange" title="Separar plantas">Axonometría</label>
-      <input type="range" id="explodeRange" min="0" max="100" value="0">
-    </div>
+    <button id="modoPlano" class="mode-btn" title="Vista cenital de la planta">
+      <svg><use href="#i-plan"/></svg>
+    </button>
+    <button id="modoLista" class="mode-btn" title="Listado de viviendas">
+      <svg><use href="#i-list"/></svg>
+    </button>
   </nav>
 
   <!-- ══════════ FILTERS ══════════ -->
@@ -147,12 +142,7 @@
     </div>
   </aside>
 
-  <!-- ══════════ LEGEND + COMPASS ══════════ -->
-  <div id="legend" class="ui hidden-ui">
-    <span><i class="dot d-disp"></i>Disponible</span>
-    <span><i class="dot d-res"></i>Reservada</span>
-    <span><i class="dot d-ven"></i>Vendida</span>
-  </div>
+  <!-- ══════════ COMPASS (oculta en el rediseño flat; la aguja sigue viva en JS) ══════════ -->
   <div id="compass" class="ui hidden-ui" title="Norte"><div id="needle">N</div></div>
   <div id="attrib" class="ui hidden-ui">Imagen aérea © Esri, Maxar, Earthstar Geographics</div>
 
