@@ -94,11 +94,11 @@ input, textarea { -webkit-user-select: text; user-select: text; }
        por líneas de 1px, sin sombras ─── */
 #topbar { top: 0; left: 0; right: 0; z-index: 50; }
 #topbar.hidden-ui { transform: translateY(-8px); }
-.tb-row { display: flex; align-items: stretch; height: var(--tb-h);
+.tb-row { display: flex; align-items: stretch; height: calc(var(--tb-h) + 1px);
   background: var(--panel-solid); border-bottom: 1px solid var(--line); }
 .tb-spacer { flex: 1; }
 
-#backHome { width: auto; aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+#backHome { width: var(--tb-h); height: var(--tb-h); display: flex; align-items: center; justify-content: center;
   background: none; border: none; border-right: 1px solid var(--line); color: var(--ink);
   cursor: pointer; transition: background 0.2s ease; }
 #backHome:hover { background: var(--lime-soft); }
@@ -115,7 +115,7 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 /* Fila 2: plantas (celdas cuadradas) + Filtrar */
 #floorNav { display: flex; align-items: stretch; }
 #floorBtns { display: flex; }
-.floor-btn { width: auto; aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+.floor-btn { width: var(--tb-h); height: var(--tb-h); display: flex; align-items: center; justify-content: center;
   background: var(--panel-solid); color: var(--ink); border: none; border-right: 1px solid var(--line);
   cursor: pointer; font-family: var(--font); transition: background 0.2s ease, color 0.2s ease; padding: 0; }
 .floor-btn:hover { background: var(--lime-soft); }
@@ -134,21 +134,20 @@ input, textarea { -webkit-user-select: text; user-select: text; }
   font-size: 11px; font-weight: 700; letter-spacing: 0; }
 .ft-count.show { display: inline-flex; }
 
-/* Switch día/noche colgante bajo el header: dos casillas cuadradas */
+/* Switch día/noche colgante bajo el header: dos casillas cuadradas, sin borde */
 .dn-switch { position: absolute; top: calc(100% + 12px); right: 12px; display: flex; padding: 0;
-  background: var(--panel-solid); border: 1px solid var(--line); cursor: pointer; }
-.dn-ico { width: 42px; height: 41px; display: flex; align-items: center; justify-content: center;
+  background: var(--panel-solid); border: none; cursor: pointer; }
+.dn-ico { width: 42px; height: 42px; display: flex; align-items: center; justify-content: center;
   color: var(--muted); transition: background 0.25s ease, color 0.25s ease; }
-.dn-ico + .dn-ico { border-left: 1px solid var(--line); }
 .dn-ico svg { width: 20px; height: 20px; }
 .dn-switch:not(.night) .dn-sun,
 .dn-switch.night .dn-moon { background: var(--ink); color: #fff; }
 
 /* ─── Píldora de modos (referencia: cápsula oscura, botones circulares,
        el activo en blanco) ─── */
-#modeBar { left: 20px; bottom: 20px; z-index: 34; display: flex; gap: 8px; padding: 8px;
+#modeBar { left: 20px; bottom: 20px; z-index: 34; display: flex; gap: 6px; padding: 5px;
   background: #17171a; border-radius: 999px; }
-.mode-btn { width: 52px; height: 52px; border-radius: 50%; border: none; display: flex;
+.mode-btn { width: 68px; height: 68px; border-radius: 50%; border: none; display: flex;
   align-items: center; justify-content: center; background: #2b2b30; color: #fff;
   cursor: pointer; transition: background 0.25s ease, color 0.25s ease; font-family: var(--font); }
 .mode-btn svg { width: 22px; height: 22px; }
@@ -331,7 +330,7 @@ body.sat-on #attrib { display: block; }
   .bld-sel select { font-size: 12.5px; padding: 0 32px 0 12px; max-width: 46vw; }
 
   /* Fila 2: 1|2|3|4|Todo + icono de filtrar (sin texto) */
-  #filtersToggle { width: auto; aspect-ratio: 1; padding: 0; justify-content: center; }
+  #filtersToggle { width: var(--tb-h); padding: 0; justify-content: center; }
   #filtersToggle .ft-label { display: none; }
   .ft-count { position: absolute; top: 4px; right: 4px; min-width: 17px; height: 17px;
     font-size: 9.5px; padding: 0 4px; }
@@ -339,7 +338,7 @@ body.sat-on #attrib { display: block; }
   /* Píldora de modos centrada abajo */
   #modeBar { left: 50%; transform: translateX(-50%); bottom: calc(14px + env(safe-area-inset-bottom)); }
   #modeBar.hidden-ui { transform: translateX(-50%) translateY(10px); }
-  .mode-btn { width: 56px; height: 56px; }
+  .mode-btn { width: 73px; height: 73px; }
   .mode-btn svg { width: 24px; height: 24px; }
 
   /* Filtros: hoja que baja desde el header, casi a pantalla completa */
