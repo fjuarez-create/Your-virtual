@@ -618,6 +618,9 @@ let pointerPx = { x: 0, y: 0 };
 let downPos = null;
 
 canvas.addEventListener('pointermove', (e) => {
+  // el hover (y su ventanita) es solo para ratón: en táctil el toque
+  // abre directamente la ficha, sin tooltip previo
+  if (e.pointerType !== 'mouse') return;
   pointer.x = (e.clientX / innerWidth) * 2 - 1;
   pointer.y = -(e.clientY / innerHeight) * 2 + 1;
   pointerPx = { x: e.clientX, y: e.clientY };
