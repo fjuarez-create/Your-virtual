@@ -46,27 +46,29 @@ function slabGeometry(courts, depthY) {
   return g;
 }
 
+/* Etiqueta de vivienda: píldora blanca plana con el número en negro,
+   coherente con la UI (solo se muestra en viviendas disponibles). */
 function makeLabelSprite(text) {
   const cv = document.createElement('canvas');
-  cv.width = 128; cv.height = 64;
+  cv.width = 192; cv.height = 96;
   const ctx = cv.getContext('2d');
-  ctx.fillStyle = 'rgba(10,15,28,0.85)';
-  const r = 14;
+  ctx.shadowColor = 'rgba(17,17,18,0.22)';
+  ctx.shadowBlur = 10;
+  ctx.shadowOffsetY = 4;
+  ctx.fillStyle = 'rgba(255,255,255,0.97)';
   ctx.beginPath();
-  ctx.roundRect(8, 6, 112, 52, r);
+  ctx.roundRect(20, 16, 152, 60, 30);
   ctx.fill();
-  ctx.strokeStyle = 'rgba(217,180,92,0.8)';
-  ctx.lineWidth = 3;
-  ctx.stroke();
-  ctx.fillStyle = '#fff';
-  ctx.font = '700 30px Inter, sans-serif';
+  ctx.shadowColor = 'transparent';
+  ctx.fillStyle = '#111112';
+  ctx.font = '600 32px "Open Sans", "Segoe UI", sans-serif';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(text, 64, 34);
+  ctx.fillText(text, 96, 47);
   const tex = new THREE.CanvasTexture(cv);
-  tex.anisotropy = 4;
+  tex.anisotropy = 8;
   const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true });
   const sp = new THREE.Sprite(mat);
-  sp.scale.set(4.6, 2.3, 1);
+  sp.scale.set(3.4, 1.7, 1);
   return sp;
 }
 
@@ -194,9 +196,8 @@ export function buildBuilding(scene, unitsById) {
     const glassM = new THREE.MeshStandardMaterial({
       color: 0x9fc4d8, roughness: 0.15, metalness: 0.4, transparent: true, opacity: 0.22,
     });
-    const edgeM = new THREE.LineBasicMaterial({ color: 0x0a0f1c, transparent: true, opacity: 0.28 });
-    for (const m of [slabM, terrM, glassM, edgeM]) m.userData.baseOpacity = m.opacity;
-    return { slabM, terrM, glassM, edgeM, all: [slabM, terrM, glassM, edgeM] };
+    for (const m of [slabM, terrM, glassM]) m.userData.baseOpacity = m.opacity;
+    return { slabM, terrM, glassM, all: [slabM, terrM, glassM] };
   };
 
   const floorGroups = new Map();
@@ -238,14 +239,10 @@ export function buildBuilding(scene, unitsById) {
       mesh.userData = { unitId: id, floorKey: F.key };
       g.add(mesh);
 
-      const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), M.edgeM);
-      edges.position.copy(mesh.position);
-      edges.raycast = () => {};
-      g.add(edges);
-
-      // Etiqueta con el número de vivienda
+      // Etiqueta con el número de vivienda (visible solo si está disponible)
       const sp = makeLabelSprite(id);
       sp.position.set(r.x, yBase + h + 1.6, r.z);
+      mesh.userData.label = sp;
       labels.add(sp);
 
       // ── Vivienda dollhouse (visible al aislar la planta) ──
@@ -401,25 +398,30 @@ export function paintUnits(unitMeshes, estadoDe, dimmedDe, selectedId, hoverId, 
       }
     }
 
-    // Envolvente translúcida sobre el BIM
+    // Envolvente translúcida sobre el BIM: muy sutil en reposo, el color
+    // solo toma cuerpo al pasar el ratón o seleccionar (vista limpia)
     mat.color.copy(col);
     if (vendida) {
       // vendida: gris, casi invisible e inerte
-      mat.opacity = 0.05 * fade;
-      mat.emissive.setHex(0x000000);
-    } else if (dimmed) {
       mat.opacity = 0.04 * fade;
       mat.emissive.setHex(0x000000);
+    } else if (dimmed) {
+      mat.opacity = 0.03 * fade;
+      mat.emissive.setHex(0x000000);
     } else if (id === selectedId) {
-      mat.opacity = 0.62 * fade;
-      mat.emissive.copy(col).multiplyScalar(0.5);
-    } else if (id === hoverId) {
       mat.opacity = 0.5 * fade;
-      mat.emissive.copy(col).multiplyScalar(0.3);
+      mat.emissive.copy(col).multiplyScalar(0.35);
+    } else if (id === hoverId) {
+      mat.opacity = 0.38 * fade;
+      mat.emissive.copy(col).multiplyScalar(0.22);
     } else {
-      mat.opacity = (doll ? 0.2 : 0.3) * fade;
+      mat.opacity = (doll ? 0.16 : 0.1) * fade;
       mat.emissive.setHex(0x000000);
     }
+
+    // Número visible solo en viviendas disponibles (y no filtradas)
+    const lb = mesh.userData.label;
+    if (lb) lb.visible = estado === 'disponible' && !dimmed && fade > 0.5;
   }
 }
 
