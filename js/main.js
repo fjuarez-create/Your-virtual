@@ -617,14 +617,17 @@ const pointer = new THREE.Vector2(-2, -2);
 let pointerPx = { x: 0, y: 0 };
 let downPos = null;
 
+let mouseActive = false; // solo el ratón habilita el hover/tooltip
 canvas.addEventListener('pointermove', (e) => {
   // el hover (y su ventanita) es solo para ratón: en táctil el toque
   // abre directamente la ficha, sin tooltip previo
-  if (e.pointerType !== 'mouse') return;
+  if (e.pointerType !== 'mouse') { mouseActive = false; return; }
+  mouseActive = true;
   pointer.x = (e.clientX / innerWidth) * 2 - 1;
   pointer.y = -(e.clientY / innerHeight) * 2 + 1;
   pointerPx = { x: e.clientX, y: e.clientY };
 });
+canvas.addEventListener('pointerleave', () => { mouseActive = false; });
 canvas.addEventListener('pointerdown', (e) => { downPos = { x: e.clientX, y: e.clientY }; });
 canvas.addEventListener('pointerup', (e) => {
   if (!downPos) return;
@@ -654,6 +657,12 @@ function pickAt(cx, cy) {
 
 function updateHover() {
   if (!B) return;
+  if (!mouseActive) {
+    // sin ratón (táctil o fuera del lienzo): nunca hover ni tooltip
+    if (app.hover) { app.hover = null; repaint(); }
+    UI.hideTooltip();
+    return;
+  }
   raycaster.setFromCamera(pointer, camera);
   const hits = raycaster.intersectObjects(B.pickables, false);
   let id = null;
