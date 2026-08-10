@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { Sky } from 'three/addons/objects/Sky.js';
+import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -487,6 +488,44 @@ app.setBuilding = (id) => {
   goOverview(1.4);
 };
 
+/* ──────────── Cielo diurno HDRI (fotografía real, CC0 Poly Haven) ────────────
+   De día se usa un HDRI despejado con nubecillas (aristea_wreck_puresky);
+   su sol (elev. 47°, az. 45°) coincide con la luz de la escena (44°/48°),
+   así que las sombras casan sin rotación. De noche se mantiene el cielo
+   procedural (estrellas + luna): los HDRI nocturnos a pie de suelo traen
+   focos y vegetación que no encajan en el entorno urbano.
+   El shader Sky actúa de respaldo mientras carga o si falla. */
+const HDRI_DAY = { url: 'assets/sky_day.hdr', envInt: 0.55 };
+function loadDayHDRI() {
+  if (HDRI_DAY.ready) return Promise.resolve(HDRI_DAY);
+  if (!HDRI_DAY.loading) {
+    HDRI_DAY.loading = new Promise((resolve) => {
+      new RGBELoader().load(HDRI_DAY.url, (tex) => {
+        tex.mapping = THREE.EquirectangularReflectionMapping;
+        const pmrem = new THREE.PMREMGenerator(renderer);
+        HDRI_DAY.tex = tex;
+        HDRI_DAY.env = pmrem.fromEquirectangular(tex).texture;
+        pmrem.dispose();
+        HDRI_DAY.ready = true;
+        resolve(HDRI_DAY);
+      }, undefined, () => resolve(null));
+    });
+  }
+  return HDRI_DAY.loading;
+}
+function applyDaySky() {
+  if (!HDRI_DAY.ready) {
+    loadDayHDRI().then((ok) => { if (ok && !app.night) applyDaySky(); });
+    return;
+  }
+  scene.background = HDRI_DAY.tex;
+  scene.backgroundIntensity = 1.0;
+  scene.environment = HDRI_DAY.env;
+  scene.environmentIntensity = HDRI_DAY.envInt;
+  sky.visible = false;
+}
+loadDayHDRI().then(() => { if (!app.night) applyDaySky(); });
+
 /* ─────────────────────────── Día / Noche ─────────────────────────── */
 function rebuildEnvironment() {
   const pmrem = new THREE.PMREMGenerator(renderer);
@@ -504,7 +543,17 @@ app.setNight = (on) => {
   sky.material.uniforms.sunPosition.value.copy(sunDir);
   sky.material.uniforms.turbidity.value = on ? 8 : 3.0;
   sky.material.uniforms.rayleigh.value = on ? 0.6 : 1.05;
-  rebuildEnvironment();
+  if (on) {
+    // noche procedural: cúpula oscura del shader + estrellas y luna
+    sky.visible = true;
+    scene.background = null;
+    scene.backgroundIntensity = 1;
+    rebuildEnvironment();
+    scene.environmentIntensity = 0.4;
+  } else {
+    applyDaySky();
+    if (!HDRI_DAY.ready) { sky.visible = true; scene.background = null; rebuildEnvironment(); scene.environmentIntensity = 0.55; }
+  }
   // de noche, la "luz solar" pasa a ser luz de luna fría y tenue
   sun.intensity = on ? 0.35 : 2.5;
   sun.color.setHex(on ? 0xbfd1ff : 0xfff1dc);
