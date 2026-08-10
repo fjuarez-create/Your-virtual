@@ -74,7 +74,10 @@ function makeLabelSprite(text, bg = '#24873f') {
   ctx.fillText(text, 112, 54);
   const tex = new THREE.CanvasTexture(cv);
   tex.anisotropy = 8;
-  const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true });
+  tex.colorSpace = THREE.SRGBColorSpace;
+  // fuera del tone mapping de la escena: el color se pinta EXACTO,
+  // como si la cartela fuera una capa de interfaz
+  const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true, toneMapped: false });
   const sp = new THREE.Sprite(mat);
   sp.scale.set(3.2, 1.83, 1);
   return sp;
