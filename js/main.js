@@ -66,9 +66,9 @@ const sunDir = new THREE.Vector3().setFromSphericalCoords(
   1, THREE.MathUtils.degToRad(90 - 44), THREE.MathUtils.degToRad(42)
 );
 Object.assign(sky.material.uniforms, {});
-sky.material.uniforms.turbidity.value = 4.5;
-sky.material.uniforms.rayleigh.value = 1.15;
-sky.material.uniforms.mieCoefficient.value = 0.004;
+sky.material.uniforms.turbidity.value = 3.0;
+sky.material.uniforms.rayleigh.value = 1.05;
+sky.material.uniforms.mieCoefficient.value = 0.003;
 sky.material.uniforms.mieDirectionalG.value = 0.82;
 sky.material.uniforms.sunPosition.value.copy(sunDir);
 
@@ -83,41 +83,126 @@ sky.material.uniforms.sunPosition.value.copy(sunDir);
   scene.environmentIntensity = 0.55;
 }
 
-// ── Capa de nubes (billboards suaves) ──
+// ── Capa de nubes (billboards suaves, cúmulos algodonosos) ──
 const clouds = new THREE.Group();
 {
   const cv = document.createElement('canvas');
   cv.width = cv.height = 256;
   const ctx = cv.getContext('2d');
-  for (const [cx, cy, r, a] of [[128, 140, 100, 0.85], [80, 150, 66, 0.7], [180, 150, 70, 0.7], [128, 120, 55, 0.55]]) {
-    const g = ctx.createRadialGradient(cx, cy, 6, cx, cy, r);
-    g.addColorStop(0, `rgba(255,247,238,${a})`);
-    g.addColorStop(1, 'rgba(255,247,238,0)');
+  // varios lóbulos con base más plana: silueta de cúmulo
+  for (const [cx, cy, r, a] of [
+    [128, 152, 92, 0.92], [84, 148, 60, 0.8], [174, 146, 62, 0.8],
+    [110, 118, 46, 0.62], [152, 116, 44, 0.6], [66, 164, 36, 0.5], [190, 166, 38, 0.5],
+  ]) {
+    const g = ctx.createRadialGradient(cx, cy, 4, cx, cy, r);
+    g.addColorStop(0, `rgba(255,250,244,${a})`);
+    g.addColorStop(0.55, `rgba(255,250,244,${a * 0.55})`);
+    g.addColorStop(1, 'rgba(255,250,244,0)');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, 256, 256);
   }
   const tex = new THREE.CanvasTexture(cv);
   let cseed = 77;
   const crnd = () => { cseed = (cseed * 1664525 + 1013904223) % 4294967296; return cseed / 4294967296; };
-  for (let i = 0; i < 26; i++) {
+  for (let i = 0; i < 16; i++) {
     const cluster = new THREE.Group();
     const n = 3 + Math.floor(crnd() * 3);
     for (let j = 0; j < n; j++) {
-      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: false, opacity: 0.55 + crnd() * 0.3 });
+      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: false, opacity: 0.5 + crnd() * 0.28 });
+      mat.userData.baseOp = mat.opacity;
       const sp = new THREE.Sprite(mat);
-      const w = 90 + crnd() * 150;
-      sp.scale.set(w, w * (0.3 + crnd() * 0.18), 1);
-      sp.position.set((crnd() - 0.5) * 160, (crnd() - 0.5) * 34, (crnd() - 0.5) * 90);
+      const w = 80 + crnd() * 140;
+      sp.scale.set(w, w * (0.3 + crnd() * 0.16), 1);
+      sp.position.set((crnd() - 0.5) * 160, (crnd() - 0.5) * 30, (crnd() - 0.5) * 90);
       cluster.add(sp);
     }
     const a = crnd() * Math.PI * 2;
-    const r = 180 + crnd() * 950;
+    const r = 200 + crnd() * 950;
     cluster.position.set(Math.cos(a) * r, 300 + crnd() * 170, Math.sin(a) * r);
     cluster.userData.speed = 2.2 + crnd() * 2.6;
     clouds.add(cluster);
   }
 }
 scene.add(clouds);
+
+// ── Cielo nocturno: estrellas y luna (visibles solo de noche) ──
+const nightSky = new THREE.Group();
+nightSky.visible = false;
+{
+  let nseed = 991;
+  const nrnd = () => { nseed = (nseed * 1664525 + 1013904223) % 4294967296; return nseed / 4294967296; };
+  // textura de disco suave para las estrellas
+  const scv = document.createElement('canvas');
+  scv.width = scv.height = 32;
+  const sctx = scv.getContext('2d');
+  const sg = sctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+  sg.addColorStop(0, 'rgba(255,255,255,1)');
+  sg.addColorStop(0.4, 'rgba(255,255,255,0.5)');
+  sg.addColorStop(1, 'rgba(255,255,255,0)');
+  sctx.fillStyle = sg;
+  sctx.fillRect(0, 0, 32, 32);
+  const starTex = new THREE.CanvasTexture(scv);
+  // dos capas de estrellas (tenues numerosas + brillantes escasas)
+  const starLayer = (count, size, opacity) => {
+    const pos = new Float32Array(count * 3);
+    const col = new Float32Array(count * 3);
+    const c = new THREE.Color();
+    for (let i = 0; i < count; i++) {
+      const az = nrnd() * Math.PI * 2;
+      const el = Math.asin(0.03 + nrnd() * 0.96);
+      const R = 3400;
+      pos[i * 3] = R * Math.cos(el) * Math.cos(az);
+      pos[i * 3 + 1] = R * Math.sin(el);
+      pos[i * 3 + 2] = R * Math.cos(el) * Math.sin(az);
+      const t = nrnd(); // blancas, algunas azuladas y alguna cálida
+      c.setHSL(t < 0.12 ? 0.09 : 0.6, t < 0.12 ? 0.5 : 0.25, 0.78 + nrnd() * 0.22);
+      col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    const m = new THREE.PointsMaterial({ size, map: starTex, transparent: true, opacity,
+      vertexColors: true, depthWrite: false, sizeAttenuation: false, fog: false,
+      blending: THREE.AdditiveBlending });
+    return new THREE.Points(g, m);
+  };
+  nightSky.add(starLayer(2100, 2.1, 0.75));
+  nightSky.add(starLayer(320, 3.8, 0.95));
+
+  // luna: disco con sombreado de limbo, "mares" tenues y halo
+  const mcv = document.createElement('canvas');
+  mcv.width = mcv.height = 256;
+  const mctx = mcv.getContext('2d');
+  const halo = mctx.createRadialGradient(128, 128, 34, 128, 128, 126);
+  halo.addColorStop(0, 'rgba(205,220,255,0.36)');
+  halo.addColorStop(0.5, 'rgba(205,220,255,0.1)');
+  halo.addColorStop(1, 'rgba(205,220,255,0)');
+  mctx.fillStyle = halo;
+  mctx.fillRect(0, 0, 256, 256);
+  const disc = mctx.createRadialGradient(116, 116, 8, 128, 128, 44);
+  disc.addColorStop(0, '#fbfcfd');
+  disc.addColorStop(0.8, '#e8edf2');
+  disc.addColorStop(1, '#c9d2dc');
+  mctx.fillStyle = disc;
+  mctx.beginPath();
+  mctx.arc(128, 128, 43, 0, Math.PI * 2);
+  mctx.fill();
+  mctx.globalAlpha = 0.14;
+  mctx.fillStyle = '#7b8798';
+  for (const [mx, my, mr] of [[112, 116, 13], [140, 132, 10], [122, 146, 8], [146, 108, 6], [104, 138, 5]]) {
+    mctx.beginPath();
+    mctx.arc(mx, my, mr, 0, Math.PI * 2);
+    mctx.fill();
+  }
+  mctx.globalAlpha = 1;
+  const moonTex = new THREE.CanvasTexture(mcv);
+  const moon = new THREE.Sprite(new THREE.SpriteMaterial({ map: moonTex, transparent: true,
+    depthWrite: false, fog: false }));
+  moon.scale.set(330, 330, 1);
+  moon.position.set(950, 2350, -700); // alineada con la luz nocturna
+  nightSky.add(moon);
+}
+scene.add(nightSky);
 
 const camera = new THREE.PerspectiveCamera(46, innerWidth / innerHeight, 0.5, 4200);
 camera.position.set(540, 480, 820);
@@ -417,12 +502,14 @@ app.setNight = (on) => {
   const elev = on ? -12 : 44;
   sunDir.setFromSphericalCoords(1, THREE.MathUtils.degToRad(90 - elev), THREE.MathUtils.degToRad(42));
   sky.material.uniforms.sunPosition.value.copy(sunDir);
-  sky.material.uniforms.turbidity.value = on ? 8 : 4.5;
-  sky.material.uniforms.rayleigh.value = on ? 0.6 : 1.15;
+  sky.material.uniforms.turbidity.value = on ? 8 : 3.0;
+  sky.material.uniforms.rayleigh.value = on ? 0.6 : 1.05;
   rebuildEnvironment();
-  sun.intensity = on ? 0.0 : 2.5;
+  // de noche, la "luz solar" pasa a ser luz de luna fría y tenue
+  sun.intensity = on ? 0.35 : 2.5;
+  sun.color.setHex(on ? 0xbfd1ff : 0xfff1dc);
   sun.position.copy(sunDir).multiplyScalar(180);
-  if (on) sun.position.set(60, 120, -40);
+  if (on) sun.position.set(60, 150, -45); // misma dirección que la luna
   hemi.color.setHex(on ? 0x223252 : 0xe3edf8);
   hemi.groundColor.setHex(on ? 0x0c1016 : 0x8b9080);
   hemi.intensity = on ? 0.42 : 0.7;
@@ -432,7 +519,16 @@ app.setNight = (on) => {
   scene.fog.color.setHex(on ? 0x0b111c : 0xd6dde3);
   bloom.strength = on ? 0.5 : 0.14;
   bloom.threshold = on ? 0.55 : 0.92;
-  for (const c of clouds.children) c.visible = !on;
+  // cielo nocturno: estrellas + luna, y nubes escasas teñidas de noche
+  nightSky.visible = on;
+  clouds.children.forEach((cluster, i) => {
+    cluster.visible = !on || i % 2 === 0;
+    for (const sp of cluster.children) {
+      const m = sp.material;
+      m.opacity = (m.userData.baseOp ?? m.opacity) * (on ? 0.3 : 1);
+      m.color.setHex(on ? 0x55617c : 0xffffff);
+    }
+  });
   // las ventanas del BIM se encienden por la noche
   if (bim) {
     for (const [, lvl] of bim.levels) {
