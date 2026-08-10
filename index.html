@@ -68,15 +68,18 @@
     </div>
     <div class="top-stats" id="topStats"></div>
     <div id="actionBar">
+      <button id="filtersToggle" class="sq-card" title="Filtrar viviendas">
+        <svg><use href="#i-filter"/></svg><span class="ft-count" id="filterCount"></span>
+      </button>
       <nav class="mode-nav">
         <button id="modo3d" class="mode-btn active" title="Vista 3D orbital">
-          <svg><use href="#i-cube"/></svg><span>3D</span>
+          <svg><use href="#i-cube"/></svg>
         </button>
         <button id="modoPlano" class="mode-btn" title="Vista cenital de la planta">
-          <svg><use href="#i-plan"/></svg><span>Plano</span>
+          <svg><use href="#i-plan"/></svg>
         </button>
         <button id="modoLista" class="mode-btn" title="Listado de viviendas">
-          <svg><use href="#i-list"/></svg><span>Listado</span>
+          <svg><use href="#i-list"/></svg>
         </button>
       </nav>
       <button id="dnToggle" class="dn-switch" role="switch" aria-checked="false" aria-label="Modo día / noche">
@@ -101,8 +104,7 @@
   </nav>
 
   <!-- ══════════ FILTERS ══════════ -->
-  <aside id="filters" class="ui hidden-ui">
-    <button id="filtersToggle"><svg class="ft-svg"><use href="#i-filter"/></svg> Filtrar viviendas <span class="ft-count" id="filterCount"></span></button>
+  <aside id="filters" class="ui">
     <div id="filtersBody">
       <div class="f-group">
         <p>Dormitorios</p>
@@ -159,19 +161,17 @@
   </aside>
 
   <!-- ══════════ LISTADO ══════════ -->
-  <section id="listado" class="ui">
+  <section id="listado">
     <header>
-      <h2>Listado de viviendas <span id="listCount"></span></h2>
-      <button id="listClose">✕</button>
+      <h2>Viviendas disponibles <span id="listCount"></span></h2>
+      <button id="listClose" title="Cerrar">✕</button>
     </header>
     <div class="table-wrap">
       <table id="unitsTable">
         <thead>
           <tr>
-            <th data-k="id">Vivienda</th><th data-k="planta">Planta</th><th data-k="dorm">Dorm.</th>
-            <th data-k="orientacion">Orientación</th><th data-k="supViv">Sup. viv.</th>
-            <th data-k="terraza">Terraza</th><th data-k="supTotal">Total</th>
-            <th data-k="precio">Precio</th><th data-k="estado">Estado</th>
+            <th data-k="id">Viv.</th><th data-k="planta">Planta</th><th data-k="dorm">Dorm.</th>
+            <th data-k="supTotal">m²</th><th data-k="precio">Precio</th>
           </tr>
         </thead>
         <tbody></tbody>

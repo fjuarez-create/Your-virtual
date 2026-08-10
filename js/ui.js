@@ -165,7 +165,9 @@ export function updateStats(app) {
   const passing = app.units.filter((u) => app.passesFilters(u)).length;
   const active = app.filters.dorms.size || app.filters.estados.size || app.filters.orients.size ||
     app.filters.terraza || app.filters.priceMax < 481000;
-  $('#filterCount').textContent = active ? `${passing}/${app.units.length}` : '';
+  const fc = $('#filterCount');
+  fc.textContent = active ? String(passing) : '';
+  fc.classList.toggle('show', !!active);
 }
 
 // ── Tooltip ──
@@ -240,29 +242,23 @@ export function renderPanel(app, unit) {
   panel.classList.add('open');
 }
 
-// ── Listado ──
+// ── Listado (solo viviendas disponibles, a pantalla completa) ──
 export function renderTable(app) {
   const tbody = $('#unitsTable tbody');
-  let rows = app.units.filter((u) => app.passesFilters(u));
+  let rows = app.units.filter((u) => app.estadoDe(u.id) === 'disponible' && app.passesFilters(u));
   if (app.sort) {
     const { k, dir } = app.sort;
-    rows = [...rows].sort((a, b) => {
-      const va = k === 'estado' ? app.estadoDe(a.id) : a[k];
-      const vb = k === 'estado' ? app.estadoDe(b.id) : b[k];
-      return (va > vb ? 1 : va < vb ? -1 : 0) * dir;
-    });
+    rows = [...rows].sort((a, b) => (a[k] > b[k] ? 1 : a[k] < b[k] ? -1 : 0) * dir);
   }
-  $('#listCount').textContent = `${rows.length} viviendas`;
-  tbody.innerHTML = rows.map((u) => {
-    const e = app.estadoDe(u.id);
-    return `<tr data-id="${u.id}">
-      <td class="u-id">${nd(u.id)}</td><td>${u.planta}</td><td>${u.dorm}D</td>
-      <td>${u.orientacion}</td><td>${fmtM2(u.supViv)}</td>
-      <td>${u.terraza ? fmtM2(u.terraza) : '—'}</td><td>${fmtM2(u.supTotal)}</td>
-      <td><strong>${fmtEUR(u.precio)}</strong></td>
-      <td><span class="tag ${e}">${e}</span></td>
-    </tr>`;
-  }).join('');
+  $('#listCount').textContent = `${rows.length}`;
+  tbody.innerHTML = rows.map((u) => `
+    <tr data-id="${u.id}">
+      <td class="u-id">${nd(u.id)}</td>
+      <td>${u.planta}</td>
+      <td>${u.dorm}D</td>
+      <td>${fmtM2(u.supTotal)}${u.terraza ? ' <em class="u-terr">terraza</em>' : ''}</td>
+      <td class="u-precio">${fmtEUR(u.precio)}</td>
+    </tr>`).join('');
   tbody.querySelectorAll('tr').forEach((tr) =>
     tr.addEventListener('click', () => {
       app.setMode('3d');
