@@ -202,6 +202,12 @@ export function renderPanel(app, unit) {
       <div class="spec"><b>${unit.terraza ? fmtM2(unit.terraza) : '—'}</b><span>Terraza</span></div>
       <div class="spec"><b>${fmtM2(unit.supTotal)}</b><span>Sup. total</span></div>
     </div>
+    <div class="equip">
+      ${unit.terraza ? '<span><svg><use href="#i-terr"/></svg>Terraza</span>' : ''}
+      <span><svg><use href="#i-car"/></svg>Garaje opcional</span>
+      <span><svg><use href="#i-store"/></svg>Trastero opcional</span>
+      <span><svg><use href="#i-gym"/></svg>Gimnasio</span>
+    </div>
     <div class="p-section">
       <h3>Plano de planta</h3>
       <a class="plan-thumb" data-plan="${F.plan}" data-cap="${F.planLabel} — Vivienda ${unit.id}">
