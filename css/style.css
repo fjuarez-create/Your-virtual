@@ -295,21 +295,16 @@ body:has(#panel.open) .dn-switch { display: none; }
   background: var(--panel-solid); border-top: 1px solid var(--line);
   display: none; flex-direction: column; padding: 0 0 env(safe-area-inset-bottom); }
 #listado.open { display: flex; }
-#listado header { display: flex; align-items: center; justify-content: space-between;
-  padding: 14px 20px; max-width: 920px; width: 100%; margin: 0 auto; }
-#listado h2 { font-size: clamp(19px, 4.5vw, 26px); font-weight: 750; color: var(--ink); letter-spacing: -0.01em; }
-#listado h2 span { display: inline-flex; align-items: center; justify-content: center; min-width: 30px; height: 30px;
-  padding: 0 8px; background: var(--ink); color: #fff; font-size: 13px; font-weight: 750; border-radius: 15px;
-  margin-left: 10px; vertical-align: middle; }
-#unitsList { flex: 1; overflow-y: auto; }
+#unitsList { flex: 1; overflow-y: auto; padding-top: 4px; }
 /* hueco final para que la píldora de modos no tape las últimas tarjetas */
 #unitsList::after { content: ""; display: block; height: 110px; }
 .u-card { display: flex; align-items: stretch; gap: 18px; width: 100%; max-width: 920px; margin: 0 auto;
   padding: 16px 20px; background: none; border: none; border-bottom: 1px solid rgba(17, 17, 18, 0.08);
   text-align: left; cursor: pointer; font-family: var(--font); transition: background 0.15s ease; }
 .u-card:hover { background: var(--lime-soft); }
-.u-plan { width: 96px; height: 116px; object-fit: cover; border: 1px solid var(--line); border-radius: 8px;
-  background: #fff; flex: none; }
+/* el plano se muestra entero, sin recortes, bien proporcionado */
+.u-plan { width: 108px; height: 116px; object-fit: contain; border: 1px solid var(--line); border-radius: 8px;
+  background: #fff; padding: 5px; flex: none; }
 .u-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .u-title { font-size: 16px; font-weight: 700; color: var(--ink); }
 .u-line { font-size: 12.5px; color: var(--muted); font-weight: 500; }
@@ -357,7 +352,7 @@ body:has(#panel.open) .dn-switch { display: none; }
 
   /* Listado a pantalla completa */
   .u-card { gap: 14px; padding: 14px; }
-  .u-plan { width: 84px; height: 102px; }
+  .u-plan { width: 94px; height: 102px; }
   .u-title, .u-price { font-size: 15px; }
   .u-icons { gap: 10px; }
   .u-icons svg { width: 19px; height: 19px; }

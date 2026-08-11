@@ -186,15 +186,13 @@ export function renderPanel(app, unit) {
   if (!unit) { panel.classList.remove('open'); return; }
   const estado = app.estadoDe(unit.id);
   const F = FLOOR_DEFS.find((f) => f.key === app.floorOf(unit));
-  const ppm2 = unit.precio / unit.supTotal;
   const disponible = estado === 'disponible';
   $('#panelBody').innerHTML = `
-    <p class="p-kicker">${app.dev.name} · Edificio&#8288; ${app.building.name}</p>
     <h2 class="p-title">Vivienda&#8288; <b>${nd(unit.id)}</b></h2>
     <p class="p-sub">${F.label} · ${unit.orientacion}</p>
     <span class="badge ${estado}">${estado}</span>
     <div class="p-price">${fmtEUR(unit.precio)}
-      <small>${fmtEUR(Math.round(ppm2))}/m² · IGIC no incluido</small>
+      <small>IGIC no incluido</small>
     </div>
     <div class="spec-grid">
       <div class="spec"><b>${unit.dorm}</b><span>Dormitorio${unit.dorm > 1 ? 's' : ''}</span></div>
@@ -215,9 +213,9 @@ export function renderPanel(app, unit) {
       </a>
     </div>
     <div class="p-section">
-      <h3>Plano de planta</h3>
-      <a class="plan-thumb" data-plan="${F.plan}" data-cap="${F.planLabel} — Vivienda ${unit.id}">
-        <img src="${F.plan}" alt="${F.planLabel}">
+      <h3>Ubicación en planta</h3>
+      <a class="plan-thumb" data-plan="assets/ubicaciones/${unit.id}.png" data-cap="Vivienda ${unit.id} — Ubicación en ${F.label}">
+        <img src="assets/ubicaciones/${unit.id}.png" alt="Ubicación de la vivienda ${unit.id} en la planta">
       </a>
     </div>
     <div class="p-section">
@@ -259,7 +257,6 @@ export function renderTable(app) {
   const list = $('#unitsList');
   const rows = app.units.filter((u) => app.estadoDe(u.id) === 'disponible' && app.passesFilters(u) &&
     (app.floor === 'all' || app.floorOf(u) === app.floor));
-  $('#listCount').textContent = `${rows.length}`;
   list.innerHTML = rows.map((u) => {
     const F = FLOOR_DEFS.find((f) => f.key === app.floorOf(u));
     return `
@@ -267,7 +264,7 @@ export function renderTable(app) {
       <img class="u-plan" src="assets/planos/${u.id}.png" data-fb="${F.plan}" alt="Plano vivienda" loading="lazy">
       <div class="u-info">
         <p class="u-title">${u.dorm}D&ensp;|&ensp;${fmtM2(u.supTotal)}</p>
-        <p class="u-line">Vivienda&#8288; ${nd(u.id)}</p>
+        <p class="u-line">SE-AP-⁠${nd(u.id)}</p>
         <p class="u-line">Planta ${plantaNum(u)} · ${u.orientacion}</p>
         <p class="u-price">${fmtEUR(u.precio)}</p>
       </div>
