@@ -464,9 +464,15 @@ app.setExplode = (v) => {
   }, 260);
 };
 
+app.recent = []; // últimas vistas: solo en memoria (un refresco lo deja a cero)
+
 app.select = (id, opts = {}) => {
   app.selected = id;
   const unit = id ? app.unitsById.get(id) : null;
+  if (unit) {
+    app.recent = [id, ...app.recent.filter((r) => r !== id)].slice(0, 6);
+    UI.renderRecent(app);
+  }
   UI.renderPanel(app, unit);
   if (unit && opts.focus) {
     const fKey = floorOf(unit);
@@ -762,9 +768,11 @@ app.exitToHome = () => {
   app.setMode('3d');
   app.setFloor('all');
   $('#filters').classList.remove('open');
-  for (const id of ['topbar', 'modeBar', 'compass', 'attrib']) {
+  for (const id of ['topbar', 'modeBar', 'compass', 'attrib', 'recentDock']) {
     document.getElementById(id)?.classList.add('hidden-ui');
   }
+  app.recent = [];
+  UI.renderRecent(app);
   $('#hero').classList.remove('gone');
   goOverview(1.4);
 };

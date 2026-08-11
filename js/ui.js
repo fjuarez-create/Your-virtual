@@ -161,6 +161,17 @@ export function updateStats(app) {
   fc.classList.toggle('show', !!active);
 }
 
+// ── Últimas viviendas vistas (bolitas, solo pantallas grandes) ──
+export function renderRecent(app) {
+  const dock = $('#recentDock');
+  dock.innerHTML = app.recent.map((id) => `
+    <button class="recent-dot${id === app.selected ? ' sel' : ''}" data-id="${id}"
+      title="Vivienda ${id}">${nd(id)}</button>`).join('');
+  dock.querySelectorAll('.recent-dot').forEach((b) =>
+    b.addEventListener('click', () => app.select(b.dataset.id, { focus: true }))
+  );
+}
+
 // ── Tooltip ──
 export function showTooltip(app, unit, x, y) {
   const tt = $('#tooltip');

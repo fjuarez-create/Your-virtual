@@ -236,13 +236,30 @@ body.sat-on #attrib { display: block; }
 #tooltip .tt-row { font-size: 11.5px; color: var(--muted); font-weight: 500; line-height: 1.45; }
 #tooltip .tt-precio { font-size: 13.5px; font-weight: 700; color: var(--ink); margin-top: 5px; }
 
-/* ─── Detail panel: superficie plana bajo el header, como el listado ─── */
-#panel { position: fixed; top: calc(var(--tb-h) * 2 + 1px); left: 0; right: 0; bottom: 0; width: auto;
+/* ─── Detail panel ───
+   Escritorio/tablet: cajón que entra de izquierda a derecha bajo el
+   header, con sombra sutil hacia la escena. Móvil: hoja inferior que
+   sube sin llegar al subheader (ver media query). ─── */
+#panel { position: fixed; top: calc(var(--tb-h) * 2 + 1px); left: 0; bottom: 0; width: min(430px, 92vw);
   background: var(--panel-solid); border-top: 1px solid var(--line); z-index: 46;
-  opacity: 0; pointer-events: none; transform: translateY(14px);
-  transition: opacity 0.3s ease, transform 0.35s cubic-bezier(0.25, 0.8, 0.3, 1); overflow-y: auto; }
-#panel.open { opacity: 1; pointer-events: auto; transform: none; }
+  pointer-events: none; transform: translateX(-105%);
+  box-shadow: 14px 0 34px rgba(17, 17, 18, 0.12);
+  transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.3, 1); overflow-y: auto; }
+#panel.open { pointer-events: auto; transform: none; }
 body:has(#panel.open) .dn-switch { display: none; }
+
+/* Últimas viviendas vistas: bolitas minimalistas a la derecha
+   (solo pantallas grandes; en memoria, un refresco las borra) */
+#recentDock { position: fixed; right: 14px; top: 50%; transform: translateY(-50%);
+  display: flex; flex-direction: column; gap: 8px; z-index: 40; }
+#recentDock:empty { display: none; }
+.recent-dot { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line);
+  background: var(--panel-solid); color: var(--ink); font-family: var(--font);
+  font-size: 11px; font-weight: 700; cursor: pointer;
+  box-shadow: 0 4px 12px rgba(17, 17, 18, 0.08);
+  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease; }
+.recent-dot:hover { transform: scale(1.08); }
+.recent-dot.sel, .recent-dot:hover { background: var(--ink); color: #fff; border-color: var(--ink); }
 #panelClose { position: sticky; top: 16px; margin-left: calc(100% - 60px); z-index: 2; width: 44px; height: 44px;
   border-radius: 10px; border: 1px solid var(--line); background: var(--panel-solid); color: var(--ink);
   cursor: pointer; font-size: 15px; transition: background 0.2s; }
@@ -345,10 +362,18 @@ body:has(#panel.open) .dn-switch { display: none; }
 
   #attrib { bottom: auto; top: calc(env(safe-area-inset-top) + 116px); font-size: 8.5px; }
 
-  /* Panel de detalle: solo se compacta el contenido */
+  /* Panel de detalle en móvil: hoja inferior que sube sin llegar al
+     subheader, con sombra fina arriba para separarse de la escena */
+  #panel { top: calc(var(--tb-h) * 2 + 49px); left: 0; right: 0; width: auto;
+    border-top: 1px solid var(--line); transform: translateY(105%);
+    box-shadow: 0 -10px 28px rgba(17, 17, 18, 0.14); }
+  #panel.open { transform: none; }
   #panelBody { padding: 0 16px 130px; }
   .p-title { font-size: 26px; }
   .p-price { font-size: 28px; }
+
+  /* las últimas vistas son exclusivas de pantallas grandes */
+  #recentDock { display: none; }
 
   /* Listado a pantalla completa */
   .u-card { gap: 14px; padding: 14px; }
