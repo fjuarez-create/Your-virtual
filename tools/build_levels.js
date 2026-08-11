@@ -1,111 +1,75 @@
-/* Procesa el FBX→GLB de Revit: asigna cada elemento a una planta lógica
-   (sotano/baja/p1/p2/atico/cubierta) según los forjados de su tramo,
-   fusiona la geometría por planta y exporta apolo_levels.glb + levels.json */
+/* Reasignación escrupulosa de plantas: anclada a las cotas reales de los
+   alzados (SECTIONS de js/layout.js) y por punto medio del elemento. */
 const { NodeIO, getBounds, Document } = require('@gltf-transform/core');
+const { ALL_EXTENSIONS } = require('@gltf-transform/extensions');
+const { weld, quantize } = require('@gltf-transform/functions');
+const { mat4, vec4 } = require('gl-matrix');
 const fs = require('fs');
 
-const BIN = 4; // ancho de bin en X (m)
+// Cotas reales por tramo (coordenadas de escena, X centrado)
+const SECTIONS = [
+  { x0: -60, x1: -31, floors: [-0.8, 2.1, 4.9, 7.7] },
+  { x0: -31, x1: 3.6, floors: [-0.8, 2.7, 6.3, 9.3] },
+  { x0: 3.6, x1: 31.6, floors: [-0.8, 1.3, 4.9, 7.9] },
+  { x0: 31.6, x1: 60, floors: [-0.1, 3.5, 6.5, 9.5] },
+];
+const MARGIN = 0.4;   // tolerancia sobre la cota de forjado (punto medio)
+const BUCKETS = ['sotano', 'baja', 'p1', 'p2', 'atico', 'cubierta'];
 
 (async () => {
-  const io = new NodeIO();
+  const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
   const doc = await io.read('apolo_raw.glb');
   const scene = doc.getRoot().listScenes()[0];
 
-  // ── 1. Recoger todos los nodos con malla y sus cajas ──
   const items = [];
-  const slabs = [];
-  const walk = (node, parentVisible) => {
-    const mesh = node.getMesh();
-    if (mesh) {
+  const walk = (node) => {
+    if (node.getMesh()) {
       const b = getBounds(node);
-      const it = {
-        node, name: node.getName(),
-        x0: b.min[0], x1: b.max[0], y0: b.min[1], y1: b.max[1], z0: b.min[2], z1: b.max[2],
-      };
-      items.push(it);
-      if (/^Suelo FOR/.test(it.name)) {
-        const area = (it.x1 - it.x0) * (it.z1 - it.z0);
-        if (area > 25) slabs.push({ ...it, area });
-      }
+      items.push({ node, name: node.getName(),
+        x0: b.min[0], x1: b.max[0], y0: b.min[1], y1: b.max[1], z0: b.min[2], z1: b.max[2] });
     }
-    node.listChildren().forEach((c) => walk(c));
+    node.listChildren().forEach(walk);
   };
-  scene.listChildren().forEach((c) => walk(c));
+  scene.listChildren().forEach(walk);
 
   const gx0 = Math.min(...items.map(i => i.x0)), gx1 = Math.max(...items.map(i => i.x1));
   const gz0 = Math.min(...items.map(i => i.z0)), gz1 = Math.max(...items.map(i => i.z1));
   const cx = (gx0 + gx1) / 2, cz = (gz0 + gz1) / 2;
-  console.log('bounds x', gx0.toFixed(1), gx1.toFixed(1), 'z', gz0.toFixed(1), gz1.toFixed(1));
+  console.log('cx', cx.toFixed(2), 'cz', cz.toFixed(2));
 
-  // ── 2. Escaleras de niveles por bin de X ──
-  const bins = [];
-  for (let x = gx0; x < gx1; x += BIN) {
-    const ys = slabs
-      .filter(s => Math.min(s.x1, x + BIN) - Math.max(s.x0, x) > 1.2 && s.y1 > -1.6)
-      .map(s => s.y1).sort((a, b) => a - b);
-    // clustering: fusionar niveles a menos de 1.1 m (pares delante/detrás +0.78)
-    const clusters = [];
-    for (const y of ys) {
-      if (!clusters.length || y - clusters[clusters.length - 1].max > 1.1) {
-        clusters.push({ min: y, max: y });
-      } else clusters[clusters.length - 1].max = y;
+  // tramo por solape máximo en X (coordenadas centradas)
+  const sectionOf = (it) => {
+    let best = SECTIONS[0], bo = -1;
+    for (const S of SECTIONS) {
+      const o = Math.min(it.x1 - cx, S.x1) - Math.max(it.x0 - cx, S.x0);
+      if (o > bo) { bo = o; best = S; }
     }
-    bins.push({ x0: x, x1: x + BIN, levels: clusters.map(c => c.min) });
-  }
-  // rellenar bins vacíos con el vecino más cercano
-  for (let i = 0; i < bins.length; i++) {
-    if (!bins[i].levels.length) {
-      const j = bins.findIndex((b, k) => k > i && b.levels.length);
-      const p = [...bins.slice(0, i)].reverse().find(b => b.levels.length);
-      bins[i].levels = (p || bins[j]).levels;
-    }
-  }
-  bins.forEach(b => console.log('bin', b.x0.toFixed(0).padStart(4), b.levels.map(v => v.toFixed(1)).join(', ')));
-
-  // Escalera lógica por bin: [PB, P1, P2, AT] (+ROOF si hay 5º)
-  // El podio de garaje (−0.82) es PB en todo el edificio salvo donde el
-  // terreno sube: si el 1er cluster está por debajo de −0.5 lo tratamos como PB.
-  const ladderOf = (xc) => {
-    const bin = bins[Math.max(0, Math.min(bins.length - 1, Math.floor((xc - gx0) / BIN)))];
-    return bin.levels;
+    return best;
   };
 
-  // ── 3. Asignación de elementos a plantas ──
-  const BUCKETS = ['sotano', 'baja', 'p1', 'p2', 'atico', 'cubierta'];
   const byBucket = Object.fromEntries(BUCKETS.map(k => [k, []]));
   for (const it of items) {
-    const xc = (it.x0 + it.x1) / 2;
-    const L = ladderOf(xc); // niveles crecientes
+    const F = sectionOf(it).floors;
+    const mid = (it.y0 + it.y1) / 2;
     let bucket;
-    if (it.y1 < -1.4) bucket = 'sotano';                       // completamente bajo rasante
+    if (it.y1 < F[0] - 0.25) bucket = 'sotano';                 // bajo la losa de baja
+    else if (it.y0 > F[3] + 2.2) bucket = 'cubierta';           // casetones sobre el ático
     else {
-      // índice del mayor nivel ≤ y0 + 0.7 (apoyo del elemento)
-      let idx = -1;
-      for (let i = 0; i < L.length; i++) if (L[i] <= it.y0 + 0.7) idx = i;
-      if (idx < 0) bucket = it.y0 < -1.0 ? 'sotano' : 'baja';
-      else {
-        // idx 0..n; n≥4 ⇒ el 5º nivel es cubierta
-        const names = L.length >= 5
-          ? ['baja', 'p1', 'p2', 'atico', 'cubierta']
-          : ['baja', 'p1', 'p2', 'atico'];
-        bucket = names[Math.min(idx, names.length - 1)];
-        // elementos altos que arrancan sobre el último forjado ⇒ cubierta
-        if (idx >= names.length - 1 && it.y0 > L[L.length - 1] + 2.0) bucket = 'cubierta';
-      }
+      let idx = 0;
+      for (let i = 0; i < 4; i++) if (F[i] <= mid + MARGIN) idx = i;
+      if (mid + MARGIN < F[0]) bucket = 'sotano';
+      else bucket = ['baja', 'p1', 'p2', 'atico'][idx];
     }
     byBucket[bucket].push(it);
   }
-  BUCKETS.forEach(k => console.log(k, byBucket[k].length, 'elementos'));
+  BUCKETS.forEach(k => console.log(k.padEnd(9), byBucket[k].length, 'elementos'));
 
-  // categoría de material por el nombre del elemento de Revit
   const catOf = (name) => {
-    if (/^(VEN-|Puerta)/.test(name)) return 'glass';   // carpinterías/vidrio
+    if (/^(VEN-|Puerta)/.test(name)) return 'glass';
     if (/^(Muro|Fachada|UNIK|ICV)/.test(name)) return 'wall';
-    return 'struct';                                    // forjados, pilares, escaleras…
+    return 'struct';
   };
 
-  // ── 4. Fusión de geometría por planta y material (mundo, centrado) ──
-  const { mat4, vec3, vec4 } = require('gl-matrix');
   const out = new Document();
   const buffer = out.createBuffer();
   const outScene = out.createScene('apolo');
@@ -154,19 +118,11 @@ const BIN = 4; // ancho de bin en X (m)
     const iAcc = out.createAccessor().setType('SCALAR').setArray(new Uint32Array(idxArr)).setBuffer(buffer);
     const prim = out.createPrimitive().setAttribute('POSITION', pAcc).setAttribute('NORMAL', nAcc).setIndices(iAcc).setMaterial(MATS[cat]);
     const mesh = out.createMesh(name).addPrimitive(prim);
-    const node = out.createNode(name).setMesh(mesh);
-    outScene.addChild(node);
+    outScene.addChild(out.createNode(name).setMesh(mesh));
     console.log('mesh', name, (pos.length / 3).toLocaleString(), 'vértices');
   }
 
+  await out.transform(weld(), quantize());
   await io.write('apolo_levels.glb', out);
   console.log('→ apolo_levels.glb', (fs.statSync('apolo_levels.glb').size / 1e6).toFixed(1), 'MB');
-
-  // ── 5. levels.json: escaleras por bin en coordenadas de la escena ──
-  const sections = bins.map(b => ({
-    x0: +(b.x0 - cx).toFixed(2), x1: +(b.x1 - cx).toFixed(2),
-    levels: b.levels.map(v => +v.toFixed(2)),
-  }));
-  fs.writeFileSync('levels.json', JSON.stringify({ cx: +cx.toFixed(2), cz: +cz.toFixed(2), sections }, null, 1));
-  console.log('→ levels.json');
 })();

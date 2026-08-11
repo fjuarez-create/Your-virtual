@@ -726,13 +726,18 @@ function loop() {
   updateCompass();
   if (!intro) controls.update();
   composer.render();
-  // pasada de cartelas (capa 1): sin bloom ni tone mapping, siempre visibles
+  // pasada de cartelas (capa 1): sin bloom ni tone mapping, siempre visibles.
+  // El fondo se anula durante la pasada para no repintar el cielo encima
+  // de la escena ya compuesta.
+  const bg = scene.background;
+  scene.background = null;
   renderer.autoClear = false;
   renderer.clearDepth();
   camera.layers.set(1);
   renderer.render(scene, camera);
   camera.layers.set(0);
   renderer.autoClear = true;
+  scene.background = bg;
 }
 
 /* ─────────────────────────── Resize ─────────────────────────── */
