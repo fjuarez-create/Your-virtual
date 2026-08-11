@@ -54,7 +54,7 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 0.85;
+renderer.toneMappingExposure = 0.78;
 
 const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(0xd6dde3, 750, 2100);
@@ -81,7 +81,7 @@ sky.material.uniforms.sunPosition.value.copy(sunDir);
   scene.environment = pmrem.fromScene(envScene, 0.04).texture;
   scene.add(sky); // devolver el cielo a la escena principal
   pmrem.dispose();
-  scene.environmentIntensity = 0.55;
+  scene.environmentIntensity = 0.45;
 }
 
 // ── Capa de nubes (billboards suaves, cúmulos algodonosos) ──
@@ -224,9 +224,9 @@ controls.target.set(0, 40, 0);
 controls.enabled = false; // se habilita al terminar la intro
 
 // Luces
-const hemi = new THREE.HemisphereLight(0xe3edf8, 0x8b9080, 0.7);
+const hemi = new THREE.HemisphereLight(0xe3edf8, 0x8b9080, 0.55);
 scene.add(hemi);
-const sun = new THREE.DirectionalLight(0xfff1dc, 2.5);
+const sun = new THREE.DirectionalLight(0xfff1dc, 2.2);
 sun.position.copy(sunDir).multiplyScalar(180);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
@@ -505,7 +505,7 @@ app.setBuilding = (id) => {
    procedural (estrellas + luna): los HDRI nocturnos a pie de suelo traen
    focos y vegetación que no encajan en el entorno urbano.
    El shader Sky actúa de respaldo mientras carga o si falla. */
-const HDRI_DAY = { url: 'assets/sky_day.hdr', envInt: 0.55 };
+const HDRI_DAY = { url: 'assets/sky_day.hdr', envInt: 0.45 };
 function loadDayHDRI() {
   if (HDRI_DAY.ready) return Promise.resolve(HDRI_DAY);
   if (!HDRI_DAY.loading) {
@@ -562,19 +562,19 @@ app.setNight = (on) => {
     scene.environmentIntensity = 0.4;
   } else {
     applyDaySky();
-    if (!HDRI_DAY.ready) { sky.visible = true; scene.background = null; rebuildEnvironment(); scene.environmentIntensity = 0.55; }
+    if (!HDRI_DAY.ready) { sky.visible = true; scene.background = null; rebuildEnvironment(); scene.environmentIntensity = 0.45; }
   }
   // de noche, la "luz solar" pasa a ser luz de luna fría y tenue
-  sun.intensity = on ? 0.35 : 2.5;
+  sun.intensity = on ? 0.35 : 2.2;
   sun.color.setHex(on ? 0xbfd1ff : 0xfff1dc);
   sun.position.copy(sunDir).multiplyScalar(180);
   if (on) sun.position.set(60, 150, -45); // misma dirección que la luna
   hemi.color.setHex(on ? 0x223252 : 0xe3edf8);
   hemi.groundColor.setHex(on ? 0x0c1016 : 0x8b9080);
-  hemi.intensity = on ? 0.42 : 0.7;
+  hemi.intensity = on ? 0.42 : 0.55;
   fill.color.setHex(on ? 0x8fa8d8 : 0xa8c4e8);
   fill.intensity = on ? 0.5 : 0.4;
-  renderer.toneMappingExposure = on ? 0.8 : 0.85;
+  renderer.toneMappingExposure = on ? 0.8 : 0.78;
   scene.fog.color.setHex(on ? 0x0b111c : 0xd6dde3);
   bloom.strength = on ? 0.5 : 0.14;
   bloom.threshold = on ? 0.72 : 0.92;

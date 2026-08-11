@@ -240,10 +240,10 @@ export function loadBIM(scene, url = 'assets/apolo_levels.glb') {
         // cuando su planta está aislada.
         const mkMats = () => ({
           struct: Object.assign(new THREE.MeshStandardMaterial({
-            color: 0xd8d7d2, roughness: 0.92, metalness: 0.02, transparent: true,
+            color: 0xcfcec8, roughness: 0.93, metalness: 0.02, transparent: true,
           }), { userData: { baseOpacity: 1 } }),
           wall: Object.assign(new THREE.MeshStandardMaterial({
-            color: 0xf1efe8, roughness: 0.8, metalness: 0.0, transparent: true,
+            color: 0xe9e6df, roughness: 0.85, metalness: 0.0, transparent: true,
           }), { userData: { baseOpacity: 1 } }),
           glass: Object.assign(new THREE.MeshStandardMaterial({
             color: 0x88b4cc, roughness: 0.12, metalness: 0.4, transparent: true,

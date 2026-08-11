@@ -108,32 +108,28 @@ const BUCKETS = ['sotano', 'baja', 'p1', 'p2', 'atico', 'cubierta'];
   for (const bucket of ['baja', 'p1', 'p2', 'atico']) {
     const idx = { baja: 0, p1: 1, p2: 2, atico: 3 }[bucket];
     const caps = [];
-    const wallsOf = (t) => byBucket[bucket].filter((it) => {
-      if (/^(VEN-|Puerta|Suelo)/.test(it.name)) return false;
-      const xc = (it.x0 + it.x1) / 2 - cx;
-      return xc >= t.x0 && xc < t.x1;
-    });
     for (const S of SECTIONS) {
       const F = S.floors;
       const base = F[idx];
-      const lidMax = idx < 3 ? F[idx + 1] + 0.4 : F[3] + 3.4;
-      const els = wallsOf(S);
-      const H = modalTop(els, base + 1.9, lidMax);   // remate real del tramo
-      if (H === null) continue;
+      const els = byBucket[bucket].filter((it) => {
+        if (/^(VEN-|Puerta|Suelo)/.test(it.name)) return false;
+        const xc = (it.x0 + it.x1) / 2 - cx;
+        return xc >= S.x0 && xc < S.x1;
+      });
+      // moda de remates del tramo: solo para los elementos que cruzan de largo
+      const H = modalTop(els, base + 1.9, base + 3.6) ?? base + 2.6;
       for (const it of els) {
-        let yCap = null, bandLo, bandHi;
-        if (Math.abs(it.y1 - H) <= 0.3) {            // termina en el corte
-          yCap = it.y1; bandLo = it.y1 - 0.45; bandHi = it.y1 + 0.1;
-        } else if (it.y0 < H - 0.3 && it.y1 > H + 0.3) { // lo cruza (escaleras, núcleos)
-          yCap = H; bandLo = H - 0.35; bandHi = H + 0.2;
-        } else continue;
-        const fp = sliceFootprint(it, bandLo, bandHi);
+        const h = it.y1 - base;
+        if (h < 1.9) continue;                        // peto/media altura: no llega al corte
+        let yCap, lo, hi;
+        if (h <= 3.6) { yCap = it.y1; lo = it.y1 - 0.45; hi = it.y1 + 0.1; } // remata: tapa en SU tope
+        else { yCap = H; lo = H - 0.35; hi = H + 0.2; }                      // cruza: tapa en el corte
+        const fp = sliceFootprint(it, lo, hi);
         if (!fp) continue;
         const w = fp.x1 - fp.x0, d = fp.z1 - fp.z0;
         if (Math.min(w, d) > 1.4 || Math.min(w, d) < 0.03) continue;
         caps.push({ ...fp, y: yCap });
       }
-      console.log('corte', bucket, `tramo[${S.x0}..${S.x1}]`, 'H =', H);
     }
     capsByBucket[bucket] = caps;
     console.log('caps', bucket, caps.length);
