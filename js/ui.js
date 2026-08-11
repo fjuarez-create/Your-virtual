@@ -209,6 +209,12 @@ export function renderPanel(app, unit) {
       <span><svg><use href="#i-gym"/></svg>Gimnasio</span>
     </div>
     <div class="p-section">
+      <h3>Plano de la vivienda</h3>
+      <a class="plan-thumb" data-plan="assets/planos/${unit.id}.png" data-cap="Vivienda ${unit.id} — Plano">
+        <img src="assets/planos/${unit.id}.png" alt="Plano de la vivienda ${unit.id}">
+      </a>
+    </div>
+    <div class="p-section">
       <h3>Plano de planta</h3>
       <a class="plan-thumb" data-plan="${F.plan}" data-cap="${F.planLabel} — Vivienda ${unit.id}">
         <img src="${F.plan}" alt="${F.planLabel}">
@@ -223,16 +229,25 @@ export function renderPanel(app, unit) {
       <button class="btn-primary" id="ctaLead" ${disponible ? '' : 'disabled'}>
         ${disponible ? 'Solicitar información' : estado === 'reservada' ? 'Vivienda reservada' : 'Vivienda vendida'}
       </button>
-      <a class="btn-ghost" href="assets/APOLO_Fichas_Comerciales.pdf" target="_blank" rel="noopener">Descargar planos (PDF)</a>
+      <a class="btn-ghost" href="assets/fichas/${unit.id}.pdf" download="Ficha_Vivienda_${unit.id}.pdf">Descargar ficha en PDF</a>
     </div>
     <p class="p-note">Plaza de garaje: 15.000 € · Trastero: 2.000 € (opcionales, sujetos a disponibilidad).
     Precios sin IGIC ni gastos de compraventa. Documento informativo, no contractual.</p>`;
 
-  $('#panelBody .plan-thumb').addEventListener('click', (e) => {
-    const el = e.currentTarget;
-    $('#lbImg').src = el.dataset.plan;
-    $('#lbCap').textContent = el.dataset.cap;
-    $('#lightbox').classList.add('open');
+  document.querySelectorAll('#panelBody .plan-thumb').forEach((el) => {
+    el.addEventListener('click', () => {
+      $('#lbImg').src = el.dataset.plan;
+      $('#lbCap').textContent = el.dataset.cap;
+      $('#lightbox').classList.add('open');
+    });
+    // respaldo si falta el plano individual: se usa el de la planta
+    const img = el.querySelector('img');
+    img.addEventListener('error', () => {
+      img.onerror = null;
+      img.src = F.plan;
+      el.dataset.plan = F.plan;
+      el.dataset.cap = `${F.planLabel} — Vivienda ${unit.id}`;
+    }, { once: true });
   });
   const cta = $('#ctaLead');
   if (cta && disponible) cta.addEventListener('click', () => app.requestInfo(unit));
@@ -249,7 +264,7 @@ export function renderTable(app) {
     const F = FLOOR_DEFS.find((f) => f.key === app.floorOf(u));
     return `
     <button class="u-card" data-id="${u.id}">
-      <img class="u-plan" src="${F.plan}" alt="Plano — pendiente del plano individual" loading="lazy">
+      <img class="u-plan" src="assets/planos/${u.id}.png" data-fb="${F.plan}" alt="Plano vivienda" loading="lazy">
       <div class="u-info">
         <p class="u-title">${u.dorm}D&ensp;|&ensp;${fmtM2(u.supTotal)}</p>
         <p class="u-line">Vivienda&#8288; ${nd(u.id)}</p>
@@ -269,5 +284,9 @@ export function renderTable(app) {
       app.setMode('3d');
       app.select(c.dataset.id, { focus: true });
     })
+  );
+  // respaldo: si falta el plano individual, se muestra el de la planta
+  list.querySelectorAll('.u-plan').forEach((img) =>
+    img.addEventListener('error', () => { img.onerror = null; img.src = img.dataset.fb; }, { once: true })
   );
 }

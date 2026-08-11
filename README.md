@@ -154,7 +154,8 @@ js/api.js             Capa de datos (backend-ready)
 data/units.json       166 viviendas (del listado de precios V.01)
 data/availability.json  Estados de demostración (sustituir por backend)
 assets/plans/         Planos comerciales por nivel (de las fichas A3)
-assets/APOLO_Fichas_Comerciales.pdf  Fichas comerciales descargables
+assets/planos/        Plano individual de cada vivienda (<id>.png)
+assets/fichas/        Ficha PDF descargable de cada vivienda (<id>.pdf)
 vendor/               Three.js autoalojado (sin CDN)
 ```
 
