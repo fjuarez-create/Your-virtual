@@ -234,44 +234,59 @@ export function loadBIM(scene, url = 'assets/apolo_levels.glb') {
         group.name = 'bim';
         group.visible = false;
         // materiales reales por categoría (el vidrio refleja el entorno)
-        const mkWall = () => {
-          const m = new THREE.MeshStandardMaterial({
-            color: 0xf1efe8, roughness: 0.8, metalness: 0.0, transparent: true,
-          });
-          m.userData.baseOpacity = 1;
-          // Corte estilo pocito: cuando uCut→1 (planta aislada), SOLO las
-          // caras horizontales superiores del muro (la superficie donde se
-          // practica el corte) se oscurecen a antracita.
+        // ── Corte de sección: al aislar una planta, la banda superior de
+        //    muros, tabiques Y pilares (donde pasa el plano de corte) se
+        //    pinta en negro, rellenando las cámaras de la tabiquería seca
+        //    para que el muro cortado se lea como un todo macizo. La cota
+        //    del techo se toma de las secciones reales de cada tramo. ──
+        const LEVEL_IDX = { baja: 0, p1: 1, p2: 2, atico: 3 };
+        const ceilOf = (bucket) => {
+          const idx = LEVEL_IDX[bucket];
+          if (idx === undefined) return null;
+          return new THREE.Vector4(...SECTIONS.map((S) =>
+            idx < 3 ? S.floors[idx + 1] : S.floors[3] + 2.9));
+        };
+        const withCut = (m, ceil) => {
+          if (!ceil) return m;
           m.userData.uCut = { value: 0 };
+          m.userData.uCeil = { value: ceil };
           m.onBeforeCompile = (sh) => {
             sh.uniforms.uCut = m.userData.uCut;
+            sh.uniforms.uCeil = m.userData.uCeil;
             sh.vertexShader = sh.vertexShader
-              .replace('#include <common>', '#include <common>\nvarying vec3 vWNormal;')
-              .replace('#include <defaultnormal_vertex>',
-                '#include <defaultnormal_vertex>\nvWNormal = normalize(mat3(modelMatrix) * objectNormal);');
+              .replace('#include <common>', '#include <common>\nvarying vec3 vWPos;')
+              .replace('#include <begin_vertex>',
+                '#include <begin_vertex>\nvWPos = (modelMatrix * vec4(position, 1.0)).xyz;');
             sh.fragmentShader = sh.fragmentShader
-              .replace('#include <common>', '#include <common>\nvarying vec3 vWNormal;\nuniform float uCut;')
-              .replace('#include <color_fragment>',
-                '#include <color_fragment>\n\tdiffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.045, 0.048, 0.056), uCut * smoothstep(0.55, 0.85, vWNormal.y));');
+              .replace('#include <common>', '#include <common>\nvarying vec3 vWPos;\nuniform float uCut;\nuniform vec4 uCeil;')
+              .replace('#include <color_fragment>', `#include <color_fragment>
+	float ceilY = vWPos.x < -31.0 ? uCeil.x : (vWPos.x < 3.6 ? uCeil.y : (vWPos.x < 31.6 ? uCeil.z : uCeil.w));
+	float cutMask = uCut * smoothstep(ceilY - 1.0, ceilY - 0.78, vWPos.y);
+	diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.02, 0.021, 0.024), cutMask);`);
           };
           return m;
         };
-        const mkMats = () => ({
-          struct: Object.assign(new THREE.MeshStandardMaterial({
-            color: 0xd8d7d2, roughness: 0.92, metalness: 0.02, transparent: true,
-          }), { userData: { baseOpacity: 1 } }),
-          wall: mkWall(),
-          glass: Object.assign(new THREE.MeshStandardMaterial({
-            color: 0x88b4cc, roughness: 0.12, metalness: 0.4, transparent: true,
-            opacity: 0.55, envMapIntensity: 1.6, side: THREE.DoubleSide,
-          }), { userData: { baseOpacity: 0.55 } }),
-        });
+        const mkMats = (bucket) => {
+          const ceil = ceilOf(bucket);
+          return {
+            struct: withCut(Object.assign(new THREE.MeshStandardMaterial({
+              color: 0xd8d7d2, roughness: 0.92, metalness: 0.02, transparent: true,
+            }), { userData: { baseOpacity: 1 } }), ceil),
+            wall: withCut(Object.assign(new THREE.MeshStandardMaterial({
+              color: 0xf1efe8, roughness: 0.8, metalness: 0.0, transparent: true,
+            }), { userData: { baseOpacity: 1 } }), ceil),
+            glass: Object.assign(new THREE.MeshStandardMaterial({
+              color: 0x88b4cc, roughness: 0.12, metalness: 0.4, transparent: true,
+              opacity: 0.55, envMapIntensity: 1.6, side: THREE.DoubleSide,
+            }), { userData: { baseOpacity: 0.55 } }),
+          };
+        };
         const levels = new Map(); // bucket → { holders: [], mats: [] }
         const meshes = [];
         gltf.scene.traverse((o) => { if (o.isMesh) meshes.push(o); });
         for (const o of meshes) {
           const [bucket, cat] = o.name.split('__');
-          if (!levels.has(bucket)) levels.set(bucket, { holders: [], mats: [], byCat: mkMats() });
+          if (!levels.has(bucket)) levels.set(bucket, { holders: [], mats: [], byCat: mkMats(bucket) });
           const L = levels.get(bucket);
           const mat = L.byCat[cat] || L.byCat.struct;
           o.material = mat;
