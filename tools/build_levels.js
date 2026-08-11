@@ -90,26 +90,50 @@ const BUCKETS = ['sotano', 'baja', 'p1', 'p2', 'atico', 'cubierta'];
     return n >= 3 ? { x0, x1, z0, z1 } : null;
   };
 
+  // La altura REAL del corte no es la cota de losa: se deriva del propio
+  // modelo como la moda de los topes de muro de cada (planta, tramo).
+  const modalTop = (els, lo, hi) => {
+    const hist = {};
+    for (const it of els) {
+      if (it.y1 < lo || it.y1 > hi) continue;
+      const key = Math.round(it.y1 * 4) / 4;
+      hist[key] = (hist[key] || 0) + 1;
+    }
+    let best = null, bn = 0;
+    for (const [k, n] of Object.entries(hist)) if (n > bn) { bn = n; best = +k; }
+    return bn >= 3 ? best : null;
+  };
+
   const capsByBucket = {};
   for (const bucket of ['baja', 'p1', 'p2', 'atico']) {
     const idx = { baja: 0, p1: 1, p2: 2, atico: 3 }[bucket];
     const caps = [];
-    for (const it of byBucket[bucket]) {
-      if (/^(VEN-|Puerta|Suelo)/.test(it.name)) continue;   // carpinterías y losas, fuera
+    const wallsOf = (t) => byBucket[bucket].filter((it) => {
+      if (/^(VEN-|Puerta|Suelo)/.test(it.name)) return false;
       const xc = (it.x0 + it.x1) / 2 - cx;
-      const S = SECTIONS.find((t) => xc >= t.x0 && xc < t.x1) || SECTIONS[xc < 0 ? 0 : 3];
+      return xc >= t.x0 && xc < t.x1;
+    });
+    for (const S of SECTIONS) {
       const F = S.floors;
-      const ceil = idx < 3 ? F[idx + 1] : F[3] + 2.9;
-      const cutY = ceil - 0.4;                              // bajo la losa superior
-      if (it.y1 < cutY - 0.35) continue;                    // no llega al corte
-      // termina en el corte → tapa sobre su tope (visible); lo cruza de
-      // largo (escaleras, núcleos) → tapa a la cota del plano de corte
-      const yCap = it.y1 <= ceil + 0.05 ? it.y1 : cutY;
-      const fp = sliceFootprint(it, yCap - 0.45, yCap + 0.35);
-      if (!fp) continue;
-      const w = fp.x1 - fp.x0, d = fp.z1 - fp.z0;
-      if (Math.min(w, d) > 1.4 || Math.min(w, d) < 0.03) continue; // diagonales/masivos fuera
-      caps.push({ ...fp, y: yCap });
+      const base = F[idx];
+      const lidMax = idx < 3 ? F[idx + 1] + 0.4 : F[3] + 3.4;
+      const els = wallsOf(S);
+      const H = modalTop(els, base + 1.9, lidMax);   // remate real del tramo
+      if (H === null) continue;
+      for (const it of els) {
+        let yCap = null, bandLo, bandHi;
+        if (Math.abs(it.y1 - H) <= 0.3) {            // termina en el corte
+          yCap = it.y1; bandLo = it.y1 - 0.45; bandHi = it.y1 + 0.1;
+        } else if (it.y0 < H - 0.3 && it.y1 > H + 0.3) { // lo cruza (escaleras, núcleos)
+          yCap = H; bandLo = H - 0.35; bandHi = H + 0.2;
+        } else continue;
+        const fp = sliceFootprint(it, bandLo, bandHi);
+        if (!fp) continue;
+        const w = fp.x1 - fp.x0, d = fp.z1 - fp.z0;
+        if (Math.min(w, d) > 1.4 || Math.min(w, d) < 0.03) continue;
+        caps.push({ ...fp, y: yCap });
+      }
+      console.log('corte', bucket, `tramo[${S.x0}..${S.x1}]`, 'H =', H);
     }
     capsByBucket[bucket] = caps;
     console.log('caps', bucket, caps.length);
