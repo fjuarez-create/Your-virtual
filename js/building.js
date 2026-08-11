@@ -233,54 +233,26 @@ export function loadBIM(scene, url = 'assets/apolo_levels.glb') {
         const group = new THREE.Group();
         group.name = 'bim';
         group.visible = false;
-        // materiales reales por categoría (el vidrio refleja el entorno)
-        // ── Corte de sección: al aislar una planta, la banda superior de
-        //    muros, tabiques Y pilares (donde pasa el plano de corte) se
-        //    pinta en negro, rellenando las cámaras de la tabiquería seca
-        //    para que el muro cortado se lea como un todo macizo. La cota
-        //    del techo se toma de las secciones reales de cada tramo. ──
-        const LEVEL_IDX = { baja: 0, p1: 1, p2: 2, atico: 3 };
-        const ceilOf = (bucket) => {
-          const idx = LEVEL_IDX[bucket];
-          if (idx === undefined) return null;
-          return new THREE.Vector4(...SECTIONS.map((S) =>
-            idx < 3 ? S.floors[idx + 1] : S.floors[3] + 2.9));
-        };
-        const withCut = (m, ceil) => {
-          if (!ceil) return m;
-          m.userData.uCut = { value: 0 };
-          m.userData.uCeil = { value: ceil };
-          m.onBeforeCompile = (sh) => {
-            sh.uniforms.uCut = m.userData.uCut;
-            sh.uniforms.uCeil = m.userData.uCeil;
-            sh.vertexShader = sh.vertexShader
-              .replace('#include <common>', '#include <common>\nvarying vec3 vWPos;')
-              .replace('#include <begin_vertex>',
-                '#include <begin_vertex>\nvWPos = (modelMatrix * vec4(position, 1.0)).xyz;');
-            sh.fragmentShader = sh.fragmentShader
-              .replace('#include <common>', '#include <common>\nvarying vec3 vWPos;\nuniform float uCut;\nuniform vec4 uCeil;')
-              .replace('#include <color_fragment>', `#include <color_fragment>
-	float ceilY = vWPos.x < -31.0 ? uCeil.x : (vWPos.x < 3.6 ? uCeil.y : (vWPos.x < 31.6 ? uCeil.z : uCeil.w));
-	float cutMask = uCut * smoothstep(ceilY - 1.0, ceilY - 0.78, vWPos.y);
-	diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.02, 0.021, 0.024), cutMask);`);
-          };
-          return m;
-        };
-        const mkMats = (bucket) => {
-          const ceil = ceilOf(bucket);
-          return {
-            struct: withCut(Object.assign(new THREE.MeshStandardMaterial({
-              color: 0xd8d7d2, roughness: 0.92, metalness: 0.02, transparent: true,
-            }), { userData: { baseOpacity: 1 } }), ceil),
-            wall: withCut(Object.assign(new THREE.MeshStandardMaterial({
-              color: 0xf1efe8, roughness: 0.8, metalness: 0.0, transparent: true,
-            }), { userData: { baseOpacity: 1 } }), ceil),
-            glass: Object.assign(new THREE.MeshStandardMaterial({
-              color: 0x88b4cc, roughness: 0.12, metalness: 0.4, transparent: true,
-              opacity: 0.55, envMapIntensity: 1.6, side: THREE.DoubleSide,
-            }), { userData: { baseOpacity: 0.55 } }),
-          };
-        };
+        // materiales reales por categoría (el vidrio refleja el entorno).
+        // "cap" son las tapas de corte generadas en el pipeline: la huella
+        // exacta de cada muro/tabique/pilar cortado, en negro, rellenando
+        // las cámaras de la tabiquería seca. Solo se muestran (opacity>0)
+        // cuando su planta está aislada.
+        const mkMats = () => ({
+          struct: Object.assign(new THREE.MeshStandardMaterial({
+            color: 0xd8d7d2, roughness: 0.92, metalness: 0.02, transparent: true,
+          }), { userData: { baseOpacity: 1 } }),
+          wall: Object.assign(new THREE.MeshStandardMaterial({
+            color: 0xf1efe8, roughness: 0.8, metalness: 0.0, transparent: true,
+          }), { userData: { baseOpacity: 1 } }),
+          glass: Object.assign(new THREE.MeshStandardMaterial({
+            color: 0x88b4cc, roughness: 0.12, metalness: 0.4, transparent: true,
+            opacity: 0.55, envMapIntensity: 1.6, side: THREE.DoubleSide,
+          }), { userData: { baseOpacity: 0.55 } }),
+          cap: Object.assign(new THREE.MeshStandardMaterial({
+            color: 0x0e1013, roughness: 0.95, metalness: 0, transparent: true, opacity: 0,
+          }), { userData: { baseOpacity: 1 } }),
+        });
         const levels = new Map(); // bucket → { holders: [], mats: [] }
         const meshes = [];
         gltf.scene.traverse((o) => { if (o.isMesh) meshes.push(o); });
@@ -290,10 +262,12 @@ export function loadBIM(scene, url = 'assets/apolo_levels.glb') {
           const L = levels.get(bucket);
           const mat = L.byCat[cat] || L.byCat.struct;
           o.material = mat;
-          o.castShadow = cat !== 'glass';
+          o.castShadow = cat !== 'glass' && cat !== 'cap';
           o.receiveShadow = true;
           o.raycast = () => {}; // sin picking sobre el BIM
-          if (!L.mats.includes(mat)) L.mats.push(mat);
+          // las tapas no siguen el fundido general: su opacidad la
+          // gobierna el aislamiento de planta (animateFloors)
+          if (cat !== 'cap' && !L.mats.includes(mat)) L.mats.push(mat);
           const holder = new THREE.Group();
           holder.name = `bim-${o.name}`;
           holder.add(o);

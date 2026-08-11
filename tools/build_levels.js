@@ -64,6 +64,34 @@ const BUCKETS = ['sotano', 'baja', 'p1', 'p2', 'atico', 'cubierta'];
   }
   BUCKETS.forEach(k => console.log(k.padEnd(9), byBucket[k].length, 'elementos'));
 
+  // ── Tapas de corte: caja negra con la huella de cada muro/pilar que
+  //    llega al techo de su tramo (rellena la cámara de la tabiquería
+  //    seca para que el corte se lea macizo). Solo elementos finos y
+  //    ortogonales; escaleras y losas quedan fuera. ──
+  const capsByBucket = {};
+  for (const bucket of ['baja', 'p1', 'p2', 'atico']) {
+    const idx = { baja: 0, p1: 1, p2: 2, atico: 3 }[bucket];
+    const caps = [];
+    for (const it of byBucket[bucket]) {
+      if (!/^(Muro|Fachada|UNIK|ICV|Pilar|Columna)/.test(it.name) && !/^(Muro|Fachada|UNIK|ICV)/.test(it.name)) {
+        // pilares de Revit suelen llamarse con su familia; aceptamos también struct estrechos
+        if (!/pilar|column/i.test(it.name)) {
+          const w = it.x1 - it.x0, d = it.z1 - it.z0;
+          if (Math.min(w, d) > 0.6) continue;      // no es muro/pilar fino
+        }
+      }
+      const F = sectionOf(it).floors;
+      const ceil = idx < 3 ? F[idx + 1] : F[3] + 2.9;
+      if (it.y1 < ceil - 0.45 || it.y1 > ceil + 0.3) continue; // no llega al corte
+      const w = it.x1 - it.x0, d = it.z1 - it.z0;
+      if (Math.min(w, d) > 0.6) continue;          // diagonal/chaflán o pieza masiva
+      if (Math.max(w, d) < 0.04) continue;
+      caps.push({ x0: it.x0, x1: it.x1, z0: it.z0, z1: it.z1, y: it.y1 });
+    }
+    capsByBucket[bucket] = caps;
+    console.log('caps', bucket, caps.length);
+  }
+
   const catOf = (name) => {
     if (/^(VEN-|Puerta)/.test(name)) return 'glass';
     if (/^(Muro|Fachada|UNIK|ICV)/.test(name)) return 'wall';
@@ -77,7 +105,41 @@ const BUCKETS = ['sotano', 'baja', 'p1', 'p2', 'atico', 'cubierta'];
     struct: out.createMaterial('struct').setBaseColorFactor([1, 1, 1, 1]).setRoughnessFactor(0.9).setMetallicFactor(0),
     wall: out.createMaterial('wall').setBaseColorFactor([1, 1, 1, 1]).setRoughnessFactor(0.85).setMetallicFactor(0),
     glass: out.createMaterial('glass').setBaseColorFactor([1, 1, 1, 1]).setRoughnessFactor(0.2).setMetallicFactor(0),
+    cap: out.createMaterial('cap').setBaseColorFactor([1, 1, 1, 1]).setRoughnessFactor(0.95).setMetallicFactor(0),
   };
+
+  // caja axis-aligned → posiciones/normales/índices
+  const pushBox = (pos, norm, idxArr, x0, y0, z0, x1, y1, z1) => {
+    const base = pos.length / 3;
+    const v = [
+      [x0,y0,z0],[x1,y0,z0],[x1,y1,z0],[x0,y1,z0], // z0
+      [x0,y0,z1],[x1,y0,z1],[x1,y1,z1],[x0,y1,z1], // z1
+    ];
+    const faces = [
+      [0,3,2,1, 0,0,-1], [4,5,6,7, 0,0,1],
+      [0,1,5,4, 0,-1,0], [3,7,6,2, 0,1,0],
+      [0,4,7,3, -1,0,0], [1,2,6,5, 1,0,0],
+    ];
+    for (const [a,b,c,d,nx,ny,nz] of faces) {
+      const s0 = pos.length / 3;
+      for (const vi of [a,b,c,d]) { pos.push(...v[vi]); norm.push(nx,ny,nz); }
+      idxArr.push(s0, s0+1, s0+2, s0, s0+2, s0+3);
+    }
+  };
+
+  for (const bucket of ['baja', 'p1', 'p2', 'atico']) {
+    const caps = capsByBucket[bucket];
+    if (!caps.length) continue;
+    const pos = [], norm = [], idxArr = [];
+    for (const c of caps) pushBox(pos, norm, idxArr, c.x0 - cx, c.y - 0.035, c.z0 - cz, c.x1 - cx, c.y + 0.015, c.z1 - cz);
+    const name = `${bucket}__cap`;
+    const pAcc = out.createAccessor().setType('VEC3').setArray(new Float32Array(pos)).setBuffer(buffer);
+    const nAcc = out.createAccessor().setType('VEC3').setArray(new Float32Array(norm)).setBuffer(buffer);
+    const iAcc = out.createAccessor().setType('SCALAR').setArray(new Uint32Array(idxArr)).setBuffer(buffer);
+    const prim = out.createPrimitive().setAttribute('POSITION', pAcc).setAttribute('NORMAL', nAcc).setIndices(iAcc).setMaterial(MATS.cap);
+    outScene.addChild(out.createNode(name).setMesh(out.createMesh(name).addPrimitive(prim)));
+    console.log('mesh', name, caps.length, 'tapas');
+  }
 
   for (const bucket of BUCKETS) for (const cat of ['struct', 'wall', 'glass']) {
     const pos = [], norm = [], idxArr = [];

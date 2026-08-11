@@ -370,13 +370,10 @@ function animateFloors(dt) {
       const f = src.userData.fade;
       for (const h of lvl.holders) { h.position.y = dy; h.visible = f > 0.02; }
       for (const m of lvl.mats) m.opacity = m.userData.baseOpacity * f;
-      // corte de sección: en la planta aislada, la banda del plano de corte
-      // de muros, tabiques y pilares se pinta en negro (transición suave)
+      // tapas de corte: solo visibles cuando esta planta está aislada
       const cutTarget = app.floor !== 'all' && animKey === app.floor ? 1 : 0;
-      for (const cat of ['wall', 'struct']) {
-        const u = lvl.byCat?.[cat]?.userData.uCut;
-        if (u) u.value += (cutTarget - u.value) * k;
-      }
+      lvl.cutVal = (lvl.cutVal ?? 0) + (cutTarget - (lvl.cutVal ?? 0)) * k;
+      if (lvl.byCat?.cap) lvl.byCat.cap.opacity = f * lvl.cutVal;
     }
   }
 }
