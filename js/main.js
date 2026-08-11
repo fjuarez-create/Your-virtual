@@ -375,6 +375,21 @@ function animateFloors(dt) {
       lvl.cutVal = (lvl.cutVal ?? 0) + (cutTarget - (lvl.cutVal ?? 0)) * k;
       if (lvl.byCat?.cap) lvl.byCat.cap.opacity = f * lvl.cutVal;
     }
+
+    // Techo fantasma: al aislar una planta, la losa del nivel superior
+    // sigue proyectando sombra (invisible) para que los interiores no
+    // queden bañados por el sol como si no hubiera techo.
+    const ORDER = ['baja', 'p1', 'p2', 'atico', 'cubierta'];
+    const aboveKey = app.floor !== 'all' ? ORDER[ORDER.indexOf(app.floor) + 1] : null;
+    for (const [bKey, lvl] of bim.levels) {
+      const slabM = lvl.byCat?.slab;
+      if (!slabM) continue;
+      const ghost = bKey === aboveKey;
+      slabM.colorWrite = !ghost;
+      if (ghost) {
+        for (const h of lvl.holders) if (h.name.endsWith('__slab')) h.visible = true;
+      }
+    }
   }
 }
 

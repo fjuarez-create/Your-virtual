@@ -138,6 +138,7 @@ const BUCKETS = ['sotano', 'baja', 'p1', 'p2', 'atico', 'cubierta'];
   const catOf = (name) => {
     if (/^(VEN-|Puerta)/.test(name)) return 'glass';
     if (/^(Muro|Fachada|UNIK|ICV)/.test(name)) return 'wall';
+    if (/^Suelo/.test(name)) return 'slab';   // losas: techo-sombra de la planta inferior
     return 'struct';
   };
 
@@ -149,6 +150,7 @@ const BUCKETS = ['sotano', 'baja', 'p1', 'p2', 'atico', 'cubierta'];
     wall: out.createMaterial('wall').setBaseColorFactor([1, 1, 1, 1]).setRoughnessFactor(0.85).setMetallicFactor(0),
     glass: out.createMaterial('glass').setBaseColorFactor([1, 1, 1, 1]).setRoughnessFactor(0.2).setMetallicFactor(0),
     cap: out.createMaterial('cap').setBaseColorFactor([1, 1, 1, 1]).setRoughnessFactor(0.95).setMetallicFactor(0),
+    slab: out.createMaterial('slab').setBaseColorFactor([1, 1, 1, 1]).setRoughnessFactor(0.9).setMetallicFactor(0),
   };
 
   // caja axis-aligned → posiciones/normales/índices
@@ -184,7 +186,7 @@ const BUCKETS = ['sotano', 'baja', 'p1', 'p2', 'atico', 'cubierta'];
     console.log('mesh', name, caps.length, 'tapas');
   }
 
-  for (const bucket of BUCKETS) for (const cat of ['struct', 'wall', 'glass']) {
+  for (const bucket of BUCKETS) for (const cat of ['struct', 'wall', 'glass', 'slab']) {
     const pos = [], norm = [], idxArr = [];
     let base = 0;
     for (const it of byBucket[bucket]) {
@@ -221,7 +223,7 @@ const BUCKETS = ['sotano', 'baja', 'p1', 'p2', 'atico', 'cubierta'];
     const pAcc = out.createAccessor().setType('VEC3').setArray(new Float32Array(pos)).setBuffer(buffer);
     const nAcc = out.createAccessor().setType('VEC3').setArray(new Float32Array(norm)).setBuffer(buffer);
     const iAcc = out.createAccessor().setType('SCALAR').setArray(new Uint32Array(idxArr)).setBuffer(buffer);
-    const prim = out.createPrimitive().setAttribute('POSITION', pAcc).setAttribute('NORMAL', nAcc).setIndices(iAcc).setMaterial(MATS[cat]);
+    const prim = out.createPrimitive().setAttribute('POSITION', pAcc).setAttribute('NORMAL', nAcc).setIndices(iAcc).setMaterial(MATS[cat] || MATS.struct);
     const mesh = out.createMesh(name).addPrimitive(prim);
     outScene.addChild(out.createNode(name).setMesh(mesh));
     console.log('mesh', name, (pos.length / 3).toLocaleString(), 'vértices');

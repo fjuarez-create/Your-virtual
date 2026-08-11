@@ -252,6 +252,9 @@ export function loadBIM(scene, url = 'assets/apolo_levels.glb') {
           cap: Object.assign(new THREE.MeshStandardMaterial({
             color: 0x0e1013, roughness: 0.95, metalness: 0, transparent: true, opacity: 0,
           }), { userData: { baseOpacity: 1 } }),
+          slab: Object.assign(new THREE.MeshStandardMaterial({
+            color: 0xcfcec8, roughness: 0.93, metalness: 0.02, transparent: true,
+          }), { userData: { baseOpacity: 1 } }),
         });
         const levels = new Map(); // bucket → { holders: [], mats: [] }
         const meshes = [];
