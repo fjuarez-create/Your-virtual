@@ -64,29 +64,52 @@ const BUCKETS = ['sotano', 'baja', 'p1', 'p2', 'atico', 'cubierta'];
   }
   BUCKETS.forEach(k => console.log(k.padEnd(9), byBucket[k].length, 'elementos'));
 
-  // ── Tapas de corte: caja negra con la huella de cada muro/pilar que
-  //    llega al techo de su tramo (rellena la cámara de la tabiquería
-  //    seca para que el corte se lea macizo). Solo elementos finos y
-  //    ortogonales; escaleras y losas quedan fuera. ──
+  // ── Tapas de corte (por vértices): para cada muro/estructura que llega
+  //    al plano de corte de su tramo, se toma la huella exacta de sus
+  //    vértices en la banda del corte. Así las tapas caen siempre a la
+  //    cota correcta (nada flota), no falta ninguna, y las escaleras que
+  //    cruzan el plano se cortan justo donde lo atraviesan. ──
+  const sliceFootprint = (it, yLo, yHi) => {
+    const world = it.node.getWorldMatrix();
+    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity, n = 0;
+    for (const prim of it.node.getMesh().listPrimitives()) {
+      const P = prim.getAttribute('POSITION');
+      if (!P) continue;
+      const pv = [0, 0, 0];
+      const count = P.getCount();
+      for (let i = 0; i < count; i++) {
+        P.getElement(i, pv);
+        const v = vec4.fromValues(pv[0], pv[1], pv[2], 1);
+        vec4.transformMat4(v, v, world);
+        if (v[1] < yLo || v[1] > yHi) continue;
+        if (v[0] < x0) x0 = v[0]; if (v[0] > x1) x1 = v[0];
+        if (v[2] < z0) z0 = v[2]; if (v[2] > z1) z1 = v[2];
+        n++;
+      }
+    }
+    return n >= 3 ? { x0, x1, z0, z1 } : null;
+  };
+
   const capsByBucket = {};
   for (const bucket of ['baja', 'p1', 'p2', 'atico']) {
     const idx = { baja: 0, p1: 1, p2: 2, atico: 3 }[bucket];
     const caps = [];
     for (const it of byBucket[bucket]) {
-      if (!/^(Muro|Fachada|UNIK|ICV|Pilar|Columna)/.test(it.name) && !/^(Muro|Fachada|UNIK|ICV)/.test(it.name)) {
-        // pilares de Revit suelen llamarse con su familia; aceptamos también struct estrechos
-        if (!/pilar|column/i.test(it.name)) {
-          const w = it.x1 - it.x0, d = it.z1 - it.z0;
-          if (Math.min(w, d) > 0.6) continue;      // no es muro/pilar fino
-        }
-      }
-      const F = sectionOf(it).floors;
+      if (/^(VEN-|Puerta|Suelo)/.test(it.name)) continue;   // carpinterías y losas, fuera
+      const xc = (it.x0 + it.x1) / 2 - cx;
+      const S = SECTIONS.find((t) => xc >= t.x0 && xc < t.x1) || SECTIONS[xc < 0 ? 0 : 3];
+      const F = S.floors;
       const ceil = idx < 3 ? F[idx + 1] : F[3] + 2.9;
-      if (it.y1 < ceil - 0.45 || it.y1 > ceil + 0.3) continue; // no llega al corte
-      const w = it.x1 - it.x0, d = it.z1 - it.z0;
-      if (Math.min(w, d) > 0.6) continue;          // diagonal/chaflán o pieza masiva
-      if (Math.max(w, d) < 0.04) continue;
-      caps.push({ x0: it.x0, x1: it.x1, z0: it.z0, z1: it.z1, y: it.y1 });
+      const cutY = ceil - 0.4;                              // bajo la losa superior
+      if (it.y1 < cutY - 0.35) continue;                    // no llega al corte
+      // termina en el corte → tapa sobre su tope (visible); lo cruza de
+      // largo (escaleras, núcleos) → tapa a la cota del plano de corte
+      const yCap = it.y1 <= ceil + 0.05 ? it.y1 : cutY;
+      const fp = sliceFootprint(it, yCap - 0.45, yCap + 0.35);
+      if (!fp) continue;
+      const w = fp.x1 - fp.x0, d = fp.z1 - fp.z0;
+      if (Math.min(w, d) > 1.4 || Math.min(w, d) < 0.03) continue; // diagonales/masivos fuera
+      caps.push({ ...fp, y: yCap });
     }
     capsByBucket[bucket] = caps;
     console.log('caps', bucket, caps.length);
