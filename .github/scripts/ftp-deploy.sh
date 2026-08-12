@@ -6,6 +6,7 @@
 #   ftp-deploy.sh assets   planos, fichas, HDRI y modelo (lo pesado)
 #   ftp-deploy.sh code     css, js, data y vendor
 #   ftp-deploy.sh index    index.html, siempre el último
+#   ftp-deploy.sh check    cuenta lo que hay arriba y falla si no cuadra
 #
 # El orden importa: index.html referencia los módulos con ?v=<sha>, así que
 # tiene que subir cuando el resto ya está arriba. Si no, un visitante podría
@@ -16,7 +17,7 @@
 
 set -eu
 
-WHAT="${1:?uso: ftp-deploy.sh assets|code|index}"
+WHAT="${1:?uso: ftp-deploy.sh assets|code|index|check}"
 
 for name in FTP_SERVER FTP_USERNAME FTP_PASSWORD; do
   eval "value=\${$name:-}"
@@ -75,6 +76,41 @@ if [ -z "$DIR" ]; then
   fi
 fi
 echo "Carpeta destino: $DIR"
+
+# Cuenta los ficheros de una carpeta remota. Devuelve 0 si no existe.
+remote_count() {
+  run_lftp "$OPTS" "cd \"$DIR\"; cls -1 \"$1\"" 2>/dev/null | grep -c . || true
+}
+
+if [ "$WHAT" = check ]; then
+  echo "Raíz de la sesión FTP:"
+  run_lftp "$OPTS" "cls -1" 2>/dev/null | sed 's/^/  /'
+  echo "Contenido de $DIR:"
+  run_lftp "$OPTS" "cd \"$DIR\"; cls -1" 2>/dev/null | sed 's/^/  /'
+
+  fallos=0
+  for d in planos fichas ubicaciones; do
+    local_n=$(find "publish/assets/$d" -type f | wc -l)
+    remote_n=$(remote_count "assets/$d")
+    printf 'assets/%-12s local %3s   servidor %3s\n' "$d" "$local_n" "$remote_n"
+    [ "$remote_n" -ge "$local_n" ] || fallos=$((fallos + 1))
+  done
+  for f in index.html js/main.js css/style.css assets/apolo_levels.glb; do
+    if [ "$(remote_count "$f")" -ge 1 ]; then
+      echo "ok  $f"
+    else
+      echo "FALTA  $f"
+      fallos=$((fallos + 1))
+    fi
+  done
+
+  if [ "$fallos" -gt 0 ]; then
+    echo "La subida está incompleta: $fallos comprobaciones fallidas." >&2
+    exit 1
+  fi
+  echo "Todo subido."
+  exit 0
+fi
 
 # --transfer-all para el código: son pocos MB y así no dependemos de que el
 # servidor conserve las fechas de modificación. Los assets se comparan por

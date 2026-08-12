@@ -73,6 +73,17 @@ jobs:
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
           FTP_SERVER_DIR: ${{ secrets.FTP_SERVER_DIR }}
+        run: bash .github/scripts/ftp-deploy.sh index
+
+      # Cuenta lo que ha quedado en el servidor y falla si falta algo, para que
+      # un deploy incompleto no pase por bueno.
+      - name: Comprobar la subida
+        timeout-minutes: 10
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_SERVER_DIR: ${{ secrets.FTP_SERVER_DIR }}
         run: |
-          bash .github/scripts/ftp-deploy.sh index
+          bash .github/scripts/ftp-deploy.sh check
           echo "Publicado en https://showroom.unikdi.com/"
