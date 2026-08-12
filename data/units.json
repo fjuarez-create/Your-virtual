@@ -1,0 +1,1662 @@
+[
+ {
+  "id": "101",
+  "planta": "Baja",
+  "dorm": 2,
+  "orientacion": "Suroeste",
+  "supViv": 60.87,
+  "terraza": 0,
+  "supTotal": 60.87,
+  "precio": 191000
+ },
+ {
+  "id": "102",
+  "planta": "Baja",
+  "dorm": 2,
+  "orientacion": "Suroeste",
+  "supViv": 57.99,
+  "terraza": 0,
+  "supTotal": 57.99,
+  "precio": 182000
+ },
+ {
+  "id": "103",
+  "planta": "Baja",
+  "dorm": 2,
+  "orientacion": "Suroeste",
+  "supViv": 56.52,
+  "terraza": 0,
+  "supTotal": 56.52,
+  "precio": 178000
+ },
+ {
+  "id": "104",
+  "planta": "Baja",
+  "dorm": 2,
+  "orientacion": "Suroeste",
+  "supViv": 55.2,
+  "terraza": 0,
+  "supTotal": 55.2,
+  "precio": 174000
+ },
+ {
+  "id": "105",
+  "planta": "Baja",
+  "dorm": 2,
+  "orientacion": "Suroeste",
+  "supViv": 53.95,
+  "terraza": 0,
+  "supTotal": 53.95,
+  "precio": 170000
+ },
+ {
+  "id": "106",
+  "planta": "Baja",
+  "dorm": 2,
+  "orientacion": "Suroeste",
+  "supViv": 52.45,
+  "terraza": 0,
+  "supTotal": 52.45,
+  "precio": 165000
+ },
+ {
+  "id": "107",
+  "planta": "Baja",
+  "dorm": 1,
+  "orientacion": "Jardín interior",
+  "supViv": 42.09,
+  "terraza": 11.94,
+  "supTotal": 54.03,
+  "precio": 169000
+ },
+ {
+  "id": "108",
+  "planta": "Baja",
+  "dorm": 1,
+  "orientacion": "Jardín interior",
+  "supViv": 42.09,
+  "terraza": 11.92,
+  "supTotal": 54.01,
+  "precio": 169000
+ },
+ {
+  "id": "109",
+  "planta": "Baja",
+  "dorm": 1,
+  "orientacion": "Noreste",
+  "supViv": 43.48,
+  "terraza": 0,
+  "supTotal": 43.48,
+  "precio": 158000
+ },
+ {
+  "id": "110",
+  "planta": "Baja",
+  "dorm": 1,
+  "orientacion": "Noreste",
+  "supViv": 62.54,
+  "terraza": 0,
+  "supTotal": 62.54,
+  "precio": 227000
+ },
+ {
+  "id": "111",
+  "planta": "Baja",
+  "dorm": 2,
+  "orientacion": "Noreste",
+  "supViv": 56.16,
+  "terraza": 0,
+  "supTotal": 56.16,
+  "precio": 200000
+ },
+ {
+  "id": "112",
+  "planta": "Baja",
+  "dorm": 2,
+  "orientacion": "Noreste",
+  "supViv": 56.24,
+  "terraza": 0,
+  "supTotal": 56.24,
+  "precio": 200000
+ },
+ {
+  "id": "113",
+  "planta": "Baja",
+  "dorm": 2,
+  "orientacion": "Noreste",
+  "supViv": 56.24,
+  "terraza": 0,
+  "supTotal": 56.24,
+  "precio": 200000
+ },
+ {
+  "id": "114",
+  "planta": "Baja",
+  "dorm": 1,
+  "orientacion": "Jardín interior",
+  "supViv": 45.22,
+  "terraza": 0,
+  "supTotal": 45.22,
+  "precio": 130000
+ },
+ {
+  "id": "115",
+  "planta": "Baja",
+  "dorm": 1,
+  "orientacion": "Jardín interior",
+  "supViv": 45.22,
+  "terraza": 0,
+  "supTotal": 45.22,
+  "precio": 130000
+ },
+ {
+  "id": "116",
+  "planta": "Baja",
+  "dorm": 1,
+  "orientacion": "Jardín interior",
+  "supViv": 42.09,
+  "terraza": 11.94,
+  "supTotal": 54.03,
+  "precio": 169000
+ },
+ {
+  "id": "117",
+  "planta": "Baja",
+  "dorm": 1,
+  "orientacion": "Jardín interior",
+  "supViv": 42.09,
+  "terraza": 11.92,
+  "supTotal": 54.01,
+  "precio": 169000
+ },
+ {
+  "id": "118",
+  "planta": "Baja",
+  "dorm": 2,
+  "orientacion": "Noreste",
+  "supViv": 56.21,
+  "terraza": 0,
+  "supTotal": 56.21,
+  "precio": 200000
+ },
+ {
+  "id": "119",
+  "planta": "Baja",
+  "dorm": 2,
+  "orientacion": "Noreste",
+  "supViv": 57.52,
+  "terraza": 0,
+  "supTotal": 57.52,
+  "precio": 205000
+ },
+ {
+  "id": "120",
+  "planta": "Baja",
+  "dorm": 2,
+  "orientacion": "Noreste",
+  "supViv": 56.21,
+  "terraza": 0,
+  "supTotal": 56.21,
+  "precio": 200000
+ },
+ {
+  "id": "121",
+  "planta": "Baja",
+  "dorm": 1,
+  "orientacion": "Jardín interior",
+  "supViv": 45.22,
+  "terraza": 0,
+  "supTotal": 45.22,
+  "precio": 130000
+ },
+ {
+  "id": "122",
+  "planta": "Baja",
+  "dorm": 1,
+  "orientacion": "Jardín interior",
+  "supViv": 45.22,
+  "terraza": 0,
+  "supTotal": 45.22,
+  "precio": 130000
+ },
+ {
+  "id": "123",
+  "planta": "Baja",
+  "dorm": 1,
+  "orientacion": "Jardín interior",
+  "supViv": 42.09,
+  "terraza": 11.94,
+  "supTotal": 54.03,
+  "precio": 169000
+ },
+ {
+  "id": "124",
+  "planta": "Baja",
+  "dorm": 1,
+  "orientacion": "Jardín interior",
+  "supViv": 42.09,
+  "terraza": 11.92,
+  "supTotal": 54.01,
+  "precio": 169000
+ },
+ {
+  "id": "125",
+  "planta": "Baja",
+  "dorm": 2,
+  "orientacion": "Noreste",
+  "supViv": 56.21,
+  "terraza": 0,
+  "supTotal": 56.21,
+  "precio": 200000
+ },
+ {
+  "id": "126",
+  "planta": "Baja",
+  "dorm": 2,
+  "orientacion": "Noreste",
+  "supViv": 56.21,
+  "terraza": 0,
+  "supTotal": 56.21,
+  "precio": 200000
+ },
+ {
+  "id": "127",
+  "planta": "Baja",
+  "dorm": 2,
+  "orientacion": "Noreste",
+  "supViv": 73.3,
+  "terraza": 0,
+  "supTotal": 73.3,
+  "precio": 261000
+ },
+ {
+  "id": "128",
+  "planta": "Baja",
+  "dorm": 2,
+  "orientacion": "Noreste",
+  "supViv": 63.28,
+  "terraza": 0,
+  "supTotal": 63.28,
+  "precio": 225000
+ },
+ {
+  "id": "129",
+  "planta": "Baja",
+  "dorm": 1,
+  "orientacion": "Suroeste",
+  "supViv": 44.12,
+  "terraza": 0,
+  "supTotal": 44.12,
+  "precio": 142000
+ },
+ {
+  "id": "130",
+  "planta": "Baja",
+  "dorm": 1,
+  "orientacion": "Jardín interior",
+  "supViv": 42.09,
+  "terraza": 0,
+  "supTotal": 42.09,
+  "precio": 121000
+ },
+ {
+  "id": "131",
+  "planta": "Baja",
+  "dorm": 1,
+  "orientacion": "Jardín interior",
+  "supViv": 42.09,
+  "terraza": 0,
+  "supTotal": 42.09,
+  "precio": 121000
+ },
+ {
+  "id": "132",
+  "planta": "Baja",
+  "dorm": 1,
+  "orientacion": "Suroeste",
+  "supViv": 43.67,
+  "terraza": 0,
+  "supTotal": 43.67,
+  "precio": 141000
+ },
+ {
+  "id": "133",
+  "planta": "Baja",
+  "dorm": 1,
+  "orientacion": "Suroeste",
+  "supViv": 52.87,
+  "terraza": 0,
+  "supTotal": 52.87,
+  "precio": 170000
+ },
+ {
+  "id": "134",
+  "planta": "Baja",
+  "dorm": 1,
+  "orientacion": "Suroeste",
+  "supViv": 52.2,
+  "terraza": 0,
+  "supTotal": 52.2,
+  "precio": 168000
+ },
+ {
+  "id": "135",
+  "planta": "Baja",
+  "dorm": 1,
+  "orientacion": "Suroeste",
+  "supViv": 51.33,
+  "terraza": 0,
+  "supTotal": 51.33,
+  "precio": 165000
+ },
+ {
+  "id": "136",
+  "planta": "Baja",
+  "dorm": 1,
+  "orientacion": "Suroeste",
+  "supViv": 49.21,
+  "terraza": 0,
+  "supTotal": 49.21,
+  "precio": 158000
+ },
+ {
+  "id": "137",
+  "planta": "Baja",
+  "dorm": 1,
+  "orientacion": "Suroeste",
+  "supViv": 48.37,
+  "terraza": 0,
+  "supTotal": 48.37,
+  "precio": 156000
+ },
+ {
+  "id": "138",
+  "planta": "Baja",
+  "dorm": 1,
+  "orientacion": "Suroeste",
+  "supViv": 47.54,
+  "terraza": 0,
+  "supTotal": 47.54,
+  "precio": 153000
+ },
+ {
+  "id": "201",
+  "planta": "1ª",
+  "dorm": 2,
+  "orientacion": "Suroeste",
+  "supViv": 60.87,
+  "terraza": 0,
+  "supTotal": 60.87,
+  "precio": 191000
+ },
+ {
+  "id": "202",
+  "planta": "1ª",
+  "dorm": 2,
+  "orientacion": "Suroeste",
+  "supViv": 57.99,
+  "terraza": 0,
+  "supTotal": 57.99,
+  "precio": 182000
+ },
+ {
+  "id": "203",
+  "planta": "1ª",
+  "dorm": 2,
+  "orientacion": "Suroeste",
+  "supViv": 56.52,
+  "terraza": 0,
+  "supTotal": 56.52,
+  "precio": 178000
+ },
+ {
+  "id": "204",
+  "planta": "1ª",
+  "dorm": 2,
+  "orientacion": "Suroeste",
+  "supViv": 55.2,
+  "terraza": 0,
+  "supTotal": 55.2,
+  "precio": 174000
+ },
+ {
+  "id": "205",
+  "planta": "1ª",
+  "dorm": 2,
+  "orientacion": "Suroeste",
+  "supViv": 53.95,
+  "terraza": 0,
+  "supTotal": 53.95,
+  "precio": 170000
+ },
+ {
+  "id": "206",
+  "planta": "1ª",
+  "dorm": 2,
+  "orientacion": "Suroeste",
+  "supViv": 52.45,
+  "terraza": 0,
+  "supTotal": 52.45,
+  "precio": 165000
+ },
+ {
+  "id": "207",
+  "planta": "1ª",
+  "dorm": 2,
+  "orientacion": "Noreste",
+  "supViv": 57.01,
+  "terraza": 0,
+  "supTotal": 57.01,
+  "precio": 203000
+ },
+ {
+  "id": "208",
+  "planta": "1ª",
+  "dorm": 1,
+  "orientacion": "Noreste",
+  "supViv": 43.28,
+  "terraza": 0,
+  "supTotal": 43.28,
+  "precio": 158000
+ },
+ {
+  "id": "209",
+  "planta": "1ª",
+  "dorm": 1,
+  "orientacion": "Jardín interior",
+  "supViv": 42.09,
+  "terraza": 2.95,
+  "supTotal": 45.04,
+  "precio": 133000
+ },
+ {
+  "id": "210",
+  "planta": "1ª",
+  "dorm": 1,
+  "orientacion": "Jardín interior",
+  "supViv": 42.09,
+  "terraza": 2.94,
+  "supTotal": 45.03,
+  "precio": 133000
+ },
+ {
+  "id": "211",
+  "planta": "1ª",
+  "dorm": 1,
+  "orientacion": "Noreste",
+  "supViv": 43.48,
+  "terraza": 0,
+  "supTotal": 43.48,
+  "precio": 158000
+ },
+ {
+  "id": "212",
+  "planta": "1ª",
+  "dorm": 2,
+  "orientacion": "Noreste",
+  "supViv": 62.54,
+  "terraza": 0,
+  "supTotal": 62.54,
+  "precio": 222000
+ },
+ {
+  "id": "213",
+  "planta": "1ª",
+  "dorm": 2,
+  "orientacion": "Noreste",
+  "supViv": 56.16,
+  "terraza": 0,
+  "supTotal": 56.16,
+  "precio": 200000
+ },
+ {
+  "id": "214",
+  "planta": "1ª",
+  "dorm": 2,
+  "orientacion": "Noreste",
+  "supViv": 56.24,
+  "terraza": 0,
+  "supTotal": 56.24,
+  "precio": 200000
+ },
+ {
+  "id": "215",
+  "planta": "1ª",
+  "dorm": 2,
+  "orientacion": "Noreste",
+  "supViv": 56.24,
+  "terraza": 0,
+  "supTotal": 56.24,
+  "precio": 200000
+ },
+ {
+  "id": "216",
+  "planta": "1ª",
+  "dorm": 2,
+  "orientacion": "Noreste",
+  "supViv": 56.24,
+  "terraza": 0,
+  "supTotal": 56.24,
+  "precio": 200000
+ },
+ {
+  "id": "217",
+  "planta": "1ª",
+  "dorm": 2,
+  "orientacion": "Jardín interior",
+  "supViv": 45.22,
+  "terraza": 2.94,
+  "supTotal": 48.16,
+  "precio": 139000
+ },
+ {
+  "id": "218",
+  "planta": "1ª",
+  "dorm": 2,
+  "orientacion": "Jardín interior",
+  "supViv": 45.22,
+  "terraza": 2.95,
+  "supTotal": 48.17,
+  "precio": 139000
+ },
+ {
+  "id": "219",
+  "planta": "1ª",
+  "dorm": 2,
+  "orientacion": "Jardín interior",
+  "supViv": 42.09,
+  "terraza": 2.95,
+  "supTotal": 45.04,
+  "precio": 130000
+ },
+ {
+  "id": "220",
+  "planta": "1ª",
+  "dorm": 2,
+  "orientacion": "Jardín interior",
+  "supViv": 42.09,
+  "terraza": 2.94,
+  "supTotal": 45.03,
+  "precio": 130000
+ },
+ {
+  "id": "221",
+  "planta": "1ª",
+  "dorm": 2,
+  "orientacion": "Noreste",
+  "supViv": 56.21,
+  "terraza": 0,
+  "supTotal": 56.21,
+  "precio": 200000
+ },
+ {
+  "id": "222",
+  "planta": "1ª",
+  "dorm": 2,
+  "orientacion": "Noreste",
+  "supViv": 57.52,
+  "terraza": 0,
+  "supTotal": 57.52,
+  "precio": 205000
+ },
+ {
+  "id": "223",
+  "planta": "1ª",
+  "dorm": 2,
+  "orientacion": "Noreste",
+  "supViv": 56.77,
+  "terraza": 0,
+  "supTotal": 56.77,
+  "precio": 202000
+ },
+ {
+  "id": "224",
+  "planta": "1ª",
+  "dorm": 2,
+  "orientacion": "Noreste",
+  "supViv": 56.21,
+  "terraza": 0,
+  "supTotal": 56.21,
+  "precio": 200000
+ },
+ {
+  "id": "225",
+  "planta": "1ª",
+  "dorm": 2,
+  "orientacion": "Jardín interior",
+  "supViv": 45.22,
+  "terraza": 2.94,
+  "supTotal": 48.16,
+  "precio": 139000
+ },
+ {
+  "id": "226",
+  "planta": "1ª",
+  "dorm": 2,
+  "orientacion": "Jardín interior",
+  "supViv": 45.22,
+  "terraza": 2.95,
+  "supTotal": 48.17,
+  "precio": 139000
+ },
+ {
+  "id": "227",
+  "planta": "1ª",
+  "dorm": 2,
+  "orientacion": "Jardín interior",
+  "supViv": 42.09,
+  "terraza": 2.95,
+  "supTotal": 45.04,
+  "precio": 130000
+ },
+ {
+  "id": "228",
+  "planta": "1ª",
+  "dorm": 2,
+  "orientacion": "Jardín interior",
+  "supViv": 42.09,
+  "terraza": 2.94,
+  "supTotal": 45.03,
+  "precio": 130000
+ },
+ {
+  "id": "229",
+  "planta": "1ª",
+  "dorm": 1,
+  "orientacion": "Noreste",
+  "supViv": 56.21,
+  "terraza": 0,
+  "supTotal": 56.21,
+  "precio": 204000
+ },
+ {
+  "id": "230",
+  "planta": "1ª",
+  "dorm": 1,
+  "orientacion": "Noreste",
+  "supViv": 56.21,
+  "terraza": 0,
+  "supTotal": 56.21,
+  "precio": 204000
+ },
+ {
+  "id": "231",
+  "planta": "1ª",
+  "dorm": 2,
+  "orientacion": "Noreste",
+  "supViv": 56.21,
+  "terraza": 0,
+  "supTotal": 56.21,
+  "precio": 200000
+ },
+ {
+  "id": "232",
+  "planta": "1ª",
+  "dorm": 2,
+  "orientacion": "Noreste",
+  "supViv": 73.3,
+  "terraza": 0,
+  "supTotal": 73.3,
+  "precio": 261000
+ },
+ {
+  "id": "233",
+  "planta": "1ª",
+  "dorm": 2,
+  "orientacion": "Noreste",
+  "supViv": 63.28,
+  "terraza": 0,
+  "supTotal": 63.28,
+  "precio": 225000
+ },
+ {
+  "id": "234",
+  "planta": "1ª",
+  "dorm": 1,
+  "orientacion": "Suroeste",
+  "supViv": 44.12,
+  "terraza": 0,
+  "supTotal": 44.12,
+  "precio": 142000
+ },
+ {
+  "id": "235",
+  "planta": "1ª",
+  "dorm": 1,
+  "orientacion": "Jardín interior",
+  "supViv": 42.09,
+  "terraza": 2.94,
+  "supTotal": 45.03,
+  "precio": 133000
+ },
+ {
+  "id": "236",
+  "planta": "1ª",
+  "dorm": 1,
+  "orientacion": "Jardín interior",
+  "supViv": 42.09,
+  "terraza": 2.95,
+  "supTotal": 45.04,
+  "precio": 133000
+ },
+ {
+  "id": "237",
+  "planta": "1ª",
+  "dorm": 1,
+  "orientacion": "Suroeste",
+  "supViv": 43.67,
+  "terraza": 0,
+  "supTotal": 43.67,
+  "precio": 141000
+ },
+ {
+  "id": "238",
+  "planta": "1ª",
+  "dorm": 3,
+  "orientacion": "Suroeste",
+  "supViv": 73.56,
+  "terraza": 0,
+  "supTotal": 73.56,
+  "precio": 226000
+ },
+ {
+  "id": "239",
+  "planta": "1ª",
+  "dorm": 1,
+  "orientacion": "Suroeste",
+  "supViv": 52.87,
+  "terraza": 0,
+  "supTotal": 52.87,
+  "precio": 170000
+ },
+ {
+  "id": "240",
+  "planta": "1ª",
+  "dorm": 1,
+  "orientacion": "Suroeste",
+  "supViv": 52.2,
+  "terraza": 0,
+  "supTotal": 52.2,
+  "precio": 168000
+ },
+ {
+  "id": "241",
+  "planta": "1ª",
+  "dorm": 1,
+  "orientacion": "Suroeste",
+  "supViv": 51.33,
+  "terraza": 0,
+  "supTotal": 51.33,
+  "precio": 165000
+ },
+ {
+  "id": "242",
+  "planta": "1ª",
+  "dorm": 1,
+  "orientacion": "Suroeste",
+  "supViv": 49.21,
+  "terraza": 0,
+  "supTotal": 49.21,
+  "precio": 158000
+ },
+ {
+  "id": "243",
+  "planta": "1ª",
+  "dorm": 1,
+  "orientacion": "Suroeste",
+  "supViv": 48.37,
+  "terraza": 0,
+  "supTotal": 48.37,
+  "precio": 156000
+ },
+ {
+  "id": "244",
+  "planta": "1ª",
+  "dorm": 1,
+  "orientacion": "Suroeste",
+  "supViv": 47.54,
+  "terraza": 0,
+  "supTotal": 47.54,
+  "precio": 153000
+ },
+ {
+  "id": "245",
+  "planta": "1ª",
+  "dorm": 1,
+  "orientacion": "Suroeste",
+  "supViv": 46.71,
+  "terraza": 0,
+  "supTotal": 46.71,
+  "precio": 150000
+ },
+ {
+  "id": "246",
+  "planta": "1ª",
+  "dorm": 2,
+  "orientacion": "Suroeste",
+  "supViv": 61.47,
+  "terraza": 0,
+  "supTotal": 61.47,
+  "precio": 193000
+ },
+ {
+  "id": "301",
+  "planta": "2ª",
+  "dorm": 2,
+  "orientacion": "Suroeste",
+  "supViv": 60.87,
+  "terraza": 0,
+  "supTotal": 60.87,
+  "precio": 191000
+ },
+ {
+  "id": "302",
+  "planta": "2ª",
+  "dorm": 2,
+  "orientacion": "Suroeste",
+  "supViv": 57.99,
+  "terraza": 0,
+  "supTotal": 57.99,
+  "precio": 182000
+ },
+ {
+  "id": "303",
+  "planta": "2ª",
+  "dorm": 2,
+  "orientacion": "Suroeste",
+  "supViv": 56.52,
+  "terraza": 0,
+  "supTotal": 56.52,
+  "precio": 178000
+ },
+ {
+  "id": "304",
+  "planta": "2ª",
+  "dorm": 2,
+  "orientacion": "Suroeste",
+  "supViv": 55.2,
+  "terraza": 0,
+  "supTotal": 55.2,
+  "precio": 174000
+ },
+ {
+  "id": "305",
+  "planta": "2ª",
+  "dorm": 2,
+  "orientacion": "Suroeste",
+  "supViv": 53.95,
+  "terraza": 0,
+  "supTotal": 53.95,
+  "precio": 170000
+ },
+ {
+  "id": "306",
+  "planta": "2ª",
+  "dorm": 2,
+  "orientacion": "Suroeste",
+  "supViv": 52.45,
+  "terraza": 0,
+  "supTotal": 52.45,
+  "precio": 165000
+ },
+ {
+  "id": "307",
+  "planta": "2ª",
+  "dorm": 2,
+  "orientacion": "Noreste",
+  "supViv": 57.01,
+  "terraza": 0,
+  "supTotal": 57.01,
+  "precio": 203000
+ },
+ {
+  "id": "308",
+  "planta": "2ª",
+  "dorm": 1,
+  "orientacion": "Noreste",
+  "supViv": 43.28,
+  "terraza": 0,
+  "supTotal": 43.28,
+  "precio": 158000
+ },
+ {
+  "id": "309",
+  "planta": "2ª",
+  "dorm": 1,
+  "orientacion": "Jardín interior",
+  "supViv": 42.09,
+  "terraza": 2.95,
+  "supTotal": 45.04,
+  "precio": 133000
+ },
+ {
+  "id": "310",
+  "planta": "2ª",
+  "dorm": 1,
+  "orientacion": "Jardín interior",
+  "supViv": 42.09,
+  "terraza": 2.94,
+  "supTotal": 45.03,
+  "precio": 133000
+ },
+ {
+  "id": "311",
+  "planta": "2ª",
+  "dorm": 1,
+  "orientacion": "Noreste",
+  "supViv": 43.48,
+  "terraza": 0,
+  "supTotal": 43.48,
+  "precio": 158000
+ },
+ {
+  "id": "312",
+  "planta": "2ª",
+  "dorm": 2,
+  "orientacion": "Noreste",
+  "supViv": 62.54,
+  "terraza": 0,
+  "supTotal": 62.54,
+  "precio": 222000
+ },
+ {
+  "id": "313",
+  "planta": "2ª",
+  "dorm": 2,
+  "orientacion": "Noreste",
+  "supViv": 56.16,
+  "terraza": 0,
+  "supTotal": 56.16,
+  "precio": 200000
+ },
+ {
+  "id": "314",
+  "planta": "2ª",
+  "dorm": 2,
+  "orientacion": "Noreste",
+  "supViv": 56.24,
+  "terraza": 0,
+  "supTotal": 56.24,
+  "precio": 200000
+ },
+ {
+  "id": "315",
+  "planta": "2ª",
+  "dorm": 2,
+  "orientacion": "Noreste",
+  "supViv": 56.24,
+  "terraza": 0,
+  "supTotal": 56.24,
+  "precio": 200000
+ },
+ {
+  "id": "316",
+  "planta": "2ª",
+  "dorm": 2,
+  "orientacion": "Noreste",
+  "supViv": 56.24,
+  "terraza": 0,
+  "supTotal": 56.24,
+  "precio": 200000
+ },
+ {
+  "id": "317",
+  "planta": "2ª",
+  "dorm": 2,
+  "orientacion": "Jardín interior",
+  "supViv": 45.22,
+  "terraza": 2.94,
+  "supTotal": 48.16,
+  "precio": 139000
+ },
+ {
+  "id": "318",
+  "planta": "2ª",
+  "dorm": 2,
+  "orientacion": "Jardín interior",
+  "supViv": 45.22,
+  "terraza": 2.95,
+  "supTotal": 48.17,
+  "precio": 139000
+ },
+ {
+  "id": "319",
+  "planta": "2ª",
+  "dorm": 2,
+  "orientacion": "Jardín interior",
+  "supViv": 42.09,
+  "terraza": 2.95,
+  "supTotal": 45.04,
+  "precio": 130000
+ },
+ {
+  "id": "320",
+  "planta": "2ª",
+  "dorm": 2,
+  "orientacion": "Jardín interior",
+  "supViv": 42.09,
+  "terraza": 2.94,
+  "supTotal": 45.03,
+  "precio": 130000
+ },
+ {
+  "id": "321",
+  "planta": "2ª",
+  "dorm": 2,
+  "orientacion": "Noreste",
+  "supViv": 56.21,
+  "terraza": 0,
+  "supTotal": 56.21,
+  "precio": 200000
+ },
+ {
+  "id": "322",
+  "planta": "2ª",
+  "dorm": 2,
+  "orientacion": "Noreste",
+  "supViv": 56.52,
+  "terraza": 0,
+  "supTotal": 56.52,
+  "precio": 201000
+ },
+ {
+  "id": "323",
+  "planta": "2ª",
+  "dorm": 2,
+  "orientacion": "Noreste",
+  "supViv": 56.77,
+  "terraza": 0,
+  "supTotal": 56.77,
+  "precio": 202000
+ },
+ {
+  "id": "324",
+  "planta": "2ª",
+  "dorm": 2,
+  "orientacion": "Noreste",
+  "supViv": 56.21,
+  "terraza": 0,
+  "supTotal": 56.21,
+  "precio": 200000
+ },
+ {
+  "id": "325",
+  "planta": "2ª",
+  "dorm": 2,
+  "orientacion": "Jardín interior",
+  "supViv": 45.22,
+  "terraza": 2.94,
+  "supTotal": 48.16,
+  "precio": 139000
+ },
+ {
+  "id": "326",
+  "planta": "2ª",
+  "dorm": 2,
+  "orientacion": "Jardín interior",
+  "supViv": 45.22,
+  "terraza": 2.95,
+  "supTotal": 48.17,
+  "precio": 139000
+ },
+ {
+  "id": "327",
+  "planta": "2ª",
+  "dorm": 2,
+  "orientacion": "Jardín interior",
+  "supViv": 42.09,
+  "terraza": 2.94,
+  "supTotal": 45.03,
+  "precio": 130000
+ },
+ {
+  "id": "328",
+  "planta": "2ª",
+  "dorm": 2,
+  "orientacion": "Jardín interior",
+  "supViv": 42.09,
+  "terraza": 2.95,
+  "supTotal": 45.04,
+  "precio": 130000
+ },
+ {
+  "id": "329",
+  "planta": "2ª",
+  "dorm": 1,
+  "orientacion": "Noreste",
+  "supViv": 56.21,
+  "terraza": 0,
+  "supTotal": 56.21,
+  "precio": 204000
+ },
+ {
+  "id": "330",
+  "planta": "2ª",
+  "dorm": 1,
+  "orientacion": "Noreste",
+  "supViv": 56.21,
+  "terraza": 0,
+  "supTotal": 56.21,
+  "precio": 204000
+ },
+ {
+  "id": "331",
+  "planta": "2ª",
+  "dorm": 2,
+  "orientacion": "Noreste",
+  "supViv": 56.21,
+  "terraza": 0,
+  "supTotal": 56.21,
+  "precio": 200000
+ },
+ {
+  "id": "332",
+  "planta": "2ª",
+  "dorm": 2,
+  "orientacion": "Noreste",
+  "supViv": 73.3,
+  "terraza": 0,
+  "supTotal": 73.3,
+  "precio": 261000
+ },
+ {
+  "id": "333",
+  "planta": "2ª",
+  "dorm": 2,
+  "orientacion": "Noreste",
+  "supViv": 63.28,
+  "terraza": 0,
+  "supTotal": 63.28,
+  "precio": 225000
+ },
+ {
+  "id": "334",
+  "planta": "2ª",
+  "dorm": 1,
+  "orientacion": "Suroeste",
+  "supViv": 44.12,
+  "terraza": 0,
+  "supTotal": 44.12,
+  "precio": 142000
+ },
+ {
+  "id": "335",
+  "planta": "2ª",
+  "dorm": 1,
+  "orientacion": "Jardín interior",
+  "supViv": 42.09,
+  "terraza": 2.94,
+  "supTotal": 45.03,
+  "precio": 133000
+ },
+ {
+  "id": "336",
+  "planta": "2ª",
+  "dorm": 1,
+  "orientacion": "Jardín interior",
+  "supViv": 42.09,
+  "terraza": 2.95,
+  "supTotal": 45.04,
+  "precio": 133000
+ },
+ {
+  "id": "337",
+  "planta": "2ª",
+  "dorm": 1,
+  "orientacion": "Suroeste",
+  "supViv": 43.67,
+  "terraza": 0,
+  "supTotal": 43.67,
+  "precio": 141000
+ },
+ {
+  "id": "338",
+  "planta": "2ª",
+  "dorm": 3,
+  "orientacion": "Suroeste",
+  "supViv": 73.56,
+  "terraza": 0,
+  "supTotal": 73.56,
+  "precio": 226000
+ },
+ {
+  "id": "339",
+  "planta": "2ª",
+  "dorm": 1,
+  "orientacion": "Suroeste",
+  "supViv": 52.87,
+  "terraza": 0,
+  "supTotal": 52.87,
+  "precio": 170000
+ },
+ {
+  "id": "340",
+  "planta": "2ª",
+  "dorm": 1,
+  "orientacion": "Suroeste",
+  "supViv": 52.2,
+  "terraza": 0,
+  "supTotal": 52.2,
+  "precio": 168000
+ },
+ {
+  "id": "341",
+  "planta": "2ª",
+  "dorm": 1,
+  "orientacion": "Suroeste",
+  "supViv": 51.33,
+  "terraza": 0,
+  "supTotal": 51.33,
+  "precio": 165000
+ },
+ {
+  "id": "342",
+  "planta": "2ª",
+  "dorm": 1,
+  "orientacion": "Suroeste",
+  "supViv": 49.21,
+  "terraza": 0,
+  "supTotal": 49.21,
+  "precio": 158000
+ },
+ {
+  "id": "343",
+  "planta": "2ª",
+  "dorm": 1,
+  "orientacion": "Suroeste",
+  "supViv": 48.37,
+  "terraza": 0,
+  "supTotal": 48.37,
+  "precio": 156000
+ },
+ {
+  "id": "344",
+  "planta": "2ª",
+  "dorm": 1,
+  "orientacion": "Suroeste",
+  "supViv": 47.54,
+  "terraza": 0,
+  "supTotal": 47.54,
+  "precio": 153000
+ },
+ {
+  "id": "345",
+  "planta": "2ª",
+  "dorm": 1,
+  "orientacion": "Suroeste",
+  "supViv": 46.71,
+  "terraza": 0,
+  "supTotal": 46.71,
+  "precio": 150000
+ },
+ {
+  "id": "346",
+  "planta": "2ª",
+  "dorm": 2,
+  "orientacion": "Suroeste",
+  "supViv": 61.47,
+  "terraza": 0,
+  "supTotal": 61.47,
+  "precio": 193000
+ },
+ {
+  "id": "401",
+  "planta": "Ático",
+  "dorm": 1,
+  "orientacion": "Suroeste",
+  "supViv": 49.42,
+  "terraza": 31.6,
+  "supTotal": 81.02,
+  "precio": 301000
+ },
+ {
+  "id": "402",
+  "planta": "Ático",
+  "dorm": 1,
+  "orientacion": "Suroeste",
+  "supViv": 46.16,
+  "terraza": 31.22,
+  "supTotal": 77.38,
+  "precio": 289000
+ },
+ {
+  "id": "403",
+  "planta": "Ático",
+  "dorm": 1,
+  "orientacion": "Suroeste",
+  "supViv": 43.75,
+  "terraza": 31.2,
+  "supTotal": 74.95,
+  "precio": 281000
+ },
+ {
+  "id": "404",
+  "planta": "Ático",
+  "dorm": 1,
+  "orientacion": "Suroeste",
+  "supViv": 41.35,
+  "terraza": 31.21,
+  "supTotal": 72.56,
+  "precio": 274000
+ },
+ {
+  "id": "405",
+  "planta": "Ático",
+  "dorm": 2,
+  "orientacion": "Noreste",
+  "supViv": 52.44,
+  "terraza": 59.09,
+  "supTotal": 111.53,
+  "precio": 481000
+ },
+ {
+  "id": "406",
+  "planta": "Ático",
+  "dorm": 1,
+  "orientacion": "Noreste",
+  "supViv": 39.58,
+  "terraza": 27.64,
+  "supTotal": 67.22,
+  "precio": 285000
+ },
+ {
+  "id": "407",
+  "planta": "Ático",
+  "dorm": 1,
+  "orientacion": "Jardín interior",
+  "supViv": 42.09,
+  "terraza": 2.95,
+  "supTotal": 45.04,
+  "precio": 133000
+ },
+ {
+  "id": "408",
+  "planta": "Ático",
+  "dorm": 1,
+  "orientacion": "Jardín interior",
+  "supViv": 42.09,
+  "terraza": 2.94,
+  "supTotal": 45.03,
+  "precio": 133000
+ },
+ {
+  "id": "409",
+  "planta": "Ático",
+  "dorm": 2,
+  "orientacion": "Noreste",
+  "supViv": 49.76,
+  "terraza": 53.68,
+  "supTotal": 103.44,
+  "precio": 445000
+ },
+ {
+  "id": "410",
+  "planta": "Ático",
+  "dorm": 1,
+  "orientacion": "Noreste",
+  "supViv": 44.78,
+  "terraza": 31.2,
+  "supTotal": 75.98,
+  "precio": 322000
+ },
+ {
+  "id": "411",
+  "planta": "Ático",
+  "dorm": 1,
+  "orientacion": "Noreste",
+  "supViv": 44.78,
+  "terraza": 31.2,
+  "supTotal": 75.98,
+  "precio": 322000
+ },
+ {
+  "id": "412",
+  "planta": "Ático",
+  "dorm": 1,
+  "orientacion": "Noreste",
+  "supViv": 44.78,
+  "terraza": 31.2,
+  "supTotal": 75.98,
+  "precio": 322000
+ },
+ {
+  "id": "413",
+  "planta": "Ático",
+  "dorm": 1,
+  "orientacion": "Jardín interior",
+  "supViv": 45.22,
+  "terraza": 2.94,
+  "supTotal": 48.16,
+  "precio": 142000
+ },
+ {
+  "id": "414",
+  "planta": "Ático",
+  "dorm": 1,
+  "orientacion": "Jardín interior",
+  "supViv": 45.22,
+  "terraza": 2.95,
+  "supTotal": 48.17,
+  "precio": 142000
+ },
+ {
+  "id": "415",
+  "planta": "Ático",
+  "dorm": 1,
+  "orientacion": "Jardín interior",
+  "supViv": 42.09,
+  "terraza": 2.95,
+  "supTotal": 45.04,
+  "precio": 133000
+ },
+ {
+  "id": "416",
+  "planta": "Ático",
+  "dorm": 1,
+  "orientacion": "Jardín interior",
+  "supViv": 42.09,
+  "terraza": 2.94,
+  "supTotal": 45.03,
+  "precio": 133000
+ },
+ {
+  "id": "417",
+  "planta": "Ático",
+  "dorm": 1,
+  "orientacion": "Noreste",
+  "supViv": 45.32,
+  "terraza": 31.58,
+  "supTotal": 76.9,
+  "precio": 326000
+ },
+ {
+  "id": "418",
+  "planta": "Ático",
+  "dorm": 1,
+  "orientacion": "Noreste",
+  "supViv": 45.36,
+  "terraza": 31.6,
+  "supTotal": 76.96,
+  "precio": 326000
+ },
+ {
+  "id": "419",
+  "planta": "Ático",
+  "dorm": 1,
+  "orientacion": "Jardín interior",
+  "supViv": 45.22,
+  "terraza": 2.94,
+  "supTotal": 48.16,
+  "precio": 142000
+ },
+ {
+  "id": "420",
+  "planta": "Ático",
+  "dorm": 1,
+  "orientacion": "Jardín interior",
+  "supViv": 45.22,
+  "terraza": 2.95,
+  "supTotal": 48.17,
+  "precio": 142000
+ },
+ {
+  "id": "421",
+  "planta": "Ático",
+  "dorm": 1,
+  "orientacion": "Jardín interior",
+  "supViv": 42.09,
+  "terraza": 2.95,
+  "supTotal": 45.04,
+  "precio": 133000
+ },
+ {
+  "id": "422",
+  "planta": "Ático",
+  "dorm": 1,
+  "orientacion": "Jardín interior",
+  "supViv": 42.09,
+  "terraza": 2.94,
+  "supTotal": 45.03,
+  "precio": 133000
+ },
+ {
+  "id": "423",
+  "planta": "Ático",
+  "dorm": 1,
+  "orientacion": "Noreste",
+  "supViv": 44.78,
+  "terraza": 31.2,
+  "supTotal": 75.98,
+  "precio": 322000
+ },
+ {
+  "id": "424",
+  "planta": "Ático",
+  "dorm": 1,
+  "orientacion": "Noreste",
+  "supViv": 44.78,
+  "terraza": 31.2,
+  "supTotal": 75.98,
+  "precio": 322000
+ },
+ {
+  "id": "425",
+  "planta": "Ático",
+  "dorm": 1,
+  "orientacion": "Noreste",
+  "supViv": 44.78,
+  "terraza": 31.2,
+  "supTotal": 75.98,
+  "precio": 322000
+ },
+ {
+  "id": "426",
+  "planta": "Ático",
+  "dorm": 1,
+  "orientacion": "Noreste",
+  "supViv": 38.92,
+  "terraza": 27.12,
+  "supTotal": 66.04,
+  "precio": 280000
+ },
+ {
+  "id": "427",
+  "planta": "Ático",
+  "dorm": 1,
+  "orientacion": "Suroeste",
+  "supViv": 38.07,
+  "terraza": 46.01,
+  "supTotal": 84.08,
+  "precio": 330000
+ },
+ {
+  "id": "428",
+  "planta": "Ático",
+  "dorm": 1,
+  "orientacion": "Suroeste",
+  "supViv": 33.19,
+  "terraza": 23.09,
+  "supTotal": 56.28,
+  "precio": 211000
+ },
+ {
+  "id": "429",
+  "planta": "Ático",
+  "dorm": 1,
+  "orientacion": "Jardín interior",
+  "supViv": 42.09,
+  "terraza": 2.94,
+  "supTotal": 45.03,
+  "precio": 133000
+ },
+ {
+  "id": "430",
+  "planta": "Ático",
+  "dorm": 1,
+  "orientacion": "Jardín interior",
+  "supViv": 42.09,
+  "terraza": 2.95,
+  "supTotal": 45.04,
+  "precio": 133000
+ },
+ {
+  "id": "431",
+  "planta": "Ático",
+  "dorm": 3,
+  "orientacion": "Suroeste",
+  "supViv": 70.27,
+  "terraza": 60.46,
+  "supTotal": 130.73,
+  "precio": 476000
+ },
+ {
+  "id": "432",
+  "planta": "Ático",
+  "dorm": 1,
+  "orientacion": "Suroeste",
+  "supViv": 34.8,
+  "terraza": 18.01,
+  "supTotal": 52.81,
+  "precio": 193000
+ },
+ {
+  "id": "433",
+  "planta": "Ático",
+  "dorm": 1,
+  "orientacion": "Suroeste",
+  "supViv": 33.93,
+  "terraza": 18.01,
+  "supTotal": 51.94,
+  "precio": 190000
+ },
+ {
+  "id": "434",
+  "planta": "Ático",
+  "dorm": 2,
+  "orientacion": "Suroeste",
+  "supViv": 63.65,
+  "terraza": 35.11,
+  "supTotal": 98.76,
+  "precio": 355000
+ },
+ {
+  "id": "435",
+  "planta": "Ático",
+  "dorm": 2,
+  "orientacion": "Suroeste",
+  "supViv": 60.32,
+  "terraza": 35.11,
+  "supTotal": 95.43,
+  "precio": 344000
+ },
+ {
+  "id": "436",
+  "planta": "Ático",
+  "dorm": 1,
+  "orientacion": "Suroeste",
+  "supViv": 39,
+  "terraza": 23.8,
+  "supTotal": 62.8,
+  "precio": 265000
+ }
+]
