@@ -25,12 +25,21 @@ const D2R = Math.PI / 180;
 export const SITE = {
   lat: 27.986703,       // centro de la parcela
   lon: -15.395572,
-  // Cota del terreno. Ojo: la Elevation API da altitud sobre el nivel del mar
-  // (77,88 m aquí) pero el tileset se ancla sobre el ELIPSOIDE, y en Canarias
-  // hay unos 45 m de separación entre ambas referencias. Este valor es sólo la
-  // estimación de partida: al cargar las teselas se mide la cota real del
-  // terreno con un rayo y se corrige sola (ver calibrate()).
-  ground: 77.9 + 45,
+  // Cota del terreno sobre el ELIPSOIDE, que es la referencia del tileset.
+  // La Elevation API da altitud sobre el nivel del mar (77,88 m en la parcela)
+  // y en Canarias el geoide va unos 46 m por encima del elipsoide, así que hay
+  // que sumarlos. Este valor manda; la medición sobre el terreno sólo afina.
+  ground: 77.9 + 46,
+
+  // Ajuste fino en metros, positivo sube el entorno. Se puede tantear en vivo
+  // sin tocar código con ?cota=-3 en la URL.
+  groundNudge: 0,
+
+  // Cuánto se le permite corregir a la medición automática. Acotarlo es lo que
+  // impide el bucle: sin límite, un rayo que cae sobre la tesela global gruesa
+  // desplaza el conjunto cientos de metros, la cámara queda lejísimos del
+  // tileset y deja de pedirse la tesela fina que habría corregido el error.
+  maxAutoFix: 25,
 
   // Giro que alinea el eje largo del edificio con su rumbo real. El plugin
   // deja el tileset con +X al oeste y +Z al norte, así que el ángulo sale de
@@ -79,9 +88,13 @@ function punchHole(material, radius) {
 export function createEnvironment({ scene, camera, renderer, apiKey, onError }) {
   if (!apiKey || apiKey.startsWith('__')) return null;
 
+  // Permite tantear la cota en vivo desde la URL: ?cota=-3
+  const nudge = new URLSearchParams(location.search).get('cota');
+  if (nudge !== null && !Number.isNaN(Number(nudge))) SITE.groundNudge = Number(nudge);
+
   const group = new THREE.Group();
   group.name = 'entorno';
-  group.position.y = SITE.baseY;
+  group.position.y = SITE.baseY + SITE.groundNudge;
   group.visible = false;
   scene.add(group);
 
@@ -119,7 +132,12 @@ export function createEnvironment({ scene, camera, renderer, apiKey, onError }) 
   const PROBES = [[0, 0], [-18, -12], [18, -12], [-18, 12], [18, 12],
                   [-34, 0], [34, 0], [0, -20], [0, 20]];
 
+  const baseOffset = () => SITE.baseY + SITE.groundNudge;
+
   function calibrate() {
+    // Sin unas cuantas teselas encima, lo único que hay bajo el rayo es la
+    // malla global del planeta, que no sirve para medir un solar.
+    if (tilesLoaded < 8) return false;
     group.updateMatrixWorld(true);
     const ys = [];
     for (const [x, z] of PROBES) {
@@ -128,10 +146,16 @@ export function createEnvironment({ scene, camera, renderer, apiKey, onError }) 
       const hit = ray.intersectObject(tiles.group, true)[0];
       if (hit) ys.push(hit.point.y);
     }
-    if (ys.length < 3) return false;
+    if (ys.length < 5) return false;
     ys.sort((a, b) => a - b);
     const suelo = ys[Math.floor(ys.length / 2)];
-    group.position.y -= suelo - SITE.baseY;
+
+    // La corrección se mide siempre contra la cota nominal, no contra la
+    // anterior, y se rechaza si se sale del margen: así no puede irse lejos
+    // aunque una lectura salga mal.
+    const fix = group.position.y + (baseOffset() - suelo) - baseOffset();
+    if (Math.abs(fix) > SITE.maxAutoFix) return false;
+    group.position.y = baseOffset() + fix;
     calibrations++;
     return true;
   }
