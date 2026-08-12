@@ -210,7 +210,7 @@ export function buildBuilding(scene, unitsById) {
   const pbGroup = floorGroups.get('baja');
   pbGroup.userData.gardens = gardens;
 
-  buildContext(scene);
+  scene.userData.contexto = buildContext(scene);
 
   return { floorGroups, roofGroup, unitMeshes, pickables, layout };
 }

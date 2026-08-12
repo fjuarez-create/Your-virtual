@@ -245,7 +245,13 @@ function footballField() {
   return g;
 }
 
-export function buildContext(scene) {
+export function buildContext(parent) {
+  // Todo el contexto cuelga de un grupo propio para poder apartarlo de golpe:
+  // cuando se enciende el entorno real de Google, lo inventado sobra.
+  const scene = new THREE.Group();
+  scene.name = 'contexto';
+  parent.add(scene);
+
   let seed = 20260810;
   const rnd = () => { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; };
   const m4 = new THREE.Matrix4();
@@ -504,4 +510,6 @@ export function buildContext(scene) {
   sea.rotation.x = -Math.PI / 2;
   sea.position.set(250, -3, -1250);
   scene.add(sea);
+
+  return scene;
 }

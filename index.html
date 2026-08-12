@@ -22,8 +22,11 @@
     "three/addons/postprocessing/RenderPass.js": "./vendor/RenderPass.js",
     "three/addons/postprocessing/UnrealBloomPass.js": "./vendor/UnrealBloomPass.js",
     "three/addons/postprocessing/OutputPass.js": "./vendor/OutputPass.js",
+    "three/addons/postprocessing/Pass.js": "./vendor/Pass.js",
+    "3d-tiles-renderer": "./vendor/3d-tiles-renderer.js",
 
     "app/main.js": "./js/main.js?v=__BUILD__",
+    "app/environment.js": "./js/environment.js?v=__BUILD__",
     "app/ui.js": "./js/ui.js?v=__BUILD__",
     "app/building.js": "./js/building.js?v=__BUILD__",
     "app/context.js": "./js/context.js?v=__BUILD__",
@@ -42,6 +45,7 @@
   <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 2.5v2.6M12 18.9v2.6M2.5 12h2.6M18.9 12h2.6M5 5l1.9 1.9M17.1 17.1 19 19M19 5l-1.9 1.9M6.9 17.1 5 19" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></symbol>
   <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></symbol>
   <symbol id="i-filter" viewBox="0 0 24 24"><path d="M3.5 7h17M6.5 12h11M9.5 17h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.7"/><ellipse cx="12" cy="12" rx="3.6" ry="8.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M3.9 9h16.2M3.9 15h16.2" stroke="currentColor" stroke-width="1.7"/></symbol>
   <symbol id="i-back" viewBox="0 0 24 24"><path d="M20 12H4.5m0 0L11 5.5M4.5 12 11 18.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-chev" viewBox="0 0 24 24"><path d="m6 9.5 6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-car" viewBox="0 0 24 24"><path d="M5.1 16.4H3.9v-2.9l1.5-4.9A1.8 1.8 0 0 1 7.1 7.3h9.8a1.8 1.8 0 0 1 1.7 1.3l1.5 4.9v2.9h-1.2M6 12.5h12M8.7 16.4a1.85 1.85 0 1 1-3.7 0 1.85 1.85 0 0 1 3.7 0Zm10.3 0a1.85 1.85 0 1 1-3.7 0 1.85 1.85 0 0 1 3.7 0Zm-10.3 0h6.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -86,6 +90,9 @@
         </button>
       </nav>
       <div class="tb-spacer"></div>
+      <button id="envToggle" class="hidden" title="Entorno real" aria-pressed="false">
+        <svg><use href="#i-globe"/></svg>
+      </button>
       <button id="filtersToggle" title="Filtrar viviendas">
         <svg><use href="#i-filter"/></svg><span class="ft-label">Filtrar</span>
         <span class="ft-count" id="filterCount"></span>
@@ -185,6 +192,13 @@
   <div id="loader"><div class="spin"></div><p>Preparando el showroom…</p></div>
 </div>
 
+<!-- Atribución de Google, obligatoria mientras se muestren sus teselas. -->
+<div id="envAttr" class="ui hidden" aria-live="polite"></div>
+
+<!-- La clave de Maps se sella en el deploy desde el secreto MAPS_API_KEY. Es
+     pública por definición (viaja al navegador); lo que la protege es la
+     restricción por referente HTTP en la consola de Google, no el secreto. -->
+<script>window.MAPS_API_KEY = '__MAPS_KEY__';</script>
 <script type="module">import 'app/main.js';</script>
 </body>
 </html>

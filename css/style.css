@@ -135,6 +135,21 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .floor-btn .fb-short { font-size: 14px; font-weight: 600; }
 .floor-all { width: auto; padding: 0 18px; }
 
+/* Entorno real: botón cuadrado, misma caja que los de planta */
+.hidden { display: none !important; }
+#envToggle { width: var(--tb-h); height: var(--tb-h); display: flex; align-items: center; justify-content: center;
+  padding: 0; background: var(--panel-solid); color: var(--ink); border: none;
+  border-left: 1px solid var(--line); cursor: pointer; transition: background 0.2s ease, color 0.2s ease; }
+#envToggle:hover { background: var(--lime-soft); }
+#envToggle[aria-pressed="true"] { background: var(--ink); color: #fff; }
+#envToggle svg { width: 19px; height: 19px; }
+
+/* Atribución de Google: obligatoria mientras se vean sus teselas */
+#envAttr { position: fixed; left: 12px; bottom: 10px; z-index: 6; max-width: min(62vw, 620px);
+  padding: 4px 9px; background: rgba(255, 255, 255, 0.82); color: #3b4147;
+  font-family: var(--font); font-size: 10.5px; line-height: 1.35; letter-spacing: 0.01em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
+
 #filtersToggle { display: flex; align-items: center; gap: 9px; padding: 0 18px; position: relative;
   background: var(--panel-solid); border: none; border-left: 1px solid var(--line); color: var(--ink);
   font-family: var(--font); font-size: 12.5px; font-weight: 600; letter-spacing: 0.09em;

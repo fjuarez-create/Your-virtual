@@ -15,6 +15,7 @@ import { buildBuilding, paintUnits, loadBIM } from 'app/building.js';
 import { fetchUnits, fetchAvailability, pollAvailability, sendLead } from 'app/api.js';
 import * as UI from 'app/ui.js';
 import { ACTIVE_DEV, ACTIVE_BUILDING } from 'app/promotions.js';
+import { createEnvironment, SITE } from 'app/environment.js';
 
 const $ = (s) => document.querySelector(s);
 
@@ -245,6 +246,57 @@ composer.addPass(new RenderPass(scene, camera));
 const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.14, 0.5, 0.92);
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
+
+/* ─────────────────────── Entorno real (teselas de Google) ─────────────────────
+   Capa opcional: sin clave sellada no se crea nada y el botón no aparece. Las
+   teselas llevan la luz del día horneada, así que el entorno real y el modo
+   noche son excluyentes: activar uno apaga el otro. */
+const envBtn = $('#envToggle');
+const envAttr = $('#envAttr');
+const environment = createEnvironment({
+  scene, camera, renderer,
+  apiKey: window.MAPS_API_KEY,
+  onError: (e) => console.warn('Entorno: tesela no cargada', e),
+});
+
+function setEnvironment(on) {
+  if (!environment) return;
+  environment.setEnabled(on);
+  envBtn.setAttribute('aria-pressed', String(on));
+  envAttr.classList.toggle('hidden', !on);
+  // El contexto inventado (manzanas genéricas, suelo llano, mar) sobra en
+  // cuanto está el barrio real: se aparta entero.
+  if (scene.userData.contexto) scene.userData.contexto.visible = !on;
+  if (on && app.night) app.setNight(false); // la fotogrametría es de día
+}
+
+if (environment) {
+  envBtn.classList.remove('hidden');
+  envBtn.addEventListener('click', () => setEnvironment(!environment.enabled));
+}
+
+// asas de depuración: permiten reajustar el rumbo sin recompilar nada
+app.THREE = THREE;
+app.env = environment;
+app.cam = camera;
+app.ctl = controls;
+app.setEnvHeading = (deg) => {
+  if (environment) environment.group.rotation.y = (deg - SITE.azimuthDeg) * (Math.PI / 180);
+};
+
+let attrTick = 0;
+function updateEnvironment(dt) {
+  if (!environment) return;
+  environment.update();
+  if (!environment.enabled) return;
+  attrTick += dt;
+  if (attrTick > 1) {
+    attrTick = 0;
+    const credits = environment.tiles.getAttributions?.() || [];
+    const text = credits.map((c) => c.value).filter(Boolean).join(' · ');
+    envAttr.textContent = text ? `Google · ${text}` : 'Google';
+  }
+}
 
 /* ─────────────────────────── Tween de cámara ─────────────────────────── */
 let camTween = null;
@@ -616,6 +668,14 @@ app.setNight = (on) => {
   UI.markDayNight(on);
 };
 
+/* La noche procedural y la fotogrametría diurna no pueden convivir: encender
+   una apaga la otra. La ida está en setEnvironment; esta es la vuelta. */
+const setNightBase = app.setNight;
+app.setNight = (on) => {
+  if (on && environment?.enabled) setEnvironment(false);
+  setNightBase(on);
+};
+
 /* ──────────── Modelo BIM: siempre cargado, modelo por defecto ──────────── */
 function ensureBIM() {
   if (bim) return Promise.resolve(bim);
@@ -740,6 +800,7 @@ function loop() {
 
   updateIntro(Math.min(rawDt, 0.6)); // tiempo real: la intro dura lo mismo en cualquier dispositivo
   if (B) animateFloors(dt);
+  updateEnvironment(dt);
   updateHover();
   updateCompass();
   if (!intro) controls.update();

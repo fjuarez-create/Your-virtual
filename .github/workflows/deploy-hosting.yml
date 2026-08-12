@@ -36,6 +36,21 @@ jobs:
       - name: Versionar módulos
         run: sed -i "s/__BUILD__/${GITHUB_SHA::8}/g" index.html
 
+      # La clave de Maps es pública por naturaleza (viaja al navegador), pero no
+      # entra en el repositorio, que sí lo es. Se sella aquí desde el secreto.
+      # Sin secreto, el marcador se queda y el entorno real no se activa.
+      - name: Sellar la clave de Maps
+        env:
+          MAPS_API_KEY: ${{ secrets.MAPS_API_KEY }}
+        run: |
+          set -eu
+          if [ -n "${MAPS_API_KEY:-}" ]; then
+            MAPS_API_KEY="$MAPS_API_KEY" perl -pi -e 's/__MAPS_KEY__/$ENV{MAPS_API_KEY}/g' index.html
+            echo "Clave sellada; el entorno real queda disponible."
+          else
+            echo "Sin secreto MAPS_API_KEY: el entorno real queda desactivado."
+          fi
+
       - name: Preparar carpeta de publicación
         run: |
           set -eu
