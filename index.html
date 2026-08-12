@@ -1,190 +1,22 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no">
-<title>UNIK · Showroom Virtual — SERENEA</title>
-<meta name="description" content="Showroom virtual de las promociones de UNIK. SERENEA (Las Huesas, Telde): explora el Edificio Apolo planta a planta en 3D.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="css/style.css">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏛️</text></svg>">
-<script type="importmap">
-{
-  "imports": {
-    "three": "./vendor/three.module.min.js",
-    "three/addons/controls/OrbitControls.js": "./vendor/OrbitControls.js",
-    "three/addons/loaders/GLTFLoader.js": "./vendor/GLTFLoader.js",
-    "three/addons/loaders/RGBELoader.js": "./vendor/RGBELoader.js",
-    "three/addons/utils/BufferGeometryUtils.js": "./vendor/BufferGeometryUtils.js",
-    "three/addons/objects/Sky.js": "./vendor/Sky.js",
-    "three/addons/postprocessing/EffectComposer.js": "./vendor/EffectComposer.js",
-    "three/addons/postprocessing/RenderPass.js": "./vendor/RenderPass.js",
-    "three/addons/postprocessing/UnrealBloomPass.js": "./vendor/UnrealBloomPass.js",
-    "three/addons/postprocessing/OutputPass.js": "./vendor/OutputPass.js",
-
-    "app/main.js": "./js/main.js?v=d2db35b5",
-    "app/ui.js": "./js/ui.js?v=d2db35b5",
-    "app/building.js": "./js/building.js?v=d2db35b5",
-    "app/context.js": "./js/context.js?v=d2db35b5",
-    "app/layout.js": "./js/layout.js?v=d2db35b5",
-    "app/api.js": "./js/api.js?v=d2db35b5",
-    "app/promotions.js": "./js/promotions.js?v=d2db35b5"
-  }
-}
-</script>
+<meta charset="utf-8">
+<title>SERENEA — Edificio Apolo</title>
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="refresh" content="0; url=https://showroom.unikdi.com/">
+<link rel="canonical" href="https://showroom.unikdi.com/">
+<script>location.replace("https://showroom.unikdi.com/");</script>
+<style>
+  html { color-scheme: light dark; }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center;
+         font: 400 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+         background: #fff; color: #111; }
+  @media (prefers-color-scheme: dark) { body { background: #111; color: #eee; } }
+  a { color: inherit; }
+</style>
 </head>
 <body>
-<svg style="display:none" xmlns="http://www.w3.org/2000/svg">
-  <symbol id="i-cube" viewBox="0 0 24 24"><path d="M12 2.5 20.5 7v10L12 21.5 3.5 17V7L12 2.5Zm0 0V12m0 0 8.5-5M12 12 3.5 7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></symbol>
-  <symbol id="i-plan" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="3" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M9.5 3.5v8m0 0h11m-11 0v9M15 11.5V21" fill="none" stroke="currentColor" stroke-width="1.7"/></symbol>
-  <symbol id="i-list" viewBox="0 0 24 24"><path d="M8.5 6h12M8.5 12h12M8.5 18h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="4" cy="6" r="1.4" fill="currentColor"/><circle cx="4" cy="12" r="1.4" fill="currentColor"/><circle cx="4" cy="18" r="1.4" fill="currentColor"/></symbol>
-  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 2.5v2.6M12 18.9v2.6M2.5 12h2.6M18.9 12h2.6M5 5l1.9 1.9M17.1 17.1 19 19M19 5l-1.9 1.9M6.9 17.1 5 19" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></symbol>
-  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></symbol>
-  <symbol id="i-filter" viewBox="0 0 24 24"><path d="M3.5 7h17M6.5 12h11M9.5 17h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
-  <symbol id="i-back" viewBox="0 0 24 24"><path d="M20 12H4.5m0 0L11 5.5M4.5 12 11 18.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></symbol>
-  <symbol id="i-chev" viewBox="0 0 24 24"><path d="m6 9.5 6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
-  <symbol id="i-car" viewBox="0 0 24 24"><path d="M5.1 16.4H3.9v-2.9l1.5-4.9A1.8 1.8 0 0 1 7.1 7.3h9.8a1.8 1.8 0 0 1 1.7 1.3l1.5 4.9v2.9h-1.2M6 12.5h12M8.7 16.4a1.85 1.85 0 1 1-3.7 0 1.85 1.85 0 0 1 3.7 0Zm10.3 0a1.85 1.85 0 1 1-3.7 0 1.85 1.85 0 0 1 3.7 0Zm-10.3 0h6.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
-  <symbol id="i-store" viewBox="0 0 24 24"><rect x="4" y="9.8" width="16" height="9.4" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4.6 9.8 6 5.9a1.6 1.6 0 0 1 1.5-1h9a1.6 1.6 0 0 1 1.5 1l1.4 3.9M12 4.9v4.9M9.2 13.6h5.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
-  <symbol id="i-gym" viewBox="0 0 24 24"><path d="M7.2 8.2v7.6M3.9 9.9v4.2M16.8 8.2v7.6m3.3-5.9v4.2M7.2 12h9.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
-  <symbol id="i-terr" viewBox="0 0 24 24"><path d="M12 3.2c4.6 0 8.2 3.2 8.6 7.2H3.4c.4-4 4-7.2 8.6-7.2Zm0 0v1m0 6.2v8a1.9 1.9 0 0 0 3.8 0M12 10.4c0-4 0-7.2 0-7.2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
-  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 5 5L19.5 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
-</svg>
-<div id="app">
-  <canvas id="scene"></canvas>
-
-  <!-- ══════════ HERO / LANDING (UNIK → promociones) ══════════ -->
-  <div id="hero">
-    <div class="hero-inner">
-      <img class="unik-logo" src="assets/logo_unik.png" alt="UNIK">
-      <div class="hero-bottom">
-        <h1>Desarrollos inmobiliarios<br>que redefinen el lujo</h1>
-        <p class="hero-sub">Selecciona una de nuestras promociones.</p>
-        <div id="promoCards"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ══════════ TOP BAR (2 filas planas + switch día/noche colgante) ══════════ -->
-  <header id="topbar" class="ui hidden-ui">
-    <div class="tb-row tb-row1">
-      <button id="backHome" title="Volver a las promociones"><svg><use href="#i-back"/></svg></button>
-      <strong id="brandName">SERENEA</strong>
-      <div class="tb-spacer"></div>
-      <div class="bld-sel" id="bldSel" title="Elegir edificio">
-        <button id="bldBtn" aria-haspopup="listbox" aria-expanded="false">
-          <span id="bldLabel"></span><svg><use href="#i-chev"/></svg>
-        </button>
-        <div id="bldMenu" role="listbox"></div>
-      </div>
-    </div>
-    <div class="tb-row tb-row2">
-      <nav id="floorNav" aria-label="Plantas">
-        <div id="floorBtns"></div>
-        <button class="floor-btn floor-all active" data-floor="all">
-          <span class="fb-short">Todo</span>
-        </button>
-      </nav>
-      <div class="tb-spacer"></div>
-      <button id="filtersToggle" title="Filtrar viviendas">
-        <svg><use href="#i-filter"/></svg><span class="ft-label">Filtrar</span>
-        <span class="ft-count" id="filterCount"></span>
-      </button>
-    </div>
-    <button id="dnToggle" class="dn-switch" role="switch" aria-checked="false" aria-label="Modo día / noche">
-      <span class="dn-ico dn-sun"><svg><use href="#i-sun"/></svg></span>
-      <span class="dn-ico dn-moon"><svg><use href="#i-moon"/></svg></span>
-    </button>
-  </header>
-
-  <!-- ══════════ MODOS (píldora inferior) ══════════ -->
-  <nav id="modeBar" class="ui hidden-ui" aria-label="Modo de vista">
-    <button id="modo3d" class="mode-btn active" title="Vista 3D orbital">
-      <svg><use href="#i-cube"/></svg>
-    </button>
-    <button id="modoPlano" class="mode-btn" title="Vista cenital de la planta">
-      <svg><use href="#i-plan"/></svg>
-    </button>
-    <button id="modoLista" class="mode-btn" title="Listado de viviendas">
-      <svg><use href="#i-list"/></svg>
-    </button>
-  </nav>
-
-  <!-- ══════════ FILTERS ══════════ -->
-  <aside id="filters" class="ui">
-    <div id="filtersBody">
-      <div class="f-scroll">
-      <div class="f-group">
-        <p>Dormitorios</p>
-        <div class="chips" id="chipsDorm">
-          <button class="chip" data-dorm="1">1D</button>
-          <button class="chip" data-dorm="2">2D</button>
-          <button class="chip" data-dorm="3">3D</button>
-        </div>
-      </div>
-      <div class="f-group">
-        <p>Estado</p>
-        <div class="chips" id="chipsEstado">
-          <button class="chip" data-estado="disponible"><i class="dot d-disp"></i>Disponible</button>
-          <button class="chip" data-estado="reservada"><i class="dot d-res"></i>Reservada</button>
-          <button class="chip" data-estado="vendida"><i class="dot d-ven"></i>Vendida</button>
-        </div>
-      </div>
-      <div class="f-group">
-        <p>Orientación</p>
-        <div class="chips" id="chipsOrient">
-          <button class="chip" data-orient="Suroeste">Suroeste</button>
-          <button class="chip" data-orient="Noreste">Noreste</button>
-          <button class="chip" data-orient="Jardín interior">Jardín int.</button>
-        </div>
-      </div>
-      <div class="f-group">
-        <p>Precio máximo</p>
-        <input type="range" id="priceMax" min="121000" max="481000" step="5000" value="481000">
-        <div class="price-pill" id="priceMaxLabel"></div>
-      </div>
-      <div class="f-group">
-        <p>Con terraza</p>
-        <div class="chips"><button class="chip" id="chipTerraza">Sólo con terraza</button></div>
-      </div>
-      <button id="filtersReset">Limpiar filtros</button>
-      </div>
-      <button id="filtersApply">Aplicar filtros</button>
-    </div>
-  </aside>
-
-  <!-- ══════════ COMPASS (oculta en el rediseño flat; la aguja sigue viva en JS) ══════════ -->
-  <div id="compass" class="ui hidden-ui" title="Norte"><div id="needle">N</div></div>
-  <div id="attrib" class="ui hidden-ui">Imagen aérea © Esri, Maxar, Earthstar Geographics</div>
-
-  <!-- ══════════ ÚLTIMAS VISTAS (solo pantallas grandes; en memoria) ══════════ -->
-  <nav id="recentDock" class="ui hidden-ui" aria-label="Últimas viviendas vistas"></nav>
-
-  <!-- ══════════ TOOLTIP ══════════ -->
-  <div id="tooltip"></div>
-
-  <!-- ══════════ DETAIL PANEL ══════════ -->
-  <aside id="panel" class="ui">
-    <button id="panelClose" title="Cerrar">✕</button>
-    <div id="panelBody"></div>
-  </aside>
-
-  <!-- ══════════ LISTADO (tarjetas con plano) ══════════ -->
-  <section id="listado">
-    <div id="unitsList"></div>
-  </section>
-
-  <!-- ══════════ LIGHTBOX (planos) ══════════ -->
-  <div id="lightbox">
-    <button id="lbClose">✕</button>
-    <figure><img id="lbImg" alt="Plano de planta"><figcaption id="lbCap"></figcaption></figure>
-  </div>
-
-  <button id="skipIntro">Saltar intro ›</button>
-
-  <div id="loader"><div class="spin"></div><p>Preparando el showroom…</p></div>
-</div>
-
-<script type="module">import 'app/main.js';</script>
+  <p>El showroom se ha trasladado a <a href="https://showroom.unikdi.com/">showroom.unikdi.com</a>.</p>
 </body>
 </html>
