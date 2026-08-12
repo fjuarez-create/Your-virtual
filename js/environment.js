@@ -25,7 +25,12 @@ const D2R = Math.PI / 180;
 export const SITE = {
   lat: 27.986703,       // centro de la parcela
   lon: -15.395572,
-  ground: 77.9,         // cota del terreno (Elevation API de Google)
+  // Cota del terreno. Ojo: la Elevation API da altitud sobre el nivel del mar
+  // (77,88 m aquí) pero el tileset se ancla sobre el ELIPSOIDE, y en Canarias
+  // hay unos 45 m de separación entre ambas referencias. Este valor es sólo la
+  // estimación de partida: al cargar las teselas se mide la cota real del
+  // terreno con un rayo y se corrige sola (ver calibrate()).
+  ground: 77.9 + 45,
 
   // Giro que alinea el eje largo del edificio con su rumbo real. El plugin
   // deja el tileset con +X al oeste y +Z al norte, así que el ángulo sale de
@@ -96,6 +101,41 @@ export function createEnvironment({ scene, camera, renderer, apiKey, onError }) 
   tiles.setResolutionFromRenderer(camera, renderer);
   group.add(tiles.group);
 
+  /* Calibración vertical automática.
+
+     No basta con la altitud del terreno: la Elevation API la da sobre el nivel
+     del mar y el tileset se ancla sobre el elipsoide, y esa diferencia varía
+     según dónde estés. En vez de arrastrar una tabla geoidal, se mide: se lanza
+     un rayo hacia abajo sobre el centro de la parcela, se mira a qué cota queda
+     el terreno de Google y se desplaza el grupo hasta que coincida con la
+     planta baja del edificio. Se repite conforme llegan teselas más finas,
+     porque cada una afina la superficie. */
+  const ray = new THREE.Raycaster();
+  const DOWN = new THREE.Vector3(0, -1, 0);
+  let calibrations = 0;
+
+  // Nueve sondeos repartidos por la parcela en vez de uno: si un rayo cae
+  // sobre un árbol, un coche o una farola, la mediana lo descarta.
+  const PROBES = [[0, 0], [-18, -12], [18, -12], [-18, 12], [18, 12],
+                  [-34, 0], [34, 0], [0, -20], [0, 20]];
+
+  function calibrate() {
+    group.updateMatrixWorld(true);
+    const ys = [];
+    for (const [x, z] of PROBES) {
+      ray.set(new THREE.Vector3(x, 4000, z), DOWN);
+      ray.far = 9000;
+      const hit = ray.intersectObject(tiles.group, true)[0];
+      if (hit) ys.push(hit.point.y);
+    }
+    if (ys.length < 3) return false;
+    ys.sort((a, b) => a - b);
+    const suelo = ys[Math.floor(ys.length / 2)];
+    group.position.y -= suelo - SITE.baseY;
+    calibrations++;
+    return true;
+  }
+
   let tilesLoaded = 0;
   tiles.addEventListener('load-model', ({ scene: tileScene }) => {
     tilesLoaded++;
@@ -106,6 +146,9 @@ export function createEnvironment({ scene, camera, renderer, apiKey, onError }) 
       o.renderOrder = -1;              // el entorno se pinta antes que el edificio
       if (SITE.holeRadius > 0) punchHole(o.material, SITE.holeRadius);
     });
+    // Cada tesela nueva puede afinar el suelo bajo la parcela; se recalibra
+    // mientras llegan y se deja de tocar cuando la superficie ya es estable.
+    if (tilesLoaded < 120) calibrate();
   });
   tiles.addEventListener('load-error', (e) => onError && onError(e));
 
@@ -115,6 +158,9 @@ export function createEnvironment({ scene, camera, renderer, apiKey, onError }) 
     group,
     tiles,
     get loaded() { return tilesLoaded; },
+    get calibrations() { return calibrations; },
+    get groundOffset() { return group.position.y; },
+    calibrate,
     get enabled() { return enabled; },
 
     setEnabled(v) {
