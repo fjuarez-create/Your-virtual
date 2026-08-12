@@ -1,37 +1,38 @@
 name: Deploy al hosting (FTP)
 
-# Sube el showroom al hosting propio (showroom.unikdi.com) en cada push a la
-# rama de trabajo. Requiere estos secretos en GitHub → Settings → Secrets and
-# variables → Actions → New repository secret:
+# Publica el showroom en el hosting propio (showroom.unikdi.com) en cada push
+# a la rama de trabajo. Requiere estos secretos en GitHub → Settings → Secrets
+# and variables → Actions → New repository secret:
 #   FTP_SERVER      host FTP del panel, p. ej. lin127.loading.es
 #   FTP_USERNAME    usuario FTP
 #   FTP_PASSWORD    contraseña FTP
-#   FTP_SERVER_DIR  (opcional) carpeta destino. Si se deja en ./ el workflow
-#                   detecta solo si hay que entrar en httpdocs.
+#   FTP_SERVER_DIR  (opcional) carpeta destino. Dejándolo en ./ el propio
+#                   script detecta si hay que entrar en httpdocs.
 #
-# Se usa lftp en lugar de una acción prefabricada porque Plesk corta el canal
-# de datos con algunos clientes FTPS (ECONNRESET). lftp reutiliza la sesión
-# TLS del canal de control, que es lo que el servidor exige, y si el servidor
-# no aceptara TLS reintenta en FTP plano.
+# La subida la hace lftp (.github/scripts/ftp-deploy.sh) en lugar de una
+# acción prefabricada: la anterior abría el canal de datos con una sesión TLS
+# nueva y Plesk lo cortaba (ECONNRESET).
 
 on:
   push:
     branches: [claude/virtual-real-estate-showroom-cnb7kx]
   workflow_dispatch:
 
+# Un push nuevo sustituye al anterior: cada deploy sube el estado completo del
+# repositorio, así que el que llega después deja el sitio igual de correcto.
 concurrency:
   group: hosting
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
-      # Mismo sellado de versión que usa el deploy de Pages: el importmap
-      # referencia los módulos con ?v=__BUILD__ para que HTML y JS se cacheen
-      # siempre como conjunto consistente.
+      # El importmap referencia los módulos con ?v=__BUILD__; al fijarlo al SHA
+      # el HTML y el JS se cachean siempre como conjunto consistente.
       - name: Versionar módulos
         run: sed -i "s/__BUILD__/${GITHUB_SHA::8}/g" index.html
 
@@ -46,88 +47,32 @@ jobs:
       - name: Instalar lftp
         run: sudo apt-get update -qq && sudo apt-get install -y -qq lftp
 
-      - name: Subir al hosting
+      # Tres pasos en vez de uno para que el log señale dónde falla si falla.
+      - name: Subir assets
+        timeout-minutes: 30
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_SERVER_DIR: ${{ secrets.FTP_SERVER_DIR }}
+        run: bash .github/scripts/ftp-deploy.sh assets
+
+      - name: Subir código
+        timeout-minutes: 10
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_SERVER_DIR: ${{ secrets.FTP_SERVER_DIR }}
+        run: bash .github/scripts/ftp-deploy.sh code
+
+      - name: Subir index.html
+        timeout-minutes: 5
         env:
           FTP_SERVER: ${{ secrets.FTP_SERVER }}
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
           FTP_SERVER_DIR: ${{ secrets.FTP_SERVER_DIR }}
         run: |
-          set -eu
-
-          if [ -z "${FTP_SERVER:-}" ] || [ -z "${FTP_USERNAME:-}" ] || [ -z "${FTP_PASSWORD:-}" ]; then
-            echo "Faltan los secretos FTP_SERVER / FTP_USERNAME / FTP_PASSWORD."
-            exit 1
-          fi
-
-          # Ajustes comunes. verify-certificate no: los certificados de Plesk
-          # suelen emitirse para el hostname del servidor y no para el dominio
-          # del FTP, y ahí la validación estricta aborta la conexión.
-          # fail-exit va el último: así, si alguna variable no existiera en la
-          # versión de lftp del runner, el aviso no aborta la sesión entera.
-          COMMON='
-            set ssl:verify-certificate no;
-            set ssl:check-hostname no;
-            set ftp:passive-mode true;
-            set net:timeout 30;
-            set net:max-retries 4;
-            set net:reconnect-interval-base 5;
-            set net:reconnect-interval-multiplier 2;
-            set xfer:clobber on;
-            set mirror:parallel-transfer-count 3;
-            set cmd:fail-exit true;
-          '
-          TLS_ON="$COMMON set ftp:ssl-allow true; set ftp:ssl-force true; set ftp:ssl-protect-data true; set ftp:ssl-protect-list true;"
-          TLS_OFF="$COMMON set ftp:ssl-allow false;"
-
-          # $1 = bloque de ajustes, $2 = comandos a ejecutar ya conectado.
-          run_lftp() {
-            lftp <<LFTPEOF
-          $1
-          open -u "$FTP_USERNAME","$FTP_PASSWORD" "$FTP_SERVER"
-          $2
-          bye
-          LFTPEOF
-          }
-
-          # 1) Decidir si el servidor acepta TLS o hay que ir en plano.
-          MODE=tls
-          if ! run_lftp "$TLS_ON" "pwd" >/dev/null 2>&1; then
-            echo "El servidor no aceptó FTPS; se reintenta en FTP plano."
-            MODE=plain
-          fi
-          [ "$MODE" = tls ] && OPTS="$TLS_ON" || OPTS="$TLS_OFF"
-          echo "Modo de conexión: $MODE"
-
-          # 2) Resolver la carpeta destino. Al crear un usuario FTP en Plesk
-          # apuntando a la carpeta del dominio, el raíz de la sesión contiene
-          # httpdocs (la raíz web real) junto a logs, conf, etc.
-          DIR="${FTP_SERVER_DIR:-}"
-          case "$DIR" in ""|"."|"./") DIR="" ;; esac
-          if [ -z "$DIR" ]; then
-            if run_lftp "$OPTS" "cls -1" 2>/dev/null | tr -d '\r/' | grep -qx httpdocs; then
-              DIR=httpdocs
-            else
-              DIR=.
-            fi
-          fi
-          echo "Carpeta destino: $DIR"
-
-          # 3) Subida. El código (pocos MB) se reenvía entero en cada deploy
-          # para no depender de que el servidor conserve las fechas; assets
-          # (planos, fichas, HDRI, GLB) se compara por tamaño y solo viaja lo
-          # que cambia. --delete limpia lo que ya no exista en el repo.
-          MIRROR_CODE="mirror -R --transfer-all --delete --no-perms -v"
-          MIRROR_BIG="mirror -R --ignore-time --delete --no-perms -v"
-
-          run_lftp "$OPTS" "
-          cd \"$DIR\";
-          $MIRROR_CODE publish/css css;
-          $MIRROR_CODE publish/js js;
-          $MIRROR_CODE publish/data data;
-          $MIRROR_CODE publish/vendor vendor;
-          $MIRROR_BIG publish/assets assets;
-          put publish/index.html -o index.html;
-          "
-
+          bash .github/scripts/ftp-deploy.sh index
           echo "Publicado en https://showroom.unikdi.com/"
