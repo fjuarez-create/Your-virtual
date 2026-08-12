@@ -270,7 +270,10 @@ function setEnvironment(on) {
   if (on && app.night) app.setNight(false); // la fotogrametría es de día
 }
 
-if (environment) {
+// El botón solo aparece con ?entorno=1 mientras la capa no esté rematada: un
+// comercial enseñando el showroom no debe encontrarse un botón que no hace
+// nada. Al terminarla, se quita esta condición.
+if (environment && new URLSearchParams(location.search).get('entorno') === '1') {
   envBtn.classList.remove('hidden');
   envBtn.addEventListener('click', () => setEnvironment(!environment.enabled));
 }
