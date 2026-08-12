@@ -1,0 +1,50 @@
+name: Deploy al hosting (FTP)
+
+# Sube el showroom al hosting propio en cada push a la rama de trabajo.
+# Requiere estos secretos en GitHub → Settings → Secrets and variables →
+# Actions → New repository secret:
+#   FTP_SERVER      p. ej. ftp.tudominio.es (del panel del hosting)
+#   FTP_USERNAME    usuario FTP
+#   FTP_PASSWORD    contraseña FTP
+#   FTP_SERVER_DIR  carpeta destino, con barra final. p. ej. /public_html/
+#                   o /public_html/serenea/ para colgarlo de una subcarpeta
+# La primera subida transfiere todo (~90 MB); las siguientes solo los
+# archivos que cambian (el estado se guarda en .ftp-deploy-sync-state.json
+# dentro del servidor).
+
+on:
+  push:
+    branches: [claude/virtual-real-estate-showroom-cnb7kx]
+  workflow_dispatch:
+
+concurrency:
+  group: hosting
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Mismo sellado de versión que usa el deploy de Pages: el importmap
+      # referencia los módulos con ?v=__BUILD__ para que HTML y JS se
+      # cacheen siempre como conjunto consistente.
+      - name: Versionar módulos
+        run: sed -i "s/__BUILD__/${GITHUB_SHA::8}/g" index.html
+
+      - name: Subir por FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftps
+          server-dir: ${{ secrets.FTP_SERVER_DIR }}
+          exclude: |
+            **/.git*
+            **/.git*/**
+            .github/**
+            tools/**
+            docs/**
+            README.md
