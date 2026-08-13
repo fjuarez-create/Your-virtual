@@ -108,6 +108,61 @@ function tree(x, z, s = 1) {
  * Construye toda la escena. Devuelve:
  * { floorGroups, roofGroup, unitMeshes, pickables, layout }
  */
+/* Grano procedural para los paramentos.
+
+   El BIM llega sin coordenadas UV, así que no se pueden mapear texturas por el
+   camino habitual. En su lugar el ruido se calcula en el fragmento a partir de
+   la posición en el mundo: vale igual en cualquier cara, no consume memoria de
+   textura y no depende de cómo se hayan desplegado las mallas. Es lo que rompe
+   el aspecto de plástico del material liso, que es justo lo que delata a un
+   render de tiempo real frente a uno de V-Ray.
+
+   escala = repeticiones por metro; fuerza = cuánto varía la rugosidad. */
+function grain(material, escala, fuerza) {
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uGrainScale = { value: escala };
+    shader.uniforms.uGrainAmount = { value: fuerza };
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vGrainPos;')
+      .replace('#include <begin_vertex>',
+        '#include <begin_vertex>\nvGrainPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', [
+        '#include <common>',
+        'varying vec3 vGrainPos;',
+        'uniform float uGrainScale;',
+        'uniform float uGrainAmount;',
+        'float hash13(vec3 p) {',
+        '  p = fract(p * 0.1031);',
+        '  p += dot(p, p.zyx + 31.32);',
+        '  return fract((p.x + p.y) * p.z);',
+        '}',
+        'float ruido(vec3 p) {',
+        '  vec3 i = floor(p), f = fract(p);',
+        '  f = f * f * (3.0 - 2.0 * f);',
+        '  float a = mix(hash13(i), hash13(i + vec3(1,0,0)), f.x);',
+        '  float b = mix(hash13(i + vec3(0,1,0)), hash13(i + vec3(1,1,0)), f.x);',
+        '  float c = mix(hash13(i + vec3(0,0,1)), hash13(i + vec3(1,0,1)), f.x);',
+        '  float d = mix(hash13(i + vec3(0,1,1)), hash13(i + vec3(1,1,1)), f.x);',
+        '  return mix(mix(a, b, f.y), mix(c, d, f.y), f.z);',
+        '}',
+      ].join('\n'))
+      .replace('#include <color_fragment>', [
+        '#include <color_fragment>',
+        'diffuseColor.rgb *= 0.965 + ruido(vGrainPos * uGrainScale * 0.35) * 0.07;',
+      ].join('\n'))
+      .replace('#include <roughnessmap_fragment>', [
+        '#include <roughnessmap_fragment>',
+        'float g = ruido(vGrainPos * uGrainScale) * 0.65',
+        '        + ruido(vGrainPos * uGrainScale * 3.7) * 0.35;',
+        'roughnessFactor = clamp(roughnessFactor + (g - 0.5) * uGrainAmount, 0.05, 1.0);',
+      ].join('\n'));
+  };
+  // Sin esto, three reutilizaría el mismo programa para materiales con grano distinto.
+  material.customProgramCacheKey = () => 'grain-' + escala + '-' + fuerza;
+  return material;
+}
+
 export function buildBuilding(scene, unitsById) {
   const layout = computeLayout(unitsById);
   const { slab } = BUILDING;
@@ -239,22 +294,32 @@ export function loadBIM(scene, url = 'assets/apolo_levels.glb') {
         // las cámaras de la tabiquería seca. Solo se muestran (opacity>0)
         // cuando su planta está aislada.
         const mkMats = () => ({
-          struct: Object.assign(new THREE.MeshStandardMaterial({
-            color: 0xcfcec8, roughness: 0.93, metalness: 0.02, transparent: true,
-          }), { userData: { baseOpacity: 1 } }),
-          wall: Object.assign(new THREE.MeshStandardMaterial({
-            color: 0xe9e6df, roughness: 0.85, metalness: 0.0, transparent: true,
-          }), { userData: { baseOpacity: 1 } }),
-          glass: Object.assign(new THREE.MeshStandardMaterial({
-            color: 0x88b4cc, roughness: 0.12, metalness: 0.4, transparent: true,
-            opacity: 0.55, envMapIntensity: 1.6, side: THREE.DoubleSide,
-          }), { userData: { baseOpacity: 0.55 } }),
+          struct: Object.assign(grain(new THREE.MeshStandardMaterial({
+            color: 0xdedbd4, roughness: 0.88, metalness: 0, transparent: true,
+            envMapIntensity: 1.0,
+          }), 26, 0.16), { userData: { baseOpacity: 1 } }),
+          // Monocapa blanco: blanco cálido, nada de blanco puro, con el grano
+          // fino del mortero proyectado desde el shader.
+          wall: Object.assign(grain(new THREE.MeshStandardMaterial({
+            color: 0xf1efe9, roughness: 0.8, metalness: 0, transparent: true,
+            envMapIntensity: 1.15,
+          }), 62, 0.2), { userData: { baseOpacity: 1 } }),
+          // Vidrio de verdad: reflejo con Fresnel del entorno HDRI y una capa
+          // especular encima. El tinte verdoso es el del vidrio flotado real,
+          // no un azul de maqueta.
+          glass: Object.assign(new THREE.MeshPhysicalMaterial({
+            color: 0x2c3b3e, roughness: 0.045, metalness: 0, transparent: true,
+            opacity: 0.42, envMapIntensity: 2.6, side: THREE.DoubleSide,
+            clearcoat: 1, clearcoatRoughness: 0.02,
+            ior: 1.52, reflectivity: 0.62, specularIntensity: 1,
+          }), { userData: { baseOpacity: 0.42 } }),
           cap: Object.assign(new THREE.MeshStandardMaterial({
             color: 0x0e1013, roughness: 0.95, metalness: 0, transparent: true, opacity: 0,
           }), { userData: { baseOpacity: 1 } }),
-          slab: Object.assign(new THREE.MeshStandardMaterial({
-            color: 0xcfcec8, roughness: 0.93, metalness: 0.02, transparent: true,
-          }), { userData: { baseOpacity: 1 } }),
+          slab: Object.assign(grain(new THREE.MeshStandardMaterial({
+            color: 0xdedbd4, roughness: 0.88, metalness: 0, transparent: true,
+            envMapIntensity: 1.0,
+          }), 26, 0.16), { userData: { baseOpacity: 1 } }),
         });
         const levels = new Map(); // bucket → { holders: [], mats: [] }
         const meshes = [];
