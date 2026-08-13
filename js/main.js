@@ -824,12 +824,29 @@ function loop() {
 
 /* ─────────────────────────── Resize ─────────────────────────── */
 function onResize() {
-  camera.aspect = innerWidth / innerHeight;
+  // visualViewport da la medida real; innerWidth se queda corto cuando hay
+  // barras del navegador de por medio.
+  const vv = window.visualViewport;
+  const w = Math.round(vv ? vv.width : innerWidth);
+  const h = Math.round(vv ? vv.height : innerHeight);
+  camera.aspect = w / h;
   camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth, innerHeight);
-  composer.setSize(innerWidth, innerHeight);
+  renderer.setSize(w, h);
+  composer.setSize(w, h);
 }
-window.addEventListener('resize', onResize);
+
+/* Al girar el móvil, iOS avisa del cambio con las medidas TODAVÍA en vertical.
+   Si se hace caso a ese primer aviso, el lienzo se queda con el ancho antiguo y
+   aparecen franjas a los lados. Por eso se repite el ajuste en los instantes
+   siguientes, hasta que el navegador da la medida buena. */
+function resizeSoon() {
+  onResize();
+  requestAnimationFrame(onResize);
+  for (const ms of [60, 180, 400, 700]) setTimeout(onResize, ms);
+}
+window.addEventListener('resize', resizeSoon);
+window.addEventListener('orientationchange', resizeSoon);
+window.visualViewport?.addEventListener('resize', onResize);
 onResize();
 
 /* ─────────────────────────── Arranque ─────────────────────────── */
