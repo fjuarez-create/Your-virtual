@@ -47,6 +47,9 @@ html, body { width: 100%; max-width: 100%; overflow-x: hidden; }
 @supports not (height: 100dvh) { #app { height: 100vh; } }
 #scene { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
 
+/* Phosphor dibuja con relleno, no con trazo: sin esto los iconos saldrían
+   negros sobre los botones activos en vez de heredar el color del botón. */
+button svg, .ui svg, .u-icons svg { fill: currentColor; stroke: none; }
 .ui { position: absolute; z-index: 20; transition: opacity 0.6s ease, transform 0.6s ease; }
 .hidden-ui { opacity: 0; pointer-events: none; }
 
