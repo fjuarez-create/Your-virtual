@@ -35,7 +35,16 @@ return [
     // de sesión no viajará nunca por una conexión sin cifrar.
     'cookie_segura' => true,
 
-    // Carpeta donde se guardan fotos, vídeos y audios. Relativa a api/.
+    // Carpeta donde se guardan fotos, vídeos y audios.
+    //
+    // 'uploads' (relativa a api/) funciona sin tocar nada más.
+    //
+    // Más seguro: una ruta ABSOLUTA fuera de httpdocs, p. ej.
+    //   '/var/www/vhosts/unikdi.com/repasos.unikdi.com/medios'
+    // En Plesk, nginx sirve los ficheros estáticos sin pasar por Apache y
+    // se salta los .htaccess; con la carpeta fuera de la zona web, las
+    // fotos solo pueden salir por la API, que comprueba la sesión.
+    // La ruta exacta la da Plesk en «Hosting» → «Raíz de documentos».
     'carpeta_medios' => 'uploads',
 
     // Tope por fichero (bytes). El servidor también manda: revisa

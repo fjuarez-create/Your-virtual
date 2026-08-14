@@ -110,8 +110,11 @@ se queda bloqueado en cuanto el navegador abre varias conexiones.)
 - Sesión en cookie **HttpOnly + Secure + SameSite=Lax**: el token no lo ve
   JavaScript, así que un script inyectado no puede llevárselo.
 - Ocho intentos fallidos por correo e IP en 15 minutos y se frena.
-- Las fotos **no son públicas**: `api/uploads/` está cerrada por `.htaccess` y
-  cada fichero se sirve desde `api/medios/<id>/fichero`, que comprueba la sesión.
+- Las fotos **no son públicas**: cada fichero se sirve desde
+  `api/medios/<id>/fichero`, que comprueba la sesión. La carpeta donde se guardan
+  está cerrada por `.htaccess` y, mejor todavía, puede ponerse fuera de la zona
+  web (`carpeta_medios` admite ruta absoluta): en Plesk, nginx sirve los estáticos
+  sin leer los `.htaccess` de Apache. Ver el paso 7 bis de la guía.
 - El tipo de los ficheros subidos se deduce del contenido (`finfo`), no de lo que
   diga el navegador, y solo pasan los de la lista blanca.
 

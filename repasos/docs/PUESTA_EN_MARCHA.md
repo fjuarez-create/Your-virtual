@@ -143,6 +143,38 @@ Versión de PHP: **8.0 o superior** (con 8.1–8.3 va perfecto).
 
 ---
 
+## 7 bis. Sacar las fotos fuera de la carpeta web (recomendado)
+
+Las fotos se guardan por defecto en `httpdocs/api/uploads`, cerrada con un
+`.htaccess`. Eso basta con Apache, pero **Plesk suele poner nginx delante**, y
+nginx sirve los ficheros estáticos por su cuenta sin leer los `.htaccess`. En ese
+caso, quien acertara la dirección exacta de una foto podría verla sin haber
+entrado en la app. Los nombres son identificadores aleatorios, así que no se
+pueden adivinar ni listar, pero es mejor no depender de eso.
+
+La solución es dejar las fotos fuera de la zona web. En Plesk → el subdominio →
+**Hosting**, mira cuál es la *Raíz de documentos*; será algo como:
+
+```
+/var/www/vhosts/unikdi.com/repasos.unikdi.com/httpdocs
+```
+
+Quita el `/httpdocs` del final, añade `/medios`, y ponlo en `config.php`:
+
+```php
+'carpeta_medios' => '/var/www/vhosts/unikdi.com/repasos.unikdi.com/medios',
+```
+
+La carpeta se crea sola la primera vez que se sube una foto. Desde ahí, las
+imágenes solo pueden salir a través de la API, que comprueba la sesión antes de
+entregarlas.
+
+> Si ya había fotos subidas en `httpdocs/api/uploads`, muévelas con el
+> Administrador de archivos a la carpeta nueva conservando la estructura de
+> subcarpetas (`2026/08/…`) antes de cambiar la configuración.
+
+---
+
 ## 8. Crear las tablas y tu usuario
 
 Abre **una sola vez** en el navegador:
@@ -245,8 +277,8 @@ Dos cosas que conviene tener respaldadas, y que **no están en GitHub** porque n
 deben estarlo:
 
 - La **base de datos** (Plesk → Bases de datos → *Exportar volcado*).
-- La carpeta **`httpdocs/api/uploads`**, que es donde están todas las fotos, los
-  vídeos y las notas de voz.
+- La **carpeta de medios**, que es donde están todas las fotos, los vídeos y las
+  notas de voz: `httpdocs/api/uploads`, o la que hayas puesto en el paso 7 bis.
 
 Lo más cómodo es incluir el subdominio entero en la copia programada de Plesk
 (**Herramientas y configuración → Gestor de copias de seguridad**), que se lleva

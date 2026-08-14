@@ -148,10 +148,22 @@ function booleano(array $origen, string $clave, bool $porDefecto = false): bool
     return $v === true || $v === 1 || $v === '1' || $v === 'true';
 }
 
-/** Carpeta absoluta donde viven los medios, creada si hace falta. */
+/**
+ * Carpeta absoluta donde viven los medios, creada si hace falta.
+ *
+ * Admite una ruta relativa a api/ ('uploads', que es lo que funciona sin
+ * tocar nada) o una absoluta. Lo segundo permite sacar las fotos fuera de
+ * la carpeta web, que es más seguro: en Plesk, nginx sirve los ficheros
+ * estáticos por su cuenta y no lee los .htaccess de Apache, así que una
+ * carpeta dentro de httpdocs puede quedar accesible por URL aunque su
+ * .htaccess diga lo contrario.
+ */
 function carpeta_medios(): string
 {
-    $ruta = __DIR__ . '/../' . (config()['carpeta_medios'] ?? 'uploads');
+    $configurada = config()['carpeta_medios'] ?? 'uploads';
+    $ruta = $configurada !== '' && $configurada[0] === '/'
+        ? $configurada
+        : __DIR__ . '/../' . $configurada;
     if (!is_dir($ruta) && !mkdir($ruta, 0755, true) && !is_dir($ruta)) {
         responder_error(500, 'No se puede crear la carpeta de medios.', 'sin-carpeta');
     }

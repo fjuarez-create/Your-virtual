@@ -49,7 +49,18 @@ jobs:
           # El backend, sin el ejemplo de configuración ni los datos.
           mkdir -p publish/api
           cp -r api/. publish/api/
-          rm -rf publish/api/uploads publish/api/datos
+
+          # Las carpetas de fotos y de base de datos viajan VACÍAS pero
+          # CON su .htaccess: es el que impide que se pueda pedir una foto
+          # por su URL sin haber entrado en la app. Si se borraran enteras,
+          # PHP recrearía la carpeta al vuelo y quedaría abierta.
+          for carpeta in uploads datos; do
+            find "publish/api/$carpeta" -mindepth 1 \
+              ! -name '.htaccess' ! -name '.gitkeep' -delete 2>/dev/null || true
+          done
+          test -f publish/api/uploads/.htaccess || { echo "Falta el .htaccess de uploads." >&2; exit 1; }
+          test -f publish/api/datos/.htaccess   || { echo "Falta el .htaccess de datos." >&2; exit 1; }
+
           rm -f publish/api/config.php publish/api/config.example.php
 
           # tools/ y docs/ no se publican: son para trabajar en local.
