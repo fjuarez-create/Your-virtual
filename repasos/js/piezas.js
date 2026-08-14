@@ -23,8 +23,8 @@ import { ir } from './app.js';
 export function cabeceraTab(titulo) {
   return [
     h('div.topbar', null,
-      h('div.grow', null, logoUnik({ alto: 20 })),
-      avatar(store.sesion(), { onclick: () => ir('#/ajustes') }),
+      h('div.grow', null, logoUnik({ alto: 16 })),
+      avatar(store.sesion(), { tam: 55, onclick: () => ir('#/ajustes') }),
     ),
     ajustarTitulo(h('h1.titulo-pantalla', null, titulo)),
   ];
@@ -44,7 +44,7 @@ export function cabeceraDentro(titulo, { volverA, sub, acciones = [] } = {}) {
       }, icon('arrowLeft')),
       h('div.grow', null, sub ? h('p.eyebrow', null, sub) : null),
       ...acciones,
-      avatar(store.sesion(), { onclick: () => ir('#/ajustes') }),
+      avatar(store.sesion(), { tam: 55, onclick: () => ir('#/ajustes') }),
     ),
     ajustarTitulo(h('h1.titulo-pantalla', null, titulo)),
   ];
@@ -265,7 +265,7 @@ export function tarjetaActa({ lista, conteo, gente }) {
   const titulo = lista.nombre || u?.nombre || lista.unidadId;
 
   return h('button.acta', { onclick: () => ir('#/l/' + lista.id) },
-    grupoAvatares(gente.map((g) => store.persona(g.id, g.nombre)), { tam: 44 }),
+    grupoAvatares(gente.map((g) => store.persona(g.id, g.nombre)), { tam: 55 }),
     h('div.grow', null,
       h('div.acta-tit', null, titulo),
       h('div.acta-pie', null,
@@ -399,7 +399,7 @@ export function tareaFila(t, { portada, donde } = {}) {
     h('div.grow', null,
       h('p.tarea-txt', null, t.texto || 'Sin descripción'),
       h('div.tarea-pie', null,
-        avatar(store.persona(t.creadoPor, t.creadoPorNombre), { tam: 28 }),
+        avatar(store.persona(t.creadoPor, t.creadoPorNombre), { tam: 35 }),
         t.rechazada ? h('span.tag.rojo', null, 'Rechazada') : h('span.tag', { class: e.tag }, e.nombre),
         donde ? h('span.tarea-donde', null, donde) : null,
       ),

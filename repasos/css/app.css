@@ -125,6 +125,9 @@ img, video { max-width: 100%; display: block; }
 }
 .screen.no-tabs { padding-bottom: calc(env(safe-area-inset-bottom) + 32px); }
 .screen > * + * { margin-top: 14px; }
+/* El titular ya trae su propio hueco inferior; el genérico lo
+   duplicaría. */
+.screen > .titulo-pantalla + * { margin-top: 0; }
 
 /* ─── Tipografía ───────────────────────────────────────────────── */
 .display {
@@ -727,11 +730,8 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
    Un acta la tocan varias personas. Se solapan en vez de ponerse
    en fila para que la tarjeta no cambie de ancho según cuántas
    hayan pasado por ella. */
-.avatares { position: relative; height: 44px; flex: none; }
-.avatar.apilado {
-  position: absolute; top: 0;
-  box-shadow: 0 0 0 2.5px var(--bg);
-}
+.avatares { position: relative; height: 55px; flex: none; }
+.avatar.apilado { position: absolute; top: 0; }
 .avatar.mas {
   background: var(--surface-2); color: var(--muted);
   display: grid; place-items: center; font-weight: 700;
@@ -845,7 +845,12 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 .acta-pie {
   display: flex; align-items: center; gap: 8px; margin-top: 4px;
   font-size: 12.5px; color: var(--muted);
+  /* La fecha y la fase, en una línea: con la pila de bolitas ancha, el
+     hueco que queda es justo y partirlas en tres renglones desmonta la
+     tarjeta. */
+  white-space: nowrap;
 }
+.acta-tit { min-width: 0; }
 
 /* Pre en gris porque es lo corriente; post en el color de marca
    porque la vivienda ya está entregada y el cliente está dentro. */
@@ -941,9 +946,11 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
   letter-spacing: 0;
   white-space: nowrap;
   display: block;
-  /* El logotipo necesita aire antes del titular: pegados se leían como
-     una sola marca de dos pisos en vez de como marca y sección. */
-  margin-top: 18px;
+  /* El titular respira por arriba y por abajo: pegado al logotipo se
+     leía como una sola marca de dos pisos, y pegado a lo de abajo, como
+     el rótulo de la primera sección en vez de como el de la pantalla. */
+  margin-top: 36px;
+  margin-bottom: 28px;
   font-size: 56px;   /* de partida; el JS lo ajusta al ancho real */
 }
 
@@ -999,5 +1006,5 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
   overflow: hidden;
 }
 .tarea-pie { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
-.tarea-pie .avatar { box-shadow: 0 0 0 2px var(--bg); }
+
 .tarea-donde { font-size: 11.5px; color: var(--muted); }

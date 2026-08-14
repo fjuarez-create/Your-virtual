@@ -181,11 +181,16 @@ export function avatar(usuario, { tam = 44, radio = '50%', onclick, etiqueta } =
  * resume con «+n», que es cuando dejarían de leerse las iniciales.
  */
 export function grupoAvatares(gente = [], { tam = 38, max = 3 } = {}) {
-  const lista = gente.slice(0, max);
+  // La pila nunca pasa de `max` círculos contando el «+n»: con cuatro
+  // caras se comía el ancho de la tarjeta y la fecha rompía en tres
+  // líneas. Con tres justas se enseñan las tres; a partir de ahí, dos
+  // y el resumen.
+  const cabenTodas = gente.length <= max;
+  const lista = gente.slice(0, cabenTodas ? max : max - 1);
   const resto = gente.length - lista.length;
-  // Un tercio tapaba la primera inicial de la de detrás; con algo
-  // menos se sigue leyendo quién es sin que la pila se alargue.
-  const solape = Math.round(tam * 0.26);
+  // Sin el aro que las separaba, dos bolitas muy montadas se leen como
+  // una mancha: se solapan menos para que cada cara siga siendo una.
+  const solape = Math.round(tam * 0.18);
 
   const caja = h('div.avatares', {
     // Sin gente no se reserva hueco; con ella, el ancho es el de la
