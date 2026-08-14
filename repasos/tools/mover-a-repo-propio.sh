@@ -53,51 +53,81 @@ if [ -f .git/shallow ] && [ "$HAY_SUBTREE" = si ]; then
   exit 1
 fi
 
+RAIZ="$PWD"
 RAMA_TEMPORAL="repasos-a-su-repo"
 git branch -D "$RAMA_TEMPORAL" >/dev/null 2>&1 || true
 TEMPORAL=""
+YA_AL_DIA=no
 limpiar() { [ -n "$TEMPORAL" ] && rm -rf "$TEMPORAL"; }
 trap limpiar EXIT
+
+RESULTADO=0
 
 if [ "$HAY_SUBTREE" = si ]; then
   echo "1/3 · Extrayendo repasos/ con su historial…"
   git subtree split --prefix=repasos -b "$RAMA_TEMPORAL"
-  ORIGEN_PUSH="$RAMA_TEMPORAL:main"
+  echo "2/3 · Empujando a $DESTINO (rama main)…"
+  git push "$DESTINO" "$RAMA_TEMPORAL:main" || RESULTADO=1
 else
-  # Plan B: sin subtree no se puede reescribir la historia de la carpeta,
-  # así que se lleva su contenido actual en un commit único. El historial
-  # completo sigue estando en Your-virtual, que no se toca.
-  echo "1/3 · Tu git no trae 'git subtree'; se lleva el contenido actual"
-  echo "      en un commit único (el historial se queda en Your-virtual)."
+  # Sin subtree no se puede reescribir la historia de la carpeta. En vez
+  # de inventar un repositorio nuevo —que al segundo intento chocaría con
+  # lo ya publicado—, se clona el destino, se sustituye su contenido por
+  # el actual y se hace un commit encima. Así vale igual para el primer
+  # traslado que para cada actualización posterior.
+  echo "1/3 · Tu git no trae 'git subtree'; se pondrá el destino al día"
+  echo "      con un commit encima (el historial se queda en Your-virtual)."
   TEMPORAL="$(mktemp -d)"
+  DESTINO_LOCAL="$TEMPORAL/destino"
+  NOMBRE="$(git config user.name || echo 'UNIK repasos')"
+  CORREO="$(git config user.email || echo 'repasos@unikdi.com')"
+
+  if ! git clone --quiet "$DESTINO" "$DESTINO_LOCAL" 2>/dev/null; then
+    echo "No se pudo clonar el repositorio de destino." >&2
+    echo "Comprueba la URL y que tienes permiso: gh auth login" >&2
+    exit 1
+  fi
+
+  # Hay que partir SIEMPRE de lo que ya está publicado; si no, el commit
+  # nuevo nace suelto y GitHub rechaza el envío. Tres casos: ya existe
+  # main en el destino, existe otra rama, o el repositorio está vacío y
+  # todavía no hay ninguna (ahí 'checkout -B' no sirve y HEAD se apunta
+  # a mano).
+  if git -C "$DESTINO_LOCAL" rev-parse --verify --quiet origin/main >/dev/null; then
+    git -C "$DESTINO_LOCAL" checkout -q -B main origin/main
+  elif git -C "$DESTINO_LOCAL" rev-parse --verify --quiet HEAD >/dev/null; then
+    git -C "$DESTINO_LOCAL" checkout -q -B main
+  else
+    git -C "$DESTINO_LOCAL" symbolic-ref HEAD refs/heads/main
+  fi
+
+  # Fuera todo salvo el propio .git: lo que valga se vuelve a poner
+  # ahora, y así lo que se haya borrado desaparece también allí.
+  find "$DESTINO_LOCAL" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+
   # git archive exporta solo lo que está bajo control de versiones: ni
   # config.php, ni fotos subidas, ni bases de datos.
-  git archive HEAD repasos | tar -x -C "$TEMPORAL" --strip-components=1
-  (
-    cd "$TEMPORAL"
-    git init -q -b main
-    git add -A
-    git -c user.name="$(git -C "$OLDPWD" config user.name || echo UNIK)" \
-        -c user.email="$(git -C "$OLDPWD" config user.email || echo repasos@unikdi.com)" \
-        commit -q -m "UNIK repasos: importado desde Your-virtual"
-  )
-  ORIGEN_PUSH="main"
+  git -C "$RAIZ" archive HEAD repasos | tar -x -C "$DESTINO_LOCAL" --strip-components=1
+
+  ORIGEN_SHA="$(git -C "$RAIZ" rev-parse --short HEAD)"
+  git -C "$DESTINO_LOCAL" add -A
+  if git -C "$DESTINO_LOCAL" diff --cached --quiet; then
+    echo "2/3 · El destino ya estaba al día: no hay nada que subir."
+    YA_AL_DIA=si
+  else
+    git -C "$DESTINO_LOCAL" \
+        -c user.name="$NOMBRE" -c user.email="$CORREO" \
+        commit -q -m "UNIK repasos: al día con Your-virtual ($ORIGEN_SHA)"
+    echo "2/3 · Empujando a $DESTINO (rama main)…"
+    git -C "$DESTINO_LOCAL" push --quiet "$DESTINO" main || RESULTADO=1
+  fi
 fi
 
-echo "2/3 · Empujando a $DESTINO (rama main)…"
-empujar() {
-  if [ "$HAY_SUBTREE" = si ]; then
-    git push "$DESTINO" "$ORIGEN_PUSH"
-  else
-    git -C "$TEMPORAL" push "$DESTINO" main
-  fi
-}
-if ! empujar; then
+if [ "$RESULTADO" -ne 0 ]; then
   echo >&2
   echo "No se pudo empujar. Lo más habitual:" >&2
-  echo "  · el repositorio de destino no está vacío → créalo sin README ni .gitignore" >&2
+  echo "  · falta autenticación → 'gh auth login' y vuelve a intentarlo" >&2
   echo "  · la URL está mal escrita" >&2
-  echo "  · falta autenticación → prueba con 'gh auth login' o con la URL SSH" >&2
+  echo "  · alguien subió cambios al destino entre medias" >&2
   echo >&2
   if [ "$HAY_SUBTREE" = si ]; then
     echo "La rama local '$RAMA_TEMPORAL' se conserva; puedes reintentar con:" >&2
@@ -111,9 +141,15 @@ fi
 echo "3/3 · Limpiando…"
 git branch -D "$RAMA_TEMPORAL" >/dev/null 2>&1 || true
 
+if [ "$YA_AL_DIA" = si ]; then
+  echo
+  echo "El repositorio de destino ya estaba al día. No había nada que subir."
+  exit 0
+fi
+
 cat <<'FIN'
 
-Listo. El repositorio nuevo ya tiene la app en su raíz.
+Listo. El repositorio de destino tiene la app al día en su raíz.
 
 Siguientes pasos, en el repositorio NUEVO:
   1. Settings → Secrets and variables → Actions → New repository secret
