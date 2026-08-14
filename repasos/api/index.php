@@ -850,7 +850,13 @@ function cambios(): void
     // Directorio ligero del equipo: nombre y versión de la foto. Sin
     // él, la app solo sabe cómo se llama quien creó una tarea y tiene
     // que pintar iniciales aunque esa persona tenga foto puesta.
-    $personas = traer('usuarios', $desde);
+    //
+    // Va ENTERO en cada respuesta, no por fecha como el resto. Un equipo
+    // son unas decenas de filas, y filtrarlo por «lo cambiado desde la
+    // última vez» dejaba sin directorio a quien ya estaba sincronizado:
+    // las fichas se crearon el primer día y no vuelven a tocarse, así
+    // que no aparecían nunca.
+    $personas = bd()->query('SELECT * FROM usuarios ORDER BY nombre')->fetchAll();
 
     $listas = traer('listas', $desde);
     $tareas = traer('tareas', $desde);
@@ -860,8 +866,12 @@ function cambios(): void
     // La marca siguiente sale de los propios datos, no del reloj del
     // servidor: así un desfase horario entre hosting y móvil no puede
     // hacer que se pierdan cambios.
+    // Las personas NO cuentan para la marca: como viajan siempre
+    // enteras, si una tuviera la fecha más alta empujaría la marca por
+    // delante de tareas que se quedaron fuera del tope de esta tanda, y
+    // esas ya no se pedirían nunca.
     $marca = $desde;
-    foreach ([$personas, $listas, $tareas, $comentarios, $medios] as $conjunto) {
+    foreach ([$listas, $tareas, $comentarios, $medios] as $conjunto) {
         foreach ($conjunto as $fila) {
             if ($fila['actualizado'] > $marca) {
                 $marca = $fila['actualizado'];

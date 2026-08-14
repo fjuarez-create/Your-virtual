@@ -44,10 +44,22 @@ const OFICIOS_MUESTRA = [
  * una sola. Devuelve cuántas actas y tareas se han creado.
  */
 export async function crear(promoId) {
-  const equipo = store.equipo();
+  let equipo = store.equipo();
+
+  // Si el dispositivo aún no tiene el directorio —recién instalado, o
+  // sincronizado desde antes de que el directorio existiera— se pide y
+  // se reintenta antes de rendirse. Decirle «no hay gente» a quien
+  // tiene nueve personas dadas de alta sería mentirle.
+  if (equipo.length < 2) {
+    await store.sincronizar({ forzar: true });
+    await store.cargarPersonas();
+    equipo = store.equipo();
+  }
   const yo = store.sesion();
   if (equipo.length < 2) {
-    throw new Error('Hace falta que haya al menos dos personas dadas de alta.');
+    throw new Error(navigator.onLine
+      ? 'No he podido leer el equipo. Prueba a sincronizar y vuelve.'
+      : 'Sin conexión: hace falta para leer el equipo.');
   }
 
   // Se firma con quien NO está usando la app, que es justo lo que no se
