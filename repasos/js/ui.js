@@ -149,7 +149,12 @@ export function avatar(usuario, { tam = 44, radio = '50%', onclick, etiqueta } =
       color: luminancia(fondo) > 0.42 ? '#111112' : '#ffffff',
       fontSize: Math.round(tam * 0.34) + 'px',
     },
-    'aria-label': etiqueta || (usuario?.nombre ? `Cuenta de ${usuario.nombre}` : 'Cuenta'),
+    // «Cuenta de X» solo si se puede pulsar; en un listado la bolita
+    // informa de quién creó la tarea, no lleva a ninguna cuenta.
+    'aria-label': etiqueta
+      || (onclick
+        ? (usuario?.nombre ? `Cuenta de ${usuario.nombre}` : 'Cuenta')
+        : (usuario?.nombre || '')),
     onclick,
   }, iniciales(usuario?.nombre));
 

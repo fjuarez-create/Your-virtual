@@ -586,6 +586,40 @@ export async function listasRecientes(n = 15) {
   return (await actasConDatos()).slice(0, n);
 }
 
+/* ─── Directorio del equipo ───────────────────────────────────────
+   Se guarda en memoria para poder consultarlo sin esperar: pintar una
+   bolita no puede ser una operación asíncrona, o cada fila de una lista
+   parpadearía al aparecer la cara. */
+let personas = new Map();
+let personasPorNombre = new Map();
+
+export async function cargarPersonas() {
+  const todas = await db.getAll('personas');
+  personas = new Map(todas.map((p) => [p.id, p]));
+  personasPorNombre = new Map(todas.map((p) => [clavePersona(p.nombre), p]));
+  return personas;
+}
+
+const clavePersona = (n) => String(n || '')
+  .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+/**
+ * Ficha para pintar la bolita de alguien: su foto si la tiene, y si no
+ * el nombre para las iniciales. Se busca por identificador y, si no
+ * aparece, por nombre: las tareas viejas guardan «local» como autor.
+ */
+export function persona(id, nombre) {
+  const p = personas.get(id) || personasPorNombre.get(clavePersona(nombre));
+  // Quien está usando la app es el caso más frecuente y su ficha ya
+  // viene con la foto resuelta desde la sesión.
+  if (!p && usuario && (usuario.id === id || clavePersona(usuario.nombre) === clavePersona(nombre))) {
+    return usuario;
+  }
+  if (!p) return { id: id || nombre, nombre };
+  return { ...p, avatarUrl: api.urlAvatar(p.id, p.avatar) };
+}
+
 /* ─── Outbox ──────────────────────────────────────────────────── */
 async function encolar(tipo, id) {
   // Si ya hay un apunte para el mismo registro, no hace falta otro: al
@@ -697,6 +731,12 @@ async function fusionarTanda(desde) {
   const r = await api.cambios(desde);
   if (!r) return null;
 
+  if (r.personas?.length) {
+    // El directorio no se fusiona por marca de tiempo: lo que manda el
+    // servidor es la verdad, aquí nadie lo edita desde el dispositivo.
+    await db.putVarios('personas', r.personas);
+    await cargarPersonas();
+  }
   if (r.listas?.length) {
     const fusionadas = [];
     for (const remota of r.listas) {
@@ -765,6 +805,9 @@ function sinBlobs(registro) {
 
 /* Arranque del motor: pendientes al abrir y reintento periódico. */
 export async function arrancarSync() {
+  // El directorio primero: si se pintara la primera pantalla sin él,
+  // las bolitas saldrían con iniciales y cambiarían a foto al segundo.
+  await cargarPersonas();
   await refrescarPendientes();
   estadoSync.ultimo = await db.meta.get('ultimoSync');
   avisar();

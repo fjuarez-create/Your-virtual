@@ -727,7 +727,7 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
    Un acta la tocan varias personas. Se solapan en vez de ponerse
    en fila para que la tarjeta no cambie de ancho según cuántas
    hayan pasado por ella. */
-.avatares { position: relative; height: 38px; flex: none; }
+.avatares { position: relative; height: 44px; flex: none; }
 .avatar.apilado {
   position: absolute; top: 0;
   box-shadow: 0 0 0 2.5px var(--bg);
@@ -941,7 +941,9 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
   letter-spacing: 0;
   white-space: nowrap;
   display: block;
-  margin-top: 2px;
+  /* El logotipo necesita aire antes del titular: pegados se leían como
+     una sola marca de dos pisos en vez de como marca y sección. */
+  margin-top: 18px;
   font-size: 56px;   /* de partida; el JS lo ajusta al ancho real */
 }
 
@@ -978,8 +980,8 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
    una vivienda andando. El fondo dice el estado antes que la
    etiqueta. */
 .tarea-fila {
-  display: flex; align-items: center; gap: 12px;
-  width: 100%; padding: 10px; text-align: left;
+  display: flex; align-items: center; gap: 13px;
+  width: 100%; padding: 11px; text-align: left;
   background: var(--surface); border-radius: var(--r-md);
   transition: transform var(--mov-corto) var(--sal-estandar);
 }
@@ -987,7 +989,7 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 .tarea-fila.resuelta { background: rgba(63, 125, 90, 0.10); }
 .tarea-fila.rechazada { background: var(--rojo-soft); }
 .tarea-foto {
-  width: 62px; height: 62px; flex: 0 0 62px; border-radius: 13px;
+  width: 84px; height: 84px; flex: 0 0 84px; border-radius: 15px;
   background: var(--surface-2) center / cover no-repeat;
   display: grid; place-items: center; color: var(--muted-2);
 }
@@ -996,6 +998,6 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.tarea-pie { display: flex; align-items: center; gap: 7px; margin-top: 6px; }
+.tarea-pie { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
 .tarea-pie .avatar { box-shadow: 0 0 0 2px var(--bg); }
 .tarea-donde { font-size: 11.5px; color: var(--muted); }

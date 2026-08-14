@@ -847,6 +847,11 @@ function cambios(): void
         $desde = '1970-01-01T00:00:00.000Z';
     }
 
+    // Directorio ligero del equipo: nombre y versión de la foto. Sin
+    // él, la app solo sabe cómo se llama quien creó una tarea y tiene
+    // que pintar iniciales aunque esa persona tenga foto puesta.
+    $personas = traer('usuarios', $desde);
+
     $listas = traer('listas', $desde);
     $tareas = traer('tareas', $desde);
     $comentarios = traer('comentarios', $desde);
@@ -856,7 +861,7 @@ function cambios(): void
     // servidor: así un desfase horario entre hosting y móvil no puede
     // hacer que se pierdan cambios.
     $marca = $desde;
-    foreach ([$listas, $tareas, $comentarios, $medios] as $conjunto) {
+    foreach ([$personas, $listas, $tareas, $comentarios, $medios] as $conjunto) {
         foreach ($conjunto as $fila) {
             if ($fila['actualizado'] > $marca) {
                 $marca = $fila['actualizado'];
@@ -868,6 +873,7 @@ function cambios(): void
         || count($comentarios) >= TOPE_CAMBIOS || count($medios) >= TOPE_CAMBIOS;
 
     responder([
+        'personas'    => array_map('persona_salida', $personas),
         'listas'      => array_map('lista_salida', $listas),
         'tareas'      => array_map('tarea_salida', $tareas),
         'comentarios' => array_map('comentario_salida', $comentarios),
@@ -884,6 +890,18 @@ function traer(string $tabla, string $desde): array
     );
     $stmt->execute([$desde]);
     return $stmt->fetchAll();
+}
+
+/** Lo mínimo para pintar la bolita de alguien: nombre y foto. */
+function persona_salida(array $u): array
+{
+    return [
+        'id' => $u['id'],
+        'nombre' => $u['nombre'],
+        'avatar' => $u['avatar'] ?? '',
+        'activo' => (int) ($u['activo'] ?? 1) === 1,
+        'actualizado' => $u['actualizado'],
+    ];
 }
 
 function lista_salida(array $f): array

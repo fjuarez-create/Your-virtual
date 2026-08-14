@@ -14,7 +14,7 @@
      outbox       cambios pendientes de subir (orden de llegada)
    ═══════════════════════════════════════════════════════════════ */
 const NOMBRE = 'unik-repasos';
-const VERSION = 2;
+const VERSION = 3;
 
 let dbPromise = null;
 
@@ -25,6 +25,12 @@ export function abrir() {
     req.onupgradeneeded = () => {
       const db = req.result;
       if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta');
+      // El equipo: nombre y versión de la foto de cada uno, para
+      // que las bolitas de las tareas enseñen la cara y no las
+      // iniciales de quien tiene foto puesta.
+      if (!db.objectStoreNames.contains('personas')) {
+        db.createObjectStore('personas', { keyPath: 'id' });
+      }
       if (!db.objectStoreNames.contains('listas')) {
         db.createObjectStore('listas', { keyPath: 'id' }).createIndex('unidadId', 'unidadId');
       }
@@ -122,5 +128,5 @@ export async function numPendientes() {
 
 /** Borra todo el contenido local (cierre de sesión). */
 export async function limpiarTodo() {
-  for (const s of ['meta', 'listas', 'tareas', 'medios', 'comentarios', 'outbox']) await vaciar(s);
+  for (const s of ['meta', 'listas', 'tareas', 'medios', 'comentarios', 'personas', 'outbox']) await vaciar(s);
 }

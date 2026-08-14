@@ -130,8 +130,17 @@ export function barraSync() {
     boton.style.display = e.online && !e.sincronizando ? 'flex' : 'none';
   };
 
-  pintar(store.estadoSync);
-  const quitar = store.alCambiarSync(pintar);
+  // Cuando todo está bien la cinta no se enseña: en Ajustes está el
+  // detalle y aquí sobra. Aparece sola si no hay cobertura o si queda
+  // algo por subir, que es cuando de verdad hay que enterarse.
+  const original = pintar;
+  const pintarSiHaceFalta = (e) => {
+    const hayQueContarlo = !e.online || e.pendientes > 0 || e.sincronizando || !!e.error;
+    barra.style.display = hayQueContarlo ? '' : 'none';
+    if (hayQueContarlo) original(e);
+  };
+  pintarSiHaceFalta(store.estadoSync);
+  const quitar = store.alCambiarSync(pintarSiHaceFalta);
   // Cuando la cinta sale del documento deja de escuchar.
   new MutationObserver((_, obs) => {
     if (!barra.isConnected) { quitar(); obs.disconnect(); }
@@ -256,7 +265,7 @@ export function tarjetaActa({ lista, conteo, gente }) {
   const titulo = lista.nombre || u?.nombre || lista.unidadId;
 
   return h('button.acta', { onclick: () => ir('#/l/' + lista.id) },
-    grupoAvatares(gente, { tam: 38 }),
+    grupoAvatares(gente.map((g) => store.persona(g.id, g.nombre)), { tam: 44 }),
     h('div.grow', null,
       h('div.acta-tit', null, titulo),
       h('div.acta-pie', null,
@@ -390,7 +399,7 @@ export function tareaFila(t, { portada, donde } = {}) {
     h('div.grow', null,
       h('p.tarea-txt', null, t.texto || 'Sin descripción'),
       h('div.tarea-pie', null,
-        avatar({ id: t.creadoPor, nombre: t.creadoPorNombre }, { tam: 22 }),
+        avatar(store.persona(t.creadoPor, t.creadoPorNombre), { tam: 28 }),
         t.rechazada ? h('span.tag.rojo', null, 'Rechazada') : h('span.tag', { class: e.tag }, e.nombre),
         donde ? h('span.tarea-donde', null, donde) : null,
       ),

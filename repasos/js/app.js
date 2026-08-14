@@ -196,6 +196,10 @@ export function refrescar() {
 /* ─── Arranque ────────────────────────────────────────────────── */
 async function arrancar() {
   await store.cargarSesion();
+  // El directorio del equipo antes de pintar: si no, la primera
+  // pantalla saldría con iniciales y las caras aparecerían al
+  // navegar, que se lee como un fallo.
+  await store.cargarPersonas();
   window.addEventListener('hashchange', enrutar);
   await enrutar();
   vigilarDatosNuevos();
