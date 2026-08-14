@@ -537,6 +537,50 @@ export async function verificadasPorDia(dias = 7) {
 const claveDia = (d) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
+/**
+ * Todas las tareas de una vivienda, de todas sus actas juntas. Es lo
+ * que se ve al entrar en una villa: allí no importa en qué inspección
+ * salió cada cosa, sino qué queda por hacer en esa casa.
+ */
+export async function tareasDeUnidad(unidadId) {
+  const listas = (await db.getAll('listas')).filter((l) => !l.borrada && l.unidadId === unidadId);
+  const suyas = new Set(listas.map((l) => l.id));
+  const tareas = (await db.getAll('tareas')).filter((t) => !t.borrada && suyas.has(t.listaId));
+  return {
+    listas,
+    tareas: tareas.sort((a, b) => b.actualizado.localeCompare(a.actualizado)),
+    conteo: contar(tareas),
+  };
+}
+
+/**
+ * Las últimas tareas tocadas de toda la promoción, con la vivienda a la
+ * que pertenecen: en un listado mezclado, «rodapié sin sellar» no dice
+ * nada si no se sabe de qué villa es.
+ */
+export async function tareasRecientes(n = 12, { promoId = null } = {}) {
+  const listas = (await db.getAll('listas'))
+    .filter((l) => !l.borrada && (!promoId || l.promoId === promoId));
+  const donde = new Map(listas.map((l) => [l.id, l.unidadId]));
+  const tareas = (await db.getAll('tareas'))
+    .filter((t) => !t.borrada && donde.has(t.listaId))
+    .sort((a, b) => b.actualizado.localeCompare(a.actualizado))
+    .slice(0, n);
+  return Promise.all(tareas.map(async (t) => ({
+    tarea: t,
+    unidadId: donde.get(t.listaId),
+    portada: await urlDePortada(t),
+  })));
+}
+
+/** Cifras de toda una promoción, para la barra de la portada. */
+export async function resumenPromocion(promoId) {
+  const listas = (await db.getAll('listas')).filter((l) => !l.borrada && l.promoId === promoId);
+  const suyas = new Set(listas.map((l) => l.id));
+  const tareas = (await db.getAll('tareas')).filter((t) => !t.borrada && suyas.has(t.listaId));
+  return { ...contar(tareas), listas: listas.length };
+}
+
 /** Las últimas actas tocadas, para el listado de la portada. */
 export async function listasRecientes(n = 15) {
   return (await actasConDatos()).slice(0, n);

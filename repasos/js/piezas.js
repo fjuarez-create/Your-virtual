@@ -4,13 +4,83 @@
    ═══════════════════════════════════════════════════════════════ */
 import {
   h, icon, sheet, toast, confirmSheet, avatar, grupoAvatares, anillo,
-  fechaCorta, fechaRelativa, hora,
+  logoUnik, fechaCorta, fechaRelativa, hora,
 } from './ui.js';
 import * as media from './media.js';
 import * as store from './store.js';
 import * as api from './api.js';
-import { unidad, fase, oficio, OFICIOS } from './catalog.js';
+import { unidad, fase, oficio, estado, OFICIOS } from './catalog.js';
 import { ir } from './app.js';
+
+/**
+ * Cabecera de las cuatro pantallas con bolitas: el logotipo a la
+ * izquierda, la cuenta a la derecha y debajo el titular a todo lo ancho.
+ *
+ * Aquí NO hay flecha de volver, y es a propósito: son las cuatro raíces
+ * de la app, no hay un atrás al que ir. La flecha aparece solo al entrar
+ * en un acta o en una tarea, y allí ocupa el sitio del logotipo.
+ */
+export function cabeceraTab(titulo) {
+  return [
+    h('div.topbar', null,
+      h('div.grow', null, logoUnik({ alto: 20 })),
+      avatar(store.sesion(), { onclick: () => ir('#/ajustes') }),
+    ),
+    ajustarTitulo(h('h1.titulo-pantalla', null, titulo)),
+  ];
+}
+
+/**
+ * Cabecera de dentro: la flecha de volver donde en las pantallas raíz va
+ * el logotipo, y el titular igual de grande, para que se note que sigues
+ * en la misma app y solo has bajado un nivel.
+ */
+export function cabeceraDentro(titulo, { volverA, sub, acciones = [] } = {}) {
+  return [
+    h('div.topbar', null,
+      h('button.icon-btn', {
+        'aria-label': 'Volver',
+        onclick: () => (volverA ? ir(volverA) : history.back()),
+      }, icon('arrowLeft')),
+      h('div.grow', null, sub ? h('p.eyebrow', null, sub) : null),
+      ...acciones,
+      avatar(store.sesion(), { onclick: () => ir('#/ajustes') }),
+    ),
+    ajustarTitulo(h('h1.titulo-pantalla', null, titulo)),
+  ];
+}
+
+/**
+ * Ajusta el cuerpo del titular para que la palabra ocupe justo el ancho
+ * disponible. Se mide una vez con canvas en lugar de probar tamaños en
+ * el DOM: una sola medición y ninguna relectura de estilos, que es lo
+ * que evita el parpadeo al entrar en la pantalla.
+ */
+function ajustarTitulo(nodo) {
+  const medir = () => {
+    // El ancho del PROPIO titular, no el de su contenedor: clientWidth
+    // de un contenedor incluye su relleno, y medir contra él hacía los
+    // títulos 40 px más anchos de lo que cabe, así que se salían.
+    const ancho = nodo.clientWidth || 0;
+    if (!ancho) return;
+    const lienzo = ajustarTitulo.lienzo ||= document.createElement('canvas').getContext('2d');
+    const REF = 100;
+    lienzo.font = `200 ${REF}px ${getComputedStyle(nodo).fontFamily}`;
+    const suyo = lienzo.measureText(nodo.textContent).width;
+    if (suyo <= 0) return;
+    // Con tope por arriba y por abajo: una palabra corta no debe salir
+    // gigante ni un nombre largo quedar ilegible por caber a la fuerza.
+    const cuerpo = Math.min(150, Math.max(26, Math.floor((REF * ancho) / suyo)));
+    nodo.style.fontSize = cuerpo + 'px';
+    // Si aun al mínimo no cabe, se deja partir en dos líneas.
+    nodo.style.whiteSpace = (REF * ancho) / suyo < 26 ? 'normal' : 'nowrap';
+  };
+  requestAnimationFrame(medir);
+  // La medida se hace con la tipografía ya cargada: si se midiera con
+  // la de reserva, el titular saldría con el cuerpo equivocado.
+  document.fonts?.ready.then(medir);
+  return nodo;
+}
 
 /** Cabecera con flecha de volver, título, subtítulo y acciones. */
 export function cabecera(titulo, sub, { volverA, acciones = [] } = {}) {
@@ -262,4 +332,68 @@ export function chevron() {
   const svg = icon('chevron');
   svg.classList.add('chev');
   return svg;
+}
+
+/**
+ * Barra de avance de tres tramos con su leyenda. Un anillo de un solo
+ * color no puede decir la proporción entre tres estados; esta sí, y de
+ * paso pone a la vista la cola de «Revisar», que es donde se atasca el
+ * trabajo cuando la subcontrata va por delante de quien comprueba.
+ */
+export function barraAvance(c) {
+  const total = c.total || 0;
+  const pct = (n) => (total ? (100 * n) / total : 0);
+  const tramo = (clase, n) => (n > 0
+    ? h('i', { class: clase, style: { width: pct(n) + '%' } })
+    : null);
+
+  const dato = (clase, n, etiqueta) => h('div', null,
+    h('span.punto', { class: clase }),
+    h('b', null, String(n)),
+    h('span', null, etiqueta),
+  );
+
+  return h('div', null,
+    h('p.eyebrow', null, 'Avance'),
+    h('div.avance-barra', { style: { marginTop: '10px' } },
+      tramo('t-resuelta', c.hechas),
+      tramo('t-revisar', c.esperando),
+      tramo('t-pendiente', c.pendientes),
+    ),
+    h('div.leyenda', null,
+      dato('t-resuelta', c.hechas, 'Resueltas'),
+      dato('t-revisar', c.esperando, 'A revisar'),
+      dato('t-pendiente', c.pendientes, 'Pendientes'),
+    ),
+  );
+}
+
+/**
+ * Una tarea en un listado: foto, texto, estado y quién la creó.
+ * `donde` es opcional y sitúa la tarea cuando el listado mezcla
+ * viviendas (la portada), porque ahí «rodapié sin sellar» no dice nada
+ * si no se sabe de qué villa es.
+ */
+export function tareaFila(t, { portada, donde } = {}) {
+  const e = estado(t.estado);
+  const clases = ['tarea-fila'];
+  if (t.rechazada) clases.push('rechazada');
+  else if (t.estado === 'verificada') clases.push('resuelta');
+
+  return h('button', {
+    class: clases.join(' '),
+    onclick: () => ir(`#/l/${t.listaId}/t/${t.id}`),
+  },
+    portada
+      ? h('div.tarea-foto', { style: { backgroundImage: `url("${portada}")` } })
+      : h('div.tarea-foto', null, icon('image', 20)),
+    h('div.grow', null,
+      h('p.tarea-txt', null, t.texto || 'Sin descripción'),
+      h('div.tarea-pie', null,
+        avatar({ id: t.creadoPor, nombre: t.creadoPorNombre }, { tam: 22 }),
+        t.rechazada ? h('span.tag.rojo', null, 'Rechazada') : h('span.tag', { class: e.tag }, e.nombre),
+        donde ? h('span.tarea-donde', null, donde) : null,
+      ),
+    ),
+  );
 }

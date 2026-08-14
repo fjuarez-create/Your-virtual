@@ -4,7 +4,7 @@ import { h, icon, sheet, toast, confirmSheet, avatar, pesoLegible } from '../ui.
 import * as store from '../store.js';
 import * as api from '../api.js';
 import * as db from '../db.js';
-import { barraSync, chevron, cabecera, hojaFoto } from '../piezas.js';
+import { barraSync, chevron, cabeceraTab, cabeceraDentro, hojaFoto } from '../piezas.js';
 import { ir, refrescar } from '../app.js';
 
 export async function render() {
@@ -32,8 +32,9 @@ export async function render() {
     tab: admin ? 'ajustes' : undefined,
     sinTabs: !admin,
     contenido: [
-      admin ? null : cabecera('Tu cuenta', '', { volverA: '#/' }),
-      h('h1.display', { style: { marginTop: admin ? '0' : '10px' } }, 'Ajustes'),
+      // Para quien administra es una pestaña y no hay atrás; para el
+      // resto se llega desde su bolita de cuenta, y ahí sí hay vuelta.
+      ...(admin ? cabeceraTab('AJUSTES') : cabeceraDentro('AJUSTES', { volverA: '#/' })),
 
       // Tarjeta de cuenta, con el mismo aire que el perfil de la referencia.
       h('div', { style: { display: 'flex', alignItems: 'center', gap: '14px', margin: '22px 0 6px' } },

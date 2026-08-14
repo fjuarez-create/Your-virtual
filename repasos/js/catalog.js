@@ -75,10 +75,21 @@ export const FASES = [
   { id: 'post', nombre: 'Post-entrega', corto: 'Post' },
 ];
 
+/**
+ * Los tres estados de una tarea.
+ *
+ * OJO con los identificadores: `resuelta` se LLAMA «Revisar» y
+ * `verificada` se LLAMA «Resuelta». Los nombres visibles cambiaron
+ * después, cuando quedó claro que lo que la subcontrata da por hecho no
+ * está cerrado hasta que alguien lo comprueba; los identificadores se
+ * dejaron como estaban para no tener que tocar las tareas que ya
+ * estaban subidas. Al leer código, fíjate en el id; al leer pantalla,
+ * en el nombre.
+ */
 export const ESTADOS = [
-  { id: 'pendiente', nombre: 'Pendiente', tag: 'accent' },
-  { id: 'resuelta', nombre: 'Resuelta', tag: 'ok' },
-  { id: 'verificada', nombre: 'Verificada', tag: 'ink' },
+  { id: 'pendiente', nombre: 'Pendiente', tag: '' },
+  { id: 'resuelta', nombre: 'Revisar', tag: 'warn' },
+  { id: 'verificada', nombre: 'Resuelta', tag: 'ink' },
 ];
 
 /**

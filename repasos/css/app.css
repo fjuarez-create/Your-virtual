@@ -4,6 +4,16 @@
    para la acción principal de cada pantalla. Nunca dos acentos
    compitiendo en la misma vista.
    ═══════════════════════════════════════════════════════════════ */
+/* Los titulares de pantalla. Recortada a los caracteres que se usan:
+   de 165 KB a 18, que en obra con mala cobertura se nota. */
+@font-face {
+  font-family: 'PP Eiko';
+  src: url('../assets/fonts/eiko-thin.woff2') format('woff2');
+  font-weight: 200;
+  font-style: normal;
+  font-display: swap;
+}
+
 @font-face {
   font-family: 'Open Sans';
   src: url('../assets/fonts/opensans-var.woff2') format('woff2');
@@ -44,8 +54,9 @@
   --shadow: 0 14px 40px rgba(17, 17, 18, 0.10);
   --shadow-sm: 0 4px 16px rgba(17, 17, 18, 0.07);
   --font: 'Open Sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-titulo: 'PP Eiko', 'Open Sans', serif;
 
-  --tab-h: 78px;            /* alto que reserva la barra inferior */
+  --tab-h: 96px;            /* alto que reserva la barra inferior */
   --pad: 20px;
 
   /* ─── Movimiento ───────────────────────────────────────────────
@@ -393,15 +404,15 @@ button.avatar:active { transform: scale(0.92); }
   position: absolute; left: 50%; z-index: 40;
   bottom: calc(env(safe-area-inset-bottom) + 14px);
   transform: translateX(-50%);
-  display: flex; gap: 6px; padding: 6px;
+  display: flex; gap: 8px; padding: 8px;
   background: var(--ink); border-radius: 999px;
   box-shadow: 0 10px 30px rgba(17, 17, 18, 0.28);
 }
 /* La bolita que viaja. Va por detrás de los botones, y su posición la
    fija el JS con --x según cuál esté activo. */
 .tabbar .marca {
-  position: absolute; top: 6px; left: 6px;
-  width: 52px; height: 52px; border-radius: 50%;
+  position: absolute; top: 8px; left: 8px;
+  width: 65px; height: 65px; border-radius: 50%;
   background: #fff;
   transform: translateX(var(--x, 0));
   transition: transform var(--mov-medio) var(--sal-muelle);
@@ -410,7 +421,7 @@ button.avatar:active { transform: scale(0.92); }
 .tabbar.sin-animar .marca { transition: none; }
 .tabbar button {
   position: relative; z-index: 1;
-  width: 52px; height: 52px; border-radius: 50%;
+  width: 65px; height: 65px; border-radius: 50%;
   background: transparent; color: rgba(255, 255, 255, 0.55);
   display: grid; place-items: center;
   transition: color var(--mov-medio) var(--sal-estandar),
@@ -419,7 +430,7 @@ button.avatar:active { transform: scale(0.92); }
 .tabbar button:active { transform: scale(0.9); }
 .tabbar button[aria-current='true'] { color: var(--ink); }
 .tabbar button svg {
-  width: 23px; height: 23px;
+  width: 29px; height: 29px;
   transition: transform var(--mov-medio) var(--sal-muelle);
 }
 /* Al activarse, el icono da un pellizco de escala: confirma el cambio
@@ -916,3 +927,75 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 }
 
 .vacio-suave { padding: 34px 0; }
+
+/* ═══════════════════════════════════════════════════════════════
+   Cabecera de las pantallas con bolitas y titular de pantalla
+   ═══════════════════════════════════════════════════════════════ */
+/* El titular ocupa el ancho entero. El tamaño no va en el CSS: lo
+   calcula ajustarTitulo() midiendo la palabra, porque «AJUSTES» y
+   «VIVIENDAS» no llenan lo mismo con el mismo cuerpo. */
+.titulo-pantalla {
+  font-family: var(--font-titulo);
+  font-weight: 200;
+  line-height: 0.88;
+  letter-spacing: 0;
+  white-space: nowrap;
+  display: block;
+  margin-top: 2px;
+  font-size: 56px;   /* de partida; el JS lo ajusta al ancho real */
+}
+
+/* ─── Barra de avance de tres tramos ───────────────────────────
+   Sustituye al anillo en la portada: con tres estados, una barra
+   dice de un vistazo la proporción entre ellos, cosa que un anillo
+   de un solo color no puede. */
+.avance-barra {
+  display: flex; width: 100%; height: 46px;
+  border-radius: 13px; overflow: hidden;
+  background: var(--surface);
+}
+.avance-barra i {
+  display: block; height: 100%;
+  transition: width var(--mov-largo) var(--sal-estandar);
+}
+.avance-barra .t-resuelta { background: var(--ink); }
+.avance-barra .t-revisar { background: var(--accent); }
+.avance-barra .t-pendiente { background: var(--surface-2); }
+
+.leyenda { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 12px; }
+.leyenda > div { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.leyenda .punto {
+  width: 11px; height: 11px; border-radius: 3px; flex: none;
+}
+.leyenda .punto.t-resuelta { background: var(--ink); }
+.leyenda .punto.t-revisar { background: var(--accent); }
+.leyenda .punto.t-pendiente { background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line); }
+.leyenda b { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.leyenda span { font-size: 12.5px; color: var(--muted); }
+
+/* ─── Tarea en un listado ──────────────────────────────────────
+   La foto y el texto se leen sin abrirla, que es como se repasa
+   una vivienda andando. El fondo dice el estado antes que la
+   etiqueta. */
+.tarea-fila {
+  display: flex; align-items: center; gap: 12px;
+  width: 100%; padding: 10px; text-align: left;
+  background: var(--surface); border-radius: var(--r-md);
+  transition: transform var(--mov-corto) var(--sal-estandar);
+}
+.tarea-fila:active { transform: scale(0.985); }
+.tarea-fila.resuelta { background: rgba(63, 125, 90, 0.10); }
+.tarea-fila.rechazada { background: var(--rojo-soft); }
+.tarea-foto {
+  width: 62px; height: 62px; flex: 0 0 62px; border-radius: 13px;
+  background: var(--surface-2) center / cover no-repeat;
+  display: grid; place-items: center; color: var(--muted-2);
+}
+.tarea-txt {
+  font-size: 14px; line-height: 1.3; font-weight: 600; letter-spacing: -0.01em;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.tarea-pie { display: flex; align-items: center; gap: 7px; margin-top: 6px; }
+.tarea-pie .avatar { box-shadow: 0 0 0 2px var(--bg); }
+.tarea-donde { font-size: 11.5px; color: var(--muted); }

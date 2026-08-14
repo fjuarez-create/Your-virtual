@@ -62,8 +62,8 @@ let rutaActual = '';
  * El activo no cambia de color de golpe: hay una bolita blanca que se
  * desliza por detrás hasta su sitio.
  */
-const ANCHO_BOLITA = 52;
-const HUECO_BOLITA = 6;
+const ANCHO_BOLITA = 65;   // 52 + 25 %
+const HUECO_BOLITA = 8;
 
 function barraInferior(activo) {
   const tabs = tabsVisibles();

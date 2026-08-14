@@ -4,10 +4,10 @@
    distintas y la fecha de cualquiera de ellas no diría nada. Lo que
    importa es cuántas tareas tiene y en qué estado están, y eso lo dice
    el color de la fila antes de leer un número. */
-import { h, icon, toast, avatar, anillo } from '../ui.js';
+import { h, icon, toast, anillo } from '../ui.js';
 import { PROMOCIONES, promocion, unidades } from '../catalog.js';
 import * as store from '../store.js';
-import { filtroEstado, filtroOficio } from '../piezas.js';
+import { filtroEstado, filtroOficio, cabeceraTab } from '../piezas.js';
 import { ir } from '../app.js';
 
 export async function render({ promoId, desdeTab = false }) {
@@ -43,10 +43,7 @@ export async function render({ promoId, desdeTab = false }) {
   return {
     tab: 'viviendas',
     contenido: [
-      h('div.topbar', null,
-        h('div.grow', null, h('h1.titulo-promo', null, p.nombre.toUpperCase())),
-        avatar(store.sesion(), { onclick: () => ir('#/ajustes') }),
-      ),
+      ...cabeceraTab('VIVIENDAS'),
       filtroEstado((v) => { estado = v; pintar(); }),
       filtroOficio((v) => { oficioId = v; pintar(); }),
       contador,

@@ -5,7 +5,7 @@ import { h, icon, sheet, toast, confirmSheet, emptyState, fechaCorta, hora } fro
 import { unidad, fase, estado, promocion, ESTADOS, OFICIOS, oficio } from '../catalog.js';
 import * as store from '../store.js';
 import * as media from '../media.js';
-import { cabecera, barraSync } from '../piezas.js';
+import { cabeceraDentro, barraSync } from '../piezas.js';
 import { ir, refrescar } from '../app.js';
 import { informe } from '../informe.js';
 import { hojaDePuerta, nombreDeFichero } from '../pdf.js';
@@ -71,15 +71,17 @@ export async function render({ listaId }) {
     sinTabs: true,
     fab,
     contenido: [
-      cabecera(`Inspección ${fechaCorta(lista.creado)}`,
-        `${u?.nombre || ''} · ${f.nombre}`,
-        {
-          volverA: `#/p/${lista.promoId}/v/${String(lista.unidadId).split(':')[1]}`,
-          acciones: [h('button.icon-btn', {
-            'aria-label': 'Opciones de la lista',
-            onclick: () => menuLista(lista, tareas),
-          }, icon('gear'))],
-        }),
+      // El titular es la vivienda y no la fecha: al entrar desde una
+      // lista de actas, lo primero que hay que reconocer es de qué casa
+      // se está hablando.
+      ...cabeceraDentro(lista.nombre || (u?.nombre || 'Acta').toUpperCase(), {
+        volverA: `#/p/${lista.promoId}/v/${String(lista.unidadId).split(':')[1]}`,
+        sub: `${f.nombre} · ${fechaCorta(lista.creado)}`,
+        acciones: [h('button.icon-btn', {
+          'aria-label': 'Opciones del acta',
+          onclick: () => menuLista(lista, tareas),
+        }, icon('gear'))],
+      }),
 
       h('div.card-ink', null,
         // Quién firmó la inspección y a qué hora, que es lo que se

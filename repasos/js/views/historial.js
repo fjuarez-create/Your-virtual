@@ -3,10 +3,10 @@
    Mientras solo haya una promoción activa se entra directo a la suya y
    no se pierde un toque en elegirla. En cuanto haya dos, el selector
    vuelve por su cuenta desde el catálogo. */
-import { h, icon, avatar, emptyState } from '../ui.js';
+import { h, icon, emptyState } from '../ui.js';
 import * as store from '../store.js';
-import { PROMOCIONES, promocion } from '../catalog.js';
-import { tarjetaActa, filtroEstado, filtroOficio } from '../piezas.js';
+import { PROMOCIONES } from '../catalog.js';
+import { tarjetaActa, filtroEstado, filtroOficio, cabeceraTab } from '../piezas.js';
 import { ir } from '../app.js';
 
 export async function render() {
@@ -25,7 +25,7 @@ export async function render() {
     return {
       tab: 'listas',
       contenido: [
-        cabecera(p, store.sesion()),
+        ...cabeceraTab('ACTAS'),
         emptyState('clipboard', 'Todavía no hay actas',
           'Cuando crees la primera lista de repaso aparecerá aquí, con su fecha y quién la hizo.',
           h('button.btn.ink', { onclick: () => ir('#/viviendas') }, icon('plus'), 'Nueva lista de repasos')),
@@ -55,7 +55,7 @@ export async function render() {
     tab: 'listas',
     fab: null,
     contenido: [
-      cabecera(p, store.sesion()),
+      ...cabeceraTab('ACTAS'),
       filtroEstado((v) => { estado = v; pintar(); }),
       filtroOficio((v) => { oficioId = v; pintar(); }),
       contador,
@@ -63,14 +63,6 @@ export async function render() {
       lista,
     ],
   };
-}
-
-function cabecera(p, usuario) {
-  return h('div.topbar', null,
-    // Sin flecha de volver: es una pestaña, no hay atrás al que ir.
-    h('div.grow', null, h('h1.titulo-promo', null, p.nombre.toUpperCase())),
-    avatar(usuario, { onclick: () => ir('#/ajustes') }),
-  );
 }
 
 /**
