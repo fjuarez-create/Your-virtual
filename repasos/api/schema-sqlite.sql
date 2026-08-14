@@ -13,6 +13,8 @@ CREATE TABLE IF NOT EXISTS usuarios (
   email         TEXT NOT NULL UNIQUE,
   password_hash TEXT NOT NULL,
   rol           TEXT NOT NULL DEFAULT 'usuario',
+  empresa       TEXT NOT NULL DEFAULT '',
+  verifica      INTEGER NOT NULL DEFAULT 0,
   activo        INTEGER NOT NULL DEFAULT 1,
   creado        TEXT NOT NULL,
   actualizado   TEXT NOT NULL
@@ -62,6 +64,7 @@ CREATE TABLE IF NOT EXISTS tareas (
   portada_id        TEXT,
   estado_por        TEXT,
   estado_en         TEXT,
+  rechazada         INTEGER NOT NULL DEFAULT 0,
   borrada           INTEGER NOT NULL DEFAULT 0,
   creado            TEXT NOT NULL,
   actualizado       TEXT NOT NULL,
@@ -71,9 +74,25 @@ CREATE TABLE IF NOT EXISTS tareas (
 CREATE INDEX IF NOT EXISTS ix_tareas_lista ON tareas (lista_id);
 CREATE INDEX IF NOT EXISTS ix_tareas_actualizado ON tareas (actualizado);
 
+CREATE TABLE IF NOT EXISTS comentarios (
+  id                 TEXT NOT NULL PRIMARY KEY,
+  tarea_id           TEXT NOT NULL,
+  texto              TEXT NOT NULL,
+  tipo               TEXT NOT NULL DEFAULT 'nota',
+  borrada            INTEGER NOT NULL DEFAULT 0,
+  creado             TEXT NOT NULL,
+  actualizado        TEXT NOT NULL,
+  creado_por         TEXT,
+  creado_por_nombre  TEXT NOT NULL,
+  creado_por_empresa TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS ix_comentarios_tarea ON comentarios (tarea_id);
+CREATE INDEX IF NOT EXISTS ix_comentarios_actualizado ON comentarios (actualizado);
+
 CREATE TABLE IF NOT EXISTS medios (
-  id          TEXT NOT NULL PRIMARY KEY,
-  tarea_id    TEXT NOT NULL,
+  id            TEXT NOT NULL PRIMARY KEY,
+  tarea_id      TEXT NOT NULL,
+  comentario_id TEXT,
   tipo        TEXT NOT NULL,
   mime        TEXT NOT NULL,
   tam         INTEGER NOT NULL DEFAULT 0,

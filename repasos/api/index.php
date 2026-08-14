@@ -119,6 +119,9 @@ function despachar(string $metodo, array $p): void
     if ($r0 === 'tareas' && $metodo === 'POST') {
         guardar_tareas();
     }
+    if ($r0 === 'comentarios' && $metodo === 'POST') {
+        guardar_comentarios();
+    }
 
     if ($r0 === 'medios') {
         if ($metodo === 'POST' && !isset($p[1])) {
@@ -156,7 +159,7 @@ function login(): void
         responder_error(429, 'Demasiados intentos. Espera unos minutos.', 'bloqueado');
     }
 
-    $stmt = bd()->prepare('SELECT id, nombre, email, rol, activo, password_hash FROM usuarios WHERE email = ?');
+    $stmt = bd()->prepare('SELECT id, nombre, email, rol, empresa, verifica, activo, password_hash FROM usuarios WHERE email = ?');
     $stmt->execute([$email]);
     $u = $stmt->fetch();
 
@@ -178,9 +181,7 @@ function login(): void
 
     limpiar_intentos($email);
     crear_sesion($u['id']);
-    responder(['usuario' => [
-        'id' => $u['id'], 'nombre' => $u['nombre'], 'email' => $u['email'], 'rol' => $u['rol'],
-    ]]);
+    responder(['usuario' => usuario_salida($u)]);
 }
 
 function cambiar_password_propia(): void
@@ -217,10 +218,12 @@ function listar_usuarios(): void
 {
     exigir_admin();
     $filas = bd()->query(
-        'SELECT id, nombre, email, rol, activo, creado FROM usuarios ORDER BY activo DESC, nombre ASC'
+        'SELECT id, nombre, email, rol, empresa, verifica, activo, creado
+           FROM usuarios ORDER BY activo DESC, nombre ASC'
     )->fetchAll();
     foreach ($filas as &$f) {
         $f['activo'] = (int) $f['activo'] === 1;
+        $f['verifica'] = (int) $f['verifica'] === 1;
     }
     responder(['usuarios' => $filas]);
 }
@@ -231,8 +234,9 @@ function crear_usuario(): void
     $d = cuerpo();
     $nombre = texto($d, 'nombre', 120);
     $email = mb_strtolower(texto($d, 'email', 190));
-    $password = (string) ($d['password'] ?? '');
+    $empresa = texto($d, 'empresa', 120);
     $rol = ($d['rol'] ?? 'usuario') === 'admin' ? 'admin' : 'usuario';
+    $verifica = booleano($d, 'verifica');
 
     if (mb_strlen($nombre) < 3) {
         responder_error(400, 'El nombre es demasiado corto.', 'nombre');
@@ -240,8 +244,16 @@ function crear_usuario(): void
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         responder_error(400, 'El correo no es válido.', 'email');
     }
+    if ($empresa === '') {
+        responder_error(400, 'Falta la empresa o el rol.', 'empresa');
+    }
+
+    // La contraseña la calcula el servidor con la misma regla que la app:
+    // nombre + primera palabra de la empresa. Así el alta es un solo paso
+    // y quien la crea puede dictarla sin consultarla.
+    $password = contrasena_inicial($nombre, $empresa);
     if (mb_strlen($password) < 8) {
-        responder_error(400, 'La contraseña debe tener al menos 8 caracteres.', 'corta');
+        responder_error(400, 'El nombre y la empresa son demasiado cortos para generar una contraseña segura.', 'corta');
     }
 
     $existe = bd()->prepare('SELECT 1 FROM usuarios WHERE email = ?');
@@ -252,13 +264,19 @@ function crear_usuario(): void
 
     $id = uuid();
     bd()->prepare(
-        'INSERT INTO usuarios (id, nombre, email, password_hash, rol, activo, creado, actualizado)
-         VALUES (?, ?, ?, ?, ?, 1, ?, ?)'
-    )->execute([$id, $nombre, $email, password_hash($password, PASSWORD_DEFAULT), $rol, ahora_iso(), ahora_iso()]);
+        'INSERT INTO usuarios (id, nombre, email, password_hash, rol, empresa, verifica, activo, creado, actualizado)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)'
+    )->execute([
+        $id, $nombre, $email, password_hash($password, PASSWORD_DEFAULT),
+        $rol, $empresa, $verifica ? 1 : 0, ahora_iso(), ahora_iso(),
+    ]);
 
+    // La contraseña en claro viaja una única vez, aquí, para que la app
+    // pueda ofrecer el botón de compartirla. No se guarda en ningún sitio.
     responder(['usuario' => [
-        'id' => $id, 'nombre' => $nombre, 'email' => $email, 'rol' => $rol, 'activo' => true,
-    ]], 201);
+        'id' => $id, 'nombre' => $nombre, 'email' => $email, 'rol' => $rol,
+        'empresa' => $empresa, 'verifica' => $verifica, 'activo' => true,
+    ], 'password' => $password], 201);
 }
 
 function editar_usuario(string $id): void
@@ -290,6 +308,14 @@ function editar_usuario(string $id): void
         }
         $campos[] = 'password_hash = ?';
         $valores[] = password_hash((string) $d['password'], PASSWORD_DEFAULT);
+    }
+    if (isset($d['empresa'])) {
+        $campos[] = 'empresa = ?';
+        $valores[] = texto($d, 'empresa', 120);
+    }
+    if (isset($d['verifica'])) {
+        $campos[] = 'verifica = ?';
+        $valores[] = booleano($d, 'verifica') ? 1 : 0;
     }
     if (isset($d['rol'])) {
         if ($u['id'] === $yo['id'] && $d['rol'] !== 'admin') {
@@ -354,6 +380,19 @@ function borrar_usuario(string $id): void
     responder(['ok' => true]);
 }
 
+/** Datos del usuario que se devuelven al cliente. Nunca el hash. */
+function usuario_salida(array $u): array
+{
+    return [
+        'id' => $u['id'],
+        'nombre' => $u['nombre'],
+        'email' => $u['email'],
+        'rol' => $u['rol'],
+        'empresa' => $u['empresa'] ?? '',
+        'verifica' => (int) ($u['verifica'] ?? 0) === 1,
+    ];
+}
+
 function cuenta_admins(): int
 {
     return (int) bd()->query("SELECT COUNT(*) FROM usuarios WHERE rol = 'admin' AND activo = 1")->fetchColumn();
@@ -398,7 +437,7 @@ function guardar_listas(): void
 
 function guardar_tareas(): void
 {
-    exigir_sesion();
+    $yo = exigir_sesion();
     $entrada = cuerpo()['tareas'] ?? [];
     if (!is_array($entrada)) {
         responder_error(400, 'Formato incorrecto.', 'formato');
@@ -410,6 +449,17 @@ function guardar_tareas(): void
         }
         $estado = in_array($t['estado'] ?? '', ['pendiente', 'resuelta', 'verificada'], true)
             ? $t['estado'] : 'pendiente';
+
+        // Verificar es un permiso, y el navegador no es de fiar: si quien
+        // manda el cambio no puede verificar, la tarea se queda como
+        // estaba en el servidor en lugar de pasar a verificada.
+        if ($estado === 'verificada' && !(bool) $yo['verifica'] && $yo['rol'] !== 'admin') {
+            $previo = bd()->prepare('SELECT estado FROM tareas WHERE id = ?');
+            $previo->execute([$t['id']]);
+            $guardado = $previo->fetchColumn();
+            $estado = $guardado === 'verificada' ? 'verificada' : 'resuelta';
+        }
+
         $registro = [
             'id'                => $t['id'],
             'lista_id'          => $t['listaId'],
@@ -419,6 +469,7 @@ function guardar_tareas(): void
             'portada_id'        => es_uuid($t['portadaId'] ?? null) ? $t['portadaId'] : null,
             'estado_por'        => texto($t, 'estadoPor', 120) ?: null,
             'estado_en'         => isset($t['estadoEn']) ? iso($t['estadoEn']) : null,
+            'rechazada'         => booleano($t, 'rechazada') ? 1 : 0,
             'borrada'           => booleano($t, 'borrada') ? 1 : 0,
             'creado'            => iso($t['creado'] ?? null),
             'actualizado'       => iso($t['actualizado'] ?? null),
@@ -430,6 +481,42 @@ function guardar_tareas(): void
         }
     }
     responder(['guardadas' => $guardadas]);
+}
+
+/**
+ * Hilo de una tarea: rechazos y notas. Mismo protocolo de upsert que el
+ * resto; el texto de un rechazo no se puede editar después, pero sí
+ * borrar, y eso viaja como borrada = 1.
+ */
+function guardar_comentarios(): void
+{
+    exigir_sesion();
+    $entrada = cuerpo()['comentarios'] ?? [];
+    if (!is_array($entrada)) {
+        responder_error(400, 'Formato incorrecto.', 'formato');
+    }
+    $guardados = 0;
+    foreach ($entrada as $c) {
+        if (!is_array($c) || !es_uuid($c['id'] ?? null) || !es_uuid($c['tareaId'] ?? null)) {
+            continue;
+        }
+        $registro = [
+            'id'                 => $c['id'],
+            'tarea_id'           => $c['tareaId'],
+            'texto'              => mb_substr((string) ($c['texto'] ?? ''), 0, 4000),
+            'tipo'               => in_array($c['tipo'] ?? '', ['nota', 'rechazo'], true) ? $c['tipo'] : 'nota',
+            'borrada'            => booleano($c, 'borrada') ? 1 : 0,
+            'creado'             => iso($c['creado'] ?? null),
+            'actualizado'        => iso($c['actualizado'] ?? null),
+            'creado_por'         => es_uuid($c['creadoPor'] ?? null) ? $c['creadoPor'] : null,
+            'creado_por_nombre'  => texto($c, 'creadoPorNombre', 120, 'Sin identificar'),
+            'creado_por_empresa' => texto($c, 'creadoPorEmpresa', 120),
+        ];
+        if (upsert('comentarios', $registro)) {
+            $guardados++;
+        }
+    }
+    responder(['guardados' => $guardados]);
 }
 
 /**
@@ -485,6 +572,7 @@ function subir_medio(): void
 
     $id = (string) ($_POST['id'] ?? '');
     $tareaId = (string) ($_POST['tareaId'] ?? '');
+    $comentarioId = (string) ($_POST['comentarioId'] ?? '');
     $tipo = (string) ($_POST['tipo'] ?? '');
 
     if (!es_uuid($id) || !es_uuid($tareaId) || !isset(MIMES[$tipo])) {
@@ -538,8 +626,9 @@ function subir_medio(): void
     }
 
     upsert('medios', [
-        'id'          => $id,
-        'tarea_id'    => $tareaId,
+        'id'            => $id,
+        'tarea_id'      => $tareaId,
+        'comentario_id' => es_uuid($comentarioId) ? $comentarioId : null,
         'tipo'        => $tipo,
         'mime'        => $detectado,
         'tam'         => $tam,
@@ -664,13 +753,14 @@ function cambios(): void
 
     $listas = traer('listas', $desde);
     $tareas = traer('tareas', $desde);
+    $comentarios = traer('comentarios', $desde);
     $medios = traer('medios', $desde);
 
     // La marca siguiente sale de los propios datos, no del reloj del
     // servidor: así un desfase horario entre hosting y móvil no puede
     // hacer que se pierdan cambios.
     $marca = $desde;
-    foreach ([$listas, $tareas, $medios] as $conjunto) {
+    foreach ([$listas, $tareas, $comentarios, $medios] as $conjunto) {
         foreach ($conjunto as $fila) {
             if ($fila['actualizado'] > $marca) {
                 $marca = $fila['actualizado'];
@@ -678,14 +768,16 @@ function cambios(): void
         }
     }
 
-    $hayMas = count($listas) >= TOPE_CAMBIOS || count($tareas) >= TOPE_CAMBIOS || count($medios) >= TOPE_CAMBIOS;
+    $hayMas = count($listas) >= TOPE_CAMBIOS || count($tareas) >= TOPE_CAMBIOS
+        || count($comentarios) >= TOPE_CAMBIOS || count($medios) >= TOPE_CAMBIOS;
 
     responder([
-        'listas' => array_map('lista_salida', $listas),
-        'tareas' => array_map('tarea_salida', $tareas),
-        'medios' => array_map('medio_salida', $medios),
-        'ahora'  => $marca,
-        'mas'    => $hayMas,
+        'listas'      => array_map('lista_salida', $listas),
+        'tareas'      => array_map('tarea_salida', $tareas),
+        'comentarios' => array_map('comentario_salida', $comentarios),
+        'medios'      => array_map('medio_salida', $medios),
+        'ahora'       => $marca,
+        'mas'         => $hayMas,
     ]);
 }
 
@@ -714,16 +806,30 @@ function tarea_salida(array $f): array
         'id' => $f['id'], 'listaId' => $f['lista_id'], 'texto' => $f['texto'],
         'estado' => $f['estado'], 'orden' => (int) $f['orden'], 'portadaId' => $f['portada_id'],
         'estadoPor' => $f['estado_por'], 'estadoEn' => $f['estado_en'],
+        'rechazada' => (int) ($f['rechazada'] ?? 0) === 1,
         'borrada' => (int) $f['borrada'] === 1,
         'creado' => $f['creado'], 'actualizado' => $f['actualizado'],
         'creadoPor' => $f['creado_por'], 'creadoPorNombre' => $f['creado_por_nombre'],
     ];
 }
 
+function comentario_salida(array $f): array
+{
+    return [
+        'id' => $f['id'], 'tareaId' => $f['tarea_id'], 'texto' => $f['texto'], 'tipo' => $f['tipo'],
+        'borrada' => (int) $f['borrada'] === 1,
+        'creado' => $f['creado'], 'actualizado' => $f['actualizado'],
+        'creadoPor' => $f['creado_por'], 'creadoPorNombre' => $f['creado_por_nombre'],
+        'creadoPorEmpresa' => $f['creado_por_empresa'] ?? '',
+    ];
+}
+
 function medio_salida(array $f): array
 {
     return [
-        'id' => $f['id'], 'tareaId' => $f['tarea_id'], 'tipo' => $f['tipo'], 'mime' => $f['mime'],
+        'id' => $f['id'], 'tareaId' => $f['tarea_id'],
+        'comentarioId' => $f['comentario_id'] ?? null,
+        'tipo' => $f['tipo'], 'mime' => $f['mime'],
         'tam' => (int) $f['tam'], 'ancho' => (int) $f['ancho'], 'alto' => (int) $f['alto'],
         'duracion' => (int) $f['duracion'], 'borrada' => (int) $f['borrada'] === 1,
         'creado' => $f['creado'], 'actualizado' => $f['actualizado'],

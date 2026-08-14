@@ -2,12 +2,13 @@
    Se ve la foto y el texto de cada una sin tener que abrirla, que es
    como se repasa una vivienda andando. */
 import { h, icon, sheet, toast, confirmSheet, emptyState, fechaCorta, hora } from '../ui.js';
-import { unidad, fase, estado, ESTADOS } from '../catalog.js';
+import { unidad, fase, estado, promocion, ESTADOS } from '../catalog.js';
 import * as store from '../store.js';
 import * as media from '../media.js';
 import { cabecera, barraSync } from '../piezas.js';
 import { ir, refrescar } from '../app.js';
 import { informe } from '../informe.js';
+import { hojaDePuerta, nombreDeFichero } from '../pdf.js';
 
 export async function render({ listaId }) {
   const lista = await store.lista(listaId);
@@ -104,6 +105,11 @@ export async function render({ listaId }) {
       ),
 
       barraSync(),
+
+      tareas.length ? h('button.btn.pdf.full', {
+        onclick: () => descargarHoja(lista, tareas),
+      }, icon('documento'), 'Hoja PDF para la puerta') : null,
+
       conteo.total ? chips : null,
       tareas.length ? listado : emptyState('camera', 'Lista vacía',
         'Recorre la vivienda y añade una tarea por cada remate, defecto o detalle que encuentres.',
@@ -127,6 +133,7 @@ function tarjetaTarea(t, numero, urlPortada, tipos, listaId) {
     h('div.body', null,
       h('p.txt', null, t.texto || 'Sin descripción'),
       h('div.meta', null,
+        t.rechazada ? h('span.tag.rojo', null, 'Rechazada') : null,
         h('span.tag', { class: e.tag }, e.nombre),
         t.estado !== 'pendiente' && t.estadoPor
           ? h('span.tag', null, t.estadoPor.split(/\s+/)[0])
@@ -241,17 +248,63 @@ function hojaTexto(imagenes) {
   });
 }
 
+/* ─── Hoja PDF para la puerta ─────────────────────────────────── */
+/**
+ * Genera la hoja e intenta entregarla por el camino más cómodo del
+ * dispositivo: en el móvil, el menú de compartir (de ahí va a WhatsApp o
+ * a Archivos); en el ordenador, una descarga normal.
+ */
+async function descargarHoja(lista, tareas) {
+  const u = unidad(lista.unidadId);
+  const p = promocion(lista.promoId);
+  try {
+    const blob = hojaDePuerta({
+      vivienda: u?.nombre || lista.unidadId,
+      promocion: p?.nombre || lista.promoId,
+      fase: fase(lista.fase).nombre,
+      fecha: fechaCorta(lista.creado),
+      autor: lista.creadoPorNombre,
+      tareas,
+    });
+    const nombre = nombreDeFichero(u?.nombre || 'vivienda', fechaCorta(lista.creado));
+    const fichero = new File([blob], nombre, { type: 'application/pdf' });
+
+    if (navigator.canShare?.({ files: [fichero] })) {
+      await navigator.share({ files: [fichero], title: nombre });
+      return;
+    }
+
+    const url = URL.createObjectURL(blob);
+    const enlace = h('a', { href: url, download: nombre, style: { display: 'none' } });
+    document.body.append(enlace);
+    enlace.click();
+    setTimeout(() => { enlace.remove(); URL.revokeObjectURL(url); }, 4000);
+    toast('PDF descargado');
+  } catch (e) {
+    if (e?.name === 'AbortError') return;
+    console.error(e);
+    toast('No se pudo generar el PDF', 'err');
+  }
+}
+
 /* ─── Opciones de la lista ────────────────────────────────────── */
 async function menuLista(lista, tareas) {
   const accion = await sheet((cerrar) => [
     h('h2.title', null, 'Lista de repaso'),
     h('p.sub', null, `Creada por ${lista.creadoPorNombre} el ${fechaCorta(lista.creado)} a las ${hora(lista.creado)}.`),
     h('div.stack', { style: { marginTop: '6px' } },
+      h('button.row', { onclick: () => cerrar('hoja') },
+        h('div.row-lead', { style: { background: 'rgba(198,58,48,.12)', color: '#c63a30' } }, icon('documento', 18)),
+        h('div.grow', null,
+          h('div.row-title', null, 'Hoja PDF para la puerta'),
+          h('div.row-sub', null, 'Listado grande, para imprimir y pegar'),
+        ),
+      ),
       h('button.row', { onclick: () => cerrar('informe') },
         h('div.row-lead', null, icon('download', 18)),
         h('div.grow', null,
-          h('div.row-title', null, 'Informe para imprimir'),
-          h('div.row-sub', null, 'Fotos y textos en una sola página'),
+          h('div.row-title', null, 'Informe con fotos'),
+          h('div.row-sub', null, 'Para mandar a la constructora'),
         ),
       ),
       h('button.row', { onclick: () => cerrar('estados') },
@@ -276,6 +329,7 @@ async function menuLista(lista, tareas) {
     h('button.btn.ghost.full', { onclick: () => cerrar(null) }, 'Cancelar'),
   ]);
 
+  if (accion === 'hoja') return descargarHoja(lista, tareas);
   if (accion === 'informe') return informe(lista, { abrirImpresion: true });
 
   if (accion === 'cerrar') {

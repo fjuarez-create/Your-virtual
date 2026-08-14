@@ -26,6 +26,7 @@ const ARMAZON = [
   'js/piezas.js',
   'js/catalog.js',
   'js/informe.js',
+  'js/pdf.js',
   'js/views/entrar.js',
   'js/views/inicio.js',
   'js/views/promociones.js',

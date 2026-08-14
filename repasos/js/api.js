@@ -69,6 +69,8 @@ export const eliminarUsuario = (id) =>
 /* ─── Sincronización ──────────────────────────────────────────── */
 export const subirListas = (listas) => pedir('listas', { metodo: 'POST', json: { listas } });
 export const subirTareas = (tareas) => pedir('tareas', { metodo: 'POST', json: { tareas } });
+export const subirComentarios = (comentarios) =>
+  pedir('comentarios', { metodo: 'POST', json: { comentarios } });
 
 /** Sube un medio con su fichero. `alProgreso(0..1)` es opcional. */
 export function subirMedio(medio, blob, alProgreso) {
@@ -79,6 +81,7 @@ export function subirMedio(medio, blob, alProgreso) {
     const form = new FormData();
     form.append('id', medio.id);
     form.append('tareaId', medio.tareaId);
+    if (medio.comentarioId) form.append('comentarioId', medio.comentarioId);
     form.append('tipo', medio.tipo);
     form.append('creado', medio.creado);
     form.append('duracion', String(medio.duracion || 0));

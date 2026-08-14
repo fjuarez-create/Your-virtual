@@ -44,14 +44,48 @@ Si dos personas tocan la misma tarea, gana la modificación más reciente; los
 borrados también viajan, para que un móvil que estuvo dos días sin cobertura se
 entere de lo que se borró mientras tanto.
 
-## Usuarios
+## Usuarios y permisos
 
-Las cuentas las crea el administrador desde **Ajustes → Usuarios**: nombre,
-correo y una contraseña inicial (hay botón para generar una legible al dictado).
-Cada uno puede cambiarla luego desde sus propios ajustes.
+Las cuentas las crea el administrador desde **Ajustes → Usuarios** con solo tres
+datos: nombre, correo y empresa o rol. **La contraseña la genera la app**: el
+nombre completo seguido de la primera palabra de la empresa, en minúsculas, sin
+tildes ni espacios (`Alba García` + `Unik — Promotor` → `albagarciaunik`). La
+misma regla vive en `js/catalog.js` y en `api/lib/nucleo.php`, así que cliente y
+servidor calculan siempre lo mismo.
+
+Al crear el usuario aparece la contraseña con un botón de **compartir**, que en
+el móvil abre WhatsApp, correo o lo que haya instalado. Es la única vez que se
+puede ver.
+
+**Verificar es un permiso aparte del de administrador.** Quien no lo tiene solo
+puede mover tareas entre *pendiente* y *resuelta*; el chip de *verificada* le sale
+apagado. El permiso se propone según la empresa (UNIK y la dirección facultativa
+sí, constructora y subcontratas no) y se puede ajustar a mano. La comprobación
+está también en el servidor: un cliente manipulado no puede saltársela.
 
 Desactivar a alguien le quita el acceso pero **conserva su firma** en los repasos
 que ya hizo. Siempre tiene que quedar al menos un administrador activo.
+
+La sesión dura **seis meses**: se entra una vez y el móvil de obra no vuelve a
+pedir nada.
+
+## Rechazos: el hilo de la tarea
+
+Devolver a *pendiente* algo que estaba *resuelto* no se puede hacer en silencio.
+La app pide una explicación —y admite una foto— y con eso monta un **hilo** dentro
+de la tarea. La tarea queda marcada como **Rechazada** en rojo, tanto en el
+listado como al abrirla, para que quien la dio por resuelta lo vea sin buscar.
+
+También se pueden añadir notas sueltas al hilo sin cambiar el estado.
+
+## Dos documentos distintos
+
+- **Hoja PDF para la puerta** (botón rojo): un listado grande, con una casilla por
+  tarea, para imprimir y pegar con cinta en la puerta de la vivienda. El PDF se
+  escribe a mano en `js/pdf.js`, sin librerías: pesa unos pocos kilobytes y en el
+  móvil sale por el menú de compartir.
+- **Informe con fotos**: una ficha por tarea con su imagen, para mandar a la
+  constructora. Se genera con la impresión del navegador (*Guardar como PDF*).
 
 ## Puesta en marcha en el hosting
 
@@ -66,6 +100,10 @@ Los pasos completos, con el detalle de cada pantalla de Plesk, están en
 5. Crear `api/config.php` en el servidor con los datos de la base.
 6. Subir los límites de PHP para que entren los vídeos.
 7. Abrir `api/install.php` una vez y borrarlo después.
+
+Cuando se publique una versión que añada campos o tablas, abrir una vez
+`api/actualizar.php`: mira qué falta, lo añade sin tocar ningún dato, y da de
+alta el equipo inicial calculando la contraseña de cada uno. Es idempotente.
 
 ### Despliegue automático
 
@@ -131,7 +169,8 @@ js/store.js             Modelo de datos y motor de sincronización
 js/db.js                Almacén local (IndexedDB)
 js/api.js               Cliente del backend
 js/media.js             Cámara, compresión de fotos y grabadora de voz
-js/informe.js           Informe imprimible
+js/informe.js           Informe con fotos, para imprimir
+js/pdf.js               Hoja PDF de la puerta (generador propio)
 js/catalog.js           Promociones, viviendas, fases y estados
 js/ui.js                Nodos, iconos, avisos, hojas y visor
 js/piezas.js            Cabecera, cinta de sincronización, fila de lista

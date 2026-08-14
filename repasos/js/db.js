@@ -6,14 +6,15 @@
    arquitecta recorra una villa sin cobertura y no pierda el trabajo.
 
    Almacenes:
-     meta     clave/valor (sesión, última sincronización…)
-     listas   listas de repaso            índice: unidadId
-     tareas   tareas de cada lista        índice: listaId
-     medios   fotos, vídeos y audios      índice: tareaId
-     outbox   cambios pendientes de subir (orden de llegada)
+     meta         clave/valor (sesión, última sincronización…)
+     listas       listas de repaso            índice: unidadId
+     tareas       tareas de cada lista        índice: listaId
+     medios       fotos, vídeos y audios      índice: tareaId
+     comentarios  hilo de cada tarea          índice: tareaId
+     outbox       cambios pendientes de subir (orden de llegada)
    ═══════════════════════════════════════════════════════════════ */
 const NOMBRE = 'unik-repasos';
-const VERSION = 1;
+const VERSION = 2;
 
 let dbPromise = null;
 
@@ -32,6 +33,10 @@ export function abrir() {
       }
       if (!db.objectStoreNames.contains('medios')) {
         db.createObjectStore('medios', { keyPath: 'id' }).createIndex('tareaId', 'tareaId');
+      }
+      // Versión 2: el hilo de una tarea (rechazos y notas).
+      if (!db.objectStoreNames.contains('comentarios')) {
+        db.createObjectStore('comentarios', { keyPath: 'id' }).createIndex('tareaId', 'tareaId');
       }
       if (!db.objectStoreNames.contains('outbox')) {
         db.createObjectStore('outbox', { keyPath: 'seq', autoIncrement: true });
@@ -117,5 +122,5 @@ export async function numPendientes() {
 
 /** Borra todo el contenido local (cierre de sesión). */
 export async function limpiarTodo() {
-  for (const s of ['meta', 'listas', 'tareas', 'medios', 'outbox']) await vaciar(s);
+  for (const s of ['meta', 'listas', 'tareas', 'medios', 'comentarios', 'outbox']) await vaciar(s);
 }

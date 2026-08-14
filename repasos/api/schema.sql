@@ -13,6 +13,8 @@ CREATE TABLE IF NOT EXISTS usuarios (
   email         VARCHAR(190) NOT NULL,
   password_hash VARCHAR(255) NOT NULL,
   rol           VARCHAR(10)  NOT NULL DEFAULT 'usuario',
+  empresa       VARCHAR(120) NOT NULL DEFAULT '',
+  verifica      TINYINT(1)   NOT NULL DEFAULT 0,
   activo        TINYINT(1)   NOT NULL DEFAULT 1,
   creado        CHAR(24)     NOT NULL,
   actualizado   CHAR(24)     NOT NULL,
@@ -69,6 +71,7 @@ CREATE TABLE IF NOT EXISTS tareas (
   portada_id        CHAR(36)     DEFAULT NULL,
   estado_por        VARCHAR(120) DEFAULT NULL,
   estado_en         CHAR(24)     DEFAULT NULL,
+  rechazada         TINYINT(1)   NOT NULL DEFAULT 0,
   borrada           TINYINT(1)   NOT NULL DEFAULT 0,
   creado            CHAR(24)     NOT NULL,
   actualizado       CHAR(24)     NOT NULL,
@@ -79,9 +82,26 @@ CREATE TABLE IF NOT EXISTS tareas (
   KEY ix_tareas_actualizado (actualizado)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS comentarios (
+  id                 CHAR(36)     NOT NULL,
+  tarea_id           CHAR(36)     NOT NULL,
+  texto              TEXT         NOT NULL,
+  tipo               VARCHAR(20)  NOT NULL DEFAULT 'nota',   -- nota | rechazo
+  borrada            TINYINT(1)   NOT NULL DEFAULT 0,
+  creado             CHAR(24)     NOT NULL,
+  actualizado        CHAR(24)     NOT NULL,
+  creado_por         CHAR(36)     DEFAULT NULL,
+  creado_por_nombre  VARCHAR(120) NOT NULL,
+  creado_por_empresa VARCHAR(120) NOT NULL DEFAULT '',
+  PRIMARY KEY (id),
+  KEY ix_comentarios_tarea (tarea_id),
+  KEY ix_comentarios_actualizado (actualizado)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS medios (
-  id          CHAR(36)     NOT NULL,
-  tarea_id    CHAR(36)     NOT NULL,
+  id            CHAR(36)     NOT NULL,
+  tarea_id      CHAR(36)     NOT NULL,
+  comentario_id CHAR(36)     DEFAULT NULL,
   tipo        VARCHAR(10)  NOT NULL,          -- imagen | video | audio
   mime        VARCHAR(100) NOT NULL,
   tam         BIGINT       NOT NULL DEFAULT 0,

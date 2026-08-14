@@ -8,6 +8,7 @@
    ═══════════════════════════════════════════════════════════════ */
 import * as db from './db.js';
 import * as api from './api.js';
+import { puedeVerificar } from './catalog.js';
 
 /* ─── Identificadores y sellos de tiempo ──────────────────────── */
 export function nuevoId() {
@@ -176,22 +177,116 @@ export async function actualizarTarea(id, cambios) {
   return nueva;
 }
 
+/**
+ * Cambia el estado de una tarea dejando constancia de por qué.
+ *
+ * Devolver a pendiente algo que estaba resuelto es un rechazo: quien lo
+ * hace tiene que explicarlo, y la tarea queda marcada para que el
+ * constructor lo vea sin tener que abrirla. Es el hilo de la tarea.
+ *
+ * @param {string} nuevo  'pendiente' | 'resuelta' | 'verificada'
+ * @param {{texto?: string, imagen?: {blob: Blob, mime: string, ancho: number, alto: number}}} nota
+ */
+export async function cambiarEstado(tareaId, nuevo, nota = {}) {
+  const t = await db.get('tareas', tareaId);
+  if (!t) return null;
+  if (t.estado === nuevo) return t;
+
+  if (nuevo === 'verificada' && !puedeVerificar(usuario)) {
+    throw new Error('No tienes permiso para verificar tareas.');
+  }
+
+  const rechazo = t.estado === 'resuelta' && nuevo === 'pendiente';
+  const cambios = { estado: nuevo };
+  if (rechazo) cambios.rechazada = true;
+  else if (nuevo !== 'pendiente') cambios.rechazada = false;
+
+  const actualizada = await actualizarTarea(tareaId, cambios);
+
+  if (nota.texto || nota.imagen) {
+    await añadirComentario(tareaId, {
+      texto: nota.texto || '',
+      tipo: rechazo ? 'rechazo' : 'nota',
+      imagen: nota.imagen,
+    });
+  }
+  return actualizada;
+}
+
+/** ¿Devolver esta tarea a pendiente exige explicación? */
+export function exigeExplicacion(tarea, nuevo) {
+  return !!tarea && tarea.estado === 'resuelta' && nuevo === 'pendiente';
+}
+
+/* ─── Hilo de la tarea ────────────────────────────────────────── */
+export async function comentariosDeTarea(tareaId) {
+  const todos = await db.porIndice('comentarios', 'tareaId', tareaId);
+  return todos.filter((c) => !c.borrada).sort((a, b) => a.creado.localeCompare(b.creado));
+}
+
+export async function añadirComentario(tareaId, { texto, tipo = 'nota', imagen }) {
+  const c = {
+    id: nuevoId(),
+    tareaId,
+    texto: texto || '',
+    tipo,
+    borrada: false,
+    creado: ahora(),
+    actualizado: ahora(),
+    creadoPor: usuario?.id || 'local',
+    creadoPorNombre: usuario?.nombre || 'Sin identificar',
+    creadoPorEmpresa: usuario?.empresa || '',
+  };
+  await db.put('comentarios', c);
+  await encolar('comentario', c.id);
+
+  if (imagen) {
+    await añadirMedio(tareaId, {
+      tipo: 'imagen',
+      blob: imagen.blob,
+      mime: imagen.mime,
+      ancho: imagen.ancho,
+      alto: imagen.alto,
+      comentarioId: c.id,
+    });
+  }
+  return c;
+}
+
+export async function borrarComentario(id) {
+  const c = await db.get('comentarios', id);
+  if (!c) return;
+  await db.put('comentarios', { ...c, borrada: true, actualizado: ahora() });
+  await encolar('comentario', id);
+}
+
+/** Imágenes adjuntas a un comentario concreto. */
+export async function mediosDeComentario(comentarioId) {
+  const todos = await db.getAll('medios');
+  return todos.filter((m) => !m.borrada && m.comentarioId === comentarioId);
+}
+
 export async function borrarTarea(id) {
   const medios = await db.porIndice('medios', 'tareaId', id);
   for (const m of medios) await borrarMedio(m.id, { silencioso: true });
+  for (const c of await comentariosDeTarea(id)) await borrarComentario(c.id);
   return actualizarTarea(id, { borrada: true });
 }
 
 /* ─── Medios ──────────────────────────────────────────────────── */
+/** Material de la tarea. Las fotos del hilo no entran aquí: viven en
+    su comentario y no deben mezclarse con el carrete de la tarea. */
 export async function mediosDeTarea(tareaId) {
   const todos = await db.porIndice('medios', 'tareaId', tareaId);
-  return todos.filter((m) => !m.borrada).sort((a, b) => a.creado.localeCompare(b.creado));
+  return todos.filter((m) => !m.borrada && !m.comentarioId)
+    .sort((a, b) => a.creado.localeCompare(b.creado));
 }
 
-export async function añadirMedio(tareaId, { tipo, blob, mime, ancho, alto, duracion, nombre }) {
+export async function añadirMedio(tareaId, { tipo, blob, mime, ancho, alto, duracion, nombre, comentarioId }) {
   const m = {
     id: nuevoId(),
     tareaId,
+    comentarioId: comentarioId || null,
     tipo,                                  // 'imagen' | 'video' | 'audio'
     mime: mime || blob.type || 'application/octet-stream',
     tam: blob.size,
@@ -206,9 +301,10 @@ export async function añadirMedio(tareaId, { tipo, blob, mime, ancho, alto, dur
     actualizado: ahora(),
   };
   await db.put('medios', m);
-  // La primera imagen de la tarea es su portada en el listado.
+  // La primera imagen de la tarea es su portada en el listado. Las del
+  // hilo nunca lo son: describen la corrección, no el defecto.
   const t = await db.get('tareas', tareaId);
-  if (t && !t.portadaId && tipo === 'imagen') {
+  if (t && !t.portadaId && tipo === 'imagen' && !comentarioId) {
     await db.put('tareas', { ...t, portadaId: m.id, actualizado: ahora() });
     await encolar('tarea', tareaId);
   }
@@ -370,6 +466,9 @@ async function empujar() {
       } else if (item.tipo === 'tarea') {
         const t = await db.get('tareas', item.id);
         if (t) await api.subirTareas([sinBlobs(t)]);
+      } else if (item.tipo === 'comentario') {
+        const c = await db.get('comentarios', item.id);
+        if (c) await api.subirComentarios([sinBlobs(c)]);
       } else if (item.tipo === 'medio') {
         const m = await db.get('medios', item.id);
         if (m && !m.borrada && m.blob) {
@@ -436,6 +535,14 @@ async function fusionarTanda(desde) {
     }
     await db.putVarios('tareas', fusionadas);
   }
+  if (r.comentarios?.length) {
+    const fusionados = [];
+    for (const remoto of r.comentarios) {
+      const local = await db.get('comentarios', remoto.id);
+      if (!local || remoto.actualizado >= local.actualizado) fusionados.push(normalizarComentario(remoto));
+    }
+    await db.putVarios('comentarios', fusionados);
+  }
   if (r.medios?.length) {
     const fusionados = [];
     for (const remoto of r.medios) {
@@ -453,7 +560,9 @@ async function fusionarTanda(desde) {
   // La revisión sube al final, con todo ya escrito: si se avisara antes,
   // la pantalla se repintaría con los datos de hace un momento y se
   // quedaría así hasta el siguiente cambio.
-  if (r.listas?.length || r.tareas?.length || r.medios?.length) estadoSync.revision++;
+  if (r.listas?.length || r.tareas?.length || r.medios?.length || r.comentarios?.length) {
+    estadoSync.revision++;
+  }
   return r;
 }
 
@@ -461,7 +570,10 @@ async function fusionarTanda(desde) {
 // para que el resto de la app no tenga que pensar en ello.
 const bool = (v) => v === true || v === 1 || v === '1';
 const normalizarLista = (l) => ({ ...l, cerrada: bool(l.cerrada), borrada: bool(l.borrada) });
-const normalizarTarea = (t) => ({ ...t, orden: Number(t.orden) || 0, borrada: bool(t.borrada) });
+const normalizarTarea = (t) => ({
+  ...t, orden: Number(t.orden) || 0, borrada: bool(t.borrada), rechazada: bool(t.rechazada),
+});
+const normalizarComentario = (c) => ({ ...c, borrada: bool(c.borrada) });
 const normalizarMedio = (m) => ({
   ...m, subido: true, borrada: bool(m.borrada),
   tam: Number(m.tam) || 0, ancho: Number(m.ancho) || 0,

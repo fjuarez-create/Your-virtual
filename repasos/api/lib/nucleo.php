@@ -127,6 +127,44 @@ function es_uuid(?string $valor): bool
     return is_string($valor) && (bool) preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $valor);
 }
 
+/** Minúsculas, sin tildes y sin nada que no sea letra o número. */
+function llano(string $texto): string
+{
+    $tildes = [
+        'á' => 'a', 'à' => 'a', 'ä' => 'a', 'â' => 'a', 'ã' => 'a', 'å' => 'a',
+        'é' => 'e', 'è' => 'e', 'ë' => 'e', 'ê' => 'e',
+        'í' => 'i', 'ì' => 'i', 'ï' => 'i', 'î' => 'i',
+        'ó' => 'o', 'ò' => 'o', 'ö' => 'o', 'ô' => 'o', 'õ' => 'o',
+        'ú' => 'u', 'ù' => 'u', 'ü' => 'u', 'û' => 'u',
+        'ñ' => 'n', 'ç' => 'c',
+    ];
+    $texto = mb_strtolower($texto, 'UTF-8');
+    $texto = strtr($texto, $tildes);
+    return preg_replace('/[^a-z0-9]/', '', $texto) ?? '';
+}
+
+/**
+ * Contraseña inicial: nombre completo seguido de la primera palabra de
+ * la empresa o rol, en minúsculas, sin tildes ni espacios.
+ * «Alba García» + «Unik — Promotor» → albagarciaunik
+ *
+ * Tiene que dar exactamente lo mismo que contrasenaInicial() en
+ * js/catalog.js: quien da de alta a alguien dicta la contraseña de
+ * memoria, y las dos partes han de coincidir.
+ */
+function contrasena_inicial(string $nombre, string $empresa): string
+{
+    $primera = '';
+    foreach (preg_split('/\s+/u', trim($empresa)) ?: [] as $palabra) {
+        $limpia = llano($palabra);
+        if ($limpia !== '') {
+            $primera = $limpia;
+            break;
+        }
+    }
+    return llano($nombre) . $primera;
+}
+
 function texto(array $origen, string $clave, int $max = 255, string $porDefecto = ''): string
 {
     $v = $origen[$clave] ?? $porDefecto;

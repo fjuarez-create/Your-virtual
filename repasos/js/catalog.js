@@ -87,3 +87,66 @@ export function estado(id) {
 export function fase(id) {
   return FASES.find((f) => f.id === id) || FASES[0];
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Usuarios: contraseña, permisos y roles
+   ═══════════════════════════════════════════════════════════════ */
+
+/** Quita tildes y todo lo que no sea letra o número. */
+function llano(texto) {
+  return String(texto || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+/**
+ * Contraseña inicial de un usuario: su nombre completo seguido de la
+ * primera palabra de su empresa o rol, todo en minúsculas, sin tildes y
+ * sin espacios. «Alba García» + «Unik — Promotor» → albagarciaunik.
+ *
+ * Se calcula igual en el navegador y en el servidor, así que quien da de
+ * alta a alguien puede dictarle la contraseña sin consultarla en ningún
+ * sitio.
+ */
+export function contrasenaInicial(nombre, empresa) {
+  const palabras = String(empresa || '').trim().split(/\s+/);
+  const primera = palabras.map(llano).find((p) => p) || '';
+  return llano(nombre) + primera;
+}
+
+/**
+ * Quién puede marcar una tarea como verificada. Es un permiso por
+ * usuario, no por empresa: hay técnicos externos que no verifican y
+ * gente de UNIK que sí.
+ */
+export function puedeVerificar(usuario) {
+  return !!usuario && (usuario.verifica === true || usuario.rol === 'admin');
+}
+
+/** Estados que puede poner un usuario concreto. */
+export function estadosPermitidos(usuario) {
+  return puedeVerificar(usuario) ? ESTADOS : ESTADOS.filter((e) => e.id !== 'verificada');
+}
+
+/**
+ * Empresas y roles que se ofrecen al dar de alta, para no tener que
+ * escribirlos a mano cada vez. El campo admite cualquier texto: esto
+ * son solo atajos.
+ */
+export const EMPRESAS = [
+  { texto: 'Unik — Promotor', verifica: true },
+  { texto: 'DO — Arquitecto', verifica: true },
+  { texto: 'Arquitecto', verifica: true },
+  { texto: 'Arquitecta', verifica: true },
+  { texto: 'DEO Aparejador', verifica: false },
+  { texto: 'Sinergia', verifica: false },
+  { texto: 'Subcontrata', verifica: false },
+];
+
+/** Sugerencia de permiso de verificación a partir de la empresa/rol. */
+export function verificaPorDefecto(empresa) {
+  const conocida = EMPRESAS.find((e) => llano(e.texto) === llano(empresa));
+  if (conocida) return conocida.verifica;
+  // Ante lo desconocido, el permiso más restrictivo.
+  return false;
+}

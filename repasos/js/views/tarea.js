@@ -1,7 +1,7 @@
 /* Detalle de una tarea: la foto en grande, el texto completo y el resto
    de material de apoyo (más fotos, vídeo y notas de voz). */
 import { h, icon, sheet, toast, confirmSheet, openViewer, fechaCorta, hora, pesoLegible } from '../ui.js';
-import { ESTADOS, estado, unidad } from '../catalog.js';
+import { ESTADOS, estado, unidad, estadosPermitidos } from '../catalog.js';
 import * as store from '../store.js';
 import * as media from '../media.js';
 import { cabecera } from '../piezas.js';
@@ -18,6 +18,10 @@ export async function render({ listaId, tareaId }) {
   const audios = medios.filter((m) => m.tipo === 'audio');
   const hermanas = await store.tareasDeLista(listaId);
   const indice = hermanas.findIndex((x) => x.id === tareaId);
+
+  const comentarios = await store.comentariosDeTarea(tareaId);
+  const mediosPorComentario = new Map();
+  for (const c of comentarios) mediosPorComentario.set(c.id, await store.mediosDeComentario(c.id));
 
   /* ─── Medio principal ─── */
   const hero = h('div.hero-media');
@@ -72,17 +76,22 @@ export async function render({ listaId, tareaId }) {
   pintarHero();
 
   /* ─── Estado ─── */
+  const yo = store.sesion();
+  const permitidos = estadosPermitidos(yo);
+
   const chipsEstado = h('div.chips', null,
-    ESTADOS.map((e) => h('button.chip', {
-      'aria-pressed': t.estado === e.id ? 'true' : 'false',
-      onclick: async () => {
-        if (t.estado === e.id) return;
-        await store.actualizarTarea(t.id, { estado: e.id });
-        toast('Marcada como ' + e.nombre.toLowerCase());
-        refrescar();
-      },
-    }, e.nombre)),
+    permitidos.map((op) => h('button.chip', {
+      'aria-pressed': t.estado === op.id ? 'true' : 'false',
+      onclick: () => cambiarEstadoTarea(t, op.id),
+    }, op.nombre)),
   );
+
+  if (permitidos.length < ESTADOS.length) {
+    chipsEstado.append(h('span.chip', {
+      style: { opacity: '.45', pointerEvents: 'none' },
+      title: 'Solo la dirección facultativa y UNIK pueden verificar',
+    }, 'Verificada'));
+  }
 
   const e = estado(t.estado);
 
@@ -99,6 +108,8 @@ export async function render({ listaId, tareaId }) {
           }, icon('gear'))],
         },
       ),
+
+      t.rechazada ? avisoRechazo(comentarios) : null,
 
       hero,
       rail,
@@ -120,6 +131,8 @@ export async function render({ listaId, tareaId }) {
           ? h('p.hint', null, `${e.nombre} por ${t.estadoPor} el ${fechaCorta(t.estadoEn)} a las ${hora(t.estadoEn)}`)
           : null,
       ),
+
+      hiloDeTarea(t, comentarios, mediosPorComentario),
 
       audios.length ? h('div', { style: { marginTop: '20px' } },
         h('p.eyebrow', { style: { marginBottom: '10px' } }, 'Notas de voz'),
@@ -177,6 +190,164 @@ function navegacionHermanas(hermanas, indice, listaId) {
     h('button.btn.ghost', { disabled: !siguiente, onclick: () => ir(`#/l/${listaId}/t/${siguiente.id}`) },
       'Siguiente', icon('arrowRight')),
   );
+}
+
+/* ─── Rechazo e hilo ──────────────────────────────────────────── */
+/**
+ * Cambia el estado. Devolver a pendiente algo que estaba resuelto no se
+ * puede hacer en silencio: quien lo hace tiene que explicar por qué, y
+ * puede adjuntar una foto de cómo está la cosa. Eso queda en el hilo y
+ * el constructor lo ve nada más abrir la tarea.
+ */
+async function cambiarEstadoTarea(t, nuevo) {
+  if (t.estado === nuevo) return;
+
+  if (store.exigeExplicacion(t, nuevo)) {
+    const nota = await hojaRechazo(t);
+    if (!nota) return;
+    await store.cambiarEstado(t.id, nuevo, nota);
+    toast('Devuelta a pendiente');
+    return refrescar();
+  }
+
+  try {
+    await store.cambiarEstado(t.id, nuevo);
+    toast('Marcada como ' + nuevo);
+    refrescar();
+  } catch (e) {
+    toast(e.message, 'err');
+  }
+}
+
+/** Hoja del rechazo: texto obligatorio y foto opcional. */
+function hojaRechazo(t) {
+  return sheet((cerrar) => {
+    const area = h('textarea.textarea', {
+      rows: 4,
+      placeholder: 'Qué sigue mal y qué hay que hacer…',
+      autocapitalize: 'sentences',
+    });
+    const aviso = h('p.hint.err', { style: { display: 'none' } });
+    const previa = h('div.rail', { style: { display: 'none' } });
+    let imagen = null;
+
+    const adjuntar = h('button.btn.ghost.full', { style: { marginTop: '10px' } }, icon('camera'), 'Adjuntar una foto');
+    adjuntar.addEventListener('click', async () => {
+      const [f] = await media.hacerFoto();
+      if (!f) return;
+      toast('Preparando la foto…');
+      try {
+        const img = await media.prepararImagen(f);
+        imagen = img;
+        previa.replaceChildren(h('div.m', { style: { backgroundImage: `url("${URL.createObjectURL(img.blob)}")` } }));
+        previa.style.display = 'flex';
+        adjuntar.replaceChildren(icon('check'), document.createTextNode('Foto adjunta · cambiar'));
+      } catch { toast('No se pudo leer la foto', 'err'); }
+    });
+
+    setTimeout(() => area.focus(), 320);
+
+    return [
+      h('h2.title', null, 'Devolver a pendiente'),
+      h('p.sub', null, 'Esta tarea estaba dada por resuelta. Explica por qué la rechazas: quien la resolvió verá el aviso y tu explicación.'),
+      area,
+      previa,
+      adjuntar,
+      aviso,
+      h('button.btn.accent.full', {
+        style: { marginTop: '14px' },
+        onclick: () => {
+          const texto = area.value.trim();
+          if (texto.length < 5) {
+            aviso.textContent = 'Escribe al menos una frase explicando el rechazo.';
+            aviso.style.display = 'block';
+            return;
+          }
+          cerrar({ texto, imagen });
+        },
+      }, 'Rechazar y devolver a pendiente'),
+      h('button.btn.ghost.full', { onclick: () => cerrar(null) }, 'Cancelar'),
+    ];
+  });
+}
+
+/** Banda de aviso cuando la tarea viene rechazada. */
+function avisoRechazo(comentarios) {
+  const ultimo = [...comentarios].reverse().find((c) => c.tipo === 'rechazo');
+  return h('div.alerta', null,
+    h('div.alerta-ico', null, icon('rechazo', 20)),
+    h('div.grow', null,
+      h('p.alerta-titulo', null, 'Rechazada'),
+      h('p.alerta-texto', null, ultimo
+        ? `${ultimo.creadoPorNombre} la devolvió a pendiente: «${ultimo.texto}»`
+        : 'Se devolvió a pendiente tras darse por resuelta.'),
+    ),
+  );
+}
+
+/** Hilo de la tarea: rechazos y notas, en orden. */
+function hiloDeTarea(t, comentarios, mediosPorComentario) {
+  const bloque = h('div', { style: { marginTop: '24px' } },
+    h('div.topbar', null,
+      h('div.grow', null, h('p.eyebrow', null, `Hilo${comentarios.length ? ' · ' + comentarios.length : ''}`)),
+      h('button.tag', { onclick: () => hojaNota(t) }, 'Añadir nota'),
+    ),
+  );
+
+  if (!comentarios.length) {
+    bloque.append(h('p.hint', { style: { marginTop: '4px' } },
+      'Aquí quedan los rechazos y las notas que se vayan añadiendo.'));
+    return bloque;
+  }
+
+  const hilo = h('div.hilo', { style: { marginTop: '10px' } });
+  for (const c of comentarios) {
+    const fotos = mediosPorComentario.get(c.id) || [];
+    hilo.append(h('div.mensaje', { class: c.tipo === 'rechazo' ? 'rechazo' : '' },
+      h('div.mensaje-cab', null,
+        c.tipo === 'rechazo' ? h('span.tag.rojo', null, 'Rechazo') : null,
+        h('span.mensaje-autor', null, c.creadoPorNombre),
+        c.creadoPorEmpresa ? h('span.mensaje-empresa', null, c.creadoPorEmpresa) : null,
+        h('span.mensaje-fecha', null, `${fechaCorta(c.creado)} · ${hora(c.creado)}`),
+      ),
+      c.texto ? h('p.mensaje-texto', null, c.texto) : null,
+      fotos.length ? h('div.rail', { style: { marginTop: '9px' } },
+        fotos.map((m) => {
+          const url = store.urlDeMedio(m);
+          return h('div.m', {
+            role: 'button', tabindex: '0',
+            style: url ? { backgroundImage: `url("${url}")` } : null,
+            onclick: () => url && openViewer(h('img', { src: url, alt: '' })),
+          });
+        }),
+      ) : null,
+    ));
+  }
+  bloque.append(hilo);
+  return bloque;
+}
+
+/** Nota suelta en el hilo, sin cambiar el estado. */
+function hojaNota(t) {
+  return sheet((cerrar) => {
+    const area = h('textarea.textarea', { rows: 4, placeholder: 'Escribe una nota para el hilo…' });
+    setTimeout(() => area.focus(), 320);
+    return [
+      h('h2.title', null, 'Nueva nota'),
+      area,
+      h('button.btn.accent.full', {
+        onclick: async () => {
+          const texto = area.value.trim();
+          if (!texto) return;
+          await store.añadirComentario(t.id, { texto, tipo: 'nota' });
+          cerrar(true);
+          toast('Nota añadida');
+          refrescar();
+        },
+      }, 'Añadir al hilo'),
+      h('button.btn.ghost.full', { onclick: () => cerrar(false) }, 'Cancelar'),
+    ];
+  });
 }
 
 /* ─── Acciones ────────────────────────────────────────────────── */

@@ -4,6 +4,7 @@
 import { h, icon, sheet, toast, confirmSheet, iniciales, emptyState } from '../ui.js';
 import * as api from '../api.js';
 import * as store from '../store.js';
+import { EMPRESAS, contrasenaInicial, verificaPorDefecto } from '../catalog.js';
 import { cabecera, chevron } from '../piezas.js';
 import { ir, refrescar } from '../app.js';
 
@@ -41,7 +42,7 @@ export async function render() {
           : emptyState('users', 'Solo estás tú', 'Da de alta a los arquitectos que van a hacer los repasos.'),
 
       h('p.hint', { style: { marginTop: '22px' } },
-        'La contraseña que pongas al crear el usuario se la tienes que pasar tú. Cada uno puede cambiarla después desde sus ajustes.'),
+        'La contraseña la genera la app con el nombre y la empresa. Al crear el usuario aparece un botón para enviársela por WhatsApp o donde prefieras. Cada uno puede cambiarla después desde sus ajustes.'),
     ],
   };
 }
@@ -56,8 +57,9 @@ function filaUsuario(u, yo) {
       iniciales(u.nombre)),
     h('div.grow', null,
       h('div.row-title', null, u.nombre + (esYo ? ' (tú)' : '')),
-      h('div.row-sub', null, u.email),
+      h('div.row-sub', null, [u.empresa, u.email].filter(Boolean).join(' · ')),
     ),
+    u.verifica ? h('span.tag.accent', null, 'Verifica') : null,
     u.rol === 'admin' ? h('span.tag.ink', null, 'Admin') : null,
     !u.activo ? h('span.tag', null, 'Inactivo') : null,
     esYo ? null : chevron(),
@@ -65,53 +67,99 @@ function filaUsuario(u, yo) {
 }
 
 /* ─── Alta ────────────────────────────────────────────────────── */
+/**
+ * Alta en un paso: nombre y empresa. La contraseña la calcula la propia
+ * app con la regla de la casa (nombre + primera palabra de la empresa),
+ * así que no hay que inventarla ni apuntarla en ningún sitio.
+ */
 function altaUsuario() {
   return sheet((cerrar) => {
     const nombre = h('input.input', { type: 'text', placeholder: 'Nombre y apellido', autocomplete: 'off' });
     const email = h('input.input', { type: 'email', placeholder: 'correo@unikdi.com', autocomplete: 'off', inputmode: 'email' });
-    const pass = h('input.input', { type: 'text', placeholder: 'Contraseña inicial', autocomplete: 'off' });
+    const empresa = h('input.input', { type: 'text', placeholder: 'Empresa o rol', autocomplete: 'off' });
     const aviso = h('p.hint.err', { style: { display: 'none' } });
+    const vista = h('code.clave-vista', null, '—');
     let rol = 'usuario';
+    let verifica = false;
+    let verificaTocado = false;
 
-    const chips = h('div.chips', null,
-      ...[['usuario', 'Arquitecto'], ['admin', 'Administrador']].map(([id, txt]) =>
-        h('button.chip', {
-          'aria-pressed': id === rol ? 'true' : 'false',
-          onclick: (e) => {
-            rol = id;
-            [...chips.children].forEach((c) => c.setAttribute('aria-pressed', c === e.currentTarget ? 'true' : 'false'));
-          },
-        }, txt)),
+    const chipsEmpresa = h('div.chips', null,
+      EMPRESAS.map((e) => h('button.chip', {
+        onclick: () => { empresa.value = e.texto; empresa.dispatchEvent(new Event('input')); },
+      }, e.texto)),
     );
 
-    const generar = h('button.tag', {
-      onclick: () => { pass.value = contraseñaSugerida(); toast('Contraseña generada, cópiala antes de guardar'); },
-    }, 'Generar');
+    const chipVerifica = h('button.chip.accent', {
+      'aria-pressed': 'false',
+      onclick: (ev) => {
+        verifica = !verifica;
+        verificaTocado = true;
+        ev.currentTarget.setAttribute('aria-pressed', verifica ? 'true' : 'false');
+      },
+    }, 'Puede verificar');
+
+    const chipAdmin = h('button.chip', {
+      'aria-pressed': 'false',
+      onclick: (ev) => {
+        rol = rol === 'admin' ? 'usuario' : 'admin';
+        ev.currentTarget.setAttribute('aria-pressed', rol === 'admin' ? 'true' : 'false');
+      },
+    }, 'Administrador');
+
+    const repintar = () => {
+      const clave = contrasenaInicial(nombre.value, empresa.value);
+      vista.textContent = clave || '—';
+      // El permiso se propone según la empresa, pero manda lo que se toque.
+      if (!verificaTocado) {
+        verifica = verificaPorDefecto(empresa.value.trim());
+        chipVerifica.setAttribute('aria-pressed', verifica ? 'true' : 'false');
+      }
+    };
+    nombre.addEventListener('input', repintar);
+    empresa.addEventListener('input', repintar);
 
     return [
       h('h2.title', null, 'Nuevo usuario'),
-      h('div.stack', null, nombre, email,
-        h('div', { style: { position: 'relative' } }, pass,
-          h('div', { style: { position: 'absolute', right: '10px', top: '11px' } }, generar)),
+      h('div.stack', null, nombre, email, empresa),
+      h('p.hint', { style: { marginTop: '10px' } }, 'Atajos:'),
+      chipsEmpresa,
+
+      h('div.clave-caja', { style: { marginTop: '16px' } },
+        h('div.grow', null,
+          h('p.eyebrow', null, 'Su contraseña será'),
+          vista,
+        ),
       ),
-      h('p.eyebrow', { style: { marginTop: '14px', marginBottom: '8px' } }, 'Permisos'),
-      chips,
+
+      h('p.eyebrow', { style: { marginTop: '18px', marginBottom: '8px' } }, 'Permisos'),
+      h('div.chips', null, chipVerifica, chipAdmin),
+      h('p.hint', null, 'Sin «Puede verificar», el usuario solo podrá mover tareas entre pendiente y resuelta.'),
+
       aviso,
       h('button.btn.accent.full', {
-        onclick: async (e) => {
+        style: { marginTop: '16px' },
+        onclick: async (ev) => {
           aviso.style.display = 'none';
-          const datos = { nombre: nombre.value.trim(), email: email.value.trim().toLowerCase(), password: pass.value, rol };
+          const datos = {
+            nombre: nombre.value.trim(),
+            email: email.value.trim().toLowerCase(),
+            empresa: empresa.value.trim(),
+            rol, verifica,
+          };
           if (datos.nombre.length < 3) return fallo('Escribe el nombre completo.');
           if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(datos.email)) return fallo('El correo no es válido.');
-          if (datos.password.length < 8) return fallo('La contraseña debe tener al menos 8 caracteres.');
-          e.currentTarget.disabled = true;
+          if (!datos.empresa) return fallo('Escribe la empresa o el rol: de ahí sale la contraseña.');
+          if (contrasenaInicial(datos.nombre, datos.empresa).length < 8) {
+            return fallo('El nombre y la empresa son demasiado cortos para una contraseña segura.');
+          }
+          ev.currentTarget.disabled = true;
           try {
-            await api.crearUsuario(datos);
+            const r = await api.crearUsuario(datos);
             cerrar(true);
-            toast('Usuario creado');
+            await hojaCredenciales(r.usuario, r.password, 'Usuario creado');
             refrescar();
           } catch (err) {
-            e.currentTarget.disabled = false;
+            ev.currentTarget.disabled = false;
             fallo(err.codigo === 'duplicado' ? 'Ya existe un usuario con ese correo.' : err.message);
           }
 
@@ -122,6 +170,59 @@ function altaUsuario() {
         },
       }, 'Crear usuario'),
       h('button.btn.ghost.full', { onclick: () => cerrar(false) }, 'Cancelar'),
+    ];
+  });
+}
+
+/**
+ * Hoja con el usuario y la contraseña recién creados, con el botón de
+ * compartir del móvil: desde ahí se manda por WhatsApp, correo o lo que
+ * haya instalado. Es la única vez que la contraseña se puede ver.
+ */
+export function hojaCredenciales(usuario, password, titulo = 'Acceso') {
+  const texto = [
+    'UNIK repasos — tu acceso',
+    '',
+    `Nombre: ${usuario.nombre}`,
+    `Usuario: ${usuario.email}`,
+    `Contraseña: ${password}`,
+    '',
+    location.origin + location.pathname.replace(/index\.html$/, ''),
+  ].join('\n');
+
+  return sheet((cerrar) => {
+    const compartir = h('button.btn.accent.full', null, icon('share'), 'Enviar por WhatsApp o correo');
+    compartir.addEventListener('click', async () => {
+      try {
+        if (navigator.share) {
+          await navigator.share({ title: 'UNIK repasos', text: texto });
+        } else {
+          await navigator.clipboard.writeText(texto);
+          toast('Copiado al portapapeles');
+        }
+      } catch (e) {
+        if (e?.name !== 'AbortError') toast('No se pudo compartir; cópialo a mano', 'err');
+      }
+    });
+
+    return [
+      h('h2.title', null, titulo),
+      h('p.sub', null, 'Esta contraseña no se puede volver a consultar. Envíasela ahora.'),
+      h('div.clave-caja', { style: { marginTop: '6px' } },
+        h('div.grow', null,
+          h('p.eyebrow', null, usuario.email),
+          h('code.clave-vista', null, password),
+        ),
+        h('button.icon-btn', {
+          'aria-label': 'Copiar',
+          onclick: async () => {
+            try { await navigator.clipboard.writeText(password); toast('Contraseña copiada'); }
+            catch { toast('No se pudo copiar', 'err'); }
+          },
+        }, icon('copy', 18)),
+      ),
+      compartir,
+      h('button.btn.ghost.full', { onclick: () => cerrar(true) }, 'Hecho'),
     ];
   });
 }
@@ -193,13 +294,14 @@ function editarUsuario(u) {
 }
 
 function pedirPassword(u) {
+  const sugerida = contrasenaInicial(u.nombre, u.empresa || '');
   return sheet((cerrar) => {
-    const pass = h('input.input', { type: 'text', placeholder: 'Contraseña nueva', value: contraseñaSugerida() });
+    const pass = h('input.input', { type: 'text', value: sugerida.length >= 8 ? sugerida : contrasenaSugerida() });
     const aviso = h('p.hint.err', { style: { display: 'none' } });
     return [
       h('h2.title', null, 'Contraseña de ' + u.nombre.split(/\s+/)[0]),
       pass,
-      h('p.hint', null, 'Cópiala antes de guardar: no se puede volver a consultar.'),
+      h('p.hint', null, 'Viene puesta la que le corresponde por su nombre y empresa. Al guardar podrás enviársela.'),
       aviso,
       h('button.btn.accent.full', {
         onclick: async () => {
@@ -209,7 +311,8 @@ function pedirPassword(u) {
           }
           try {
             await api.editarUsuario(u.id, { password: pass.value });
-            cerrar(true); toast('Contraseña cambiada');
+            cerrar(true);
+            await hojaCredenciales(u, pass.value, 'Contraseña cambiada');
           } catch (e) {
             aviso.textContent = e.message;
             aviso.style.display = 'block';
@@ -222,7 +325,7 @@ function pedirPassword(u) {
 }
 
 /** Contraseña legible al dictado: sin caracteres que se confundan. */
-function contraseñaSugerida() {
+function contrasenaSugerida() {
   const alfabeto = 'abcdefghijkmnpqrstuvwxyz23456789';
   const bytes = crypto.getRandomValues(new Uint8Array(12));
   return [...bytes].map((b) => alfabeto[b % alfabeto.length]).join('');

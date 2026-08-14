@@ -9,7 +9,9 @@
 declare(strict_types=1);
 
 const COOKIE_SESION = 'repasos_sesion';
-const DIAS_SESION = 30;
+// Seis meses: se entra una vez y el móvil de obra no vuelve a pedir
+// nada hasta pasado ese plazo.
+const DIAS_SESION = 183;
 const MAX_INTENTOS = 8;              // por correo e IP
 const VENTANA_INTENTOS = 900;        // 15 minutos
 
@@ -64,7 +66,7 @@ function usuario_actual(): ?array
         return null;
     }
     $stmt = bd()->prepare(
-        'SELECT u.id, u.nombre, u.email, u.rol, u.activo, s.caduca
+        'SELECT u.id, u.nombre, u.email, u.rol, u.empresa, u.verifica, u.activo, s.caduca
            FROM sesiones s JOIN usuarios u ON u.id = s.usuario_id
           WHERE s.token = ?'
     );
@@ -89,10 +91,12 @@ function usuario_actual(): ?array
     }
 
     $usuario = [
-        'id'     => $fila['id'],
-        'nombre' => $fila['nombre'],
-        'email'  => $fila['email'],
-        'rol'    => $fila['rol'],
+        'id'       => $fila['id'],
+        'nombre'   => $fila['nombre'],
+        'email'    => $fila['email'],
+        'rol'      => $fila['rol'],
+        'empresa'  => $fila['empresa'] ?? '',
+        'verifica' => (int) ($fila['verifica'] ?? 0) === 1,
     ];
     return $usuario;
 }
