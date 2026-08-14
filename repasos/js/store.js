@@ -118,7 +118,13 @@ export async function lista(id) {
   return l && !l.borrada ? l : null;
 }
 
-export async function crearLista({ unidadId, promoId, fase, nombre = '' }) {
+/**
+ * `autor` permite firmar en nombre de otra persona del equipo. Solo lo
+ * usa la creación de datos de ejemplo; el trabajo de verdad lo firma
+ * siempre quien tiene la sesión abierta.
+ */
+export async function crearLista({ unidadId, promoId, fase, nombre = '', autor = null }) {
+  const quien = autor || usuario;
   const l = {
     id: nuevoId(),
     unidadId, promoId, fase,
@@ -130,8 +136,8 @@ export async function crearLista({ unidadId, promoId, fase, nombre = '' }) {
     borrada: false,
     creado: ahora(),
     actualizado: ahora(),
-    creadoPor: usuario?.id || 'local',
-    creadoPorNombre: usuario?.nombre || 'Sin identificar',
+    creadoPor: quien?.id || 'local',
+    creadoPorNombre: quien?.nombre || 'Sin identificar',
   };
   await db.put('listas', l);
   await encolar('lista', l.id);
@@ -164,8 +170,9 @@ export async function tarea(id) {
   return t && !t.borrada ? t : null;
 }
 
-export async function crearTarea({ listaId, texto, oficio = OFICIO_POR_DEFECTO }) {
+export async function crearTarea({ listaId, texto, oficio = OFICIO_POR_DEFECTO, autor = null }) {
   const hermanas = await tareasDeLista(listaId);
+  const quien = autor || usuario;
   const t = {
     id: nuevoId(),
     listaId,
@@ -177,8 +184,8 @@ export async function crearTarea({ listaId, texto, oficio = OFICIO_POR_DEFECTO }
     borrada: false,
     creado: ahora(),
     actualizado: ahora(),
-    creadoPor: usuario?.id || 'local',
-    creadoPorNombre: usuario?.nombre || 'Sin identificar',
+    creadoPor: quien?.id || 'local',
+    creadoPorNombre: quien?.nombre || 'Sin identificar',
   };
   await db.put('tareas', t);
   await encolar('tarea', t.id);
@@ -609,6 +616,13 @@ const clavePersona = (n) => String(n || '')
  * el nombre para las iniciales. Se busca por identificador y, si no
  * aparece, por nombre: las tareas viejas guardan «local» como autor.
  */
+/** El equipo entero, para elegir a quién atribuir algo. */
+export function equipo() {
+  return [...personas.values()]
+    .filter((p) => p.activo !== false)
+    .map((p) => ({ ...p, avatarUrl: api.urlAvatar(p.id, p.avatar) }));
+}
+
 export function persona(id, nombre) {
   const p = personas.get(id) || personasPorNombre.get(clavePersona(nombre));
   // Quien está usando la app es el caso más frecuente y su ficha ya

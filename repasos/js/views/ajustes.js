@@ -5,6 +5,8 @@ import * as store from '../store.js';
 import * as api from '../api.js';
 import * as db from '../db.js';
 import { barraSync, chevron, cabeceraTab, cabeceraDentro, hojaFoto } from '../piezas.js';
+import * as ejemplos from '../ejemplos.js';
+import { PROMOCIONES } from '../catalog.js';
 import { ir, refrescar } from '../app.js';
 
 export async function render() {
@@ -25,6 +27,7 @@ export async function render() {
   }
 
   const admin = store.esAdmin();
+  const hayEjemplos = admin ? await ejemplos.cuantos() : 0;
 
   return {
     // Quien administra tiene su pestaña; el resto llega por la bolita
@@ -74,6 +77,18 @@ export async function render() {
         ),
         fila('trash', 'Vaciar la caché local', 'No borra nada del servidor', () => vaciarCache(), true),
       ),
+
+      // Solo para quien administra: montar trabajo de muestra firmado
+      // por el equipo, y quitarlo después sin dejar rastro.
+      admin ? h('p.eyebrow', { style: { marginTop: '26px', marginBottom: '10px' } }, 'Datos de ejemplo') : null,
+      admin ? h('div.stack', null,
+        fila('users', 'Crear actas de ejemplo',
+          'Tres actas firmadas por el equipo, para ver cómo queda',
+          () => montarEjemplos()),
+        hayEjemplos ? fila('trash', 'Quitar las actas de ejemplo',
+          `${hayEjemplos} ${hayEjemplos === 1 ? 'acta puesta' : 'actas puestas'}`,
+          () => quitarEjemplos(), true) : null,
+      ) : null,
 
       h('p.eyebrow', { style: { marginTop: '26px', marginBottom: '10px' } }, 'Sesión'),
       h('div.stack', null,
@@ -174,4 +189,39 @@ async function cerrarSesion() {
   await store.cerrarSesion();
   location.hash = '#/entrar';
   location.reload();
+}
+
+/* ─── Datos de ejemplo ────────────────────────────────────────── */
+async function montarEjemplos() {
+  const p = PROMOCIONES.find((x) => x.activa);
+  if (!p) return toast('No hay ninguna promoción activa', 'err');
+
+  const seguir = await confirmSheet({
+    title: '¿Crear actas de ejemplo?',
+    text: 'Se montan tres actas en viviendas que no tengan nada, firmadas por '
+      + 'gente del equipo, para ver cómo queda la app con varias personas. '
+      + 'Se llaman «Ejemplo · …» y se pueden quitar desde aquí mismo.',
+    ok: 'Crear',
+  });
+  if (!seguir) return;
+
+  try {
+    const { actas, tareas } = await ejemplos.crear(p.id);
+    toast(`${actas} actas y ${tareas} tareas de ejemplo`);
+    refrescar();
+  } catch (e) {
+    toast(e.message || 'No se pudieron crear', 'err');
+  }
+}
+
+async function quitarEjemplos() {
+  const seguir = await confirmSheet({
+    title: '¿Quitar las actas de ejemplo?',
+    text: 'Solo se retiran las que empiezan por «Ejemplo · ». El repaso real no se toca.',
+    ok: 'Quitar', danger: true,
+  });
+  if (!seguir) return;
+  const n = await ejemplos.borrar();
+  toast(n ? `${n} ${n === 1 ? 'acta retirada' : 'actas retiradas'}` : 'No había ninguna');
+  refrescar();
 }
