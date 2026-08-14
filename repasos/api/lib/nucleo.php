@@ -61,6 +61,12 @@ function bd(): PDO
             error_log('UNIK repasos · sin base de datos: ' . $e->getMessage());
             responder_error(500, 'No se puede conectar con la base de datos.', 'sin-bd');
         }
+        // Al abrir la conexión se comprueba que la base de datos tenga lo
+        // que el código espera. Es una consulta a una tabla de dos filas
+        // cuando ya está al día, y evita tener que acordarse de abrir
+        // ninguna página después de publicar.
+        require_once __DIR__ . '/esquema.php';
+        esquema_al_dia($pdo);
     }
     return $pdo;
 }

@@ -107,3 +107,10 @@ CREATE TABLE IF NOT EXISTS medios (
 );
 CREATE INDEX IF NOT EXISTS ix_medios_tarea ON medios (tarea_id);
 CREATE INDEX IF NOT EXISTS ix_medios_actualizado ON medios (actualizado);
+
+-- Tabla de control: guarda la versión del esquema para que el backend
+-- sepa, al arrancar, si tiene que añadir algo por su cuenta.
+CREATE TABLE IF NOT EXISTS meta (
+  clave TEXT NOT NULL PRIMARY KEY,
+  valor TEXT NOT NULL
+);

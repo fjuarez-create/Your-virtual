@@ -99,26 +99,59 @@ Los pasos completos, con el detalle de cada pantalla de Plesk, están en
 4. Lanzar el despliegue desde *Actions*.
 5. Crear `api/config.php` en el servidor con los datos de la base.
 6. Subir los límites de PHP para que entren los vídeos.
-7. Abrir `api/install.php` una vez y borrarlo después.
+7. Abrir `api/install.php` una vez; el despliegue lo retira del servidor solo.
 
-Cuando se publique una versión que añada campos o tablas, abrir una vez
-`api/actualizar.php`: mira qué falta, lo añade sin tocar ningún dato, y da de
-alta el equipo inicial calculando la contraseña de cada uno. Es idempotente.
+**No hay que volver a abrir ninguna página después de publicar.** Cuando una
+versión añade campos o tablas, el backend lo detecta al arrancar y lo aplica él
+(`api/lib/esquema.php`): compara `ESQUEMA_VERSION` con lo guardado en la tabla
+`meta` y añade lo que falte, una vez y con cerrojo. Si algo fallara, no sube el
+número de versión y lo reintenta en el arranque siguiente, así que nunca se da
+por buena una migración a medias. Ningún dato ni ninguna contraseña se tocan.
+
+`api/actualizar.php` queda solo para dar de alta el equipo inicial en una
+instalación nueva, y se ejecuta en local: **no se publica**.
 
 ### Despliegue automático
 
-`.github/workflows/deploy.yml` publica en cada push a `main`. Necesita estos
-secretos en el repositorio (*Settings → Secrets and variables → Actions*):
+La app se publica desde el repositorio **Your-virtual**, con
+`.github/workflows/deploy-repasos.yml`, en cada push a la rama de trabajo que
+toque algo de `repasos/`. No hace falta pasar por ningún Codespace ni por un
+segundo repositorio.
+
+Secretos necesarios (*Settings → Secrets and variables → Actions*):
 
 | Secreto | Qué es |
 | --- | --- |
-| `FTP_SERVER` | host FTP del panel |
-| `FTP_USERNAME` | usuario FTP del subdominio |
-| `FTP_PASSWORD` | contraseña |
-| `FTP_SERVER_DIR` | opcional; sin él se detecta `httpdocs` |
+| `REPASOS_FTP_SERVER` | host FTP del panel |
+| `REPASOS_FTP_USERNAME` | usuario FTP del subdominio de repasos |
+| `REPASOS_FTP_PASSWORD` | contraseña |
+| `REPASOS_FTP_SERVER_DIR` | opcional; sin él se detecta `httpdocs` |
 
-El despliegue **no sube ni borra** `api/config.php`, `api/uploads/` ni
-`api/datos/`: las fotos y las credenciales del servidor se quedan donde están.
+Llevan el prefijo `REPASOS_` porque en ese mismo repositorio viven los `FTP_*`
+del showroom, que apuntan a otro sitio del mismo hosting.
+
+Tres protecciones, porque el hosting es compartido y un error aquí se paga caro:
+
+- **Antes de escribir nada** se comprueba dónde se va a escribir, y este paso
+  no se salta nunca. En un despliegue normal se exige que la carpeta contenga
+  `api/config.php`, que crea el instalador y no viaja nunca en la subida: es
+  una señal que solo existe en esta instalación. Marcar *primera_instalacion*
+  no exime de la comprobación, la endurece: entonces se exige que la carpeta
+  esté **vacía de verdad**. Si los secretos apuntaran a otro sitio del hosting,
+  el despliegue para sin haber tocado un fichero, marque uno la casilla o no.
+- **La contraseña del FTP no viaja nunca en claro.** Si el servidor no negocia
+  FTPS, el despliegue para en lugar de bajar a FTP plano por su cuenta; para
+  hacerlo hay que escribirlo explícitamente (`FTP_PERMITIR_PLANO=1`).
+- **No sube ni borra** `api/config.php`, `api/uploads/` ni `api/datos/`: las
+  fotos y las credenciales se quedan donde están.
+- **Retira del servidor** `api/install.php` y `api/actualizar.php`, que
+  configuran y crean usuarios sin pedir contraseña, y **comprueba que ya no
+  están**: si el borrado no surtiera efecto, el despliegue falla en vez de
+  darlo por hecho. Por si acaso, `actualizar.php` además solo se ejecuta desde
+  la propia máquina o por línea de comandos.
+
+Usa su propio grupo de concurrencia (`hosting-repasos`) para no cancelar un
+despliegue del showroom, que usa `hosting`.
 
 ## Probar en local
 

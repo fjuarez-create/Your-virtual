@@ -1,22 +1,31 @@
 <?php
 /**
- * actualizar.php — pone al día una instalación que ya está funcionando.
+ * actualizar.php — da de alta el equipo inicial de una instalación nueva.
  *
- * Se abre en el navegador cada vez que se publica una versión que añade
- * campos o tablas nuevas. Es idempotente: mira qué falta y solo añade
- * eso, sin tocar ni un dato existente. Pasarlo dos veces no hace nada.
+ * Ya NO hay que abrirlo después de cada publicación: los campos y las
+ * tablas que falten los añade el propio backend al arrancar
+ * (api/lib/esquema.php). Este fichero queda solo para la primera puesta
+ * en marcha, y por eso no se sube al servidor: se ejecuta en local.
  *
- *     https://repasos.unikdi.com/api/actualizar.php
- *
- * También da de alta el equipo inicial (la lista de abajo), calculando
- * la contraseña de cada uno con la regla de la app. Los que ya existen
- * se dejan como están: nunca pisa una contraseña ya en uso.
- *
- * Cuando termine, bórralo del servidor.
+ * Nunca toca la contraseña de quien ya existe.
  */
 declare(strict_types=1);
 
 require __DIR__ . '/lib/nucleo.php';
+
+/*
+ * Esta página crea usuarios y enseña sus contraseñas en pantalla, y no
+ * pide ninguna para hacerlo. El despliegue ya se encarga de no subirla y
+ * de retirarla del servidor si quedó de antes, pero eso son dos pasos que
+ * podrían fallar; este es el que no depende de nadie: fuera de la línea
+ * de comandos y de la propia máquina, no se ejecuta.
+ */
+$porConsola = PHP_SAPI === 'cli' || PHP_SAPI === 'cli-server';
+$desdeAqui = in_array($_SERVER['REMOTE_ADDR'] ?? '', ['127.0.0.1', '::1'], true);
+if (!$porConsola && !$desdeAqui) {
+    http_response_code(404);
+    exit("No disponible.\n");
+}
 
 /* ═══════════════════════════════════════════════════════════════
    Equipo inicial. Vaciar esta lista cuando ya estén todos dados
@@ -43,54 +52,12 @@ try {
     $pdo = bd();
     $pasos[] = 'Conexión con la base de datos correcta (motor ' . motor() . ').';
 
-    /* ── Tablas que falten (comentarios, y las demás si es nuevo) ── */
-    $sql = file_get_contents(fichero_esquema());
-    if ($sql === false) {
-        throw new RuntimeException('No se encuentra el fichero de esquema.');
-    }
-    $creadas = 0;
-    foreach (array_filter(array_map('trim', explode(';', $sql))) as $sentencia) {
-        if (stripos($sentencia, 'CREATE ') === false) {
-            continue;
-        }
-        $pdo->exec($sentencia);
-        $creadas++;
-    }
-    $pasos[] = "Tablas comprobadas ({$creadas} sentencias).";
-
-    /* ── Columnas nuevas ── */
-    $nuevas = [
-        'usuarios' => [
-            'empresa'  => "VARCHAR(120) NOT NULL DEFAULT ''",
-            'verifica' => 'TINYINT(1) NOT NULL DEFAULT 0',
-            'avatar'   => "VARCHAR(24) NOT NULL DEFAULT ''",
-        ],
-        'tareas' => [
-            'rechazada' => 'TINYINT(1) NOT NULL DEFAULT 0',
-        ],
-        'medios' => [
-            'comentario_id' => 'CHAR(36) DEFAULT NULL',
-        ],
-    ];
-    $añadidas = [];
-    foreach ($nuevas as $tabla => $columnas) {
-        $existentes = columnas_de($tabla);
-        foreach ($columnas as $nombre => $tipo) {
-            if (in_array($nombre, $existentes, true)) {
-                continue;
-            }
-            if (motor() === 'sqlite') {
-                // SQLite no tiene TINYINT ni VARCHAR con longitud útil.
-                $tipo = str_replace(['TINYINT(1)', 'CHAR(36)'], ['INTEGER', 'TEXT'], $tipo);
-                $tipo = preg_replace('/VARCHAR\(\d+\)/', 'TEXT', $tipo);
-            }
-            $pdo->exec("ALTER TABLE {$tabla} ADD COLUMN {$nombre} {$tipo}");
-            $añadidas[] = "{$tabla}.{$nombre}";
-        }
-    }
-    $pasos[] = $añadidas
-        ? 'Campos añadidos: ' . htmlspecialchars(implode(', ', $añadidas), ENT_QUOTES) . '.'
-        : 'No faltaba ningún campo.';
+    require_once __DIR__ . '/lib/esquema.php';
+    $hechos = esquema_aplicar($pdo);
+    esquema_guardar_version($pdo, ESQUEMA_VERSION);
+    $pasos[] = $hechos
+        ? 'Campos añadidos: ' . htmlspecialchars(implode(', ', $hechos), ENT_QUOTES) . '.'
+        : 'El esquema ya estaba al día.';
 
     /* ── Equipo inicial ── */
     foreach (EQUIPO as [$nombre, $email, $empresa, $verifica, $rol]) {
@@ -124,21 +91,6 @@ try {
     }
 } catch (Throwable $e) {
     $fallo = $e->getMessage();
-}
-
-/** Nombres de columna de una tabla, en los dos motores. */
-function columnas_de(string $tabla): array
-{
-    try {
-        if (motor() === 'sqlite') {
-            $filas = bd()->query("PRAGMA table_info({$tabla})")->fetchAll();
-            return array_column($filas, 'name');
-        }
-        $filas = bd()->query("SHOW COLUMNS FROM {$tabla}")->fetchAll();
-        return array_column($filas, 'Field');
-    } catch (Throwable $e) {
-        return [];
-    }
 }
 
 ?><!DOCTYPE html>
@@ -199,8 +151,7 @@ function columnas_de(string $tabla): array
       </table>
 
       <p class="bien" style="margin-top:22px"><strong>Listo.</strong>
-      Copia las contraseñas de los usuarios nuevos antes de cerrar esta página: no se pueden volver a consultar.
-      Después borra <code>api/actualizar.php</code> del servidor.</p>
+      Copia las contraseñas de los usuarios nuevos antes de cerrar esta página: no se pueden volver a consultar.</p>
     <?php endif; ?>
   </div>
 </body>

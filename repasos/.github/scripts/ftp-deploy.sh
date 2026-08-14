@@ -2,6 +2,7 @@
 #
 # Sube UNIK repasos al subdominio por FTP.
 #
+#   ftp-deploy.sh destino    comprueba que la carpeta es la de repasos
 #   ftp-deploy.sh subir      todo menos index.html y sw.js
 #   ftp-deploy.sh arranque   index.html y sw.js, al final del todo
 #   ftp-deploy.sh comprobar  verifica que lo esencial está arriba
@@ -33,7 +34,6 @@ for nombre in FTP_SERVER FTP_USERNAME FTP_PASSWORD; do
 done
 
 AJUSTES='
-  set ssl:verify-certificate no;
   set ftp:passive-mode true;
   set net:timeout 20;
   set net:max-retries 3;
@@ -42,11 +42,15 @@ AJUSTES='
   set xfer:clobber on;
   set cmd:fail-exit true;
 '
-# Igual que en el showroom: el canal de control cifrado protege las
-# credenciales; el de datos va en claro porque Plesk cortaba la conexión
-# al renegociar TLS en cada fichero.
-TLS="$AJUSTES set ftp:ssl-allow true; set ftp:ssl-force true; set ftp:ssl-protect-data false;"
-PLANO="$AJUSTES set ftp:ssl-allow false;"
+# El canal de CONTROL, por donde viaja la contraseña, va cifrado siempre.
+# El de DATOS va en claro porque Plesk cortaba la conexión al renegociar
+# TLS en cada fichero, y por ahí solo pasan los ficheros públicos de la
+# app. Esa distinción es deliberada; lo que no se admite es mandar las
+# credenciales en claro.
+CIFRADO="set ftp:ssl-allow true; set ftp:ssl-force true; set ftp:ssl-protect-data false;"
+TLS_VERIFICADO="$AJUSTES set ssl:verify-certificate yes; $CIFRADO"
+TLS_SIN_VERIFICAR="$AJUSTES set ssl:verify-certificate no; $CIFRADO"
+PLANO="$AJUSTES set ssl:verify-certificate no; set ftp:ssl-allow false;"
 
 lanzar() {
   lftp <<FIN
@@ -57,10 +61,27 @@ bye
 FIN
 }
 
-OPC="$TLS"
-if ! lanzar "$TLS" "pwd" >/dev/null 2>&1; then
-  echo "El servidor no aceptó FTPS; se usa FTP plano."
+# Nunca se baja a FTP en claro por su cuenta: una sonda fallida por un
+# corte de red bastaría para mandar la contraseña del hosting por
+# Internet en texto plano, y con ella se lee api/config.php, que trae las
+# credenciales de la base de datos.
+if lanzar "$TLS_VERIFICADO" "pwd" >/dev/null 2>&1; then
+  OPC="$TLS_VERIFICADO"
+  echo "Conexión cifrada, con el certificado del servidor verificado."
+elif lanzar "$TLS_SIN_VERIFICAR" "pwd" >/dev/null 2>&1; then
+  OPC="$TLS_SIN_VERIFICAR"
+  echo "AVISO: no se ha podido verificar el certificado del servidor FTP."
+  echo "       La contraseña sigue viajando cifrada, pero conviene revisar"
+  echo "       el certificado del hosting."
+elif [ "${FTP_PERMITIR_PLANO:-}" = "1" ]; then
   OPC="$PLANO"
+  echo "AVISO: FTP SIN CIFRAR. Permitido a propósito con FTP_PERMITIR_PLANO=1."
+else
+  echo "El servidor no acepta FTPS y la contraseña viajaría en claro. Paro." >&2
+  echo "Plesk ofrece FTPS y SFTP: revisa que estén activados para esta cuenta." >&2
+  echo "Si no hubiera alternativa, hay que ponerlo por escrito en el workflow" >&2
+  echo "con FTP_PERMITIR_PLANO=1; a propósito no se hace solo." >&2
+  exit 1
 fi
 
 DIR="${FTP_SERVER_DIR:-}"
@@ -79,6 +100,58 @@ contar_remoto() {
 }
 
 case "$QUE" in
+  destino)
+    # El mismo hosting alberga otros sitios, y el peor accidente posible
+    # es publicar aquí encima de otro. Así que antes de escribir nada hay
+    # que saber dónde se escribe. «Primera instalación» NO exime de esta
+    # comprobación: cambia lo que hay que demostrar, y a algo más
+    # estricto —que la carpeta esté vacía de verdad—, no a nada.
+    LISTADO=$(lanzar "$OPC" "cd \"$DIR\"; cls -1" 2>/dev/null | tr -d '\r' | sed 's#/$##' | grep . || true)
+
+    if [ "${PRIMERA_INSTALACION:-}" = "true" ]; then
+      # Plesk deja sus propias carpetas de servicio en un subdominio recién
+      # creado; esas no cuentan como «ocupado».
+      AJENOS=$(printf '%s\n' "$LISTADO" | grep -vx -e 'logs' -e 'tmp' -e 'anon_ftp' -e 'error_docs' -e '.well-known' || true)
+      if [ -z "$AJENOS" ]; then
+        echo "Destino vacío: «$DIR» está listo para la primera instalación."
+      else
+        echo "" >&2
+        echo "PARO ANTES DE TOCAR NADA." >&2
+        echo "Has marcado «primera instalación», pero «$DIR» NO está vacía:" >&2
+        printf '%s\n' "$AJENOS" | sed 's/^/    /' >&2
+        echo "" >&2
+        echo "Si UNIK repasos ya está instalado ahí, lanza el despliegue normal," >&2
+        echo "SIN marcar la casilla." >&2
+        echo "Si eso de arriba es OTRO sitio web, los secretos REPASOS_FTP_*" >&2
+        echo "apuntan donde no deben y publicar aquí lo habría borrado." >&2
+        exit 1
+      fi
+    elif [ "$(contar_remoto "api/config.php")" -ge 1 ]; then
+      # api/config.php lo crea el instalador y no viaja nunca en el
+      # despliegue: es una señal que solo existe en esta instalación.
+      echo "Destino correcto: «$DIR» es una instalación de UNIK repasos."
+    else
+      echo "" >&2
+      echo "PARO ANTES DE TOCAR NADA." >&2
+      echo "En «$DIR» no hay api/config.php, así que no parece la carpeta de" >&2
+      echo "UNIK repasos. Casi siempre esto es un problema de credenciales:" >&2
+      echo "comprueba que REPASOS_FTP_USERNAME sea el usuario FTP DEL SUBDOMINIO" >&2
+      echo "de repasos y no el de otro sitio del mismo hosting, y revisa" >&2
+      echo "REPASOS_FTP_SERVER_DIR." >&2
+      echo "" >&2
+      echo "Esto es lo que hay ahora mismo en «$DIR»:" >&2
+      if [ -n "$LISTADO" ]; then
+        printf '%s\n' "$LISTADO" | sed 's/^/    /' >&2
+      else
+        echo "    (vacía)" >&2
+        echo "" >&2
+        echo "Al estar vacía, si de verdad es la primera instalación puedes lanzar" >&2
+        echo "el workflow a mano marcando «primera_instalacion»." >&2
+      fi
+      exit 1
+    fi
+    ;;
+
   subir)
     lanzar "$OPC" "cd \"$DIR\";
       mirror -R --transfer-all --delete --no-perms -v publish/css css;
@@ -87,6 +160,44 @@ case "$QUE" in
       mirror -R --transfer-all --no-perms -v publish/api api;
       put publish/manifest.webmanifest -o manifest.webmanifest;
       put publish/.htaccess -o .htaccess;"
+    ;;
+
+  limpiar)
+    # api/ se sube sin --delete para no rozar las fotos ni config.php, así
+    # que lo que se retira del repositorio hay que retirarlo a mano.
+    #
+    # Estas dos páginas crean usuarios y tocan la base de datos SIN pedir
+    # contraseña, así que aquí no vale con intentarlo: hay que comprobar
+    # que ya no están. Y «no las veo» solo cuenta si de verdad se ha
+    # podido preguntar: un corte de FTP no puede pasar por «no estaban».
+    listar_api() {
+      lanzar "$OPC" "cd \"$DIR\"; cls -1 api/" 2>/dev/null | tr -d '\r' | sed 's#/$##; s#.*/##' | grep . || true
+    }
+
+    EN_API=$(listar_api)
+    if [ -z "$EN_API" ]; then
+      echo "No he podido listar api/ en el servidor, así que no puedo asegurar" >&2
+      echo "que las páginas de instalación no estén publicadas. Paro." >&2
+      exit 1
+    fi
+
+    for f in actualizar.php install.php; do
+      if ! printf '%s\n' "$EN_API" | grep -qx "$f"; then
+        echo "no estaba  api/$f"
+        continue
+      fi
+      lanzar "$OPC" "cd \"$DIR\"; rm -f \"api/$f\";" >/dev/null 2>&1 || true
+
+      QUEDA=$(listar_api)
+      if [ -z "$QUEDA" ] || printf '%s\n' "$QUEDA" | grep -qx "$f"; then
+        echo "" >&2
+        echo "NO he podido quitar api/$f del servidor." >&2
+        echo "Esa página crea usuarios y enseña sus contraseñas sin pedir nada," >&2
+        echo "y está publicada. Bórrala a mano por FTP antes de seguir." >&2
+        exit 1
+      fi
+      echo "retirado   api/$f"
+    done
     ;;
 
   arranque)

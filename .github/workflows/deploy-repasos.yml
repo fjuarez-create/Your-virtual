@@ -1,0 +1,199 @@
+name: Publicar UNIK repasos
+
+# Publica la carpeta repasos/ en repasos.unikdi.com en cuanto se empuja un
+# cambio suyo. Sustituye al viaje por el Codespace y por el repositorio
+# unik-repasos: lo que se sube aquí es lo que queda publicado.
+#
+# Secretos necesarios (Settings → Secrets and variables → Actions):
+#   REPASOS_FTP_SERVER      host FTP del panel
+#   REPASOS_FTP_USERNAME    usuario FTP DEL SUBDOMINIO de repasos
+#   REPASOS_FTP_PASSWORD    su contraseña
+#   REPASOS_FTP_SERVER_DIR  (opcional) carpeta destino; vacío = se detecta
+#
+# Llevan el prefijo REPASOS_ a propósito: los FTP_* de este mismo
+# repositorio son los del showroom y apuntan a otro sitio. Compartir
+# nombre sería publicar una cosa encima de la otra.
+
+on:
+  push:
+    branches: [claude/uniq-repasos-app-2ja8y2]
+    paths:
+      - 'repasos/**'
+      - '.github/workflows/deploy-repasos.yml'
+  workflow_dispatch:
+    inputs:
+      primera_instalacion:
+        description: 'El subdominio está vacío y hay que instalar por primera vez (se exigirá que lo esté)'
+        type: boolean
+        default: false
+
+# Grupo propio: un despliegue de repasos no debe cancelar uno del showroom,
+# que usa el grupo «hosting».
+concurrency:
+  group: hosting-repasos
+  cancel-in-progress: true
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: repasos
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Comprobar que están los secretos
+        env:
+          SERVER: ${{ secrets.REPASOS_FTP_SERVER }}
+          USERNAME: ${{ secrets.REPASOS_FTP_USERNAME }}
+          PASSWORD: ${{ secrets.REPASOS_FTP_PASSWORD }}
+        run: |
+          set -eu
+          falta=0
+          # Los nombres del bucle son los de los secretos de verdad: si el
+          # mensaje nombrara otra cosa, mandaría a crear un secreto que no
+          # se lee en ningún sitio y el fallo parecería no arreglarse nunca.
+          for n in SERVER USERNAME PASSWORD; do
+            eval "v=\${$n:-}"
+            [ -n "$v" ] || { echo "Falta el secreto REPASOS_FTP_${n}." >&2; falta=1; }
+          done
+          if [ "$falta" = 1 ]; then
+            echo "" >&2
+            echo "Añádelos en Settings → Secrets and variables → Actions." >&2
+            exit 1
+          fi
+          echo "Los tres secretos están puestos."
+
+      # El SHA sella la versión en index.html y en sw.js. Al cambiar, el
+      # service worker tira su caché entera y ningún móvil se queda con
+      # media versión vieja y media nueva.
+      - name: Sellar la versión
+        run: |
+          set -eu
+          BUILD="${GITHUB_SHA::8}"
+          sed -i "s/__BUILD__/${BUILD}/g" index.html sw.js
+          echo "Versión: ${BUILD}"
+
+      - name: Preparar carpeta de publicación
+        run: |
+          set -eu
+          rm -rf publish && mkdir publish
+          cp index.html sw.js manifest.webmanifest .htaccess publish/
+          cp -r css js assets publish/
+
+          mkdir -p publish/api
+          cp -r api/. publish/api/
+
+          # Las carpetas de fotos y de base de datos viajan VACÍAS pero CON
+          # su .htaccess: es lo que impide pedir una foto por su URL sin
+          # haber entrado en la app. Si viajaran borradas del todo, PHP las
+          # recrearía al vuelo y quedarían abiertas.
+          for carpeta in uploads datos; do
+            find "publish/api/$carpeta" -mindepth 1 \
+              ! -name '.htaccess' ! -name '.gitkeep' -delete 2>/dev/null || true
+          done
+          test -f publish/api/uploads/.htaccess || { echo "Falta el .htaccess de uploads." >&2; exit 1; }
+          test -f publish/api/datos/.htaccess   || { echo "Falta el .htaccess de datos." >&2; exit 1; }
+
+          # config.php lo crea el instalador y vive solo en el servidor.
+          rm -f publish/api/config.php publish/api/config.example.php
+
+          # actualizar.php ya no hace falta arriba: el esquema se pone al
+          # día solo. Ni él ni el instalador piden contraseña, así que
+          # dejarlos publicados sería dejar dos puertas abiertas.
+          # El instalador viaja únicamente en la primera puesta en marcha,
+          # que es cuando todavía no hay config.php que crear.
+          rm -f publish/api/actualizar.php
+          if [ "${PRIMERA}" = "true" ]; then
+            echo "Primera instalación: se publica api/install.php."
+          else
+            rm -f publish/api/install.php
+          fi
+
+          du -sh publish
+          find publish -type f | wc -l
+        env:
+          PRIMERA: ${{ inputs.primera_instalacion }}
+
+      - name: Comprobar que no viaja ningún secreto
+        env:
+          PRIMERA: ${{ inputs.primera_instalacion }}
+        run: |
+          set -eu
+          prohibidos="api/config.php api/actualizar.php"
+          [ "${PRIMERA}" = "true" ] || prohibidos="$prohibidos api/install.php"
+          for f in $prohibidos; do
+            if [ -f "publish/$f" ]; then
+              echo "$f no debe publicarse." >&2
+              exit 1
+            fi
+          done
+          if grep -rIl --exclude-dir=assets -E "password'\s*=>\s*'[^']+'" publish/api 2>/dev/null | grep -q .; then
+            echo "Hay credenciales en los ficheros a publicar." >&2
+            exit 1
+          fi
+          echo "Sin credenciales ni páginas de instalación en la carpeta de publicación."
+
+      - name: Instalar lftp
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq lftp
+
+      # Antes de escribir nada: comprobar que la carpeta a la que apuntan
+      # los secretos es la de repasos. Es la red que evita el peor
+      # accidente posible: publicar repasos encima del showroom.
+      #
+      # Este paso NO se salta nunca, ni en la primera instalación. Marcar
+      # esa casilla no exime de comprobar el destino: cambia lo que hay
+      # que demostrar, y a algo más estricto (que la carpeta esté vacía).
+      # Justo en el primer despliegue es cuando los secretos acaban de
+      # escribirse y nadie los ha probado todavía.
+      - name: Comprobar que el destino es el correcto
+        timeout-minutes: 5
+        env:
+          FTP_SERVER: ${{ secrets.REPASOS_FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.REPASOS_FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.REPASOS_FTP_PASSWORD }}
+          FTP_SERVER_DIR: ${{ secrets.REPASOS_FTP_SERVER_DIR }}
+          PRIMERA_INSTALACION: ${{ inputs.primera_instalacion }}
+        run: bash .github/scripts/ftp-deploy.sh destino
+
+      - name: Subir código y backend
+        timeout-minutes: 12
+        env:
+          FTP_SERVER: ${{ secrets.REPASOS_FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.REPASOS_FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.REPASOS_FTP_PASSWORD }}
+          FTP_SERVER_DIR: ${{ secrets.REPASOS_FTP_SERVER_DIR }}
+        run: bash .github/scripts/ftp-deploy.sh subir
+
+      # api/ se sincroniza sin --delete para no rozar las fotos, así que
+      # lo que se deja de publicar hay que retirarlo del servidor aparte.
+      - name: Retirar las páginas de instalación del servidor
+        if: ${{ inputs.primera_instalacion != true }}
+        timeout-minutes: 5
+        env:
+          FTP_SERVER: ${{ secrets.REPASOS_FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.REPASOS_FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.REPASOS_FTP_PASSWORD }}
+          FTP_SERVER_DIR: ${{ secrets.REPASOS_FTP_SERVER_DIR }}
+        run: bash .github/scripts/ftp-deploy.sh limpiar
+
+      - name: Subir index.html y sw.js
+        timeout-minutes: 5
+        env:
+          FTP_SERVER: ${{ secrets.REPASOS_FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.REPASOS_FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.REPASOS_FTP_PASSWORD }}
+          FTP_SERVER_DIR: ${{ secrets.REPASOS_FTP_SERVER_DIR }}
+        run: bash .github/scripts/ftp-deploy.sh arranque
+
+      - name: Comprobar la subida
+        timeout-minutes: 6
+        env:
+          FTP_SERVER: ${{ secrets.REPASOS_FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.REPASOS_FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.REPASOS_FTP_PASSWORD }}
+          FTP_SERVER_DIR: ${{ secrets.REPASOS_FTP_SERVER_DIR }}
+        run: |
+          bash .github/scripts/ftp-deploy.sh comprobar
+          echo "Publicado en https://repasos.unikdi.com/"

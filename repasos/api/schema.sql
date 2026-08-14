@@ -117,3 +117,11 @@ CREATE TABLE IF NOT EXISTS medios (
   KEY ix_medios_tarea (tarea_id),
   KEY ix_medios_actualizado (actualizado)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Tabla de control: guarda la versión del esquema para que el backend
+-- sepa, al arrancar, si tiene que añadir algo por su cuenta.
+CREATE TABLE IF NOT EXISTS meta (
+  clave VARCHAR(60)  NOT NULL,
+  valor VARCHAR(255) NOT NULL,
+  PRIMARY KEY (clave)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
