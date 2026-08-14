@@ -176,25 +176,25 @@ export async function nuevaTarea(listaId) {
         h('div.row-lead', null, icon('image', 18)),
         h('div.grow', null, h('div.row-title', null, 'Elegir de la galería')),
       ),
-      h('button.row', { onclick: () => cerrar('texto') },
-        h('div.row-lead', null, icon('edit', 18)),
-        h('div.grow', null, h('div.row-title', null, 'Solo texto, sin foto')),
-      ),
     ),
     h('button.btn.ghost.full', { onclick: () => cerrar(null) }, 'Cancelar'),
   ]);
   if (!origen) return;
 
-  let preparadas = [];
-  if (origen !== 'texto') {
-    const ficheros = origen === 'camara' ? await media.hacerFoto() : await media.elegirFotos();
-    if (!ficheros.length) return;
-    toast(ficheros.length > 1 ? `Preparando ${ficheros.length} fotos…` : 'Preparando la foto…');
-    for (const f of ficheros) {
-      try { preparadas.push(await media.prepararImagen(f)); }
-      catch { toast('Una de las imágenes no se pudo leer', 'err'); }
-    }
-    if (!preparadas.length) return;
+  // Toda tarea lleva foto. Un repaso sin imagen obliga a quien lo lee a
+  // fiarse de la descripción, y quien tiene que corregirlo no sabe ni
+  // dónde mirar.
+  const preparadas = [];
+  const ficheros = origen === 'camara' ? await media.hacerFoto() : await media.elegirFotos();
+  if (!ficheros.length) return;
+  toast(ficheros.length > 1 ? `Preparando ${ficheros.length} fotos…` : 'Preparando la foto…');
+  for (const f of ficheros) {
+    try { preparadas.push(await media.prepararImagen(f)); }
+    catch { toast('Una de las imágenes no se pudo leer', 'err'); }
+  }
+  if (!preparadas.length) {
+    toast('No se pudo leer ninguna foto. Inténtalo otra vez.', 'err');
+    return;
   }
 
   const datos = await hojaTexto(preparadas, ultimoOficio);
@@ -248,14 +248,19 @@ function hojaTexto(imagenes, oficioPrevio) {
       }, o.corto)),
     );
 
+    // Las tres cosas son obligatorias: foto, descripción y oficio. La
+    // pista dice cuál falta, y solo una a la vez: una lista de tres
+    // reproches se lee como una regañina.
     const validar = () => {
-      const hayQue = texto.value.trim().length > 0 || imagenes.length > 0;
-      const vale = hayQue && !!elegido;
+      const hayFoto = imagenes.length > 0;
+      const hayTexto = texto.value.trim().length > 0;
+      const vale = hayFoto && hayTexto && !!elegido;
       guardar.disabled = !vale;
       otra.disabled = !vale;
-      pista.textContent = !hayQue
-        ? 'Escribe qué hay que hacer o añade una foto.'
-        : !elegido ? 'Elige el oficio para poder guardar.' : '';
+      pista.textContent = !hayFoto ? 'Esta tarea necesita al menos una foto.'
+        : !hayTexto ? 'Escribe qué hay que hacer aquí.'
+        : !elegido ? 'Elige el oficio para poder guardar.'
+        : '';
       return vale;
     };
     texto.addEventListener('input', validar);
@@ -271,7 +276,7 @@ function hojaTexto(imagenes, oficioPrevio) {
     validar();
 
     return [
-      h('h2.title', null, imagenes.length ? 'Describe el repaso' : 'Nueva tarea'),
+      h('h2.title', null, 'Describe el repaso'),
       previsualizacion,
       texto,
       h('p.eyebrow', { style: { marginTop: '14px' } }, 'Oficio'),

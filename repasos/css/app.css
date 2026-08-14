@@ -866,8 +866,16 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
   font-size: clamp(28px, 8vw, 34px); font-weight: 800;
   letter-spacing: -0.02em; text-transform: uppercase;
 }
-.chips.filtro { gap: 8px; }
-.chips.filtro .chip { padding: 11px 20px; font-size: 13.5px; }
+.chips.filtro { gap: 9px; }
+.chips.filtro .chip {
+  padding: 13px 22px; font-size: 14px;
+  border-radius: 17px;
+  background: var(--bg);
+  box-shadow: inset 0 0 0 1.5px var(--line);
+}
+.chips.filtro .chip[aria-pressed='true'] {
+  background: var(--accent); color: var(--on-accent); box-shadow: none;
+}
 .contador { font-size: 12.5px; color: var(--muted); margin-top: 12px; }
 
 .selector {
@@ -958,10 +966,21 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
    Sustituye al anillo en la portada: con tres estados, una barra
    dice de un vistazo la proporción entre ellos, cosa que un anillo
    de un solo color no puede. */
-.avance-barra {
-  display: flex; width: 100%; height: 46px;
-  border-radius: 13px; overflow: hidden;
+/* La barra vive dentro de una tarjeta que respira: el dato importa lo
+   suficiente como para no ir suelto entre dos rótulos. */
+.widget-avance {
   background: var(--surface);
+  border-radius: var(--r-xl);
+  padding: 28px 24px 26px;
+}
+.widget-avance .eyebrow { margin-bottom: 20px; }
+
+.avance-barra {
+  display: flex; width: 100%; height: 20px;
+  border-radius: 999px; overflow: hidden;
+  /* Blanco y no gris: sobre la tarjeta clara, el tramo pendiente tiene
+     que distinguirse del fondo o la barra parece más corta de lo que es. */
+  background: var(--bg);
 }
 .avance-barra i {
   display: block; height: 100%;
@@ -969,18 +988,26 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 }
 .avance-barra .t-resuelta { background: var(--ink); }
 .avance-barra .t-revisar { background: var(--accent); }
-.avance-barra .t-pendiente { background: var(--surface-2); }
+.avance-barra .t-pendiente { background: var(--bg); }
 
-.leyenda { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 12px; }
-.leyenda > div { display: flex; align-items: center; gap: 8px; min-width: 0; }
+/* Tres columnas fijas y la etiqueta debajo de la cifra. En una sola
+   fila, «33 Resueltas · 16 A revisar · 24 Pendientes» cabe por los
+   pelos y se parte en cuanto alguna cifra llega a tres dígitos. */
+.leyenda {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 4px 12px; margin-top: 24px;
+}
+.leyenda > div { min-width: 0; }
+.leyenda-cifra { display: flex; align-items: center; gap: 8px; }
 .leyenda .punto {
   width: 11px; height: 11px; border-radius: 3px; flex: none;
 }
 .leyenda .punto.t-resuelta { background: var(--ink); }
 .leyenda .punto.t-revisar { background: var(--accent); }
-.leyenda .punto.t-pendiente { background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line); }
-.leyenda b { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.leyenda span { font-size: 12.5px; color: var(--muted); }
+.leyenda .punto.t-pendiente { background: var(--bg); box-shadow: inset 0 0 0 1px var(--line); }
+.leyenda b { font-size: 19px; font-weight: 800; letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums; }
+.leyenda > div > span { font-size: 12.5px; color: var(--muted); display: block; margin-top: 2px; }
 
 /* ─── Tarea en un listado ──────────────────────────────────────
    La foto y el texto se leen sin abrirla, que es como se repasa

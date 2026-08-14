@@ -357,14 +357,16 @@ export function barraAvance(c) {
     : null);
 
   const dato = (clase, n, etiqueta) => h('div', null,
-    h('span.punto', { class: clase }),
-    h('b', null, String(n)),
+    h('div.leyenda-cifra', null,
+      h('span.punto', { class: clase }),
+      h('b', null, String(n)),
+    ),
     h('span', null, etiqueta),
   );
 
-  return h('div', null,
+  return h('div.widget-avance', null,
     h('p.eyebrow', null, 'Avance'),
-    h('div.avance-barra', { style: { marginTop: '10px' } },
+    h('div.avance-barra', null,
       tramo('t-resuelta', c.hechas),
       tramo('t-revisar', c.esperando),
       tramo('t-pendiente', c.pendientes),
