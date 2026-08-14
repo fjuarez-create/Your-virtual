@@ -55,63 +55,29 @@ que ya hizo. Siempre tiene que quedar al menos un administrador activo.
 
 ## Puesta en marcha en el hosting
 
-### 1. Subdominio
+Los pasos completos, con el detalle de cada pantalla de Plesk, están en
+**[docs/PUESTA_EN_MARCHA.md](docs/PUESTA_EN_MARCHA.md)**. En resumen:
 
-Crear el subdominio en Plesk (`repasos.unikdi.com`) con **HTTPS**. No es un
-capricho: sin HTTPS el navegador no da acceso a la cámara, ni al micrófono, ni
-deja instalar la app.
+1. Subdominio en Plesk **con HTTPS** — sin él el navegador no da acceso a la
+   cámara ni al micrófono, ni deja instalar la app.
+2. Base de datos MySQL (o SQLite, si el plan no la incluye).
+3. Cuenta FTP del subdominio y sus datos guardados como secretos del repositorio.
+4. Lanzar el despliegue desde *Actions*.
+5. Crear `api/config.php` en el servidor con los datos de la base.
+6. Subir los límites de PHP para que entren los vídeos.
+7. Abrir `api/install.php` una vez y borrarlo después.
 
-### 2. Base de datos
+### Despliegue automático
 
-En Plesk → *Bases de datos* → *Añadir base de datos*. Apuntar nombre, usuario y
-contraseña.
-
-Si el plan no diera MySQL, la app también funciona con **SQLite** (un fichero, sin
-servidor); basta poner `'driver' => 'sqlite'` en la configuración.
-
-### 3. Configuración
-
-Copiar `api/config.example.php` a `api/config.php` **en el servidor** y rellenar
-los datos de la base y el administrador inicial:
-
-```php
-'admin_inicial' => [
-    'nombre'   => 'Fran Juárez',
-    'email'    => 'f.juarez@unikdi.com',
-    'password' => 'la-que-quieras-min-8',
-],
-```
-
-`config.php` no está en el repositorio y el despliegue no lo toca nunca.
-
-### 4. Instalar
-
-Abrir una vez `https://repasos.unikdi.com/api/install.php`. Crea las tablas y el
-usuario administrador. **Después, borrar `api/install.php` del servidor** y vaciar
-`admin_inicial` en `config.php`.
-
-### 5. Límites de PHP
-
-Para que entren los vídeos, en el PHP del subdominio (Plesk → *Configuración de
-PHP*):
-
-```
-upload_max_filesize = 80M
-post_max_size       = 84M
-max_execution_time  = 300
-```
-
-### 6. Despliegue automático
-
-`.github/workflows/deploy-repasos.yml` publica en cada push que toque `repasos/`.
-Necesita estos secretos en el repositorio:
+`.github/workflows/deploy.yml` publica en cada push a `main`. Necesita estos
+secretos en el repositorio (*Settings → Secrets and variables → Actions*):
 
 | Secreto | Qué es |
 | --- | --- |
-| `FTP_REPASOS_SERVER` | host FTP del panel |
-| `FTP_REPASOS_USERNAME` | usuario FTP del subdominio |
-| `FTP_REPASOS_PASSWORD` | contraseña |
-| `FTP_REPASOS_SERVER_DIR` | opcional; vacío = se detecta `httpdocs` |
+| `FTP_SERVER` | host FTP del panel |
+| `FTP_USERNAME` | usuario FTP del subdominio |
+| `FTP_PASSWORD` | contraseña |
+| `FTP_SERVER_DIR` | opcional; sin él se detecta `httpdocs` |
 
 El despliegue **no sube ni borra** `api/config.php`, `api/uploads/` ni
 `api/datos/`: las fotos y las credenciales del servidor se quedan donde están.
@@ -123,7 +89,6 @@ dispositivo y avisa de que no se comparte. Sirve para ver la interfaz sin montar
 nada:
 
 ```bash
-cd repasos
 # apiBase: '' en index.html → modo local
 python3 -m http.server 8080
 ```
@@ -131,7 +96,6 @@ python3 -m http.server 8080
 Con backend, hace falta PHP:
 
 ```bash
-cd repasos
 cp api/config.example.php api/config.php    # driver 'sqlite' y admin_inicial
 PHP_CLI_SERVER_WORKERS=10 php -S 127.0.0.1:8099 -t .
 # → http://127.0.0.1:8099/api/install.php  y luego  http://127.0.0.1:8099/
@@ -170,6 +134,7 @@ js/ui.js                Nodos, iconos, avisos, hojas y visor
 js/piezas.js            Cabecera, cinta de sincronización, fila de lista
 js/views/               Una pantalla por fichero
 api/                    Backend PHP (ver api/schema.sql)
+docs/                   Puesta en marcha del servidor
 tools/make-icons.mjs    Regenera los iconos de la app
 ```
 

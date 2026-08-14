@@ -2,9 +2,9 @@
 #
 # Sube UNIK repasos al subdominio por FTP.
 #
-#   ftp-repasos.sh subir      todo menos index.html y sw.js
-#   ftp-repasos.sh arranque   index.html y sw.js, al final del todo
-#   ftp-repasos.sh comprobar  verifica que lo esencial está arriba
+#   ftp-deploy.sh subir      todo menos index.html y sw.js
+#   ftp-deploy.sh arranque   index.html y sw.js, al final del todo
+#   ftp-deploy.sh comprobar  verifica que lo esencial está arriba
 #
 # El orden importa: index.html y sw.js son los que declaran la versión
 # nueva. Si subieran primero, un móvil podría pedir un módulo que aún no
@@ -17,14 +17,14 @@
 # Por eso el espejo va carpeta por carpeta y api/ se sube sin --delete.
 #
 # Variables (secretos del repositorio):
-#   FTP_REPASOS_SERVER, FTP_REPASOS_USERNAME, FTP_REPASOS_PASSWORD
-#   FTP_REPASOS_SERVER_DIR (opcional)
+#   FTP_SERVER, FTP_USERNAME, FTP_PASSWORD
+#   FTP_SERVER_DIR (opcional)
 
 set -eu
 
-QUE="${1:?uso: ftp-repasos.sh subir|arranque|comprobar}"
+QUE="${1:?uso: ftp-deploy.sh subir|arranque|comprobar}"
 
-for nombre in FTP_REPASOS_SERVER FTP_REPASOS_USERNAME FTP_REPASOS_PASSWORD; do
+for nombre in FTP_SERVER FTP_USERNAME FTP_PASSWORD; do
   eval "valor=\${$nombre:-}"
   if [ -z "$valor" ]; then
     echo "Falta el secreto $nombre en el repositorio." >&2
@@ -51,7 +51,7 @@ PLANO="$AJUSTES set ftp:ssl-allow false;"
 lanzar() {
   lftp <<FIN
 $1
-open -u "$FTP_REPASOS_USERNAME","$FTP_REPASOS_PASSWORD" "$FTP_REPASOS_SERVER"
+open -u "$FTP_USERNAME","$FTP_PASSWORD" "$FTP_SERVER"
 $2
 bye
 FIN
@@ -63,7 +63,7 @@ if ! lanzar "$TLS" "pwd" >/dev/null 2>&1; then
   OPC="$PLANO"
 fi
 
-DIR="${FTP_REPASOS_SERVER_DIR:-}"
+DIR="${FTP_SERVER_DIR:-}"
 case "$DIR" in "" | "." | "./") DIR="" ;; esac
 if [ -z "$DIR" ]; then
   if lanzar "$OPC" "cls -1" 2>/dev/null | tr -d '\r/' | grep -qx httpdocs; then
