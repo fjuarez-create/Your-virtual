@@ -34,40 +34,81 @@ if [ ! -f repasos/index.html ]; then
   echo "Prueba:  git checkout claude/uniq-repasos-app-2ja8y2" >&2
   exit 1
 fi
-if ! git subtree --help >/dev/null 2>&1; then
-  echo "Tu git no trae 'git subtree'. En macOS: brew install git. En Windows, usa Git Bash." >&2
-  exit 1
+# ¿Está disponible git subtree? Se comprueba que exista el ejecutable, NO
+# con 'git subtree --help': eso abre el manual, y en un contenedor sin
+# manuales instalados (un Codespace, por ejemplo) falla aunque el comando
+# esté perfectamente.
+HAY_SUBTREE=no
+if [ -x "$(git --exec-path)/git-subtree" ] || command -v git-subtree >/dev/null 2>&1; then
+  HAY_SUBTREE=si
 fi
+
 if [ -n "$(git status --porcelain)" ]; then
   echo "Hay cambios sin guardar. Haz commit o guárdalos antes de mover nada." >&2
   exit 1
 fi
 # Un clon superficial no tiene historia que extraer.
-if [ -f .git/shallow ]; then
+if [ -f .git/shallow ] && [ "$HAY_SUBTREE" = si ]; then
   echo "Este clon es superficial. Ejecuta antes:  git fetch --unshallow" >&2
   exit 1
 fi
 
 RAMA_TEMPORAL="repasos-a-su-repo"
 git branch -D "$RAMA_TEMPORAL" >/dev/null 2>&1 || true
+TEMPORAL=""
+limpiar() { [ -n "$TEMPORAL" ] && rm -rf "$TEMPORAL"; }
+trap limpiar EXIT
 
-echo "1/3 · Extrayendo repasos/ con su historial…"
-git subtree split --prefix=repasos -b "$RAMA_TEMPORAL"
+if [ "$HAY_SUBTREE" = si ]; then
+  echo "1/3 · Extrayendo repasos/ con su historial…"
+  git subtree split --prefix=repasos -b "$RAMA_TEMPORAL"
+  ORIGEN_PUSH="$RAMA_TEMPORAL:main"
+else
+  # Plan B: sin subtree no se puede reescribir la historia de la carpeta,
+  # así que se lleva su contenido actual en un commit único. El historial
+  # completo sigue estando en Your-virtual, que no se toca.
+  echo "1/3 · Tu git no trae 'git subtree'; se lleva el contenido actual"
+  echo "      en un commit único (el historial se queda en Your-virtual)."
+  TEMPORAL="$(mktemp -d)"
+  # git archive exporta solo lo que está bajo control de versiones: ni
+  # config.php, ni fotos subidas, ni bases de datos.
+  git archive HEAD repasos | tar -x -C "$TEMPORAL" --strip-components=1
+  (
+    cd "$TEMPORAL"
+    git init -q -b main
+    git add -A
+    git -c user.name="$(git -C "$OLDPWD" config user.name || echo UNIK)" \
+        -c user.email="$(git -C "$OLDPWD" config user.email || echo repasos@unikdi.com)" \
+        commit -q -m "UNIK repasos: importado desde Your-virtual"
+  )
+  ORIGEN_PUSH="main"
+fi
 
 echo "2/3 · Empujando a $DESTINO (rama main)…"
-if ! git push "$DESTINO" "$RAMA_TEMPORAL:main"; then
+empujar() {
+  if [ "$HAY_SUBTREE" = si ]; then
+    git push "$DESTINO" "$ORIGEN_PUSH"
+  else
+    git -C "$TEMPORAL" push "$DESTINO" main
+  fi
+}
+if ! empujar; then
   echo >&2
   echo "No se pudo empujar. Lo más habitual:" >&2
   echo "  · el repositorio de destino no está vacío → créalo sin README ni .gitignore" >&2
   echo "  · la URL está mal escrita" >&2
   echo "  · falta autenticación → prueba con 'gh auth login' o con la URL SSH" >&2
   echo >&2
-  echo "La rama local '$RAMA_TEMPORAL' se conserva; puedes reintentar con:" >&2
-  echo "  git push $DESTINO $RAMA_TEMPORAL:main" >&2
+  if [ "$HAY_SUBTREE" = si ]; then
+    echo "La rama local '$RAMA_TEMPORAL' se conserva; puedes reintentar con:" >&2
+    echo "  git push $DESTINO $RAMA_TEMPORAL:main" >&2
+  else
+    echo "Vuelve a ejecutar este mismo comando cuando esté resuelto." >&2
+  fi
   exit 1
 fi
 
-echo "3/3 · Limpiando la rama temporal…"
+echo "3/3 · Limpiando…"
 git branch -D "$RAMA_TEMPORAL" >/dev/null 2>&1 || true
 
 cat <<'FIN'
