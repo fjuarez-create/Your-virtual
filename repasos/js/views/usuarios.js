@@ -1,11 +1,11 @@
 /* Administración de usuarios. Solo la ve el administrador: da de alta a
    los arquitectos con su correo y una contraseña inicial, y puede
    desactivarlos sin perder la firma de los repasos que ya hicieron. */
-import { h, icon, sheet, toast, confirmSheet, iniciales, emptyState } from '../ui.js';
+import { h, icon, sheet, toast, confirmSheet, avatar, emptyState } from '../ui.js';
 import * as api from '../api.js';
 import * as store from '../store.js';
 import { EMPRESAS, contrasenaInicial, verificaPorDefecto } from '../catalog.js';
-import { cabecera, chevron } from '../piezas.js';
+import { cabecera, chevron, hojaFoto } from '../piezas.js';
 import { ir, refrescar } from '../app.js';
 
 export async function render() {
@@ -15,7 +15,7 @@ export async function render() {
   let error = null;
   try {
     const r = await api.listarUsuarios();
-    usuarios = r.usuarios || [];
+    usuarios = (r.usuarios || []).map((u) => ({ ...u, avatarUrl: api.urlAvatar(u.id, u.avatar) }));
   } catch (e) {
     error = e.codigo === 'red' ? 'Sin conexión con el servidor.' : e.message;
   }
@@ -23,7 +23,7 @@ export async function render() {
   const yo = store.sesion();
 
   return {
-    tab: 'ajustes',
+    sinTabs: true,
     fab: h('button.fab', { onclick: () => altaUsuario() }, icon('plus'), 'Nuevo usuario'),
     contenido: [
       cabecera('Usuarios', 'Equipo con acceso a los repasos', { volverA: '#/ajustes' }),
@@ -53,8 +53,7 @@ function filaUsuario(u, yo) {
     onclick: () => (esYo ? toast('Tu propia cuenta se gestiona en Ajustes') : editarUsuario(u)),
     style: u.activo ? null : { opacity: '0.55' },
   },
-    h('div.avatar', { style: { width: '40px', height: '40px', flex: '0 0 40px', fontSize: '13px', borderRadius: '12px' } },
-      iniciales(u.nombre)),
+    avatar(u, { tam: 40, radio: '13px' }),
     h('div.grow', null,
       h('div.row-title', null, u.nombre + (esYo ? ' (tú)' : '')),
       h('div.row-sub', null, [u.empresa, u.email].filter(Boolean).join(' · ')),
@@ -233,6 +232,17 @@ function editarUsuario(u) {
     h('h2.title', null, u.nombre),
     h('p.sub', null, u.email),
     h('div.stack', { style: { marginTop: '10px' } },
+      h('button.row', {
+        onclick: async () => {
+          if (await hojaFoto(u)) { cerrar(true); refrescar(); }
+        },
+      },
+        h('div.row-lead', null, icon('camera', 18)),
+        h('div.grow', null,
+          h('div.row-title', null, u.avatar ? 'Cambiar su foto' : 'Ponerle una foto'),
+          h('div.row-sub', null, 'Podrá cambiarla o quitarla'),
+        ),
+      ),
       h('button.row', {
         onclick: async () => {
           const nueva = await pedirPassword(u);

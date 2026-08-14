@@ -1,11 +1,11 @@
 /* Ajustes: cuenta, sincronización, administración de usuarios y datos
    guardados en el dispositivo. */
-import { h, icon, sheet, toast, confirmSheet, iniciales, pesoLegible } from '../ui.js';
+import { h, icon, sheet, toast, confirmSheet, avatar, pesoLegible } from '../ui.js';
 import * as store from '../store.js';
 import * as api from '../api.js';
 import * as db from '../db.js';
-import { barraSync, chevron } from '../piezas.js';
-import { ir } from '../app.js';
+import { barraSync, chevron, cabecera, hojaFoto } from '../piezas.js';
+import { ir, refrescar } from '../app.js';
 
 export async function render() {
   const u = store.sesion();
@@ -14,20 +14,30 @@ export async function render() {
   const filas = [];
 
   if (api.HAY_SERVIDOR && !u.local) {
+    filas.push(fila('user', u.avatar ? 'Cambiar mi foto' : 'Poner una foto',
+      'Si no hay foto se ven tus iniciales', async () => {
+        if (await hojaFoto(u)) { await store.refrescarSesion(); refrescar(); }
+      }));
     filas.push(fila('key', 'Cambiar mi contraseña', null, () => cambiarPassword()));
   }
   if (store.esAdmin() && api.HAY_SERVIDOR && !u.local) {
     filas.push(fila('users', 'Usuarios', 'Alta y baja del equipo', () => ir('#/usuarios')));
   }
 
+  const admin = store.esAdmin();
+
   return {
-    tab: 'ajustes',
+    // Quien administra tiene su pestaña; el resto llega por la bolita
+    // de la esquina, así que aquí necesita la flecha de vuelta.
+    tab: admin ? 'ajustes' : undefined,
+    sinTabs: !admin,
     contenido: [
-      h('h1.display', null, 'Ajustes'),
+      admin ? null : cabecera('Tu cuenta', '', { volverA: '#/' }),
+      h('h1.display', { style: { marginTop: admin ? '0' : '10px' } }, 'Ajustes'),
 
       // Tarjeta de cuenta, con el mismo aire que el perfil de la referencia.
       h('div', { style: { display: 'flex', alignItems: 'center', gap: '14px', margin: '22px 0 6px' } },
-        h('div.avatar', { style: { width: '64px', height: '64px', flex: '0 0 64px', fontSize: '21px' } }, iniciales(u?.nombre)),
+        avatar(u, { tam: 64 }),
         h('div.grow', { style: { minWidth: 0 } },
           h('h2.title', null, u?.nombre || 'Sin identificar'),
           h('p.sub', null, u?.email || (u?.local ? 'Modo local' : '')),

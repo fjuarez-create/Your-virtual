@@ -69,7 +69,7 @@ export async function render({ promoId, unidadId }) {
     );
   }
 
-  return { tab: 'promociones', contenido };
+  return { sinTabs: true, contenido };
 }
 
 /** Hoja para elegir pre-entrega o post-entrega. */

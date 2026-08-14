@@ -13,22 +13,33 @@ import * as api from './api.js';
 const RUTAS = [
   { patron: /^\/?$/,                          vista: () => import('./views/inicio.js'),       params: () => ({}) },
   { patron: /^\/entrar$/,                     vista: () => import('./views/entrar.js'),       params: () => ({}) },
+  { patron: /^\/viviendas$/,                  vista: () => import('./views/viviendas.js'),    params: () => ({ desdeTab: true }) },
   { patron: /^\/promociones$/,                vista: () => import('./views/promociones.js'),  params: () => ({}) },
   { patron: /^\/p\/([^/]+)$/,                 vista: () => import('./views/viviendas.js'),    params: (m) => ({ promoId: m[1] }) },
   { patron: /^\/p\/([^/]+)\/v\/([^/]+)$/,     vista: () => import('./views/listas.js'),       params: (m) => ({ promoId: m[1], unidadId: `${m[1]}:${m[2]}` }) },
   { patron: /^\/l\/([^/]+)$/,                 vista: () => import('./views/tareas.js'),       params: (m) => ({ listaId: m[1] }) },
   { patron: /^\/l\/([^/]+)\/t\/([^/]+)$/,     vista: () => import('./views/tarea.js'),        params: (m) => ({ listaId: m[1], tareaId: m[2] }) },
-  { patron: /^\/historial$/,                  vista: () => import('./views/historial.js'),    params: () => ({}) },
+  { patron: /^\/listas$/,                     vista: () => import('./views/historial.js'),    params: () => ({}) },
   { patron: /^\/ajustes$/,                    vista: () => import('./views/ajustes.js'),      params: () => ({}) },
   { patron: /^\/usuarios$/,                   vista: () => import('./views/usuarios.js'),     params: () => ({}) },
 ];
 
+/**
+ * Tres destinos, y un cuarto solo para quien administra. Los iconos
+ * de inicio y viviendas son deliberadamente distintos: uno es una
+ * retícula de resumen y el otro una casa, sin parecido posible.
+ */
 const TABS = [
-  { id: 'inicio', ruta: '#/', icono: 'home', etiqueta: 'Inicio' },
-  { id: 'promociones', ruta: '#/promociones', icono: 'building', etiqueta: 'Promociones' },
-  { id: 'historial', ruta: '#/historial', icono: 'clock', etiqueta: 'Historial' },
-  { id: 'ajustes', ruta: '#/ajustes', icono: 'gear', etiqueta: 'Ajustes' },
+  { id: 'inicio', ruta: '#/', icono: 'inicio', etiqueta: 'Inicio' },
+  { id: 'listas', ruta: '#/listas', icono: 'listas', etiqueta: 'Repasos' },
+  { id: 'viviendas', ruta: '#/viviendas', icono: 'viviendas', etiqueta: 'Viviendas' },
+  { id: 'ajustes', ruta: '#/ajustes', icono: 'gear', etiqueta: 'Ajustes', soloAdmin: true },
 ];
+
+/** Los que ve el usuario actual. */
+function tabsVisibles() {
+  return TABS.filter((t) => !t.soloAdmin || store.esAdmin());
+}
 
 export function ir(ruta, { reemplazar = false } = {}) {
   if (reemplazar) location.replace(ruta);
@@ -45,16 +56,43 @@ export function atras(porDefecto = '#/') {
 const app = document.getElementById('app');
 let rutaActual = '';
 
+/**
+ * La cápsula con las bolitas. Hereda del conmutador del showroom: un
+ * contenedor oscuro con los botones dentro, en vez de botones sueltos.
+ * El activo no cambia de color de golpe: hay una bolita blanca que se
+ * desliza por detrás hasta su sitio.
+ */
+const ANCHO_BOLITA = 52;
+const HUECO_BOLITA = 6;
+
 function barraInferior(activo) {
-  return h('nav.tabbar', { role: 'navigation' },
-    TABS.map((t) => h('button', {
+  const tabs = tabsVisibles();
+  const indice = Math.max(0, tabs.findIndex((t) => t.id === activo));
+
+  const marca = h('span.marca', {
+    style: { '--x': `${indice * (ANCHO_BOLITA + HUECO_BOLITA)}px` },
+  });
+
+  const nav = h('nav.tabbar', { role: 'navigation', 'aria-label': 'Secciones' },
+    marca,
+    tabs.map((t) => h('button', {
       'aria-current': t.id === activo ? 'true' : null,
       'aria-label': t.etiqueta,
       title: t.etiqueta,
       onclick: () => ir(t.ruta),
     }, icon(t.icono))),
   );
+
+  // La bolita no debe recorrer la barra al aparecer la pantalla: solo
+  // cuando se cambia de sección estando ya dentro. La primera pintada
+  // la coloca sin transición.
+  if (barraPrevia === null) nav.classList.add('sin-animar');
+  requestAnimationFrame(() => nav.classList.remove('sin-animar'));
+  barraPrevia = activo;
+
+  return nav;
 }
+let barraPrevia = null;
 
 function pintar({ contenido, tab, fab, sinTabs }) {
   const screen = h('div.screen', { id: 'screen', class: sinTabs ? 'no-tabs' : '' });
@@ -62,12 +100,21 @@ function pintar({ contenido, tab, fab, sinTabs }) {
   for (const n of nodos) if (n) screen.append(n);
 
   // Se conservan los nodos flotantes (aviso, hoja, visor) entre pantallas.
+  // La cápsula también, si seguimos en una sección con botonera: así la
+  // bolita se desliza hasta la nueva en vez de reaparecer de cero.
+  const barraViva = sinTabs ? null : app.querySelector('.tabbar');
   [...app.children].forEach((n) => {
+    if (n === barraViva) return;
     if (!n.matches('.toast, .veil, .sheet, .viewer')) n.remove();
   });
   app.prepend(screen);
   if (fab) screen.after(fab);
-  if (!sinTabs) app.append(barraInferior(tab));
+  if (!sinTabs) {
+    if (barraViva) moverBolita(barraViva, tab);
+    else { barraPrevia = null; app.append(barraInferior(tab)); }
+  } else {
+    barraPrevia = null;
+  }
   // El aviso flotante se coloca según lo que haya debajo (ver app.css).
   app.classList.toggle('con-fab', !!fab);
   app.classList.toggle('sin-tabs', !!sinTabs);
@@ -122,6 +169,17 @@ async function enrutar() {
       sinTabs: true,
     });
   }
+}
+
+/** Desliza la bolita hasta la sección indicada sin rehacer la cápsula. */
+function moverBolita(nav, activo) {
+  const tabs = tabsVisibles();
+  const indice = Math.max(0, tabs.findIndex((t) => t.id === activo));
+  nav.querySelector('.marca')?.style.setProperty('--x', `${indice * (ANCHO_BOLITA + HUECO_BOLITA)}px`);
+  [...nav.querySelectorAll('button')].forEach((b, i) => {
+    if (i === indice) b.setAttribute('aria-current', 'true');
+    else b.removeAttribute('aria-current');
+  });
 }
 
 /** Fuerza el repintado de la pantalla actual (tras crear o borrar algo). */

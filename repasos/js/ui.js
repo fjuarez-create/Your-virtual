@@ -1,3 +1,5 @@
+import { TRAZADOS, LIENZO } from './iconos.js';
+
 /* ═══════════════════════════════════════════════════════════════
    ui.js — piezas de interfaz compartidas: creación de nodos,
    iconos, avisos, hojas inferiores y visor a pantalla completa.
@@ -13,7 +15,14 @@ export function h(spec, props = null, ...children) {
     for (const [k, v] of Object.entries(props)) {
       if (v === null || v === undefined || v === false) continue;
       if (k === 'class') el.className = [el.className, v].filter(Boolean).join(' ');
-      else if (k === 'style' && typeof v === 'object') Object.assign(el.style, v);
+      else if (k === 'style' && typeof v === 'object') {
+        // Object.assign ignora en silencio las propiedades personalizadas
+        // (--x y compañía): esas hay que ponerlas con setProperty.
+        for (const [prop, val] of Object.entries(v)) {
+          if (prop.startsWith('--')) el.style.setProperty(prop, val);
+          else el.style[prop] = val;
+        }
+      }
       else if (k === 'html') el.innerHTML = v;
       else if (k.startsWith('on') && typeof v === 'function') el.addEventListener(k.slice(2), v);
       else if (k === 'dataset') Object.assign(el.dataset, v);
@@ -35,63 +44,130 @@ function add(el, children) {
 export const $ = (sel, root = document) => root.querySelector(sel);
 
 /* ─── Iconos ────────────────────────────────────────────────────
-   Trazo de 1.8, extremos redondeados: pesa lo mismo que el texto
-   en negrita y no ensucia las píldoras grises. */
-const PATHS = {
-  chevron: 'M9 5l7 7-7 7',
-  arrowRight: 'M5 12h14M13 5l7 7-7 7',
-  arrowLeft: 'M19 12H5M11 19l-7-7 7-7',
-  home: 'M3 10.5L12 3l9 7.5V20a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1z',
-  building: 'M4 21V6a1 1 0 011-1h6a1 1 0 011 1v15M12 21V10a1 1 0 011-1h6a1 1 0 011 1v11M3 21h18M7 9h2M7 13h2M7 17h2M15 13h2M15 17h2',
-  clock: 'M12 21a9 9 0 100-18 9 9 0 000 18zM12 7v5l3.5 2',
-  gear: 'M12 15.5a3.5 3.5 0 100-7 3.5 3.5 0 000 7z M19.4 15a1.6 1.6 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.6 1.6 0 00-1.8-.3 1.6 1.6 0 00-1 1.5v.2a2 2 0 11-4 0v-.1a1.6 1.6 0 00-1-1.5 1.6 1.6 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.6 1.6 0 00.3-1.8 1.6 1.6 0 00-1.5-1H3a2 2 0 110-4h.1a1.6 1.6 0 001.5-1 1.6 1.6 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.6 1.6 0 001.8.3H9a1.6 1.6 0 001-1.5V3a2 2 0 114 0v.1a1.6 1.6 0 001 1.5 1.6 1.6 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.6 1.6 0 00-.3 1.8V9a1.6 1.6 0 001.5 1h.2a2 2 0 110 4h-.1a1.6 1.6 0 00-1.5 1z',
-  camera: 'M3 8.5A1.5 1.5 0 014.5 7h2.2a1 1 0 00.83-.45l.94-1.4A1 1 0 019.3 4.7h5.4a1 1 0 01.83.45l.94 1.4a1 1 0 00.83.45h2.2A1.5 1.5 0 0121 8.5v9a1.5 1.5 0 01-1.5 1.5h-15A1.5 1.5 0 013 17.5z M12 16.5a3.5 3.5 0 100-7 3.5 3.5 0 000 7z',
-  image: 'M4 5h16a1 1 0 011 1v12a1 1 0 01-1 1H4a1 1 0 01-1-1V6a1 1 0 011-1z M3 16l4.5-4.5a1.5 1.5 0 012.1 0L14 16 M14.5 13.5l1.9-1.9a1.5 1.5 0 012.1 0L21 14.2 M9 9.5a1 1 0 100-2 1 1 0 000 2z',
-  video: 'M3.5 6.5h11a1 1 0 011 1v9a1 1 0 01-1 1h-11a1 1 0 01-1-1v-9a1 1 0 011-1z M15.5 10.5l4-2.4a.6.6 0 01.9.5v6.8a.6.6 0 01-.9.5l-4-2.4z',
-  mic: 'M12 3.5a2.6 2.6 0 012.6 2.6v5.4a2.6 2.6 0 11-5.2 0V6.1A2.6 2.6 0 0112 3.5z M5.5 11a6.5 6.5 0 0013 0 M12 17.5V21 M9 21h6',
-  plus: 'M12 5v14M5 12h14',
-  check: 'M4.5 12.5l5 5 10-11',
-  x: 'M6 6l12 12M18 6L6 18',
-  trash: 'M4 7h16 M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2 M6 7l.9 12a1 1 0 001 .9h8.2a1 1 0 001-.9L18 7 M10 11v5M14 11v5',
-  user: 'M12 12a4 4 0 100-8 4 4 0 000 8z M4.5 20.5a7.5 7.5 0 0115 0',
-  users: 'M9.5 11.5a3.5 3.5 0 100-7 3.5 3.5 0 000 7z M2.5 20a7 7 0 0114 0 M16 5a3.5 3.5 0 010 7 M17 14.2a7 7 0 014.5 5.8',
-  logout: 'M15 4.5h3.5a1 1 0 011 1v13a1 1 0 01-1 1H15 M11 8l4 4-4 4 M15 12H3.5',
-  cloud: 'M7 18.5A4 4 0 016.6 10.6a5.5 5.5 0 0110.6-1.1A3.8 3.8 0 0117 18.5z',
-  cloudOff: 'M3 3l18 18 M7 18.5A4 4 0 016.6 10.6a5.4 5.4 0 011-1.9 M10.6 6.1a5.5 5.5 0 016.6 3.4A3.8 3.8 0 0119 17.4 M9 18.5h8',
-  search: 'M11 18a7 7 0 100-14 7 7 0 000 14z M20.5 20.5l-4.4-4.4',
-  edit: 'M4 20h4L19 9a2.1 2.1 0 00-3-3L5 17z M14.5 6.5l3 3',
-  play: 'M8 5.5l11 6.5-11 6.5z',
-  list: 'M4.5 7h15M4.5 12h15M4.5 17h9',
-  clipboard: 'M9 4.5h6a1 1 0 011 1V7H8V5.5a1 1 0 011-1z M8 6H6a1 1 0 00-1 1v12.5a1 1 0 001 1h12a1 1 0 001-1V7a1 1 0 00-1-1h-2 M8.5 12h7M8.5 16h4',
-  alert: 'M12 4l9 16H3z M12 10v4 M12 17.2v.1',
-  stop: 'M7.5 7.5h9v9h-9z',
-  key: 'M14.5 4a5.5 5.5 0 015 7.9L20 13l-2 2-2-1-2 2-2-1-2 2H6v-3l5.6-5.6A5.5 5.5 0 0114.5 4z M16.5 8.2v.1',
-  download: 'M12 4v11 M8 11.5l4 4 4-4 M4.5 19.5h15',
-  refresh: 'M20 12a8 8 0 11-2.6-5.9 M20 3.5V8h-4.5',
-  share: 'M12 3.5v12 M8.5 7l3.5-3.5L15.5 7 M5.5 12.5v7a1 1 0 001 1h11a1 1 0 001-1v-7',
-  copy: 'M9 9.5A1.5 1.5 0 0110.5 8h8A1.5 1.5 0 0120 9.5v9a1.5 1.5 0 01-1.5 1.5h-8A1.5 1.5 0 019 18.5z M15.5 5.5A1.5 1.5 0 0014 4H5.5A1.5 1.5 0 004 5.5V14a1.5 1.5 0 001.5 1.5',
-  documento: 'M6 3.5h7l5 5V20a1 1 0 01-1 1H6a1 1 0 01-1-1V4.5a1 1 0 011-1z M13 3.5V8a1 1 0 001 1h4 M8.5 13.5h7 M8.5 17h4',
-  hilo: 'M20.5 12a7.5 7.5 0 01-10.9 6.7L4.5 20l1.3-5A7.5 7.5 0 1120.5 12z',
-  rechazo: 'M12 21a9 9 0 100-18 9 9 0 000 18z M15 9l-6 6 M9 9l6 6',
+   Phosphor Icons, peso «regular», embebidos en js/iconos.js. Son
+   trazados rellenos sobre un lienzo de 256, no trazos: de ahí que
+   aquí no se toque stroke-width, solo el color. */
+export function icon(nombre, tam) {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', LIENZO);
+  svg.setAttribute('fill', 'currentColor');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
+  if (tam) { svg.style.width = tam + 'px'; svg.style.height = tam + 'px'; }
+  const d = TRAZADOS[nombre];
+  if (d) svg.innerHTML = d;
+  return svg;
+}
+
+/* ─── Avatar ────────────────────────────────────────────────────
+   Foto si la hay; si no, las iniciales sobre un color estable para
+   esa persona. Estable y no aleatorio a propósito: si cambiara en
+   cada pantalla dejaría de servir para reconocer a nadie. */
+/* Pardos, arenas, piedras y grises: la familia del acento. Se
+   distinguen entre sí por tono y por claridad, no solo por claridad,
+   para que dos bolitas juntas no parezcan la misma con otra luz. */
+const PALETA_AVATAR = [
+  '#9b8f7f', // taupe (el de la marca)
+  '#6e6558', // tierra tostada
+  '#b3a08a', // arena
+  '#5f6560', // piedra verdosa
+  '#8d8a95', // gris lila
+  '#a8927c', // caramelo apagado
+  '#767f7a', // salvia oscura
+  '#c0b6a6', // lino
+  '#7d7f8c', // pizarra
+  '#8f7f6e', // topo
+  '#9aa08e', // oliva claro
+  '#5c5b57', // grafito cálido
+];
+
+/**
+ * El equipo lleva su color escrito. Nueve personas repartidas por un
+ * hash sobre doce colores chocan casi seguro (cumpleaños), y el encargo
+ * era que fuesen todos distintos; así que a quien ya está se le asigna
+ * a mano y el hash queda de reserva para quien entre después.
+ *
+ * La clave es el nombre y no el identificador porque el nombre es el
+ * único dato de una persona que la app conoce siempre: en una tarea
+ * sincronizada viaja quién la creó y cómo se llama, nunca su ficha.
+ */
+const COLOR_DEL_EQUIPO = {
+  'francisco juarez del dago': '#9b8f7f',
+  'alba garcia': '#6e6558',
+  'felix j bordes': '#b3a08a',
+  'felipe remacha': '#5f6560',
+  'tomas bordes': '#8d8a95',
+  'andrea garcia': '#a8927c',
+  'fran acien': '#767f7a',
+  'juanjo arguelles': '#7d7f8c',
+  'sofia santana': '#8f7f6e',
 };
 
-export function icon(name, size) {
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('viewBox', '0 0 24 24');
-  svg.setAttribute('fill', 'none');
-  svg.setAttribute('stroke', 'currentColor');
-  svg.setAttribute('stroke-width', '1.8');
-  svg.setAttribute('stroke-linecap', 'round');
-  svg.setAttribute('stroke-linejoin', 'round');
-  svg.setAttribute('aria-hidden', 'true');
-  if (size) { svg.style.width = size + 'px'; svg.style.height = size + 'px'; }
-  for (const d of (PATHS[name] || '').split(' M').map((p, i) => (i ? 'M' + p : p))) {
-    if (!d.trim()) continue;
-    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    path.setAttribute('d', d);
-    svg.append(path);
+/** Minúsculas, sin tildes y sin signos, para que «Félix J. Bordes» y
+    «Felix J Bordes» sean la misma persona. */
+function clave(nombre) {
+  return String(nombre || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+/** Luminancia relativa, para decidir si el texto va en tinta o en blanco. */
+function luminancia(hex) {
+  const v = [1, 3, 5].map((i) => {
+    const c = parseInt(hex.slice(i, i + 2), 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2];
+}
+
+/**
+ * Color de una persona: siempre el mismo, en cualquier dispositivo y sin
+ * consultar nada. Acepta la ficha entera o solo un nombre.
+ */
+export function colorDe(persona) {
+  const nombre = typeof persona === 'string' ? persona : persona?.nombre;
+  const escrito = COLOR_DEL_EQUIPO[clave(nombre)];
+  if (escrito) return escrito;
+
+  const texto = clave(nombre) || String(persona?.id || persona || '');
+  let h = 0;
+  for (let i = 0; i < texto.length; i++) h = (h * 31 + texto.charCodeAt(i)) >>> 0;
+  return PALETA_AVATAR[h % PALETA_AVATAR.length];
+}
+
+/**
+ * Bolita de una persona. `usuario` necesita id, nombre y, si tiene
+ * foto, `avatar` (la marca de tiempo que sirve para refrescar la caché).
+ */
+export function avatar(usuario, { tam = 44, radio = '50%', onclick, etiqueta } = {}) {
+  const fondo = colorDe(usuario);
+  const nodo = h(onclick ? 'button.avatar' : 'div.avatar', {
+    style: {
+      width: tam + 'px', height: tam + 'px', flex: `0 0 ${tam}px`,
+      borderRadius: radio,
+      background: fondo,
+      color: luminancia(fondo) > 0.42 ? '#111112' : '#ffffff',
+      fontSize: Math.round(tam * 0.34) + 'px',
+    },
+    'aria-label': etiqueta || (usuario?.nombre ? `Cuenta de ${usuario.nombre}` : 'Cuenta'),
+    onclick,
+  }, iniciales(usuario?.nombre));
+
+  if (usuario?.avatarUrl) {
+    const img = h('img', {
+      src: usuario.avatarUrl, alt: '',
+      style: { width: '100%', height: '100%', objectFit: 'cover', opacity: '0' },
+    });
+    // La foto entra con un fundido: si falla, se quedan las iniciales.
+    img.addEventListener('load', () => {
+      img.style.transition = 'opacity var(--mov-medio) var(--sal-estandar)';
+      img.style.opacity = '1';
+      nodo.classList.add('con-foto');
+    });
+    img.addEventListener('error', () => img.remove());
+    nodo.append(img);
   }
-  return svg;
+  return nodo;
 }
 
 /* ─── Avisos ──────────────────────────────────────────────────── */

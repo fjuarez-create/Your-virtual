@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
   rol           VARCHAR(10)  NOT NULL DEFAULT 'usuario',
   empresa       VARCHAR(120) NOT NULL DEFAULT '',
   verifica      TINYINT(1)   NOT NULL DEFAULT 0,
+  avatar        VARCHAR(24)  NOT NULL DEFAULT '',
   activo        TINYINT(1)   NOT NULL DEFAULT 1,
   creado        CHAR(24)     NOT NULL,
   actualizado   CHAR(24)     NOT NULL,

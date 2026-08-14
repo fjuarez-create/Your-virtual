@@ -22,18 +22,25 @@ const ahora = () => new Date().toISOString();
 
 /* ─── Sesión ──────────────────────────────────────────────────── */
 let usuario = null;
+
+/** Añade la dirección de la foto, si la persona tiene una puesta. */
+function conFoto(u) {
+  if (!u) return u;
+  return { ...u, avatarUrl: api.urlAvatar(u.id, u.avatar) };
+}
+
 export const sesion = () => usuario;
 export const esAdmin = () => !!usuario && usuario.rol === 'admin';
 
 export async function cargarSesion() {
-  usuario = (await db.meta.get('usuario')) || null;
+  usuario = conFoto(await db.meta.get('usuario')) || null;
   if (api.HAY_SERVIDOR && navigator.onLine) {
     // Se refresca contra el servidor, pero si no contesta seguimos con
     // la sesión guardada: sin cobertura la app tiene que abrir igual.
     try {
       const u = await api.yo();
-      usuario = u.usuario;
-      await db.meta.set('usuario', usuario);
+      usuario = conFoto(u.usuario);
+      await db.meta.set('usuario', u.usuario);
     } catch (e) {
       if (e.status === 401) { usuario = null; await db.meta.del('usuario'); }
     }
@@ -43,8 +50,8 @@ export async function cargarSesion() {
 
 export async function iniciarSesion(email, password) {
   const r = await api.entrar(email, password);
-  usuario = r.usuario;
-  await db.meta.set('usuario', usuario);
+  usuario = conFoto(r.usuario);
+  await db.meta.set('usuario', r.usuario);
   return usuario;
 }
 
@@ -61,6 +68,15 @@ export async function cerrarSesion() {
   // Si quedaba trabajo sin subir se conserva: se recupera al volver a entrar.
   if (pend > 0) await db.meta.del('usuario');
   else await db.limpiarTodo();
+}
+
+/** Refresca los datos de la sesión tras cambiar la foto o el perfil. */
+export async function refrescarSesion() {
+  if (!api.HAY_SERVIDOR || usuario?.local) return usuario;
+  const r = await api.yo();
+  usuario = conFoto(r.usuario);
+  await db.meta.set('usuario', r.usuario);
+  return usuario;
 }
 
 /* ─── Estado de sincronización (observable simple) ────────────── */

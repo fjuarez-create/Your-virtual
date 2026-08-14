@@ -63,6 +63,7 @@ try {
         'usuarios' => [
             'empresa'  => "VARCHAR(120) NOT NULL DEFAULT ''",
             'verifica' => 'TINYINT(1) NOT NULL DEFAULT 0',
+            'avatar'   => "VARCHAR(24) NOT NULL DEFAULT ''",
         ],
         'tareas' => [
             'rechazada' => 'TINYINT(1) NOT NULL DEFAULT 0',

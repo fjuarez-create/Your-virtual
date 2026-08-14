@@ -68,6 +68,33 @@ export async function prepararImagen(file) {
   return { blob, ancho, alto, mime: 'image/jpeg' };
 }
 
+/**
+ * Foto de perfil: recorte cuadrado centrado y 512 px de lado. Se hace
+ * aquí y no en el servidor para que lo que viaje sean 40 KB y no 6 MB.
+ */
+export async function prepararAvatar(file) {
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+  } catch {
+    bitmap = await bitmapDesdeElemento(file);
+  }
+  const lado = Math.min(bitmap.width, bitmap.height);
+  const sx = (bitmap.width - lado) / 2;
+  const sy = (bitmap.height - lado) / 2;
+
+  const LADO = 512;
+  const lienzo = document.createElement('canvas');
+  lienzo.width = lienzo.height = LADO;
+  const ctx = lienzo.getContext('2d');
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(bitmap, sx, sy, lado, lado, 0, 0, LADO, LADO);
+  bitmap.close?.();
+
+  const blob = await new Promise((res) => lienzo.toBlob(res, 'image/jpeg', 0.86));
+  return blob;
+}
+
 function bitmapDesdeElemento(file) {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);

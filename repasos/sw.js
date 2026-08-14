@@ -19,6 +19,7 @@ const ARMAZON = [
   'css/app.css?v=' + VERSION,
   'js/app.js?v=' + VERSION,
   'js/ui.js',
+  'js/iconos.js',
   'js/db.js',
   'js/api.js',
   'js/store.js',

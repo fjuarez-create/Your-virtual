@@ -68,7 +68,7 @@ export async function render({ listaId }) {
   const fab = h('button.fab', { onclick: () => nuevaTarea(listaId) }, icon('camera'), 'Nueva tarea');
 
   return {
-    tab: 'promociones',
+    sinTabs: true,
     fab,
     contenido: [
       cabecera(`Inspección ${fechaCorta(lista.creado)}`,

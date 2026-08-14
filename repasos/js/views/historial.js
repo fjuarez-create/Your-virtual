@@ -1,11 +1,19 @@
 /* Historial: todas las inspecciones, de todas las viviendas, en orden
    inverso. Es la vista para responder «¿qué se repasó esta semana?». */
-import { h, icon, emptyState, fechaCorta } from '../ui.js';
+import { h, icon, emptyState, fechaCorta, avatar } from '../ui.js';
 import * as store from '../store.js';
 import { FASES } from '../catalog.js';
 import { filaLista, barraSync } from '../piezas.js';
 import { ir } from '../app.js';
 import * as db from '../db.js';
+
+/** Cabecera común: solo la marca y el acceso a la cuenta. */
+function cabeceraRepasos() {
+  return h('div.topbar', null,
+    h('div.grow', null, h('p.eyebrow', null, 'Todas las inspecciones')),
+    avatar(store.sesion(), { onclick: () => ir('#/ajustes') }),
+  );
+}
 
 export async function render() {
   const todas = (await db.getAll('listas')).filter((l) => !l.borrada)
@@ -13,12 +21,13 @@ export async function render() {
 
   if (!todas.length) {
     return {
-      tab: 'historial',
+      tab: 'listas',
       contenido: [
-        h('h1.display', null, 'Historial'),
-        emptyState('clock', 'Todavía no hay inspecciones',
+        cabeceraRepasos(),
+        h('h1.display', null, 'Repasos'),
+        emptyState('clipboard', 'Todavía no hay inspecciones',
           'Cuando crees tu primera lista de repaso aparecerá aquí, con su fecha y quién la hizo.',
-          h('button.btn.accent', { onclick: () => ir('#/promociones') }, icon('plus'), 'Nuevo repaso')),
+          h('button.btn.accent', { onclick: () => ir('#/viviendas') }, icon('plus'), 'Nuevo repaso')),
       ],
     };
   }
@@ -66,9 +75,10 @@ export async function render() {
   const viviendas = new Set(todas.map((l) => l.unidadId)).size;
 
   return {
-    tab: 'historial',
+    tab: 'listas',
     contenido: [
-      h('h1.display', null, 'Historial'),
+      cabeceraRepasos(),
+      h('h1.display', null, 'Repasos'),
       h('p.sub', null, `${todas.length} ${todas.length === 1 ? 'inspección' : 'inspecciones'} en ${viviendas} ${viviendas === 1 ? 'vivienda' : 'viviendas'}.`),
       barraSync(),
       chips,

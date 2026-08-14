@@ -66,6 +66,23 @@ export const editarUsuario = (id, datos) =>
 export const eliminarUsuario = (id) =>
   pedir('usuarios/' + encodeURIComponent(id), { metodo: 'DELETE' });
 
+/* ─── Foto de perfil ──────────────────────────────────────────── */
+/** La versión va en la dirección: al cambiar la foto cambia la URL y
+    el navegador deja de servir la anterior desde su caché. */
+export function urlAvatar(id, version) {
+  if (!HAY_SERVIDOR || !id || !version) return '';
+  return `${API_BASE}usuarios/${encodeURIComponent(id)}/avatar?v=${encodeURIComponent(version)}`;
+}
+
+export function subirAvatar(id, blob) {
+  const form = new FormData();
+  form.append('fichero', blob, 'avatar.jpg');
+  return pedir(`usuarios/${encodeURIComponent(id)}/avatar`, { metodo: 'POST', form });
+}
+
+export const borrarAvatar = (id) =>
+  pedir(`usuarios/${encodeURIComponent(id)}/avatar`, { metodo: 'DELETE' });
+
 /* ─── Sincronización ──────────────────────────────────────────── */
 export const subirListas = (listas) => pedir('listas', { metodo: 'POST', json: { listas } });
 export const subirTareas = (tareas) => pedir('tareas', { metodo: 'POST', json: { tareas } });

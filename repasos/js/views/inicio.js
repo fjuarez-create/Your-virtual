@@ -1,6 +1,6 @@
 /* Portada: saludo, cifras del estado de los repasos, acceso directo a
    crear uno nuevo y las últimas listas tocadas. */
-import { h, icon, saludo, iniciales } from '../ui.js';
+import { h, icon, saludo, avatar } from '../ui.js';
 import * as store from '../store.js';
 import { barraSync, avisoLocal, filaLista } from '../piezas.js';
 import { ir } from '../app.js';
@@ -20,10 +20,7 @@ export async function render() {
     contenido: [
       h('div.topbar', null,
         h('div.grow', null, h('p.eyebrow', null, 'UNIK repasos')),
-        h('button.avatar', {
-          'aria-label': 'Tu cuenta',
-          onclick: () => ir('#/ajustes'),
-        }, iniciales(u?.nombre)),
+        avatar(u, { onclick: () => ir('#/ajustes') }),
       ),
 
       h('h1.display', null, saludo() + ',', h('br'), h('span.thin', null, nombreCorto)),
@@ -56,7 +53,7 @@ export async function render() {
         ),
       ),
 
-      h('button.cta', { onclick: () => ir('#/promociones') },
+      h('button.cta', { onclick: () => ir('#/viviendas') },
         h('div.grow', null,
           h('div.cta-title', null, 'Nuevo repaso'),
           h('div.cta-sub', null, 'Elige promoción y vivienda'),
@@ -67,7 +64,7 @@ export async function render() {
       recientes.length ? h('div', { style: { marginTop: '24px' } },
         h('div.topbar', null,
           h('div.grow', null, h('p.eyebrow', null, 'Últimas inspecciones')),
-          h('button.tag', { onclick: () => ir('#/historial') }, 'Ver todas'),
+          h('button.tag', { onclick: () => ir('#/listas') }, 'Ver todas'),
         ),
         h('div.stack', { style: { marginTop: '10px' } },
           recientes.map((l) => filaLista(l, conteos.get(l.id), { mostrarVivienda: true })),

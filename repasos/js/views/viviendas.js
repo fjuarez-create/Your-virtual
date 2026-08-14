@@ -1,14 +1,23 @@
 /* Rejilla de viviendas de una promoción. El color dice de un vistazo
    cuáles tienen repaso pendiente sin necesidad de entrar en ninguna. */
-import { h, icon, toast } from '../ui.js';
-import { promocion, unidades } from '../catalog.js';
+import { h, icon, toast, avatar } from '../ui.js';
+import { PROMOCIONES, promocion, unidades } from '../catalog.js';
 import * as store from '../store.js';
 import { cabecera } from '../piezas.js';
 import { ir } from '../app.js';
 
-export async function render({ promoId }) {
+export async function render({ promoId, desdeTab = false }) {
+  // Desde la pestaña no hay promoción en la dirección: con una sola
+  // activa se entra directo a sus viviendas, que es lo que pasa hoy.
+  // Con varias, primero hay que elegir.
+  if (!promoId) {
+    const activas = PROMOCIONES.filter((x) => x.activa);
+    if (activas.length === 1) promoId = activas[0].id;
+    else { ir('#/promociones', { reemplazar: true }); return { contenido: [] }; }
+  }
   const p = promocion(promoId);
   if (!p) { toast('Promoción desconocida', 'err'); ir('#/promociones', { reemplazar: true }); return { contenido: [] }; }
+  const yo = store.sesion();
 
   const lista = unidades(promoId);
   const resumen = await store.resumenPorUnidad(promoId);
@@ -61,10 +70,16 @@ export async function render({ promoId }) {
   pintar();
 
   return {
-    tab: 'promociones',
+    tab: desdeTab ? 'viviendas' : undefined,
+    sinTabs: !desdeTab,
     contenido: [
-      cabecera(p.nombre, p.ubicacion, { volverA: '#/promociones' }),
-      h('h1.display', { style: { marginTop: '10px' } }, 'Viviendas'),
+      desdeTab
+        ? h('div.topbar', null,
+            h('div.grow', null, h('p.eyebrow', null, p.nombre)),
+            avatar(yo, { onclick: () => ir('#/ajustes') }),
+          )
+        : cabecera(p.nombre, p.ubicacion, { volverA: '#/promociones' }),
+      h('h1.display', { style: { marginTop: desdeTab ? '4px' : '10px' } }, 'Viviendas'),
       chips,
       contador,
       rejilla,

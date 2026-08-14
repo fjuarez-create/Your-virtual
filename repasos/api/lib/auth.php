@@ -66,7 +66,7 @@ function usuario_actual(): ?array
         return null;
     }
     $stmt = bd()->prepare(
-        'SELECT u.id, u.nombre, u.email, u.rol, u.empresa, u.verifica, u.activo, s.caduca
+        'SELECT u.id, u.nombre, u.email, u.rol, u.empresa, u.verifica, u.avatar, u.activo, s.caduca
            FROM sesiones s JOIN usuarios u ON u.id = s.usuario_id
           WHERE s.token = ?'
     );
@@ -97,6 +97,7 @@ function usuario_actual(): ?array
         'rol'      => $fila['rol'],
         'empresa'  => $fila['empresa'] ?? '',
         'verifica' => (int) ($fila['verifica'] ?? 0) === 1,
+        'avatar'   => $fila['avatar'] ?? '',
     ];
     return $usuario;
 }

@@ -107,6 +107,17 @@ function despachar(string $metodo, array $p): void
         if ($metodo === 'PATCH' && isset($p[1])) {
             editar_usuario($p[1]);
         }
+        if (isset($p[1], $p[2]) && $p[2] === 'avatar') {
+            if ($metodo === 'POST') {
+                subir_avatar($p[1]);
+            }
+            if ($metodo === 'GET') {
+                servir_avatar($p[1]);
+            }
+            if ($metodo === 'DELETE') {
+                borrar_avatar($p[1]);
+            }
+        }
         if ($metodo === 'DELETE' && isset($p[1])) {
             borrar_usuario($p[1]);
         }
@@ -159,7 +170,7 @@ function login(): void
         responder_error(429, 'Demasiados intentos. Espera unos minutos.', 'bloqueado');
     }
 
-    $stmt = bd()->prepare('SELECT id, nombre, email, rol, empresa, verifica, activo, password_hash FROM usuarios WHERE email = ?');
+    $stmt = bd()->prepare('SELECT id, nombre, email, rol, empresa, verifica, avatar, activo, password_hash FROM usuarios WHERE email = ?');
     $stmt->execute([$email]);
     $u = $stmt->fetch();
 
@@ -218,12 +229,13 @@ function listar_usuarios(): void
 {
     exigir_admin();
     $filas = bd()->query(
-        'SELECT id, nombre, email, rol, empresa, verifica, activo, creado
+        'SELECT id, nombre, email, rol, empresa, verifica, avatar, activo, creado
            FROM usuarios ORDER BY activo DESC, nombre ASC'
     )->fetchAll();
     foreach ($filas as &$f) {
         $f['activo'] = (int) $f['activo'] === 1;
         $f['verifica'] = (int) $f['verifica'] === 1;
+        $f['avatar'] = $f['avatar'] ?? '';
     }
     responder(['usuarios' => $filas]);
 }
@@ -390,7 +402,89 @@ function usuario_salida(array $u): array
         'rol' => $u['rol'],
         'empresa' => $u['empresa'] ?? '',
         'verifica' => (int) ($u['verifica'] ?? 0) === 1,
+        // Marca de cuándo se puso la foto: sirve de versión para que el
+        // navegador no siga enseñando la anterior desde su caché.
+        'avatar' => $u['avatar'] ?? '',
     ];
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Foto de perfil
+   ═══════════════════════════════════════════════════════════════ */
+/** La foto la puede tocar quien administra, o el propio interesado. */
+function exigir_sobre_usuario(string $id): array
+{
+    $yo = exigir_sesion();
+    if ($yo['rol'] !== 'admin' && $yo['id'] !== $id) {
+        responder_error(403, 'Solo puedes cambiar tu propia foto.', 'sin-permiso');
+    }
+    return $yo;
+}
+
+function ruta_avatar(string $id): string
+{
+    return carpeta_medios() . '/avatares/' . $id . '.jpg';
+}
+
+function subir_avatar(string $id): void
+{
+    exigir_sobre_usuario($id);
+    if (!es_uuid($id)) {
+        responder_error(400, 'Identificador incorrecto.', 'formato');
+    }
+    if (!isset($_FILES['fichero']) || $_FILES['fichero']['error'] !== UPLOAD_ERR_OK) {
+        responder_error(400, 'No llegó la foto.', 'fichero');
+    }
+    $temporal = $_FILES['fichero']['tmp_name'];
+    if ((int) $_FILES['fichero']['size'] > 4 * 1024 * 1024) {
+        responder_error(413, 'La foto es demasiado grande.', 'grande');
+    }
+    // La app la manda ya recortada y recomprimida en JPEG; aquí solo se
+    // comprueba que de verdad sea una imagen.
+    $detectado = (new finfo(FILEINFO_MIME_TYPE))->file($temporal) ?: '';
+    if (!isset(MIMES['imagen'][$detectado])) {
+        responder_error(415, 'Eso no es una imagen.', 'mime');
+    }
+
+    $destino = ruta_avatar($id);
+    if (!is_dir(dirname($destino)) && !mkdir(dirname($destino), 0755, true) && !is_dir(dirname($destino))) {
+        responder_error(500, 'No se pudo crear la carpeta de fotos.', 'carpeta');
+    }
+    if (!move_uploaded_file($temporal, $destino)) {
+        responder_error(500, 'No se pudo guardar la foto.', 'guardar');
+    }
+    @chmod($destino, 0644);
+
+    $marca = ahora_iso();
+    bd()->prepare('UPDATE usuarios SET avatar = ?, actualizado = ? WHERE id = ?')
+        ->execute([$marca, $marca, $id]);
+    responder(['avatar' => $marca], 201);
+}
+
+function borrar_avatar(string $id): void
+{
+    exigir_sobre_usuario($id);
+    @unlink(ruta_avatar($id));
+    bd()->prepare("UPDATE usuarios SET avatar = '', actualizado = ? WHERE id = ?")
+        ->execute([ahora_iso(), $id]);
+    responder(['ok' => true]);
+}
+
+function servir_avatar(string $id): void
+{
+    exigir_sesion();
+    $real = realpath(ruta_avatar($id));
+    if ($real === false || strpos($real, carpeta_medios()) !== 0 || !is_file($real)) {
+        responder_error(404, 'Sin foto.');
+    }
+    header('Content-Type: image/jpeg');
+    header('Content-Length: ' . (string) filesize($real));
+    // Un año: la dirección lleva la versión, así que cambiar la foto
+    // cambia la dirección y la caché vieja deja de usarse sola.
+    header('Cache-Control: private, max-age=31536000, immutable');
+    header('X-Content-Type-Options: nosniff');
+    readfile($real);
+    exit;
 }
 
 function cuenta_admins(): int
