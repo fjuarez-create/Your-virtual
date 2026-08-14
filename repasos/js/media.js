@@ -37,6 +37,54 @@ export const elegirFotos = () => pedirFicheros({ accept: 'image/*', multiple: tr
 export const grabarVideo = () => pedirFicheros({ accept: 'video/*', capture: 'environment' });
 export const elegirVideo = () => pedirFicheros({ accept: 'video/*' });
 
+/**
+ * Botón de subida de verdad: un <label> con el <input type="file">
+ * escondido dentro. El toque llega al input por la vía nativa de la
+ * etiqueta, sin que nadie llame a click().
+ *
+ * Esto importa: Safari en iOS solo abre el selector de ficheros si la
+ * llamada sale de un toque reciente. Con una hoja de opciones por medio
+ * («¿cámara o galería?») la llamada llega tarde y el navegador la
+ * ignora en silencio — desde fuera parece que el botón está muerto. Con
+ * un label no hay nada que ignorar.
+ *
+ * Y de paso sobra preguntar: `accept="image/*"` sin `capture` hace que
+ * iOS ofrezca ya «Fototeca», «Hacer foto» y «Elegir archivo» en su
+ * propio menú. Preguntarlo antes era duplicar el trabajo del sistema.
+ *
+ * @param {object} opciones  clase (las del label), accept, capture,
+ *   multiple, etiqueta (aria-label) y onElegir(ficheros).
+ */
+export function botonFichero({ clase = 'btn', accept, capture, multiple = false, etiqueta, onElegir }, ...contenido) {
+  const input = h('input', {
+    type: 'file', accept, multiple: multiple || null, tabindex: '-1',
+    style: {
+      position: 'absolute', left: '0', top: '0', width: '1px', height: '1px',
+      opacity: '0', pointerEvents: 'none',
+    },
+  });
+  if (capture) input.setAttribute('capture', capture);
+  input.addEventListener('change', () => {
+    const ficheros = [...input.files];
+    // Se vacía el input para que volver a elegir la misma foto dispare
+    // otra vez 'change'; si no, la segunda vez no pasaría nada.
+    input.value = '';
+    if (ficheros.length) onElegir(ficheros);
+  });
+  return h(['label', ...String(clase).split(/\s+/).filter(Boolean)].join('.'), {
+    role: 'button', tabindex: '0',
+    'aria-label': etiqueta || null,
+    style: { position: 'relative', cursor: 'pointer' },
+    // Teclado: el input no es alcanzable a propósito (tabindex -1), así
+    // que es el label quien recoge Enter y espacio.
+    onkeydown: (ev) => {
+      if (ev.key !== 'Enter' && ev.key !== ' ') return;
+      ev.preventDefault();
+      input.click();
+    },
+  }, input, ...contenido);
+}
+
 /* ─── Imágenes ────────────────────────────────────────────────── */
 /** Reescala y recomprime. Devuelve { blob, ancho, alto, mime }. */
 export async function prepararImagen(file) {

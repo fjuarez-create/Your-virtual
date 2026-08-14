@@ -66,7 +66,15 @@ export async function render({ listaId, tareaId }) {
       if (m.tipo === 'video' && !url) celda.append(h('span.k', null, icon('cloudOff')));
       rail.append(celda);
     }
-    rail.append(h('button.add', { 'aria-label': 'Añadir material', onclick: () => añadirMaterial(t) }, icon('plus')));
+    // El «+» del carrete va directo a la foto: cuando una tarea no tiene
+    // nada, este botón es lo único que hay en pantalla, y lo que se va a
+    // añadir es una foto el 95% de las veces. Vídeo y voz siguen abajo,
+    // en «Añadir material».
+    rail.append(media.botonFichero({
+      clase: 'add', etiqueta: 'Añadir una foto',
+      accept: 'image/*', multiple: true,
+      onElegir: (ficheros) => guardarFotos(t, ficheros),
+    }, icon('plus')));
     marcarRail = () => {
       [...rail.querySelectorAll('.m')].forEach((c, i) =>
         c.setAttribute('aria-current', actual && visuales[i]?.id === actual.id ? 'true' : 'false'));
@@ -142,7 +150,10 @@ export async function render({ listaId, tareaId }) {
       h('div', { style: { marginTop: '22px' } },
         h('p.eyebrow', { style: { marginBottom: '10px' } }, 'Añadir material'),
         h('div.btn-row', null,
-          h('button.btn', { onclick: () => añadirFoto(t) }, icon('camera'), 'Foto'),
+          media.botonFichero({
+            clase: 'btn', accept: 'image/*', multiple: true,
+            onElegir: (ficheros) => guardarFotos(t, ficheros),
+          }, icon('camera'), 'Foto'),
           h('button.btn', { onclick: () => añadirVideo(t) }, icon('video'), 'Vídeo'),
           h('button.btn', { onclick: () => añadirAudio(t) }, icon('mic'), 'Voz'),
         ),
@@ -231,19 +242,26 @@ function hojaRechazo(t) {
     const previa = h('div.rail', { style: { display: 'none' } });
     let imagen = null;
 
-    const adjuntar = h('button.btn.ghost.full', { style: { marginTop: '10px' } }, icon('camera'), 'Adjuntar una foto');
-    adjuntar.addEventListener('click', async () => {
-      const [f] = await media.hacerFoto();
-      if (!f) return;
-      toast('Preparando la foto…');
-      try {
-        const img = await media.prepararImagen(f);
-        imagen = img;
-        previa.replaceChildren(h('div.m', { style: { backgroundImage: `url("${URL.createObjectURL(img.blob)}")` } }));
-        previa.style.display = 'flex';
-        adjuntar.replaceChildren(icon('check'), document.createTextNode('Foto adjunta · cambiar'));
-      } catch { toast('No se pudo leer la foto', 'err'); }
-    });
+    // El texto va en su propio <span> porque el label lleva dentro el
+    // input escondido: si se reemplazaran los hijos del botón entero,
+    // se llevaría por delante el input y el botón dejaría de abrir nada.
+    const cara = h('span', {
+      style: { display: 'inline-flex', alignItems: 'center', gap: '9px' },
+    }, icon('camera'), 'Adjuntar una foto');
+    const adjuntar = media.botonFichero({
+      clase: 'btn ghost full', accept: 'image/*',
+      onElegir: async ([f]) => {
+        toast('Preparando la foto…');
+        try {
+          const img = await media.prepararImagen(f);
+          imagen = img;
+          previa.replaceChildren(h('div.m', { style: { backgroundImage: `url("${URL.createObjectURL(img.blob)}")` } }));
+          previa.style.display = 'flex';
+          cara.replaceChildren(icon('check'), document.createTextNode('Foto adjunta · cambiar'));
+        } catch { toast('No se pudo leer la foto', 'err'); }
+      },
+    }, cara);
+    adjuntar.style.marginTop = '10px';
 
     setTimeout(() => area.focus(), 320);
 
@@ -372,32 +390,21 @@ function editarTexto(t) {
   });
 }
 
-async function añadirFoto(t) {
-  const origen = await sheet((cerrar) => [
-    h('h2.title', null, 'Añadir foto'),
-    h('div.stack', null,
-      h('button.row', { onclick: () => cerrar('camara') },
-        h('div.row-lead', null, icon('camera', 18)),
-        h('div.grow', null, h('div.row-title', null, 'Hacer una foto')),
-      ),
-      h('button.row', { onclick: () => cerrar('galeria') },
-        h('div.row-lead', null, icon('image', 18)),
-        h('div.grow', null, h('div.row-title', null, 'Elegir de la galería')),
-      ),
-    ),
-    h('button.btn.ghost.full', { onclick: () => cerrar(null) }, 'Cancelar'),
-  ]);
-  if (!origen) return;
-  const ficheros = origen === 'camara' ? await media.hacerFoto() : await media.elegirFotos();
-  if (!ficheros.length) return;
+/** Reescala, guarda y repinta. Lo comparten los dos sitios desde los
+ *  que se añaden fotos: el «+» del carrete y el botón de abajo. */
+async function guardarFotos(t, ficheros) {
+  if (!ficheros?.length) return;
   toast('Preparando…');
+  let puestas = 0;
   for (const f of ficheros) {
     try {
       const img = await media.prepararImagen(f);
       await store.añadirMedio(t.id, { tipo: 'imagen', blob: img.blob, mime: img.mime, ancho: img.ancho, alto: img.alto });
-    } catch { toast('No se pudo añadir una de las fotos', 'err'); }
+      puestas++;
+    } catch { toast('No se pudo leer una de las fotos', 'err'); }
   }
-  toast('Foto añadida');
+  if (!puestas) return;
+  toast(puestas > 1 ? `${puestas} fotos añadidas` : 'Foto añadida');
   refrescar();
 }
 
