@@ -1,0 +1,89 @@
+-- ═══════════════════════════════════════════════════════════════
+-- UNIK repasos — esquema para SQLite.
+--
+-- Mismo modelo que schema.sql (MySQL), traducido: sin ENGINE ni
+-- COLLATE, los índices como sentencias aparte y el autoincremento con
+-- INTEGER PRIMARY KEY. Útil si el hosting no da base de datos, y es lo
+-- que se usa para probar la API en local.
+-- ═══════════════════════════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS usuarios (
+  id            TEXT NOT NULL PRIMARY KEY,
+  nombre        TEXT NOT NULL,
+  email         TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  rol           TEXT NOT NULL DEFAULT 'usuario',
+  activo        INTEGER NOT NULL DEFAULT 1,
+  creado        TEXT NOT NULL,
+  actualizado   TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS sesiones (
+  token      TEXT NOT NULL PRIMARY KEY,
+  usuario_id TEXT NOT NULL,
+  creado     TEXT NOT NULL,
+  visto      TEXT NOT NULL,
+  caduca     TEXT NOT NULL,
+  agente     TEXT,
+  FOREIGN KEY (usuario_id) REFERENCES usuarios (id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS ix_sesiones_usuario ON sesiones (usuario_id);
+
+CREATE TABLE IF NOT EXISTS intentos (
+  id     INTEGER PRIMARY KEY AUTOINCREMENT,
+  email  TEXT NOT NULL,
+  ip     TEXT NOT NULL,
+  cuando TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_intentos_email ON intentos (email, cuando);
+CREATE INDEX IF NOT EXISTS ix_intentos_ip ON intentos (ip, cuando);
+
+CREATE TABLE IF NOT EXISTS listas (
+  id                TEXT NOT NULL PRIMARY KEY,
+  unidad_id         TEXT NOT NULL,
+  promo_id          TEXT NOT NULL,
+  fase              TEXT NOT NULL DEFAULT 'pre',
+  cerrada           INTEGER NOT NULL DEFAULT 0,
+  borrada           INTEGER NOT NULL DEFAULT 0,
+  creado            TEXT NOT NULL,
+  actualizado       TEXT NOT NULL,
+  creado_por        TEXT,
+  creado_por_nombre TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_listas_unidad ON listas (unidad_id);
+CREATE INDEX IF NOT EXISTS ix_listas_actualizado ON listas (actualizado);
+
+CREATE TABLE IF NOT EXISTS tareas (
+  id                TEXT NOT NULL PRIMARY KEY,
+  lista_id          TEXT NOT NULL,
+  texto             TEXT NOT NULL,
+  estado            TEXT NOT NULL DEFAULT 'pendiente',
+  orden             INTEGER NOT NULL DEFAULT 0,
+  portada_id        TEXT,
+  estado_por        TEXT,
+  estado_en         TEXT,
+  borrada           INTEGER NOT NULL DEFAULT 0,
+  creado            TEXT NOT NULL,
+  actualizado       TEXT NOT NULL,
+  creado_por        TEXT,
+  creado_por_nombre TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_tareas_lista ON tareas (lista_id);
+CREATE INDEX IF NOT EXISTS ix_tareas_actualizado ON tareas (actualizado);
+
+CREATE TABLE IF NOT EXISTS medios (
+  id          TEXT NOT NULL PRIMARY KEY,
+  tarea_id    TEXT NOT NULL,
+  tipo        TEXT NOT NULL,
+  mime        TEXT NOT NULL,
+  tam         INTEGER NOT NULL DEFAULT 0,
+  ancho       INTEGER NOT NULL DEFAULT 0,
+  alto        INTEGER NOT NULL DEFAULT 0,
+  duracion    INTEGER NOT NULL DEFAULT 0,
+  ruta        TEXT NOT NULL,
+  borrada     INTEGER NOT NULL DEFAULT 0,
+  creado      TEXT NOT NULL,
+  actualizado TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_medios_tarea ON medios (tarea_id);
+CREATE INDEX IF NOT EXISTS ix_medios_actualizado ON medios (actualizado);

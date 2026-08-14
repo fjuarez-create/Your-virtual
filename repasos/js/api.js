@@ -1,0 +1,124 @@
+/* ═══════════════════════════════════════════════════════════════
+   api.js — cliente del backend PHP.
+
+   Todo el protocolo es «upsert»: cliente y servidor intercambian
+   registros completos con su marca `actualizado`, y gana el más
+   reciente. Los borrados viajan como registros con `borrada: true`,
+   de modo que un dispositivo que estuvo sin cobertura también se
+   entera de lo que se borró mientras tanto.
+
+   La sesión va en una cookie HttpOnly puesta por el servidor: el
+   token nunca pasa por JavaScript y las fotos se pueden pedir
+   directamente con <img src> sin montar cabeceras.
+   ═══════════════════════════════════════════════════════════════ */
+const CFG = window.REPASOS_CONFIG || {};
+export const API_BASE = (CFG.apiBase || '').replace(/\/?$/, '/');
+export const HAY_SERVIDOR = API_BASE !== '/';
+
+export class ApiError extends Error {
+  constructor(mensaje, status, codigo) {
+    super(mensaje);
+    this.status = status;
+    this.codigo = codigo;
+  }
+}
+
+async function pedir(ruta, { metodo = 'GET', json, form, signal } = {}) {
+  if (!HAY_SERVIDOR) throw new ApiError('Sin servidor configurado', 0, 'sin-servidor');
+  const opciones = { method: metodo, credentials: 'include', signal, headers: {} };
+  if (json !== undefined) {
+    opciones.headers['Content-Type'] = 'application/json';
+    opciones.body = JSON.stringify(json);
+  } else if (form) {
+    opciones.body = form;
+  }
+  let res;
+  try {
+    res = await fetch(API_BASE + ruta, opciones);
+  } catch (e) {
+    throw new ApiError('Sin conexión con el servidor', 0, 'red');
+  }
+  const texto = await res.text();
+  let datos = null;
+  if (texto) {
+    try { datos = JSON.parse(texto); } catch { /* respuesta no-JSON */ }
+  }
+  if (!res.ok) {
+    const msg = datos?.error || `Error ${res.status}`;
+    throw new ApiError(msg, res.status, datos?.codigo);
+  }
+  return datos;
+}
+
+/* ─── Sesión ──────────────────────────────────────────────────── */
+export const entrar = (email, password) =>
+  pedir('auth/login', { metodo: 'POST', json: { email, password } });
+export const salir = () => pedir('auth/logout', { metodo: 'POST' });
+export const yo = () => pedir('auth/me');
+export const cambiarPassword = (actual, nueva) =>
+  pedir('auth/password', { metodo: 'POST', json: { actual, nueva } });
+
+/* ─── Usuarios (solo administración) ──────────────────────────── */
+export const listarUsuarios = () => pedir('usuarios');
+export const crearUsuario = (datos) => pedir('usuarios', { metodo: 'POST', json: datos });
+export const editarUsuario = (id, datos) =>
+  pedir('usuarios/' + encodeURIComponent(id), { metodo: 'PATCH', json: datos });
+export const eliminarUsuario = (id) =>
+  pedir('usuarios/' + encodeURIComponent(id), { metodo: 'DELETE' });
+
+/* ─── Sincronización ──────────────────────────────────────────── */
+export const subirListas = (listas) => pedir('listas', { metodo: 'POST', json: { listas } });
+export const subirTareas = (tareas) => pedir('tareas', { metodo: 'POST', json: { tareas } });
+
+/** Sube un medio con su fichero. `alProgreso(0..1)` es opcional. */
+export function subirMedio(medio, blob, alProgreso) {
+  if (!HAY_SERVIDOR) return Promise.reject(new ApiError('Sin servidor', 0, 'sin-servidor'));
+  // XHR en lugar de fetch: es la única forma de conocer el progreso de
+  // subida, y un vídeo por 3G tarda lo suficiente como para merecer barra.
+  return new Promise((resolve, reject) => {
+    const form = new FormData();
+    form.append('id', medio.id);
+    form.append('tareaId', medio.tareaId);
+    form.append('tipo', medio.tipo);
+    form.append('creado', medio.creado);
+    form.append('duracion', String(medio.duracion || 0));
+    form.append('ancho', String(medio.ancho || 0));
+    form.append('alto', String(medio.alto || 0));
+    form.append('fichero', blob, medio.nombre || (medio.id + extension(medio.mime)));
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', API_BASE + 'medios');
+    xhr.withCredentials = true;
+    xhr.upload.onprogress = (e) => {
+      if (alProgreso && e.lengthComputable) alProgreso(e.loaded / e.total);
+    };
+    xhr.onload = () => {
+      let datos = null;
+      try { datos = JSON.parse(xhr.responseText); } catch { /* vacío */ }
+      if (xhr.status >= 200 && xhr.status < 300) resolve(datos);
+      else reject(new ApiError(datos?.error || `Error ${xhr.status}`, xhr.status, datos?.codigo));
+    };
+    xhr.onerror = () => reject(new ApiError('Sin conexión con el servidor', 0, 'red'));
+    xhr.send(form);
+  });
+}
+
+export const borrarMedioRemoto = (id) =>
+  pedir('medios/' + encodeURIComponent(id), { metodo: 'DELETE' });
+
+/** Cambios en el servidor desde una marca de tiempo. */
+export const cambios = (desde) =>
+  pedir('cambios?desde=' + encodeURIComponent(desde || ''));
+
+/** URL pública de un medio ya subido. */
+export const urlMedio = (id) => API_BASE + 'medios/' + encodeURIComponent(id) + '/fichero';
+
+function extension(mime) {
+  const m = {
+    'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp',
+    'video/mp4': '.mp4', 'video/quicktime': '.mov', 'video/webm': '.webm',
+    'audio/webm': '.webm', 'audio/mp4': '.m4a', 'audio/mpeg': '.mp3',
+    'audio/ogg': '.ogg', 'audio/wav': '.wav',
+  };
+  return m[mime] || '.bin';
+}

@@ -2,3 +2,15 @@ node_modules/
 .DS_Store
 publish/
 index.local.html
+
+# El backend de repasos: credenciales, fotos subidas y base de datos
+# viven solo en el servidor. Al repositorio solo van los .htaccess que
+# cierran esas carpetas y un .gitkeep para que existan al desplegar.
+repasos/api/config.php
+repasos/api/uploads/*
+!repasos/api/uploads/.gitkeep
+!repasos/api/uploads/.htaccess
+repasos/api/datos/*
+!repasos/api/datos/.gitkeep
+!repasos/api/datos/.htaccess
+repasos/publish/

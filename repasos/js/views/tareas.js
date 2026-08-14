@@ -1,0 +1,313 @@
+/* Pantalla principal de trabajo: las tareas de una lista de repaso.
+   Se ve la foto y el texto de cada una sin tener que abrirla, que es
+   como se repasa una vivienda andando. */
+import { h, icon, sheet, toast, confirmSheet, emptyState, fechaCorta, hora } from '../ui.js';
+import { unidad, fase, estado, ESTADOS } from '../catalog.js';
+import * as store from '../store.js';
+import * as media from '../media.js';
+import { cabecera, barraSync } from '../piezas.js';
+import { ir, refrescar } from '../app.js';
+import { informe } from '../informe.js';
+
+export async function render({ listaId }) {
+  const lista = await store.lista(listaId);
+  if (!lista) { toast('La lista ya no existe', 'err'); ir('#/', { reemplazar: true }); return { contenido: [] }; }
+
+  const u = unidad(lista.unidadId);
+  const f = fase(lista.fase);
+  const tareas = await store.tareasDeLista(listaId);
+
+  // Portadas y tipos de medio, para pintar cada tarjeta de una vez.
+  const portadas = new Map();
+  const tipos = new Map();
+  for (const t of tareas) {
+    portadas.set(t.id, await store.urlDePortada(t));
+    const ms = await store.mediosDeTarea(t.id);
+    tipos.set(t.id, {
+      imagenes: ms.filter((m) => m.tipo === 'imagen').length,
+      videos: ms.filter((m) => m.tipo === 'video').length,
+      audios: ms.filter((m) => m.tipo === 'audio').length,
+    });
+  }
+
+  const conteo = {
+    total: tareas.length,
+    pendientes: tareas.filter((t) => t.estado === 'pendiente').length,
+  };
+
+  let filtro = 'todas';
+  const listado = h('div.stack');
+
+  const pintar = () => {
+    listado.replaceChildren();
+    const visibles = tareas.filter((t) =>
+      filtro === 'todas' ? true : filtro === 'pendientes' ? t.estado === 'pendiente' : t.estado !== 'pendiente');
+    if (!visibles.length) {
+      listado.append(h('p.sub', { style: { padding: '26px 0', textAlign: 'center' } },
+        filtro === 'pendientes' ? 'No queda nada pendiente en esta lista.' : 'Todavía no hay ninguna tarea cerrada.'));
+      return;
+    }
+    visibles.forEach((t) => listado.append(tarjetaTarea(t, tareas.indexOf(t) + 1, portadas.get(t.id), tipos.get(t.id), listaId)));
+  };
+
+  const chips = h('div.chips', null,
+    ...[['todas', `Todas ${conteo.total}`], ['pendientes', `Pendientes ${conteo.pendientes}`], ['cerradas', 'Cerradas']]
+      .map(([id, txt]) => h('button.chip.accent', {
+        'aria-pressed': id === filtro ? 'true' : 'false',
+        onclick: (e) => {
+          filtro = id;
+          [...chips.children].forEach((c) => c.setAttribute('aria-pressed', c === e.currentTarget ? 'true' : 'false'));
+          pintar();
+        },
+      }, txt)),
+  );
+
+  pintar();
+
+  const fab = h('button.fab', { onclick: () => nuevaTarea(listaId) }, icon('camera'), 'Nueva tarea');
+
+  return {
+    tab: 'promociones',
+    fab,
+    contenido: [
+      cabecera(`Inspección ${fechaCorta(lista.creado)}`,
+        `${u?.nombre || ''} · ${f.nombre}`,
+        {
+          volverA: `#/p/${lista.promoId}/v/${String(lista.unidadId).split(':')[1]}`,
+          acciones: [h('button.icon-btn', {
+            'aria-label': 'Opciones de la lista',
+            onclick: () => menuLista(lista, tareas),
+          }, icon('gear'))],
+        }),
+
+      h('div.card-ink', null,
+        // Quién firmó la inspección y a qué hora, que es lo que se
+        // consulta cuando se repasa una lista de otra persona.
+        h('p.eyebrow', null, `${lista.creadoPorNombre} · ${hora(lista.creado)}`),
+        h('div.stats', { style: { marginTop: '16px' } },
+          h('div', null,
+            h('div.n', null, String(conteo.total)),
+            h('div.l', null, conteo.total === 1 ? 'Tarea' : 'Tareas'),
+          ),
+          h('div', null,
+            h('div.n', { class: conteo.pendientes ? 'accent' : '' }, String(conteo.pendientes)),
+            h('div.l', null, 'Pendientes'),
+          ),
+          h('div', null,
+            h('div.n', null, String(conteo.total - conteo.pendientes)),
+            h('div.l', null, 'Cerradas'),
+          ),
+        ),
+        conteo.total > 0 && h('div', { style: { marginTop: '16px' } },
+          h('div.bar', null, h('i', { style: { width: Math.round(100 * (conteo.total - conteo.pendientes) / conteo.total) + '%' } })),
+        ),
+      ),
+
+      barraSync(),
+      conteo.total ? chips : null,
+      tareas.length ? listado : emptyState('camera', 'Lista vacía',
+        'Recorre la vivienda y añade una tarea por cada remate, defecto o detalle que encuentres.',
+        h('button.btn.accent', { onclick: () => nuevaTarea(listaId) }, icon('camera'), 'Primera tarea')),
+    ],
+  };
+}
+
+/* ─── Tarjeta de tarea ────────────────────────────────────────── */
+function tarjetaTarea(t, numero, urlPortada, tipos, listaId) {
+  const e = estado(t.estado);
+  const thumb = urlPortada
+    ? h('div.thumb', { style: { backgroundImage: `url("${urlPortada}")` } }, etiquetaNumero(numero), marcasMedios(tipos))
+    : h('div.thumb.empty', null, icon('image'), etiquetaNumero(numero), marcasMedios(tipos));
+
+  return h('button.task', {
+    class: t.estado !== 'pendiente' ? 'done' : '',
+    onclick: () => ir(`#/l/${listaId}/t/${t.id}`),
+  },
+    thumb,
+    h('div.body', null,
+      h('p.txt', null, t.texto || 'Sin descripción'),
+      h('div.meta', null,
+        h('span.tag', { class: e.tag }, e.nombre),
+        t.estado !== 'pendiente' && t.estadoPor
+          ? h('span.tag', null, t.estadoPor.split(/\s+/)[0])
+          : null,
+      ),
+    ),
+  );
+}
+
+const etiquetaNumero = (n) => h('span.n', null, String(n));
+
+function marcasMedios(tipos) {
+  if (!tipos) return null;
+  const marcas = [];
+  if (tipos.imagenes > 1) marcas.push(h('span', null, icon('image'), ));
+  if (tipos.videos) marcas.push(h('span', null, icon('video')));
+  if (tipos.audios) marcas.push(h('span', null, icon('mic')));
+  return marcas.length ? h('div.kinds', null, marcas) : null;
+}
+
+/* ─── Alta de tarea ───────────────────────────────────────────── */
+/**
+ * Flujo rápido: cámara → texto → guardar. Pensado para no interrumpir
+ * el recorrido: al guardar se puede encadenar la siguiente sin volver.
+ */
+export async function nuevaTarea(listaId) {
+  const origen = await sheet((cerrar) => [
+    h('h2.title', null, 'Nueva tarea'),
+    h('div.stack', { style: { marginTop: '4px' } },
+      h('button.cta', { onclick: () => cerrar('camara') },
+        h('div.grow', null,
+          h('div.cta-title', null, 'Hacer foto'),
+          h('div.cta-sub', null, 'Se abre la cámara'),
+        ),
+        h('span.knob', null, icon('camera')),
+      ),
+      h('button.row', { onclick: () => cerrar('galeria') },
+        h('div.row-lead', null, icon('image', 18)),
+        h('div.grow', null, h('div.row-title', null, 'Elegir de la galería')),
+      ),
+      h('button.row', { onclick: () => cerrar('texto') },
+        h('div.row-lead', null, icon('edit', 18)),
+        h('div.grow', null, h('div.row-title', null, 'Solo texto, sin foto')),
+      ),
+    ),
+    h('button.btn.ghost.full', { onclick: () => cerrar(null) }, 'Cancelar'),
+  ]);
+  if (!origen) return;
+
+  let preparadas = [];
+  if (origen !== 'texto') {
+    const ficheros = origen === 'camara' ? await media.hacerFoto() : await media.elegirFotos();
+    if (!ficheros.length) return;
+    toast(ficheros.length > 1 ? `Preparando ${ficheros.length} fotos…` : 'Preparando la foto…');
+    for (const f of ficheros) {
+      try { preparadas.push(await media.prepararImagen(f)); }
+      catch { toast('Una de las imágenes no se pudo leer', 'err'); }
+    }
+    if (!preparadas.length) return;
+  }
+
+  const datos = await hojaTexto(preparadas);
+  if (!datos) return;
+
+  const t = await store.crearTarea({ listaId, texto: datos.texto });
+  for (const img of preparadas) {
+    await store.añadirMedio(t.id, {
+      tipo: 'imagen', blob: img.blob, mime: img.mime, ancho: img.ancho, alto: img.alto,
+    });
+  }
+  toast('Tarea añadida');
+  if (datos.otra) { await refrescar(); return nuevaTarea(listaId); }
+  await refrescar();
+}
+
+/** Hoja con la foto tomada y el texto de la tarea. */
+function hojaTexto(imagenes) {
+  return sheet((cerrar) => {
+    const texto = h('textarea.textarea', {
+      placeholder: 'Qué hay que hacer aquí…',
+      rows: 4, autocapitalize: 'sentences',
+    });
+    const guardar = h('button.btn.accent.full', null, 'Guardar tarea');
+    const otra = h('button.btn.ghost.full', null, icon('plus'), 'Guardar y añadir otra');
+
+    const validar = () => {
+      const vale = texto.value.trim().length > 0 || imagenes.length > 0;
+      guardar.disabled = !vale;
+      otra.disabled = !vale;
+      return vale;
+    };
+    texto.addEventListener('input', validar);
+    guardar.addEventListener('click', () => validar() && cerrar({ texto: texto.value.trim(), otra: false }));
+    otra.addEventListener('click', () => validar() && cerrar({ texto: texto.value.trim(), otra: true }));
+
+    const previsualizacion = imagenes.length
+      ? h('div.rail', null, imagenes.map((im) =>
+          h('div.m', { style: { backgroundImage: `url("${URL.createObjectURL(im.blob)}")` } })))
+      : null;
+
+    setTimeout(() => texto.focus(), 320);
+    validar();
+
+    return [
+      h('h2.title', null, imagenes.length ? 'Describe el repaso' : 'Nueva tarea'),
+      previsualizacion,
+      texto,
+      h('p.hint', null, 'Sé concreto: gremio, estancia y qué hay que corregir.'),
+      guardar,
+      otra,
+    ];
+  });
+}
+
+/* ─── Opciones de la lista ────────────────────────────────────── */
+async function menuLista(lista, tareas) {
+  const accion = await sheet((cerrar) => [
+    h('h2.title', null, 'Lista de repaso'),
+    h('p.sub', null, `Creada por ${lista.creadoPorNombre} el ${fechaCorta(lista.creado)} a las ${hora(lista.creado)}.`),
+    h('div.stack', { style: { marginTop: '6px' } },
+      h('button.row', { onclick: () => cerrar('informe') },
+        h('div.row-lead', null, icon('download', 18)),
+        h('div.grow', null,
+          h('div.row-title', null, 'Informe para imprimir'),
+          h('div.row-sub', null, 'Fotos y textos en una sola página'),
+        ),
+      ),
+      h('button.row', { onclick: () => cerrar('estados') },
+        h('div.row-lead', null, icon('check', 18)),
+        h('div.grow', null,
+          h('div.row-title', null, 'Marcar todas como…'),
+          h('div.row-sub', null, 'Cambia el estado de las ' + tareas.length + ' tareas'),
+        ),
+      ),
+      h('button.row', { onclick: () => cerrar('cerrar') },
+        h('div.row-lead', null, icon('clipboard', 18)),
+        h('div.grow', null,
+          h('div.row-title', null, lista.cerrada ? 'Reabrir la lista' : 'Cerrar la lista'),
+          h('div.row-sub', null, lista.cerrada ? 'Permite volver a editarla' : 'Deja constancia de que la inspección terminó'),
+        ),
+      ),
+      h('button.row.danger', { onclick: () => cerrar('borrar') },
+        h('div.row-lead', null, icon('trash', 18)),
+        h('div.grow', null, h('div.row-title', null, 'Borrar la lista')),
+      ),
+    ),
+    h('button.btn.ghost.full', { onclick: () => cerrar(null) }, 'Cancelar'),
+  ]);
+
+  if (accion === 'informe') return informe(lista, { abrirImpresion: true });
+
+  if (accion === 'cerrar') {
+    await store.actualizarLista(lista.id, { cerrada: !lista.cerrada });
+    toast(lista.cerrada ? 'Lista reabierta' : 'Lista cerrada');
+    return refrescar();
+  }
+
+  if (accion === 'estados') {
+    const nuevo = await sheet((cerrar) => [
+      h('h2.title', null, 'Marcar todas como'),
+      h('div.stack', null, ESTADOS.map((e) => h('button.row', { onclick: () => cerrar(e.id) },
+        h('div.grow', null, h('div.row-title', null, e.nombre)),
+      ))),
+      h('button.btn.ghost.full', { onclick: () => cerrar(null) }, 'Cancelar'),
+    ]);
+    if (!nuevo) return;
+    for (const t of tareas) if (t.estado !== nuevo) await store.actualizarTarea(t.id, { estado: nuevo });
+    toast('Estados actualizados');
+    return refrescar();
+  }
+
+  if (accion === 'borrar') {
+    const ok = await confirmSheet({
+      title: '¿Borrar la lista?',
+      text: `Se borrarán también sus ${tareas.length} tareas con sus fotos. No se puede deshacer.`,
+      ok: 'Borrar', danger: true,
+    });
+    if (!ok) return;
+    const destino = `#/p/${lista.promoId}/v/${String(lista.unidadId).split(':')[1]}`;
+    await store.borrarLista(lista.id);
+    toast('Lista borrada');
+    ir(destino);
+  }
+}

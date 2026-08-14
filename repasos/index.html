@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>UNIK repasos</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="description" content="Repasos de pre-entrega y post-entrega de las viviendas de UNIK.">
+<meta name="robots" content="noindex, nofollow">
+
+<!-- Aspecto de app instalada -->
+<meta name="theme-color" content="#ffffff">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="UNIK repasos">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/icons/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+<link rel="preload" href="assets/fonts/opensans-var.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="css/app.css?v=__BUILD__">
+
+<!-- Dirección del backend. Vacía = modo local: la app funciona igual pero los
+     datos se quedan en este dispositivo. Al publicar en el hosting con la API
+     PHP en la misma carpeta, 'api/' es el valor correcto. -->
+<script>
+  window.REPASOS_CONFIG = {
+    apiBase: 'api/',
+    build: '__BUILD__',
+  };
+</script>
+</head>
+<body>
+  <div id="app">
+    <div class="boot" id="boot"><div class="spin"></div></div>
+  </div>
+  <script type="module" src="js/app.js?v=__BUILD__"></script>
+</body>
+</html>

@@ -1,0 +1,731 @@
+<?php
+/**
+ * index.php — API de UNIK repasos.
+ *
+ * Todo el tráfico de la carpeta api/ entra por aquí (ver .htaccess).
+ * El protocolo es de tipo «upsert»: el cliente manda registros enteros
+ * con su marca `actualizado` y gana el más reciente; los borrados viajan
+ * como registros con borrada = 1, para que un móvil que estuvo sin
+ * cobertura también se entere de lo que se borró mientras tanto.
+ */
+declare(strict_types=1);
+
+require __DIR__ . '/lib/nucleo.php';
+require __DIR__ . '/lib/auth.php';
+
+/**
+ * Tipos admitidos y extensión con la que se guardan. Las funciones se
+ * declaran en cualquier orden, pero las constantes no: tienen que estar
+ * definidas antes de la llamada a despachar(), no después.
+ */
+const MIMES = [
+    'imagen' => ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp', 'image/heic' => 'heic'],
+    'video'  => ['video/mp4' => 'mp4', 'video/quicktime' => 'mov', 'video/webm' => 'webm', 'video/3gpp' => '3gp'],
+    'audio'  => ['audio/webm' => 'webm', 'audio/mp4' => 'm4a', 'audio/mpeg' => 'mp3', 'audio/ogg' => 'ogg',
+                 'audio/wav' => 'wav', 'audio/x-m4a' => 'm4a', 'audio/aac' => 'aac'],
+];
+
+/** Máximo de registros por tabla y tanda en la bajada de cambios. */
+const TOPE_CAMBIOS = 500;
+
+// Nada de la API se cachea, ni siquiera por error.
+header('Cache-Control: no-store');
+header('X-Content-Type-Options: nosniff');
+header('Referrer-Policy: same-origin');
+
+$metodo = $_SERVER['REQUEST_METHOD'];
+if ($metodo === 'OPTIONS') {
+    http_response_code(204);
+    exit;
+}
+
+/* ─── Ruta pedida ─────────────────────────────────────────────── */
+$ruta = '';
+if (isset($_SERVER['PATH_INFO'])) {
+    $ruta = trim($_SERVER['PATH_INFO'], '/');
+} else {
+    $base = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '')), '/');
+    $pedida = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+    if ($base !== '' && strpos($pedida, $base) === 0) {
+        $pedida = substr($pedida, strlen($base));
+    }
+    $ruta = trim($pedida, '/');
+    if ($ruta === 'index.php') {
+        $ruta = '';
+    }
+}
+$partes = $ruta === '' ? [] : explode('/', $ruta);
+
+try {
+    despachar($metodo, $partes);
+} catch (PDOException $e) {
+    error_log('UNIK repasos · SQL: ' . $e->getMessage());
+    responder_error(500, 'Error en la base de datos.', 'sql');
+} catch (Throwable $e) {
+    error_log('UNIK repasos · ' . $e->getMessage());
+    responder_error(500, 'Error interno.', 'interno');
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Enrutado
+   ═══════════════════════════════════════════════════════════════ */
+function despachar(string $metodo, array $p): void
+{
+    // Ninguna de estas llamadas vuelve: todas terminan en responder(),
+    // que escribe la respuesta y sale.
+    $r0 = $p[0] ?? '';
+
+    if ($r0 === '') {
+        responder(['app' => 'UNIK repasos', 'api' => 1]);
+    }
+
+    if ($r0 === 'auth') {
+        $accion = $p[1] ?? '';
+        if ($accion === 'login' && $metodo === 'POST') {
+            login();
+        }
+        if ($accion === 'logout' && $metodo === 'POST') {
+            cerrar_sesion();
+            responder(['ok' => true]);
+        }
+        if ($accion === 'me' && $metodo === 'GET') {
+            responder(['usuario' => exigir_sesion()]);
+        }
+        if ($accion === 'password' && $metodo === 'POST') {
+            cambiar_password_propia();
+        }
+        responder_error(404, 'Ruta de sesión desconocida.');
+    }
+
+    if ($r0 === 'usuarios') {
+        if ($metodo === 'GET' && !isset($p[1])) {
+            listar_usuarios();
+        }
+        if ($metodo === 'POST' && !isset($p[1])) {
+            crear_usuario();
+        }
+        if ($metodo === 'PATCH' && isset($p[1])) {
+            editar_usuario($p[1]);
+        }
+        if ($metodo === 'DELETE' && isset($p[1])) {
+            borrar_usuario($p[1]);
+        }
+        responder_error(405, 'Método no permitido.');
+    }
+
+    if ($r0 === 'listas' && $metodo === 'POST') {
+        guardar_listas();
+    }
+    if ($r0 === 'tareas' && $metodo === 'POST') {
+        guardar_tareas();
+    }
+
+    if ($r0 === 'medios') {
+        if ($metodo === 'POST' && !isset($p[1])) {
+            subir_medio();
+        }
+        if ($metodo === 'GET' && isset($p[1], $p[2]) && $p[2] === 'fichero') {
+            servir_medio($p[1]);
+        }
+        if ($metodo === 'DELETE' && isset($p[1])) {
+            borrar_medio($p[1]);
+        }
+        responder_error(405, 'Método no permitido.');
+    }
+
+    if ($r0 === 'cambios' && $metodo === 'GET') {
+        cambios();
+    }
+
+    responder_error(404, 'Ruta desconocida.');
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Sesión
+   ═══════════════════════════════════════════════════════════════ */
+function login(): void
+{
+    $datos = cuerpo();
+    $email = mb_strtolower(texto($datos, 'email', 190));
+    $password = (string) ($datos['password'] ?? '');
+
+    if ($email === '' || $password === '') {
+        responder_error(400, 'Faltan el correo o la contraseña.', 'faltan-datos');
+    }
+    if (intentos_recientes($email) >= MAX_INTENTOS) {
+        responder_error(429, 'Demasiados intentos. Espera unos minutos.', 'bloqueado');
+    }
+
+    $stmt = bd()->prepare('SELECT id, nombre, email, rol, activo, password_hash FROM usuarios WHERE email = ?');
+    $stmt->execute([$email]);
+    $u = $stmt->fetch();
+
+    // Se comprueba siempre un hash aunque el usuario no exista: si no, el
+    // tiempo de respuesta delataría qué correos están dados de alta.
+    $hash = $u['password_hash'] ?? '$2y$10$usuarioinexistenteusuarioinexistenteusuarioinexiste';
+    $vale = password_verify($password, $hash);
+
+    if (!$u || !$vale || (int) $u['activo'] !== 1) {
+        apuntar_intento($email);
+        usleep(400000);
+        responder_error(401, 'Correo o contraseña incorrectos.', 'credenciales');
+    }
+
+    if (password_needs_rehash($u['password_hash'], PASSWORD_DEFAULT)) {
+        bd()->prepare('UPDATE usuarios SET password_hash = ? WHERE id = ?')
+            ->execute([password_hash($password, PASSWORD_DEFAULT), $u['id']]);
+    }
+
+    limpiar_intentos($email);
+    crear_sesion($u['id']);
+    responder(['usuario' => [
+        'id' => $u['id'], 'nombre' => $u['nombre'], 'email' => $u['email'], 'rol' => $u['rol'],
+    ]]);
+}
+
+function cambiar_password_propia(): void
+{
+    $yo = exigir_sesion();
+    $datos = cuerpo();
+    $actual = (string) ($datos['actual'] ?? '');
+    $nueva = (string) ($datos['nueva'] ?? '');
+
+    if (mb_strlen($nueva) < 8) {
+        responder_error(400, 'La contraseña nueva debe tener al menos 8 caracteres.', 'corta');
+    }
+    $stmt = bd()->prepare('SELECT password_hash FROM usuarios WHERE id = ?');
+    $stmt->execute([$yo['id']]);
+    $hash = (string) $stmt->fetchColumn();
+    if (!password_verify($actual, $hash)) {
+        responder_error(401, 'La contraseña actual no es correcta.', 'credenciales');
+    }
+
+    bd()->prepare('UPDATE usuarios SET password_hash = ?, actualizado = ? WHERE id = ?')
+        ->execute([password_hash($nueva, PASSWORD_DEFAULT), ahora_iso(), $yo['id']]);
+
+    // Cambiar la contraseña cierra las demás sesiones; la actual sigue.
+    $token = hash('sha256', $_COOKIE[COOKIE_SESION] ?? '');
+    bd()->prepare('DELETE FROM sesiones WHERE usuario_id = ? AND token <> ?')->execute([$yo['id'], $token]);
+
+    responder(['ok' => true]);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Usuarios
+   ═══════════════════════════════════════════════════════════════ */
+function listar_usuarios(): void
+{
+    exigir_admin();
+    $filas = bd()->query(
+        'SELECT id, nombre, email, rol, activo, creado FROM usuarios ORDER BY activo DESC, nombre ASC'
+    )->fetchAll();
+    foreach ($filas as &$f) {
+        $f['activo'] = (int) $f['activo'] === 1;
+    }
+    responder(['usuarios' => $filas]);
+}
+
+function crear_usuario(): void
+{
+    exigir_admin();
+    $d = cuerpo();
+    $nombre = texto($d, 'nombre', 120);
+    $email = mb_strtolower(texto($d, 'email', 190));
+    $password = (string) ($d['password'] ?? '');
+    $rol = ($d['rol'] ?? 'usuario') === 'admin' ? 'admin' : 'usuario';
+
+    if (mb_strlen($nombre) < 3) {
+        responder_error(400, 'El nombre es demasiado corto.', 'nombre');
+    }
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        responder_error(400, 'El correo no es válido.', 'email');
+    }
+    if (mb_strlen($password) < 8) {
+        responder_error(400, 'La contraseña debe tener al menos 8 caracteres.', 'corta');
+    }
+
+    $existe = bd()->prepare('SELECT 1 FROM usuarios WHERE email = ?');
+    $existe->execute([$email]);
+    if ($existe->fetchColumn()) {
+        responder_error(409, 'Ya existe un usuario con ese correo.', 'duplicado');
+    }
+
+    $id = uuid();
+    bd()->prepare(
+        'INSERT INTO usuarios (id, nombre, email, password_hash, rol, activo, creado, actualizado)
+         VALUES (?, ?, ?, ?, ?, 1, ?, ?)'
+    )->execute([$id, $nombre, $email, password_hash($password, PASSWORD_DEFAULT), $rol, ahora_iso(), ahora_iso()]);
+
+    responder(['usuario' => [
+        'id' => $id, 'nombre' => $nombre, 'email' => $email, 'rol' => $rol, 'activo' => true,
+    ]], 201);
+}
+
+function editar_usuario(string $id): void
+{
+    $yo = exigir_admin();
+    $d = cuerpo();
+
+    $stmt = bd()->prepare('SELECT id, rol, activo FROM usuarios WHERE id = ?');
+    $stmt->execute([$id]);
+    $u = $stmt->fetch();
+    if (!$u) {
+        responder_error(404, 'Usuario no encontrado.');
+    }
+
+    $campos = [];
+    $valores = [];
+
+    if (isset($d['nombre'])) {
+        $nombre = texto($d, 'nombre', 120);
+        if (mb_strlen($nombre) < 3) {
+            responder_error(400, 'El nombre es demasiado corto.', 'nombre');
+        }
+        $campos[] = 'nombre = ?';
+        $valores[] = $nombre;
+    }
+    if (isset($d['password'])) {
+        if (mb_strlen((string) $d['password']) < 8) {
+            responder_error(400, 'La contraseña debe tener al menos 8 caracteres.', 'corta');
+        }
+        $campos[] = 'password_hash = ?';
+        $valores[] = password_hash((string) $d['password'], PASSWORD_DEFAULT);
+    }
+    if (isset($d['rol'])) {
+        if ($u['id'] === $yo['id'] && $d['rol'] !== 'admin') {
+            responder_error(400, 'No puedes quitarte a ti mismo los permisos de administrador.', 'ultimo-admin');
+        }
+        if ($u['rol'] === 'admin' && $d['rol'] !== 'admin' && cuenta_admins() <= 1) {
+            responder_error(400, 'Tiene que quedar al menos un administrador.', 'ultimo-admin');
+        }
+        $campos[] = 'rol = ?';
+        $valores[] = $d['rol'] === 'admin' ? 'admin' : 'usuario';
+    }
+    if (isset($d['activo'])) {
+        $activo = booleano($d, 'activo');
+        if ($u['id'] === $yo['id'] && !$activo) {
+            responder_error(400, 'No puedes desactivar tu propia cuenta.', 'yo-mismo');
+        }
+        if (!$activo && $u['rol'] === 'admin' && cuenta_admins() <= 1) {
+            responder_error(400, 'Tiene que quedar al menos un administrador activo.', 'ultimo-admin');
+        }
+        $campos[] = 'activo = ?';
+        $valores[] = $activo ? 1 : 0;
+        if (!$activo) {
+            bd()->prepare('DELETE FROM sesiones WHERE usuario_id = ?')->execute([$id]);
+        }
+    }
+
+    if (!$campos) {
+        responder_error(400, 'Nada que cambiar.', 'sin-cambios');
+    }
+    $campos[] = 'actualizado = ?';
+    $valores[] = ahora_iso();
+    $valores[] = $id;
+
+    bd()->prepare('UPDATE usuarios SET ' . implode(', ', $campos) . ' WHERE id = ?')->execute($valores);
+
+    // Cambiarle la contraseña a alguien echa a ese alguien de sus sesiones.
+    if (isset($d['password'])) {
+        bd()->prepare('DELETE FROM sesiones WHERE usuario_id = ?')->execute([$id]);
+    }
+
+    responder(['ok' => true]);
+}
+
+function borrar_usuario(string $id): void
+{
+    $yo = exigir_admin();
+    if ($id === $yo['id']) {
+        responder_error(400, 'No puedes borrar tu propia cuenta.', 'yo-mismo');
+    }
+    $stmt = bd()->prepare('SELECT rol FROM usuarios WHERE id = ?');
+    $stmt->execute([$id]);
+    $rol = $stmt->fetchColumn();
+    if ($rol === false) {
+        responder_error(404, 'Usuario no encontrado.');
+    }
+    if ($rol === 'admin' && cuenta_admins() <= 1) {
+        responder_error(400, 'Tiene que quedar al menos un administrador.', 'ultimo-admin');
+    }
+    // Las listas y tareas conservan creado_por_nombre: la firma de los
+    // repasos no se pierde aunque la cuenta desaparezca.
+    bd()->prepare('DELETE FROM usuarios WHERE id = ?')->execute([$id]);
+    responder(['ok' => true]);
+}
+
+function cuenta_admins(): int
+{
+    return (int) bd()->query("SELECT COUNT(*) FROM usuarios WHERE rol = 'admin' AND activo = 1")->fetchColumn();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Listas y tareas
+   ═══════════════════════════════════════════════════════════════ */
+function guardar_listas(): void
+{
+    exigir_sesion();
+    $entrada = cuerpo()['listas'] ?? [];
+    if (!is_array($entrada)) {
+        responder_error(400, 'Formato incorrecto.', 'formato');
+    }
+    $guardadas = 0;
+    foreach ($entrada as $l) {
+        if (!is_array($l) || !es_uuid($l['id'] ?? null)) {
+            continue;
+        }
+        $registro = [
+            'id'                => $l['id'],
+            'unidad_id'         => texto($l, 'unidadId', 80),
+            'promo_id'          => texto($l, 'promoId', 60),
+            'fase'              => texto($l, 'fase', 20, 'pre'),
+            'cerrada'           => booleano($l, 'cerrada') ? 1 : 0,
+            'borrada'           => booleano($l, 'borrada') ? 1 : 0,
+            'creado'            => iso($l['creado'] ?? null),
+            'actualizado'       => iso($l['actualizado'] ?? null),
+            'creado_por'        => es_uuid($l['creadoPor'] ?? null) ? $l['creadoPor'] : null,
+            'creado_por_nombre' => texto($l, 'creadoPorNombre', 120, 'Sin identificar'),
+        ];
+        if ($registro['unidad_id'] === '') {
+            continue;
+        }
+        if (upsert('listas', $registro)) {
+            $guardadas++;
+        }
+    }
+    responder(['guardadas' => $guardadas]);
+}
+
+function guardar_tareas(): void
+{
+    exigir_sesion();
+    $entrada = cuerpo()['tareas'] ?? [];
+    if (!is_array($entrada)) {
+        responder_error(400, 'Formato incorrecto.', 'formato');
+    }
+    $guardadas = 0;
+    foreach ($entrada as $t) {
+        if (!is_array($t) || !es_uuid($t['id'] ?? null) || !es_uuid($t['listaId'] ?? null)) {
+            continue;
+        }
+        $estado = in_array($t['estado'] ?? '', ['pendiente', 'resuelta', 'verificada'], true)
+            ? $t['estado'] : 'pendiente';
+        $registro = [
+            'id'                => $t['id'],
+            'lista_id'          => $t['listaId'],
+            'texto'             => mb_substr((string) ($t['texto'] ?? ''), 0, 4000),
+            'estado'            => $estado,
+            'orden'             => entero($t, 'orden'),
+            'portada_id'        => es_uuid($t['portadaId'] ?? null) ? $t['portadaId'] : null,
+            'estado_por'        => texto($t, 'estadoPor', 120) ?: null,
+            'estado_en'         => isset($t['estadoEn']) ? iso($t['estadoEn']) : null,
+            'borrada'           => booleano($t, 'borrada') ? 1 : 0,
+            'creado'            => iso($t['creado'] ?? null),
+            'actualizado'       => iso($t['actualizado'] ?? null),
+            'creado_por'        => es_uuid($t['creadoPor'] ?? null) ? $t['creadoPor'] : null,
+            'creado_por_nombre' => texto($t, 'creadoPorNombre', 120, 'Sin identificar'),
+        ];
+        if (upsert('tareas', $registro)) {
+            $guardadas++;
+        }
+    }
+    responder(['guardadas' => $guardadas]);
+}
+
+/**
+ * Inserta o actualiza según la marca `actualizado`: si lo que hay en la
+ * base es más nuevo que lo que llega, no se toca. Es lo que evita que un
+ * móvil que llevaba dos días sin cobertura pise el trabajo de hoy.
+ */
+function upsert(string $tabla, array $registro): bool
+{
+    $pdo = bd();
+    $stmt = $pdo->prepare("SELECT actualizado FROM {$tabla} WHERE id = ?");
+    $stmt->execute([$registro['id']]);
+    $existente = $stmt->fetchColumn();
+
+    if ($existente === false) {
+        $columnas = array_keys($registro);
+        $sql = sprintf(
+            'INSERT INTO %s (%s) VALUES (%s)',
+            $tabla,
+            implode(', ', $columnas),
+            implode(', ', array_fill(0, count($columnas), '?'))
+        );
+        try {
+            $pdo->prepare($sql)->execute(array_values($registro));
+            return true;
+        } catch (PDOException $e) {
+            // Otro dispositivo lo insertó entre el SELECT y el INSERT:
+            // se resuelve como actualización normal.
+            if ($e->getCode() !== '23000') {
+                throw $e;
+            }
+        }
+    } elseif ($registro['actualizado'] < (string) $existente) {
+        return false;
+    }
+
+    $sinId = $registro;
+    unset($sinId['id']);
+    $asignaciones = implode(', ', array_map(static fn ($c) => "{$c} = ?", array_keys($sinId)));
+    $valores = array_values($sinId);
+    $valores[] = $registro['id'];
+    $valores[] = $registro['actualizado'];
+    $pdo->prepare("UPDATE {$tabla} SET {$asignaciones} WHERE id = ? AND actualizado <= ?")->execute($valores);
+    return true;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Medios
+   ═══════════════════════════════════════════════════════════════ */
+function subir_medio(): void
+{
+    exigir_sesion();
+
+    $id = (string) ($_POST['id'] ?? '');
+    $tareaId = (string) ($_POST['tareaId'] ?? '');
+    $tipo = (string) ($_POST['tipo'] ?? '');
+
+    if (!es_uuid($id) || !es_uuid($tareaId) || !isset(MIMES[$tipo])) {
+        responder_error(400, 'Datos del medio incorrectos.', 'formato');
+    }
+    if (!isset($_FILES['fichero']) || $_FILES['fichero']['error'] !== UPLOAD_ERR_OK) {
+        $codigo = $_FILES['fichero']['error'] ?? -1;
+        $mensaje = in_array($codigo, [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true)
+            ? 'El fichero supera el límite del servidor.'
+            : 'No llegó el fichero.';
+        responder_error(400, $mensaje, 'fichero');
+    }
+
+    $temporal = $_FILES['fichero']['tmp_name'];
+    $tam = (int) $_FILES['fichero']['size'];
+    if ($tam <= 0 || $tam > (int) (config()['max_fichero'] ?? 83886080)) {
+        responder_error(413, 'El fichero es demasiado grande.', 'grande');
+    }
+
+    // El MIME se deduce del contenido, no de lo que diga el navegador.
+    $detectado = (new finfo(FILEINFO_MIME_TYPE))->file($temporal) ?: '';
+    $extension = MIMES[$tipo][$detectado] ?? null;
+    if ($extension === null) {
+        // finfo no reconoce algunos contenedores de audio/vídeo de móvil;
+        // en ese caso vale el MIME declarado si está en la lista blanca.
+        $declarado = (string) ($_FILES['fichero']['type'] ?? '');
+        $extension = MIMES[$tipo][$declarado] ?? null;
+        $detectado = $extension !== null ? $declarado : $detectado;
+    }
+    if ($extension === null) {
+        responder_error(415, 'Tipo de fichero no admitido: ' . $detectado, 'mime');
+    }
+
+    $existente = bd()->prepare('SELECT ruta FROM medios WHERE id = ?');
+    $existente->execute([$id]);
+    $rutaPrevia = $existente->fetchColumn();
+
+    $relativa = gmdate('Y/m') . '/' . $id . '.' . $extension;
+    $destino = carpeta_medios() . '/' . $relativa;
+    if (!is_dir(dirname($destino)) && !mkdir(dirname($destino), 0755, true) && !is_dir(dirname($destino))) {
+        responder_error(500, 'No se pudo crear la carpeta de destino.', 'carpeta');
+    }
+    if (!move_uploaded_file($temporal, $destino)) {
+        responder_error(500, 'No se pudo guardar el fichero.', 'guardar');
+    }
+    @chmod($destino, 0644);
+
+    // Si se resube el mismo id con otra extensión, el fichero viejo sobra.
+    if (is_string($rutaPrevia) && $rutaPrevia !== '' && $rutaPrevia !== $relativa) {
+        @unlink(carpeta_medios() . '/' . $rutaPrevia);
+    }
+
+    upsert('medios', [
+        'id'          => $id,
+        'tarea_id'    => $tareaId,
+        'tipo'        => $tipo,
+        'mime'        => $detectado,
+        'tam'         => $tam,
+        'ancho'       => max(0, (int) ($_POST['ancho'] ?? 0)),
+        'alto'        => max(0, (int) ($_POST['alto'] ?? 0)),
+        'duracion'    => max(0, (int) ($_POST['duracion'] ?? 0)),
+        'ruta'        => $relativa,
+        'borrada'     => 0,
+        'creado'      => iso($_POST['creado'] ?? null),
+        'actualizado' => ahora_iso(),
+    ]);
+
+    responder(['id' => $id, 'ok' => true], 201);
+}
+
+function borrar_medio(string $id): void
+{
+    exigir_sesion();
+    if (!es_uuid($id)) {
+        responder_error(400, 'Identificador incorrecto.', 'formato');
+    }
+    $stmt = bd()->prepare('SELECT ruta FROM medios WHERE id = ?');
+    $stmt->execute([$id]);
+    $ruta = $stmt->fetchColumn();
+    if ($ruta === false) {
+        responder_error(404, 'El medio no existe.');
+    }
+    if (is_string($ruta) && $ruta !== '') {
+        @unlink(carpeta_medios() . '/' . $ruta);
+    }
+    // Se marca como borrado en lugar de eliminar la fila: así el resto de
+    // dispositivos se entera en su próxima sincronización.
+    bd()->prepare("UPDATE medios SET borrada = 1, ruta = '', actualizado = ? WHERE id = ?")
+        ->execute([ahora_iso(), $id]);
+    responder(['ok' => true]);
+}
+
+function servir_medio(string $id): void
+{
+    exigir_sesion();
+    if (!es_uuid($id)) {
+        responder_error(400, 'Identificador incorrecto.', 'formato');
+    }
+    $stmt = bd()->prepare('SELECT mime, ruta, borrada FROM medios WHERE id = ?');
+    $stmt->execute([$id]);
+    $m = $stmt->fetch();
+    if (!$m || (int) $m['borrada'] === 1 || $m['ruta'] === '') {
+        responder_error(404, 'El medio no existe.');
+    }
+
+    $ruta = carpeta_medios() . '/' . $m['ruta'];
+    $real = realpath($ruta);
+    // Cinturón: la ruta guardada nunca debe salirse de la carpeta de medios.
+    if ($real === false || strpos($real, carpeta_medios()) !== 0 || !is_file($real)) {
+        responder_error(404, 'Fichero no encontrado.');
+    }
+
+    $tam = filesize($real);
+    header('Content-Type: ' . $m['mime']);
+    header('Content-Disposition: inline; filename="' . $id . '"');
+    header('Accept-Ranges: bytes');
+    // Privada: el contenido es sensible, pero el navegador puede guardarlo
+    // para no volver a bajar la misma foto en cada pintada.
+    header('Cache-Control: private, max-age=604800');
+    header('X-Content-Type-Options: nosniff');
+
+    $inicio = 0;
+    $fin = $tam - 1;
+    $rango = $_SERVER['HTTP_RANGE'] ?? '';
+    if ($rango !== '' && preg_match('/bytes=(\d*)-(\d*)/', $rango, $m2)) {
+        // Los vídeos y los audios se piden por trozos; sin esto, iOS ni
+        // siquiera empieza a reproducir.
+        if ($m2[1] !== '') {
+            $inicio = (int) $m2[1];
+        }
+        if ($m2[2] !== '') {
+            $fin = min((int) $m2[2], $tam - 1);
+        }
+        if ($inicio > $fin || $inicio >= $tam) {
+            header('Content-Range: bytes */' . $tam);
+            http_response_code(416);
+            exit;
+        }
+        http_response_code(206);
+        header("Content-Range: bytes {$inicio}-{$fin}/{$tam}");
+    }
+
+    header('Content-Length: ' . (string) ($fin - $inicio + 1));
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'HEAD') {
+        exit;
+    }
+
+    $f = fopen($real, 'rb');
+    if ($f === false) {
+        responder_error(500, 'No se pudo leer el fichero.');
+    }
+    fseek($f, $inicio);
+    $restante = $fin - $inicio + 1;
+    while ($restante > 0 && !feof($f)) {
+        $trozo = fread($f, (int) min(262144, $restante));
+        if ($trozo === false) {
+            break;
+        }
+        echo $trozo;
+        $restante -= strlen($trozo);
+        flush();
+    }
+    fclose($f);
+    exit;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Cambios (bajada)
+   ═══════════════════════════════════════════════════════════════ */
+function cambios(): void
+{
+    exigir_sesion();
+    $desde = iso($_GET['desde'] ?? null, '1970-01-01T00:00:00.000Z');
+    if (($_GET['desde'] ?? '') === '') {
+        $desde = '1970-01-01T00:00:00.000Z';
+    }
+
+    $listas = traer('listas', $desde);
+    $tareas = traer('tareas', $desde);
+    $medios = traer('medios', $desde);
+
+    // La marca siguiente sale de los propios datos, no del reloj del
+    // servidor: así un desfase horario entre hosting y móvil no puede
+    // hacer que se pierdan cambios.
+    $marca = $desde;
+    foreach ([$listas, $tareas, $medios] as $conjunto) {
+        foreach ($conjunto as $fila) {
+            if ($fila['actualizado'] > $marca) {
+                $marca = $fila['actualizado'];
+            }
+        }
+    }
+
+    $hayMas = count($listas) >= TOPE_CAMBIOS || count($tareas) >= TOPE_CAMBIOS || count($medios) >= TOPE_CAMBIOS;
+
+    responder([
+        'listas' => array_map('lista_salida', $listas),
+        'tareas' => array_map('tarea_salida', $tareas),
+        'medios' => array_map('medio_salida', $medios),
+        'ahora'  => $marca,
+        'mas'    => $hayMas,
+    ]);
+}
+
+function traer(string $tabla, string $desde): array
+{
+    $stmt = bd()->prepare(
+        "SELECT * FROM {$tabla} WHERE actualizado >= ? ORDER BY actualizado ASC LIMIT " . TOPE_CAMBIOS
+    );
+    $stmt->execute([$desde]);
+    return $stmt->fetchAll();
+}
+
+function lista_salida(array $f): array
+{
+    return [
+        'id' => $f['id'], 'unidadId' => $f['unidad_id'], 'promoId' => $f['promo_id'],
+        'fase' => $f['fase'], 'cerrada' => (int) $f['cerrada'] === 1, 'borrada' => (int) $f['borrada'] === 1,
+        'creado' => $f['creado'], 'actualizado' => $f['actualizado'],
+        'creadoPor' => $f['creado_por'], 'creadoPorNombre' => $f['creado_por_nombre'],
+    ];
+}
+
+function tarea_salida(array $f): array
+{
+    return [
+        'id' => $f['id'], 'listaId' => $f['lista_id'], 'texto' => $f['texto'],
+        'estado' => $f['estado'], 'orden' => (int) $f['orden'], 'portadaId' => $f['portada_id'],
+        'estadoPor' => $f['estado_por'], 'estadoEn' => $f['estado_en'],
+        'borrada' => (int) $f['borrada'] === 1,
+        'creado' => $f['creado'], 'actualizado' => $f['actualizado'],
+        'creadoPor' => $f['creado_por'], 'creadoPorNombre' => $f['creado_por_nombre'],
+    ];
+}
+
+function medio_salida(array $f): array
+{
+    return [
+        'id' => $f['id'], 'tareaId' => $f['tarea_id'], 'tipo' => $f['tipo'], 'mime' => $f['mime'],
+        'tam' => (int) $f['tam'], 'ancho' => (int) $f['ancho'], 'alto' => (int) $f['alto'],
+        'duracion' => (int) $f['duracion'], 'borrada' => (int) $f['borrada'] === 1,
+        'creado' => $f['creado'], 'actualizado' => $f['actualizado'],
+    ];
+}
