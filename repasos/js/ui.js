@@ -170,6 +170,118 @@ export function avatar(usuario, { tam = 44, radio = '50%', onclick, etiqueta } =
   return nodo;
 }
 
+/**
+ * Varias personas en una sola bolita: las que han tocado el acta. Se
+ * apilan solapadas, la primera delante. A partir de la tercera se
+ * resume con «+n», que es cuando dejarían de leerse las iniciales.
+ */
+export function grupoAvatares(gente = [], { tam = 38, max = 3 } = {}) {
+  const lista = gente.slice(0, max);
+  const resto = gente.length - lista.length;
+  // Un tercio tapaba la primera inicial de la de detrás; con algo
+  // menos se sigue leyendo quién es sin que la pila se alargue.
+  const solape = Math.round(tam * 0.26);
+
+  const caja = h('div.avatares', {
+    // Sin gente no se reserva hueco; con ella, el ancho es el de la
+    // pila real para que la tarjeta no baile según cuántos haya.
+    style: { width: lista.length ? `${tam + (lista.length - 1 + (resto > 0 ? 1 : 0)) * (tam - solape)}px` : '0' },
+    'aria-label': gente.map((p) => p.nombre).join(', '),
+  });
+
+  lista.forEach((p, i) => {
+    const b = avatar(p, { tam });
+    b.classList.add('apilado');
+    b.style.left = `${i * (tam - solape)}px`;
+    // El primero delante: si no, el último taparía al que creó el acta.
+    b.style.zIndex = String(lista.length - i);
+    caja.append(b);
+  });
+
+  if (resto > 0) {
+    caja.append(h('div.avatar.apilado.mas', {
+      style: {
+        width: tam + 'px', height: tam + 'px', flex: `0 0 ${tam}px`,
+        left: `${lista.length * (tam - solape)}px`,
+        fontSize: Math.round(tam * 0.32) + 'px',
+      },
+    }, '+' + resto));
+  }
+  return caja;
+}
+
+/**
+ * Anillo de avance. Se dibuja al entrar en pantalla en lugar de
+ * aparecer lleno: el recorrido es la información, y verlo crecer dice
+ * de un vistazo si la villa va bien o va justa.
+ */
+export function anillo(pct, { tam = 46, grosor = 4, etiqueta = true } = {}) {
+  const valor = Math.max(0, Math.min(100, Math.round(pct || 0)));
+  const r = (tam - grosor) / 2;
+  const vuelta = 2 * Math.PI * r;
+
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${tam} ${tam}`);
+  svg.setAttribute('width', tam);
+  svg.setAttribute('height', tam);
+  svg.setAttribute('aria-hidden', 'true');
+
+  const aro = (color, extra = {}) => {
+    const c = document.createElementNS(NS, 'circle');
+    c.setAttribute('cx', tam / 2); c.setAttribute('cy', tam / 2); c.setAttribute('r', r);
+    c.setAttribute('fill', 'none');
+    c.setAttribute('stroke', color);
+    c.setAttribute('stroke-width', grosor);
+    c.setAttribute('stroke-linecap', 'round');
+    for (const [k, v] of Object.entries(extra)) c.setAttribute(k, v);
+    return c;
+  };
+
+  svg.append(aro('var(--anillo-fondo, rgba(17,17,18,.10))'));
+  const activo = aro('var(--anillo-color, var(--accent))', {
+    'stroke-dasharray': vuelta,
+    'stroke-dashoffset': vuelta,
+    transform: `rotate(-90 ${tam / 2} ${tam / 2})`,
+  });
+  activo.style.transition = 'stroke-dashoffset var(--mov-largo) var(--sal-estandar)';
+  svg.append(activo);
+
+  const caja = h('div.anillo', { style: { width: tam + 'px', height: tam + 'px' } }, svg);
+  if (etiqueta) caja.append(h('span.anillo-n', null, valor + '%'));
+
+  // Se anima cuando entra en pantalla, no al construirse: en una lista
+  // larga, animar cincuenta anillos a la vez fuera de la vista es tirar
+  // trabajo, y además el efecto se lo pierde quien no está mirando.
+  const arrancar = () => { activo.setAttribute('stroke-dashoffset', String(vuelta * (1 - valor / 100))); };
+  if (window.IntersectionObserver && !prefiereQuieto()) {
+    const obs = new IntersectionObserver((e) => {
+      if (e[0].isIntersecting) { arrancar(); obs.disconnect(); }
+    }, { threshold: 0.4 });
+    requestAnimationFrame(() => obs.observe(caja));
+  } else {
+    activo.style.transition = 'none';
+    arrancar();
+  }
+  return caja;
+}
+
+const prefiereQuieto = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+/**
+ * El logotipo de UNIK. El fichero es blanco sobre transparente y aquí
+ * se usa como máscara: el dibujo lo pone el canal alfa y el color lo
+ * pone el CSS, así que el mismo fichero sirve en negro sobre el fondo
+ * claro de la entrada y en blanco sobre una superficie oscura.
+ */
+export function logoUnik({ alto = 26, color } = {}) {
+  return h('span.logo-unik', {
+    style: { height: alto + 'px', width: Math.round(alto * 4.126) + 'px', ...(color ? { background: color } : {}) },
+    role: 'img',
+    'aria-label': 'UNIK',
+  });
+}
+
 /* ─── Avisos ──────────────────────────────────────────────────── */
 let toastEl, toastTimer;
 export function toast(message, kind = '') {
@@ -261,6 +373,20 @@ export function fechaCorta(iso) {
 export function hora(iso) {
   const d = new Date(iso);
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+/**
+ * «Hoy», «Ayer» o la fecha. Se comparan días del calendario local, no
+ * horas transcurridas: algo de anoche a las 23:50 es «ayer» aunque haga
+ * media hora, que es como lo diría cualquiera en la obra.
+ */
+export function fechaRelativa(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const soloDia = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const dias = Math.round((soloDia(new Date()) - soloDia(d)) / 86400000);
+  if (dias === 0) return 'Hoy';
+  if (dias === 1) return 'Ayer';
+  return fechaCorta(iso);
 }
 export function iniciales(nombre) {
   const partes = String(nombre || '?').trim().split(/\s+/).filter(Boolean);

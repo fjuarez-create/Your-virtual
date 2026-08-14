@@ -8,7 +8,7 @@
    ═══════════════════════════════════════════════════════════════ */
 import * as db from './db.js';
 import * as api from './api.js';
-import { puedeVerificar } from './catalog.js';
+import { puedeVerificar, hecha, esperandoVisto, OFICIO_POR_DEFECTO } from './catalog.js';
 
 /* ─── Identificadores y sellos de tiempo ──────────────────────── */
 export function nuevoId() {
@@ -118,10 +118,14 @@ export async function lista(id) {
   return l && !l.borrada ? l : null;
 }
 
-export async function crearLista({ unidadId, promoId, fase }) {
+export async function crearLista({ unidadId, promoId, fase, nombre = '' }) {
   const l = {
     id: nuevoId(),
     unidadId, promoId, fase,
+    // Vacío a propósito: el acta se llama como la vivienda hasta que
+    // alguien decida ponerle otro nombre, y así renombrar la vivienda
+    // no deja actas con un nombre viejo pegado.
+    nombre,
     cerrada: false,
     borrada: false,
     creado: ahora(),
@@ -160,12 +164,13 @@ export async function tarea(id) {
   return t && !t.borrada ? t : null;
 }
 
-export async function crearTarea({ listaId, texto }) {
+export async function crearTarea({ listaId, texto, oficio = OFICIO_POR_DEFECTO }) {
   const hermanas = await tareasDeLista(listaId);
   const t = {
     id: nuevoId(),
     listaId,
     texto: texto || '',
+    oficio: oficio || OFICIO_POR_DEFECTO,
     estado: 'pendiente',
     orden: hermanas.length ? Math.max(...hermanas.map((x) => x.orden || 0)) + 1 : 1,
     portadaId: null,
@@ -370,58 +375,171 @@ export async function urlDePortada(tarea) {
 
 /* ─── Resúmenes para los selectores ───────────────────────────── */
 /** Por unidad: nº de listas y de tareas pendientes. */
+/**
+ * Cifras por vivienda de una promoción, ya con el criterio de la app:
+ * HECHA = verificada. Trae también los oficios que aparecen en sus
+ * tareas para poder filtrar la lista de viviendas por gremio.
+ */
 export async function resumenPorUnidad(promoId) {
   const listas = (await db.getAll('listas')).filter((l) => !l.borrada && l.promoId === promoId);
   const tareas = (await db.getAll('tareas')).filter((t) => !t.borrada);
-  const porLista = new Map();
-  for (const t of tareas) {
-    const v = porLista.get(t.listaId) || { total: 0, pendientes: 0 };
-    v.total++;
-    if (t.estado === 'pendiente') v.pendientes++;
-    porLista.set(t.listaId, v);
-  }
+  const unidadDeLista = new Map(listas.map((l) => [l.id, l.unidadId]));
+
   const salida = new Map();
+  const dame = (unidadId) => {
+    if (!salida.has(unidadId)) {
+      salida.set(unidadId, {
+        listas: 0, total: 0, hechas: 0, pendientes: 0, esperando: 0,
+        oficios: new Set(), oficiosAbiertos: new Set(), ultima: null,
+      });
+    }
+    return salida.get(unidadId);
+  };
+
   for (const l of listas) {
-    const v = salida.get(l.unidadId) || { listas: 0, total: 0, pendientes: 0, ultima: null };
+    const v = dame(l.unidadId);
     v.listas++;
-    const c = porLista.get(l.id) || { total: 0, pendientes: 0 };
-    v.total += c.total;
-    v.pendientes += c.pendientes;
     if (!v.ultima || l.creado > v.ultima) v.ultima = l.creado;
-    salida.set(l.unidadId, v);
+  }
+  for (const t of tareas) {
+    const unidadId = unidadDeLista.get(t.listaId);
+    if (!unidadId) continue;
+    const v = dame(unidadId);
+    v.total++;
+    v.oficios.add(oficioDe(t));
+    if (hecha(t)) { v.hechas++; continue; }
+    v.oficiosAbiertos.add(oficioDe(t));
+    if (esperandoVisto(t)) v.esperando++;
+    else v.pendientes++;
   }
   return salida;
 }
 
-/** Conteo de una lista concreta. */
+/** Conteo de un acta. `hechas` son las verificadas y solo esas. */
 export async function contarLista(listaId) {
-  const tareas = await tareasDeLista(listaId);
+  return contar(await tareasDeLista(listaId));
+}
+
+function contar(tareas) {
   return {
     total: tareas.length,
+    hechas: tareas.filter(hecha).length,
+    esperando: tareas.filter(esperandoVisto).length,
     pendientes: tareas.filter((t) => t.estado === 'pendiente').length,
-    resueltas: tareas.filter((t) => t.estado === 'resuelta').length,
-    verificadas: tareas.filter((t) => t.estado === 'verificada').length,
+    // Dos conjuntos, porque los filtros preguntan cosas distintas:
+    // «pintura» a secas es «aquí hubo pintura»; «pendientes + pintura»
+    // es «aquí queda pintura por verificar».
+    oficios: new Set(tareas.map(oficioDe)),
+    oficiosAbiertos: new Set(tareas.filter((t) => !hecha(t)).map(oficioDe)),
   };
 }
 
-/** Cifras globales para la portada. */
+const oficioDe = (t) => t.oficio || OFICIO_POR_DEFECTO;
+
+/** Porcentaje de avance, redondeado. Sin tareas, cero. */
+export const avance = (c) => (c && c.total ? Math.round((100 * c.hechas) / c.total) : 0);
+
+/**
+ * Todas las actas con lo que necesita su tarjeta ya calculado: quién ha
+ * participado, cuántas tareas y en qué estado. Se resuelve de una vez y
+ * no acta por acta porque con cincuenta villas y varias inspecciones
+ * cada una, ir a IndexedDB por cada tarjeta se nota al desplazar.
+ */
+export async function actasConDatos({ promoId = null } = {}) {
+  const listas = (await db.getAll('listas'))
+    .filter((l) => !l.borrada && (!promoId || l.promoId === promoId));
+  const tareas = (await db.getAll('tareas')).filter((t) => !t.borrada);
+
+  const porLista = new Map();
+  for (const t of tareas) {
+    if (!porLista.has(t.listaId)) porLista.set(t.listaId, []);
+    porLista.get(t.listaId).push(t);
+  }
+
+  return listas
+    .map((l) => {
+      const suyas = porLista.get(l.id) || [];
+      return { lista: l, conteo: contar(suyas), gente: participantes(l, suyas) };
+    })
+    .sort((a, b) => b.lista.actualizado.localeCompare(a.lista.actualizado));
+}
+
+/**
+ * Quién ha tocado un acta: quien la creó y quien haya metido tareas en
+ * ella. Se devuelven como fichas ligeras (id y nombre), que es lo que
+ * necesita la bolita para su color y sus iniciales.
+ */
+function participantes(lista, tareas) {
+  const vistos = new Map();
+  const meter = (id, nombre) => {
+    if (!nombre || vistos.has(nombre)) return;
+    vistos.set(nombre, { id: id || nombre, nombre });
+  };
+  meter(lista.creadoPor, lista.creadoPorNombre);
+  for (const t of tareas) meter(t.creadoPor, t.creadoPorNombre);
+  return [...vistos.values()];
+}
+
+/** Cifras de los dos widgets de la portada. */
 export async function resumenGeneral() {
   const listas = (await db.getAll('listas')).filter((l) => !l.borrada);
-  const tareas = (await db.getAll('tareas')).filter((t) => !t.borrada);
-  const viviendas = new Set(listas.map((l) => l.unidadId));
+  const vivas = new Set(listas.map((l) => l.id));
+  const tareas = (await db.getAll('tareas')).filter((t) => !t.borrada && vivas.has(t.listaId));
+  const c = contar(tareas);
   return {
     listas: listas.length,
-    viviendas: viviendas.size,
-    tareas: tareas.length,
-    pendientes: tareas.filter((t) => t.estado === 'pendiente').length,
+    viviendas: new Set(listas.map((l) => l.unidadId)).size,
+    total: c.total,
+    hechas: c.hechas,
+    esperando: c.esperando,
+    pendientes: c.pendientes,
     ultima: listas.map((l) => l.creado).sort().pop() || null,
   };
 }
 
-/** Las últimas listas tocadas, para el acceso rápido de la portada. */
-export async function listasRecientes(n = 4) {
-  const listas = (await db.getAll('listas')).filter((l) => !l.borrada);
-  return listas.sort((a, b) => b.actualizado.localeCompare(a.actualizado)).slice(0, n);
+/**
+ * Verificaciones por día de la última semana, para las barras de la
+ * portada. Se cuenta por `estadoEn`, que es cuando alguien dio el visto
+ * bueno, no por cuándo se creó la tarea.
+ *
+ * Los sellos son UTC y el día que le importa a quien mira es el suyo,
+ * así que la fecha se parte en local y no cortando la cadena ISO.
+ */
+export async function verificadasPorDia(dias = 7) {
+  const tareas = (await db.getAll('tareas')).filter((t) => !t.borrada && hecha(t) && t.estadoEn);
+  const cuenta = new Map();
+  for (const t of tareas) {
+    const d = new Date(t.estadoEn);
+    if (Number.isNaN(d.getTime())) continue;
+    cuenta.set(claveDia(d), (cuenta.get(claveDia(d)) || 0) + 1);
+  }
+
+  const INICIALES = ['D', 'L', 'M', 'X', 'J', 'V', 'S'];
+  const salida = [];
+  const hoy = new Date();
+  for (let i = dias - 1; i >= 0; i--) {
+    const d = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() - i);
+    salida.push({
+      inicial: INICIALES[d.getDay()],
+      n: cuenta.get(claveDia(d)) || 0,
+      hoy: i === 0,
+    });
+  }
+  const total = salida.reduce((a, x) => a + x.n, 0);
+  return {
+    dias: salida,
+    hoy: salida[salida.length - 1].n,
+    media: Math.round(total / dias),
+    tope: Math.max(1, ...salida.map((x) => x.n)),
+  };
+}
+
+const claveDia = (d) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+/** Las últimas actas tocadas, para el listado de la portada. */
+export async function listasRecientes(n = 15) {
+  return (await actasConDatos()).slice(0, n);
 }
 
 /* ─── Outbox ──────────────────────────────────────────────────── */

@@ -2,7 +2,7 @@
    Se ve la foto y el texto de cada una sin tener que abrirla, que es
    como se repasa una vivienda andando. */
 import { h, icon, sheet, toast, confirmSheet, emptyState, fechaCorta, hora } from '../ui.js';
-import { unidad, fase, estado, promocion, ESTADOS } from '../catalog.js';
+import { unidad, fase, estado, promocion, ESTADOS, OFICIOS, oficio } from '../catalog.js';
 import * as store from '../store.js';
 import * as media from '../media.js';
 import { cabecera, barraSync } from '../piezas.js';
@@ -195,10 +195,14 @@ export async function nuevaTarea(listaId) {
     if (!preparadas.length) return;
   }
 
-  const datos = await hojaTexto(preparadas);
+  const datos = await hojaTexto(preparadas, ultimoOficio);
   if (!datos) return;
 
-  const t = await store.crearTarea({ listaId, texto: datos.texto });
+  // La siguiente tarea suele ser del mismo gremio: se recuerda el
+  // último elegido para no repetir el toque en cada una.
+  ultimoOficio = datos.oficio;
+
+  const t = await store.crearTarea({ listaId, texto: datos.texto, oficio: datos.oficio });
   for (const img of preparadas) {
     await store.añadirMedio(t.id, {
       tipo: 'imagen', blob: img.blob, mime: img.mime, ancho: img.ancho, alto: img.alto,
@@ -210,24 +214,51 @@ export async function nuevaTarea(listaId) {
 }
 
 /** Hoja con la foto tomada y el texto de la tarea. */
-function hojaTexto(imagenes) {
+/** Gremio elegido en la última tarea de esta sesión. */
+let ultimoOficio = null;
+
+/**
+ * Texto, fotos y oficio. El oficio es obligatorio: de él tiran los
+ * filtros de las pantallas de actas y de viviendas, y una tarea sin
+ * gremio sería invisible al buscar por gremio. Por eso el botón de
+ * guardar no se activa hasta elegirlo.
+ */
+function hojaTexto(imagenes, oficioPrevio) {
   return sheet((cerrar) => {
+    let elegido = oficioPrevio || null;
+
     const texto = h('textarea.textarea', {
       placeholder: 'Qué hay que hacer aquí…',
-      rows: 4, autocapitalize: 'sentences',
+      rows: 3, autocapitalize: 'sentences',
     });
     const guardar = h('button.btn.accent.full', null, 'Guardar tarea');
     const otra = h('button.btn.ghost.full', null, icon('plus'), 'Guardar y añadir otra');
+    const pista = h('p.hint');
+
+    const rejilla = h('div.rejilla-oficios', null,
+      ...OFICIOS.map((o) => h('button.oficio', {
+        class: elegido === o.id ? 'on' : '',
+        onclick: (e) => {
+          elegido = o.id;
+          [...rejilla.children].forEach((c) => c.classList.toggle('on', c === e.currentTarget));
+          validar();
+        },
+      }, o.corto)),
+    );
 
     const validar = () => {
-      const vale = texto.value.trim().length > 0 || imagenes.length > 0;
+      const hayQue = texto.value.trim().length > 0 || imagenes.length > 0;
+      const vale = hayQue && !!elegido;
       guardar.disabled = !vale;
       otra.disabled = !vale;
+      pista.textContent = !hayQue
+        ? 'Escribe qué hay que hacer o añade una foto.'
+        : !elegido ? 'Elige el oficio para poder guardar.' : '';
       return vale;
     };
     texto.addEventListener('input', validar);
-    guardar.addEventListener('click', () => validar() && cerrar({ texto: texto.value.trim(), otra: false }));
-    otra.addEventListener('click', () => validar() && cerrar({ texto: texto.value.trim(), otra: true }));
+    guardar.addEventListener('click', () => validar() && cerrar({ texto: texto.value.trim(), oficio: elegido, otra: false }));
+    otra.addEventListener('click', () => validar() && cerrar({ texto: texto.value.trim(), oficio: elegido, otra: true }));
 
     const previsualizacion = imagenes.length
       ? h('div.rail', null, imagenes.map((im) =>
@@ -241,7 +272,9 @@ function hojaTexto(imagenes) {
       h('h2.title', null, imagenes.length ? 'Describe el repaso' : 'Nueva tarea'),
       previsualizacion,
       texto,
-      h('p.hint', null, 'Sé concreto: gremio, estancia y qué hay que corregir.'),
+      h('p.eyebrow', { style: { marginTop: '14px' } }, 'Oficio'),
+      rejilla,
+      pista,
       guardar,
       otra,
     ];
@@ -307,6 +340,13 @@ async function menuLista(lista, tareas) {
           h('div.row-sub', null, 'Para mandar a la constructora'),
         ),
       ),
+      h('button.row', { onclick: () => cerrar('nombre') },
+        h('div.row-lead', null, icon('edit', 18)),
+        h('div.grow', null,
+          h('div.row-title', null, 'Cambiar el nombre del acta'),
+          h('div.row-sub', null, lista.nombre || `Ahora se llama como la vivienda`),
+        ),
+      ),
       h('button.row', { onclick: () => cerrar('estados') },
         h('div.row-lead', null, icon('check', 18)),
         h('div.grow', null,
@@ -338,6 +378,16 @@ async function menuLista(lista, tareas) {
     return refrescar();
   }
 
+  if (accion === 'nombre') {
+    const puesto = await hojaNombre(lista);
+    if (puesto !== null) {
+      await store.actualizarLista(lista.id, { nombre: puesto });
+      toast(puesto ? 'Nombre cambiado' : 'Vuelve a llamarse como la vivienda');
+      refrescar();
+    }
+    return;
+  }
+
   if (accion === 'estados') {
     const nuevo = await sheet((cerrar) => [
       h('h2.title', null, 'Marcar todas como'),
@@ -364,4 +414,29 @@ async function menuLista(lista, tareas) {
     toast('Lista borrada');
     ir(destino);
   }
+}
+
+/**
+ * Renombrar un acta. Vacío devuelve el nombre de la vivienda: no se
+ * guarda un texto igual al de la villa, porque entonces renombrar la
+ * villa dejaría actas con el nombre viejo pegado.
+ */
+function hojaNombre(lista) {
+  return sheet((cerrar) => {
+    const u = unidad(lista.unidadId);
+    const campo = h('input.input', {
+      type: 'text', value: lista.nombre || '',
+      placeholder: u?.nombre || 'Nombre del acta',
+      maxlength: 80, autocapitalize: 'sentences',
+    });
+    setTimeout(() => campo.focus(), 320);
+
+    return [
+      h('h2.title', null, 'Nombre del acta'),
+      campo,
+      h('p.hint', null, `Si lo dejas vacío, el acta se llama como la vivienda (${u?.nombre || ''}).`),
+      h('button.btn.accent.full', { onclick: () => cerrar(campo.value.trim()) }, 'Guardar'),
+      h('button.btn.ghost.full', { onclick: () => cerrar(null) }, 'Cancelar'),
+    ];
+  });
 }

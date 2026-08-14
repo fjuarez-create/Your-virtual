@@ -49,11 +49,11 @@ export function unidades(promoId) {
   }
   const out = [];
   for (let n = u.desde; n <= u.hasta; n++) {
-    out.push({
-      id: `${p.id}:${String(n).padStart(2, '0')}`,
-      nombre: `${u.etiqueta || 'Vivienda'} ${n}`,
-      corto: String(n),
-    });
+    // Dos dígitos siempre: «Villa 07», no «Villa 7». Con cincuenta
+    // villas en una columna, la numeración pareja se lee de un barrido
+    // y no baila según tenga una cifra o dos.
+    const dd = String(n).padStart(2, '0');
+    out.push({ id: `${p.id}:${dd}`, nombre: `${u.etiqueta || 'Vivienda'} ${dd}`, corto: dd });
   }
   return out;
 }
@@ -80,6 +80,54 @@ export const ESTADOS = [
   { id: 'resuelta', nombre: 'Resuelta', tag: 'ok' },
   { id: 'verificada', nombre: 'Verificada', tag: 'ink' },
 ];
+
+/**
+ * Qué cuenta como hecha. Solo la verificada: que la subcontrata marque
+ * «resuelta» no cierra nada hasta que alguien con permiso lo comprueba
+ * en la vivienda.
+ *
+ * Vive aquí, en una sola línea, porque de esta decisión cuelgan todos
+ * los porcentajes de la app, los anillos de las tarjetas, el verde de
+ * una vivienda terminada y el filtro «Terminadas». Cambiarla de opinión
+ * es cambiar esta función y nada más.
+ */
+export const hecha = (t) => t?.estado === 'verificada';
+
+/** Resuelta pero sin comprobar todavía: la cola de verificación. */
+export const esperandoVisto = (t) => t?.estado === 'resuelta';
+
+/* ═══════════════════════════════════════════════════════════════
+   Oficios
+
+   El gremio de cada TAREA (no del acta: en una misma inspección hay
+   remates de pintura y de carpintería). Es obligatorio al crearla,
+   porque de él tiran los filtros de las pantallas de actas y de
+   viviendas: una tarea sin oficio sería invisible al filtrar.
+
+   «General» va primero y recoge lo que no es de un gremio concreto:
+   recoger la obra, una limpieza de fin de tajo, un repaso suelto.
+   ═══════════════════════════════════════════════════════════════ */
+export const OFICIOS = [
+  { id: 'general', nombre: 'General', corto: 'General' },
+  { id: 'pladur', nombre: 'Pladur', corto: 'Pladur' },
+  { id: 'pintura', nombre: 'Pintura', corto: 'Pintura' },
+  { id: 'pavimentos', nombre: 'Pavimentos', corto: 'Pavimentos' },
+  { id: 'carp-aluminio', nombre: 'Carpintería de aluminio', corto: 'Carp. aluminio' },
+  { id: 'carp-madera', nombre: 'Carpintería de madera', corto: 'Carp. madera' },
+  { id: 'cocinas', nombre: 'Cocinas', corto: 'Cocinas' },
+  { id: 'barandillas', nombre: 'Barandillas', corto: 'Barandillas' },
+  { id: 'fachada', nombre: 'Fachada', corto: 'Fachada' },
+  { id: 'jardines', nombre: 'Jardines', corto: 'Jardines' },
+  { id: 'fontaneria', nombre: 'Fontanería', corto: 'Fontanería' },
+  { id: 'electricidad', nombre: 'Electricidad', corto: 'Electricidad' },
+];
+
+/** El que llevan las tareas creadas antes de que existiera el campo. */
+export const OFICIO_POR_DEFECTO = 'general';
+
+export function oficio(id) {
+  return OFICIOS.find((o) => o.id === id) || OFICIOS[0];
+}
 
 export function estado(id) {
   return ESTADOS.find((e) => e.id === id) || ESTADOS[0];

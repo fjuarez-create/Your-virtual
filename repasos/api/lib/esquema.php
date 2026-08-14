@@ -18,7 +18,7 @@
 declare(strict_types=1);
 
 /** Se sube al añadir campos o tablas. */
-const ESQUEMA_VERSION = 4;
+const ESQUEMA_VERSION = 5;
 
 /**
  * Campos que tienen que existir, por tabla, con el tipo que usa MySQL.
@@ -34,6 +34,14 @@ const ESQUEMA_CAMPOS = [
     ],
     'tareas' => [
         'rechazada' => 'TINYINT(1) NOT NULL DEFAULT 0',
+        // Las tareas de antes de que existiera el campo se quedan en
+        // «general», que es justo lo que eran: un remate sin gremio.
+        'oficio'    => "VARCHAR(30) NOT NULL DEFAULT 'general'",
+    ],
+    'listas' => [
+        // Vacío = se muestra el nombre de la vivienda. Solo se guarda
+        // aquí cuando alguien lo cambia a mano.
+        'nombre' => "VARCHAR(120) NOT NULL DEFAULT ''",
     ],
     'comentarios' => [
         'creado_por_empresa' => "VARCHAR(120) NOT NULL DEFAULT ''",

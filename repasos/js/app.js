@@ -94,8 +94,13 @@ function barraInferior(activo) {
 }
 let barraPrevia = null;
 
-function pintar({ contenido, tab, fab, sinTabs }) {
-  const screen = h('div.screen', { id: 'screen', class: sinTabs ? 'no-tabs' : '' });
+function pintar({ contenido, tab, fab, sinTabs, clase }) {
+  // `clase` la pone la pantalla que necesita un fondo o un ritmo
+  // propios (la de entrada, por ejemplo, que no es una lista).
+  const screen = h('div.screen', {
+    id: 'screen',
+    class: [sinTabs ? 'no-tabs' : '', clase || ''].filter(Boolean).join(' '),
+  });
   const nodos = Array.isArray(contenido) ? contenido : [contenido];
   for (const n of nodos) if (n) screen.append(n);
 

@@ -1,88 +1,94 @@
-/* Historial: todas las inspecciones, de todas las viviendas, en orden
-   inverso. Es la vista para responder «¿qué se repasó esta semana?». */
-import { h, icon, emptyState, fechaCorta, avatar } from '../ui.js';
-import * as store from '../store.js';
-import { FASES } from '../catalog.js';
-import { filaLista, barraSync } from '../piezas.js';
-import { ir } from '../app.js';
-import * as db from '../db.js';
+/* Segunda bolita: las actas de la promoción.
 
-/** Cabecera común: solo la marca y el acceso a la cuenta. */
-function cabeceraRepasos() {
-  return h('div.topbar', null,
-    h('div.grow', null, h('p.eyebrow', null, 'Todas las inspecciones')),
-    avatar(store.sesion(), { onclick: () => ir('#/ajustes') }),
-  );
-}
+   Mientras solo haya una promoción activa se entra directo a la suya y
+   no se pierde un toque en elegirla. En cuanto haya dos, el selector
+   vuelve por su cuenta desde el catálogo. */
+import { h, icon, avatar, emptyState } from '../ui.js';
+import * as store from '../store.js';
+import { PROMOCIONES, promocion } from '../catalog.js';
+import { tarjetaActa, filtroEstado, filtroOficio } from '../piezas.js';
+import { ir } from '../app.js';
 
 export async function render() {
-  const todas = (await db.getAll('listas')).filter((l) => !l.borrada)
-    .sort((a, b) => b.creado.localeCompare(a.creado));
+  const activas = PROMOCIONES.filter((p) => p.activa);
+  const p = activas.length === 1 ? activas[0] : null;
+  if (!p) { ir('#/promociones', { reemplazar: true }); return { contenido: [] }; }
 
-  if (!todas.length) {
+  const actas = await store.actasConDatos({ promoId: p.id });
+
+  const cta = h('button.cta-negro', { onclick: () => ir('#/viviendas') },
+    h('span.grow', null, 'NUEVA LISTA DE REPASOS'),
+    h('span.cta-mas', null, icon('plus', 18)),
+  );
+
+  if (!actas.length) {
     return {
       tab: 'listas',
       contenido: [
-        cabeceraRepasos(),
-        h('h1.display', null, 'Repasos'),
-        emptyState('clipboard', 'Todavía no hay inspecciones',
-          'Cuando crees tu primera lista de repaso aparecerá aquí, con su fecha y quién la hizo.',
-          h('button.btn.accent', { onclick: () => ir('#/viviendas') }, icon('plus'), 'Nuevo repaso')),
+        cabecera(p, store.sesion()),
+        emptyState('clipboard', 'Todavía no hay actas',
+          'Cuando crees la primera lista de repaso aparecerá aquí, con su fecha y quién la hizo.',
+          h('button.btn.ink', { onclick: () => ir('#/viviendas') }, icon('plus'), 'Nueva lista de repasos')),
       ],
     };
   }
 
-  const conteos = new Map();
-  for (const l of todas) conteos.set(l.id, await store.contarLista(l.id));
-
-  let filtro = 'todas';
-  const contenedor = h('div');
+  let estado = 'todas';
+  let oficioId = 'todos';
+  const lista = h('div.stack.actas');
+  const contador = h('p.contador');
 
   const pintar = () => {
-    const visibles = todas.filter((l) => filtro === 'todas' || l.fase === filtro);
-    contenedor.replaceChildren();
+    const visibles = actas.filter((a) => encaja(a, estado, oficioId));
+    lista.replaceChildren(...visibles.map((a) => tarjetaActa(a)));
     if (!visibles.length) {
-      contenedor.append(h('p.sub', { style: { padding: '26px 0', textAlign: 'center' } }, 'Nada en esta fase todavía.'));
-      return;
+      lista.append(h('p.sub.center', { style: { padding: '30px 0' } },
+        'Ninguna acta encaja con este filtro.'));
     }
-    // Agrupadas por día: es como se recuerdan las visitas a obra.
-    let diaAnterior = '';
-    for (const l of visibles) {
-      const dia = fechaCorta(l.creado);
-      if (dia !== diaAnterior) {
-        diaAnterior = dia;
-        contenedor.append(h('p.eyebrow', { style: { margin: '20px 0 10px' } }, dia));
-      }
-      contenedor.append(h('div', { style: { marginBottom: '9px' } },
-        filaLista(l, conteos.get(l.id), { mostrarVivienda: true })));
-    }
+    contador.textContent = visibles.length === actas.length
+      ? `${actas.length} ${actas.length === 1 ? 'acta' : 'actas'}`
+      : `${visibles.length} de ${actas.length} actas`;
   };
-
-  const chips = h('div.chips', null,
-    ...[['todas', 'Todas'], ...FASES.map((f) => [f.id, f.nombre])].map(([id, txt]) =>
-      h('button.chip.accent', {
-        'aria-pressed': id === filtro ? 'true' : 'false',
-        onclick: (ev) => {
-          filtro = id;
-          [...chips.children].forEach((c) => c.setAttribute('aria-pressed', c === ev.currentTarget ? 'true' : 'false'));
-          pintar();
-        },
-      }, txt)),
-  );
-
   pintar();
-
-  const viviendas = new Set(todas.map((l) => l.unidadId)).size;
 
   return {
     tab: 'listas',
+    fab: null,
     contenido: [
-      cabeceraRepasos(),
-      h('h1.display', null, 'Repasos'),
-      h('p.sub', null, `${todas.length} ${todas.length === 1 ? 'inspección' : 'inspecciones'} en ${viviendas} ${viviendas === 1 ? 'vivienda' : 'viviendas'}.`),
-      barraSync(),
-      chips,
-      contenedor,
+      cabecera(p, store.sesion()),
+      filtroEstado((v) => { estado = v; pintar(); }),
+      filtroOficio((v) => { oficioId = v; pintar(); }),
+      contador,
+      cta,
+      lista,
     ],
   };
+}
+
+function cabecera(p, usuario) {
+  return h('div.topbar', null,
+    // Sin flecha de volver: es una pestaña, no hay atrás al que ir.
+    h('div.grow', null, h('h1.titulo-promo', null, p.nombre.toUpperCase())),
+    avatar(usuario, { onclick: () => ir('#/ajustes') }),
+  );
+}
+
+/**
+ * Los dos filtros se cruzan: «pendientes» + «pintura» deja solo las
+ * actas que tienen algo de pintura sin verificar. Por eso el conteo
+ * guarda los oficios de las tareas que aún no están hechas y no los de
+ * todas: si no, un acta terminada de pintura seguiría saliendo al
+ * buscar pintura pendiente.
+ */
+function encaja({ conteo }, estado, oficioId) {
+  const terminada = conteo.total > 0 && conteo.hechas === conteo.total;
+  if (estado === 'pendientes' && (terminada || conteo.total === 0)) return false;
+  if (estado === 'terminadas' && !terminada) return false;
+  if (oficioId !== 'todos') {
+    // Con «pendientes» se mira solo lo que queda abierto; en los demás
+    // casos, todo lo que haya pasado por el acta.
+    const donde = estado === 'pendientes' ? conteo.oficiosAbiertos : conteo.oficios;
+    if (!donde.has(oficioId)) return false;
+  }
+  return true;
 }

@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS listas (
   unidad_id         VARCHAR(80)  NOT NULL,   -- p. ej. 'brassie:04'
   promo_id          VARCHAR(60)  NOT NULL,
   fase              VARCHAR(20)  NOT NULL DEFAULT 'pre',
+  nombre            VARCHAR(120) NOT NULL DEFAULT '',   -- vacío = el de la vivienda
   cerrada           TINYINT(1)   NOT NULL DEFAULT 0,
   borrada           TINYINT(1)   NOT NULL DEFAULT 0,
   creado            CHAR(24)     NOT NULL,
@@ -68,6 +69,7 @@ CREATE TABLE IF NOT EXISTS tareas (
   lista_id          CHAR(36)     NOT NULL,
   texto             TEXT         NOT NULL,
   estado            VARCHAR(20)  NOT NULL DEFAULT 'pendiente',
+  oficio            VARCHAR(30)  NOT NULL DEFAULT 'general',
   orden             INT          NOT NULL DEFAULT 0,
   portada_id        CHAR(36)     DEFAULT NULL,
   estado_por        VARCHAR(120) DEFAULT NULL,

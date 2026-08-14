@@ -512,6 +512,7 @@ function guardar_listas(): void
             'unidad_id'         => texto($l, 'unidadId', 80),
             'promo_id'          => texto($l, 'promoId', 60),
             'fase'              => texto($l, 'fase', 20, 'pre'),
+            'nombre'            => texto($l, 'nombre', 120),
             'cerrada'           => booleano($l, 'cerrada') ? 1 : 0,
             'borrada'           => booleano($l, 'borrada') ? 1 : 0,
             'creado'            => iso($l['creado'] ?? null),
@@ -559,6 +560,7 @@ function guardar_tareas(): void
             'lista_id'          => $t['listaId'],
             'texto'             => mb_substr((string) ($t['texto'] ?? ''), 0, 4000),
             'estado'            => $estado,
+            'oficio'            => texto($t, 'oficio', 30, 'general') ?: 'general',
             'orden'             => entero($t, 'orden'),
             'portada_id'        => es_uuid($t['portadaId'] ?? null) ? $t['portadaId'] : null,
             'estado_por'        => texto($t, 'estadoPor', 120) ?: null,
@@ -888,7 +890,8 @@ function lista_salida(array $f): array
 {
     return [
         'id' => $f['id'], 'unidadId' => $f['unidad_id'], 'promoId' => $f['promo_id'],
-        'fase' => $f['fase'], 'cerrada' => (int) $f['cerrada'] === 1, 'borrada' => (int) $f['borrada'] === 1,
+        'fase' => $f['fase'], 'nombre' => (string) ($f['nombre'] ?? ''),
+        'cerrada' => (int) $f['cerrada'] === 1, 'borrada' => (int) $f['borrada'] === 1,
         'creado' => $f['creado'], 'actualizado' => $f['actualizado'],
         'creadoPor' => $f['creado_por'], 'creadoPorNombre' => $f['creado_por_nombre'],
     ];
@@ -898,7 +901,8 @@ function tarea_salida(array $f): array
 {
     return [
         'id' => $f['id'], 'listaId' => $f['lista_id'], 'texto' => $f['texto'],
-        'estado' => $f['estado'], 'orden' => (int) $f['orden'], 'portadaId' => $f['portada_id'],
+        'estado' => $f['estado'], 'oficio' => (string) ($f['oficio'] ?? 'general'),
+        'orden' => (int) $f['orden'], 'portadaId' => $f['portada_id'],
         'estadoPor' => $f['estado_por'], 'estadoEn' => $f['estado_en'],
         'rechazada' => (int) ($f['rechazada'] ?? 0) === 1,
         'borrada' => (int) $f['borrada'] === 1,

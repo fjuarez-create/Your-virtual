@@ -2,11 +2,14 @@
    piezas.js — componentes compartidos entre pantallas: cabecera con
    botón de volver, cinta de sincronización y fila de lista de repaso.
    ═══════════════════════════════════════════════════════════════ */
-import { h, icon, sheet, toast, confirmSheet, avatar, fechaCorta, hora } from './ui.js';
+import {
+  h, icon, sheet, toast, confirmSheet, avatar, grupoAvatares, anillo,
+  fechaCorta, fechaRelativa, hora,
+} from './ui.js';
 import * as media from './media.js';
 import * as store from './store.js';
 import * as api from './api.js';
-import { unidad, fase } from './catalog.js';
+import { unidad, fase, oficio, OFICIOS } from './catalog.js';
 import { ir } from './app.js';
 
 /** Cabecera con flecha de volver, título, subtítulo y acciones. */
@@ -161,6 +164,97 @@ export function hojaFoto(u) {
       h('button.btn.ghost.full', { onclick: () => cerrar(null) }, 'Cerrar'),
     ];
   });
+}
+
+/**
+ * Etiqueta de fase. Pre-entrega en gris, porque es lo corriente;
+ * post-entrega en el color de marca, porque es lo que hay que mirar
+ * primero: la vivienda ya está entregada y el cliente está dentro.
+ */
+export function chipFase(faseId) {
+  const f = fase(faseId);
+  return h('span.chip-fase' + (faseId === 'post' ? '.post' : ''), null, f.corto.toUpperCase());
+}
+
+/**
+ * Tarjeta de un acta. Es la misma en la portada y en la pestaña de
+ * actas: quién ha participado, de qué vivienda es, cuándo se hizo, si
+ * es pre o post, y cuánto lleva verificado.
+ */
+export function tarjetaActa({ lista, conteo, gente }) {
+  const u = unidad(lista.unidadId);
+  const titulo = lista.nombre || u?.nombre || lista.unidadId;
+
+  return h('button.acta', { onclick: () => ir('#/l/' + lista.id) },
+    grupoAvatares(gente, { tam: 38 }),
+    h('div.grow', null,
+      h('div.acta-tit', null, titulo),
+      h('div.acta-pie', null,
+        h('span', null, fechaRelativa(lista.creado)),
+        chipFase(lista.fase),
+      ),
+    ),
+    anillo(store.avance(conteo), { tam: 46 }),
+  );
+}
+
+/**
+ * Chips de estado. Mismos tres en actas y en viviendas, y con el mismo
+ * significado: terminada = todo verificado.
+ */
+export function filtroEstado(alCambiar, inicial = 'todas') {
+  let activo = inicial;
+  const chips = h('div.chips.filtro', null,
+    ...[['todas', 'Todas'], ['pendientes', 'Pendientes'], ['terminadas', 'Terminadas']].map(([id, txt]) =>
+      h('button.chip.accent', {
+        'aria-pressed': id === activo ? 'true' : 'false',
+        onclick: (e) => {
+          if (activo === id) return;
+          activo = id;
+          [...chips.children].forEach((c) => c.setAttribute('aria-pressed', c === e.currentTarget ? 'true' : 'false'));
+          alCambiar(activo);
+        },
+      }, txt)),
+  );
+  return chips;
+}
+
+/** Selector de oficio. Abre una hoja con los doce a dos columnas. */
+export function filtroOficio(alCambiar, inicial = 'todos') {
+  let activo = inicial;
+  const texto = h('span.grow', null, 'Todos los oficios');
+
+  const boton = h('button.selector', {
+    onclick: async () => {
+      const elegido = await hojaOficios(activo, { conTodos: true });
+      if (elegido === null || elegido === activo) return;
+      activo = elegido;
+      texto.textContent = activo === 'todos' ? 'Todos los oficios' : oficio(activo).nombre;
+      boton.classList.toggle('puesto', activo !== 'todos');
+      alCambiar(activo);
+    },
+  }, texto, icon('chevron', 16));
+
+  return boton;
+}
+
+/**
+ * Hoja de oficios. `conTodos` añade la opción de no filtrar; al crear
+ * una tarea no aparece, porque ahí elegir uno es obligatorio.
+ */
+export function hojaOficios(actual, { conTodos = false, titulo = 'Oficio' } = {}) {
+  return sheet((cerrar) => [
+    h('h2.title', null, titulo),
+    h('div.rejilla-oficios', null,
+      conTodos ? h('button.oficio' + (actual === 'todos' ? '.on' : ''), {
+        onclick: () => cerrar('todos'),
+      }, 'Todos los oficios') : null,
+      ...OFICIOS.map((o) => h('button.oficio' + (actual === o.id ? '.on' : ''), {
+        onclick: () => cerrar(o.id),
+      }, o.corto)),
+    ),
+    h('button.btn.ghost.full', { onclick: () => cerrar(null) }, 'Cancelar'),
+  ]);
 }
 
 /** Flecha «>» del final de las píldoras. */

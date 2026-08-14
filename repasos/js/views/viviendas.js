@@ -1,15 +1,16 @@
-/* Rejilla de viviendas de una promoción. El color dice de un vistazo
-   cuáles tienen repaso pendiente sin necesidad de entrar en ninguna. */
-import { h, icon, toast, avatar } from '../ui.js';
+/* Tercera bolita: las viviendas de la promoción, en una columna.
+
+   Aquí no hay fechas: una vivienda acumula tareas de inspecciones
+   distintas y la fecha de cualquiera de ellas no diría nada. Lo que
+   importa es cuántas tareas tiene y en qué estado están, y eso lo dice
+   el color de la fila antes de leer un número. */
+import { h, icon, toast, avatar, anillo } from '../ui.js';
 import { PROMOCIONES, promocion, unidades } from '../catalog.js';
 import * as store from '../store.js';
-import { cabecera } from '../piezas.js';
+import { filtroEstado, filtroOficio } from '../piezas.js';
 import { ir } from '../app.js';
 
 export async function render({ promoId, desdeTab = false }) {
-  // Desde la pestaña no hay promoción en la dirección: con una sola
-  // activa se entra directo a sus viviendas, que es lo que pasa hoy.
-  // Con varias, primero hay que elegir.
   if (!promoId) {
     const activas = PROMOCIONES.filter((x) => x.activa);
     if (activas.length === 1) promoId = activas[0].id;
@@ -17,90 +18,96 @@ export async function render({ promoId, desdeTab = false }) {
   }
   const p = promocion(promoId);
   if (!p) { toast('Promoción desconocida', 'err'); ir('#/promociones', { reemplazar: true }); return { contenido: [] }; }
-  const yo = store.sesion();
 
-  const lista = unidades(promoId);
+  const todas = unidades(promoId);
   const resumen = await store.resumenPorUnidad(promoId);
 
-  let filtro = 'todas';
-  const rejilla = h('div.grid-units');
-  const contador = h('p.sub');
+  let estado = 'todas';
+  let oficioId = 'todos';
+  const lista = h('div.stack.villas');
+  const contador = h('p.contador');
 
   const pintar = () => {
-    rejilla.replaceChildren();
-    let visibles = 0;
-    for (const u of lista) {
-      const r = resumen.get(u.id);
-      const pendientes = r?.pendientes || 0;
-      const tieneListas = !!r?.listas;
-      if (filtro === 'pendientes' && !pendientes) continue;
-      if (filtro === 'sin' && tieneListas) continue;
-      visibles++;
-
-      const clase = pendientes ? 'unit has-open' : tieneListas ? 'unit has-done' : 'unit';
-      rejilla.append(h('button', {
-        class: clase,
-        'aria-label': `${u.nombre}${pendientes ? `, ${pendientes} pendientes` : tieneListas ? ', repasada' : ''}`,
-        onclick: () => ir(`#/p/${promoId}/v/${u.id.split(':')[1]}`),
-      },
-        u.corto,
-        pendientes ? h('span.pip', null, String(pendientes)) : null,
-        !pendientes && tieneListas ? h('span.pip', null, icon('check', 10)) : null,
-      ));
+    const visibles = todas.filter((u) => encaja(resumen.get(u.id), estado, oficioId));
+    lista.replaceChildren(...visibles.map((u) => fila(u, resumen.get(u.id), promoId)));
+    if (!visibles.length) {
+      lista.append(h('p.sub.center', { style: { padding: '30px 0' } },
+        'Ninguna vivienda encaja con este filtro.'));
     }
-    if (!visibles) {
-      rejilla.append(h('p.sub', { style: { gridColumn: '1 / -1', padding: '24px 0', textAlign: 'center' } },
-        filtro === 'pendientes' ? 'No queda ninguna vivienda con tareas pendientes.' : 'Todas las viviendas tienen ya algún repaso.'));
-    }
-    contador.textContent = `${visibles} de ${lista.length} viviendas`;
+    contador.textContent = visibles.length === todas.length
+      ? `${todas.length} viviendas`
+      : `${visibles.length} de ${todas.length} viviendas`;
   };
-
-  const chips = h('div.chips', null,
-    ...[['todas', 'Todas'], ['pendientes', 'Con pendientes'], ['sin', 'Sin repasar']].map(([id, txt]) =>
-      h('button.chip.accent', {
-        'aria-pressed': id === filtro ? 'true' : 'false',
-        onclick: (e) => {
-          filtro = id;
-          [...chips.children].forEach((c) => c.setAttribute('aria-pressed', c === e.currentTarget ? 'true' : 'false'));
-          pintar();
-        },
-      }, txt)),
-  );
-
   pintar();
 
   return {
-    tab: desdeTab ? 'viviendas' : undefined,
-    sinTabs: !desdeTab,
+    tab: 'viviendas',
     contenido: [
-      desdeTab
-        ? h('div.topbar', null,
-            h('div.grow', null, h('p.eyebrow', null, p.nombre)),
-            avatar(yo, { onclick: () => ir('#/ajustes') }),
-          )
-        : cabecera(p.nombre, p.ubicacion, { volverA: '#/promociones' }),
-      h('h1.display', { style: { marginTop: desdeTab ? '4px' : '10px' } }, 'Viviendas'),
-      chips,
+      h('div.topbar', null,
+        h('div.grow', null, h('h1.titulo-promo', null, p.nombre.toUpperCase())),
+        avatar(store.sesion(), { onclick: () => ir('#/ajustes') }),
+      ),
+      filtroEstado((v) => { estado = v; pintar(); }),
+      filtroOficio((v) => { oficioId = v; pintar(); }),
       contador,
-      rejilla,
-      leyenda(),
+      lista,
     ],
   };
 }
 
-function leyenda() {
-  const punto = (color, borde) => h('span', {
-    style: {
-      width: '11px', height: '11px', borderRadius: '4px', display: 'inline-block',
-      background: color, boxShadow: borde ? 'inset 0 0 0 1px var(--line)' : 'none', flex: '0 0 11px',
-    },
-  });
-  const item = (nodo, texto) => h('span', { style: { display: 'inline-flex', alignItems: 'center', gap: '7px' } }, nodo, texto);
-  return h('div', {
-    style: { display: 'flex', gap: '16px', flexWrap: 'wrap', fontSize: '12px', color: 'var(--muted)', marginTop: '18px' },
+/**
+ * Una vivienda. Tres aspectos, y se leen antes que el texto:
+ *   apagada — no tiene ninguna tarea todavía
+ *   viva    — le queda algo por verificar
+ *   hecha   — todas sus tareas están verificadas
+ */
+function fila(u, r, promoId) {
+  const total = r?.total || 0;
+  const hechas = r?.hechas || 0;
+  const terminada = total > 0 && hechas === total;
+  const clase = !total ? 'villa apagada' : terminada ? 'villa hecha' : 'villa';
+
+  return h('button', {
+    class: clase,
+    onclick: () => ir(`#/p/${promoId}/v/${u.id.split(':')[1]}`),
   },
-    item(punto('var(--accent)'), 'Con pendientes'),
-    item(punto('var(--ink)'), 'Repasada'),
-    item(punto('var(--surface)', true), 'Sin repasos'),
+    h('span.villa-n', null, u.corto),
+    h('div.grow', null,
+      h('div.villa-tit', null, u.nombre),
+      h('div.villa-sub', null, textoDe(total, hechas, r?.esperando || 0)),
+    ),
+    total
+      ? (terminada
+          ? h('span.villa-ok', null, icon('check', 16))
+          : anillo(Math.round((100 * hechas) / total), { tam: 42 }))
+      : null,
   );
+}
+
+function textoDe(total, hechas, esperando) {
+  if (!total) return 'Sin tareas';
+  if (hechas === total) return `${total} ${total === 1 ? 'tarea' : 'tareas'} · terminada`;
+  const quedan = total - hechas;
+  return esperando
+    ? `${quedan} por verificar · ${esperando} ${esperando === 1 ? 'resuelta' : 'resueltas'}`
+    : `${quedan} de ${total} por verificar`;
+}
+
+/**
+ * Sin filtros se ven las cincuenta, incluidas las que no tienen nada:
+ * la rejilla completa es en sí una información, dice cuánto queda de
+ * promoción por pisar. En cuanto se filtra, la lista se recorta a las
+ * que cumplen, y una vivienda sin tareas no cumple ninguna de las dos.
+ */
+function encaja(r, estado, oficioId) {
+  const total = r?.total || 0;
+  const terminada = total > 0 && r.hechas === total;
+  if (estado === 'pendientes' && (!total || terminada)) return false;
+  if (estado === 'terminadas' && !terminada) return false;
+  if (oficioId !== 'todos') {
+    if (!total) return false;
+    const donde = estado === 'pendientes' ? r.oficiosAbiertos : r.oficios;
+    if (!donde.has(oficioId)) return false;
+  }
+  return true;
 }
