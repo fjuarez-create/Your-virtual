@@ -436,9 +436,20 @@ export function chevron() {
  * dentro de una ya se sabe cuál es.
  */
 export function ctaNuevaLista(alPulsar) {
-  return h('button.cta-negro', { onclick: alPulsar },
-    h('span.grow', null, 'NUEVA LISTA DE REPASOS'),
-    h('span.cta-mas', null, icon('plus', 18)),
+  return ctaAccion('NUEVA LISTA DE REPASOS', { onclick: alPulsar });
+}
+
+/**
+ * La llamada a la acción principal de una pantalla o de una hoja: caja
+ * negra a todo lo ancho, el rótulo a la izquierda y el icono en una
+ * bolita a la derecha. Es la misma pieza en todas partes para que se
+ * reconozca sin leer cuál es la acción que cierra lo que estás
+ * haciendo.
+ */
+export function ctaAccion(texto, { onclick, icono = 'plus', disabled = false } = {}) {
+  return h('button.cta-negro', { onclick, disabled: disabled || null },
+    h('span.grow', null, texto),
+    h('span.cta-mas', null, icon(icono, 18)),
   );
 }
 

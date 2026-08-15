@@ -134,19 +134,34 @@ export const esperandoVisto = (t) => t?.estado === 'resuelta';
    «General» va primero y recoge lo que no es de un gremio concreto:
    recoger la obra, una limpieza de fin de tajo, un repaso suelto.
    ═══════════════════════════════════════════════════════════════ */
+/**
+ * Los gremios. «General» va primero por ser el cajón de lo que no cae
+ * en ninguno; el resto, por orden alfabético, que es como se busca en
+ * una lista de quince donde no hay jerarquía posible.
+ *
+ * OJO con los identificadores: `carp-aluminio` se llama ahora
+ * «Aluminio» y `carp-madera`, «Puertas y rodapiés». Los ids se dejan
+ * como estaban a propósito: son los que llevan escritos las tareas ya
+ * subidas, y cambiarlos las dejaría con un gremio que no existe —
+ * invisibles al filtrar y sin nombre en el informe. Al leer código,
+ * fíjate en el id; al leer pantalla, en el nombre.
+ */
 export const OFICIOS = [
   { id: 'general', nombre: 'General', corto: 'General' },
-  { id: 'pladur', nombre: 'Pladur', corto: 'Pladur' },
-  { id: 'pintura', nombre: 'Pintura', corto: 'Pintura' },
-  { id: 'pavimentos', nombre: 'Pavimentos', corto: 'Pavimentos' },
-  { id: 'carp-aluminio', nombre: 'Carpintería de aluminio', corto: 'Carp. aluminio' },
-  { id: 'carp-madera', nombre: 'Carpintería de madera', corto: 'Carp. madera' },
-  { id: 'cocinas', nombre: 'Cocinas', corto: 'Cocinas' },
+  { id: 'aire', nombre: 'Aire acondicionado', corto: 'Aire' },
+  { id: 'carp-aluminio', nombre: 'Aluminio', corto: 'Aluminio' },
   { id: 'barandillas', nombre: 'Barandillas', corto: 'Barandillas' },
-  { id: 'fachada', nombre: 'Fachada', corto: 'Fachada' },
-  { id: 'jardines', nombre: 'Jardines', corto: 'Jardines' },
-  { id: 'fontaneria', nombre: 'Fontanería', corto: 'Fontanería' },
+  { id: 'barandillas-vidrio', nombre: 'Barandillas de vidrio', corto: 'Barandillas vidrio' },
+  { id: 'cocinas', nombre: 'Cocinas', corto: 'Cocinas' },
   { id: 'electricidad', nombre: 'Electricidad', corto: 'Electricidad' },
+  { id: 'fachada', nombre: 'Fachada', corto: 'Fachada' },
+  { id: 'fontaneria', nombre: 'Fontanería', corto: 'Fontanería' },
+  { id: 'jardines', nombre: 'Jardines', corto: 'Jardines' },
+  { id: 'pavimentos', nombre: 'Pavimentos', corto: 'Pavimentos' },
+  { id: 'pintura', nombre: 'Pintura', corto: 'Pintura' },
+  { id: 'piscinas', nombre: 'Piscinas', corto: 'Piscinas' },
+  { id: 'pladur', nombre: 'Pladur', corto: 'Pladur' },
+  { id: 'carp-madera', nombre: 'Puertas y rodapiés', corto: 'Puertas y rodapiés' },
 ];
 
 /** El que llevan las tareas creadas antes de que existiera el campo. */

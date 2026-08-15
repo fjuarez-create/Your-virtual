@@ -5,7 +5,7 @@ import { h, icon, sheet, toast, confirmSheet, emptyState, fechaCorta, hora } fro
 import { unidad, fase, estado, promocion, ESTADOS, OFICIOS, oficio } from '../catalog.js';
 import * as store from '../store.js';
 import * as media from '../media.js';
-import { cabeceraDentro, barraSync, filtroEstado } from '../piezas.js';
+import { cabeceraDentro, barraSync, filtroEstado, ctaAccion } from '../piezas.js';
 import { ir, refrescar } from '../app.js';
 import { informe } from '../informe.js';
 import { hojaDePuerta, nombreDeFichero } from '../pdf.js';
@@ -134,27 +134,28 @@ function marcasMedios(tipos) {
 }
 
 /* ─── Alta de tarea ───────────────────────────────────────────── */
-/**
- * Flujo rápido: cámara → texto → guardar. Pensado para no interrumpir
- * el recorrido: al guardar se puede encadenar la siguiente sin volver.
- */
+/** Flujo rápido: cámara → texto → guardar, sin salir del acta. */
 export async function nuevaTarea(listaId) {
+  // Dos tarjetas, una al lado de la otra y más altas que anchas. Es una
+  // elección entre dos cosas del mismo rango, y en dos filas la de
+  // arriba parecía la buena y la de abajo el plan B. Sin título: con
+  // una cámara y una foto dibujadas no hace falta contarlo.
   const origen = await sheet((cerrar) => [
-    h('h2.title', null, 'Nueva tarea'),
-    h('div.stack', { style: { marginTop: '4px' } },
-      h('button.cta', { onclick: () => cerrar('camara') },
-        h('div.grow', null,
-          h('div.cta-title', null, 'Hacer foto'),
-          h('div.cta-sub', null, 'Se abre la cámara'),
-        ),
-        h('span.knob', null, icon('camera')),
+    h('div.opciones', null,
+      h('button.opcion.principal', { onclick: () => cerrar('camara') },
+        h('span.bola', null, icon('camera', 24)),
+        h('span.grow'),
+        h('span.rotulo', null, 'Hacer foto'),
+        h('span.pie', null, 'Se abre la cámara'),
       ),
-      h('button.row', { onclick: () => cerrar('galeria') },
-        h('div.row-lead', null, icon('image', 18)),
-        h('div.grow', null, h('div.row-title', null, 'Elegir de la galería')),
+      h('button.opcion', { onclick: () => cerrar('galeria') },
+        h('span.bola', null, icon('image', 24)),
+        h('span.grow'),
+        h('span.rotulo', null, 'Galería'),
+        h('span.pie', null, 'Fotos ya hechas'),
       ),
     ),
-    h('button.btn.ghost.full', { onclick: () => cerrar(null) }, 'Cancelar'),
+    h('button.cta-claro', { onclick: () => cerrar(null) }, 'Cancelar'),
   ]);
   if (!origen) return;
 
@@ -188,7 +189,6 @@ export async function nuevaTarea(listaId) {
     });
   }
   toast('Tarea añadida');
-  if (datos.otra) { await refrescar(); return nuevaTarea(listaId); }
   await refrescar();
 }
 
@@ -210,8 +210,10 @@ function hojaTexto(imagenes, oficioPrevio) {
       placeholder: 'Qué hay que hacer aquí…',
       rows: 3, autocapitalize: 'sentences',
     });
-    const guardar = h('button.btn.accent.full', null, 'Guardar tarea');
-    const otra = h('button.btn.ghost.full', null, icon('plus'), 'Guardar y añadir otra');
+    // Una sola salida. Antes había un segundo botón para encadenar la
+    // siguiente tarea, y con dos llamadas a la acción seguidas ninguna
+    // era la principal.
+    const guardar = ctaAccion('GUARDAR TAREA', { icono: 'check' });
     const pista = h('p.hint');
 
     // Los mismos chips que los filtros y que la hoja del selector de
@@ -236,7 +238,6 @@ function hojaTexto(imagenes, oficioPrevio) {
       const hayTexto = texto.value.trim().length > 0;
       const vale = hayFoto && hayTexto && !!elegido;
       guardar.disabled = !vale;
-      otra.disabled = !vale;
       pista.textContent = !hayFoto ? 'Esta tarea necesita al menos una foto.'
         : !hayTexto ? 'Escribe qué hay que hacer aquí.'
         : !elegido ? 'Elige el oficio para poder guardar.'
@@ -244,8 +245,7 @@ function hojaTexto(imagenes, oficioPrevio) {
       return vale;
     };
     texto.addEventListener('input', validar);
-    guardar.addEventListener('click', () => validar() && cerrar({ texto: texto.value.trim(), oficio: elegido, otra: false }));
-    otra.addEventListener('click', () => validar() && cerrar({ texto: texto.value.trim(), oficio: elegido, otra: true }));
+    guardar.addEventListener('click', () => validar() && cerrar({ texto: texto.value.trim(), oficio: elegido }));
 
     const previsualizacion = imagenes.length
       ? h('div.rail', null, imagenes.map((im) =>
@@ -263,7 +263,6 @@ function hojaTexto(imagenes, oficioPrevio) {
       rejilla,
       pista,
       guardar,
-      otra,
     ];
   });
 }

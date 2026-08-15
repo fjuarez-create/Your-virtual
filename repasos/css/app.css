@@ -818,6 +818,7 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
   transition: transform var(--mov-corto) var(--sal-estandar);
 }
 .cta-negro:active { transform: scale(0.985); }
+.cta-negro:disabled { opacity: 0.4; pointer-events: none; }
 /* Sin flex:1 el texto no empuja, y la bola del «+» se queda a media
    tarjeta en vez de pegada al borde derecho. */
 .cta-negro .grow { flex: 1; min-width: 0; text-align: left; }
@@ -826,6 +827,42 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
   background: rgba(255, 255, 255, 0.14);
   display: grid; place-items: center;
 }
+/* Elegir de dónde sale la foto: dos tarjetas del mismo rango, una al
+   lado de la otra y más altas que anchas. Puestas en dos filas, la de
+   arriba se leía como la buena y la de abajo como el plan B, y no lo
+   son: en obra se tira de cámara, pero en el despacho se sube lo que ya
+   está hecho. */
+.opciones { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; }
+.opcion {
+  display: flex; flex-direction: column; align-items: flex-start;
+  aspect-ratio: 4 / 5;
+  padding: 18px 18px 20px;
+  background: var(--surface); color: var(--text);
+  border-radius: var(--r-lg);
+  text-align: left;
+  transition: transform var(--mov-corto) var(--sal-estandar),
+              background var(--mov-corto) var(--sal-estandar);
+}
+.opcion:active { transform: scale(0.97); background: var(--surface-2); }
+.opcion .grow { flex: 1; }
+.opcion .bola {
+  width: 50px; height: 50px; border-radius: 50%;
+  background: var(--bg); color: var(--text);
+  display: grid; place-items: center;
+}
+.opcion .rotulo {
+  font-size: 16.5px; font-weight: 700; letter-spacing: -0.025em;
+  line-height: 1.1;
+}
+.opcion .pie { font-size: 12.5px; color: var(--muted-oscuro); margin-top: 4px; }
+
+/* La de la cámara va en el color de marca: es la que se usa andando por
+   la vivienda, que es para lo que existe esta app. */
+.opcion.principal { background: var(--accent); color: var(--on-accent); }
+.opcion.principal:active { background: var(--accent-deep); color: #fff; }
+.opcion.principal .bola { background: var(--ink); color: #fff; }
+.opcion.principal .pie { color: rgba(17, 17, 18, 0.6); }
+
 /* La misma caja que .cta-negro —alto, ancho y redondeo— pero clara: es
    una salida, no la acción principal de la pantalla. */
 .cta-claro {
