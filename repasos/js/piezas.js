@@ -430,6 +430,30 @@ export function ctaNuevaLista(alPulsar) {
 }
 
 /**
+ * El botón redondo de añadir, abajo a la derecha. Para las pantallas
+ * que son una lista y nada más: allí la llamada a la acción a todo lo
+ * ancho parte el listado en dos y estorba justo donde se está mirando.
+ *
+ * La onda se dispara al soltar y no al apretar: el hundido ya cuenta lo
+ * de apretar, y la onda cuenta que la acción ha salido. Se quita y se
+ * vuelve a poner la clase forzando un reflujo, para que dos toques
+ * seguidos den dos ondas y no una.
+ */
+export function fabMas(alPulsar, { etiqueta = 'Añadir' } = {}) {
+  const boton = h('button.fab-bola', {
+    'aria-label': etiqueta, title: etiqueta,
+    onclick: () => {
+      boton.classList.remove('pulsa');
+      void boton.offsetWidth;
+      boton.classList.add('pulsa');
+      setTimeout(() => boton.classList.remove('pulsa'), 560);
+      alPulsar();
+    },
+  }, icon('plus'));
+  return boton;
+}
+
+/**
  * La llamada a la acción principal de una pantalla o de una hoja: caja
  * negra a todo lo ancho, el rótulo a la izquierda y el icono en una
  * bolita a la derecha. Es la misma pieza en todas partes para que se

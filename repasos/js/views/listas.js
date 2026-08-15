@@ -7,7 +7,7 @@
 import { h, icon, toast, emptyState } from '../ui.js';
 import { promocion, unidad, FASE_UNICA, puedeCrearLista } from '../catalog.js';
 import * as store from '../store.js';
-import { cabeceraDentro, ctaNuevaLista, tareaFila, tarjetaActa, filtroEstado, filtroOficio } from '../piezas.js';
+import { cabeceraDentro, fabMas, tareaFila, tarjetaActa, filtroEstado, filtroOficio } from '../piezas.js';
 import { ir, conFiltros, filtrosDeRuta, anotarFiltros } from '../app.js';
 
 export async function render({ promoId, unidadId }) {
@@ -74,18 +74,20 @@ export async function render({ promoId, unidadId }) {
 
   return {
     sinTabs: true,
-    // Sin botón flotante: la llamada a la acción negra hace lo mismo y
-    // está siempre a la vista, igual que en la pestaña de ACTAS.
-    fab: null,
+    // Aquí se viene a leer una lista. La llamada a la acción a todo lo
+    // ancho la partía por la mitad, así que la acción se va al botón
+    // redondo de abajo a la derecha, que no ocupa sitio en la lectura.
+    // Un acta la abre quien puede darla por buena: al jefe de obra no se
+    // le enseña el botón, porque responde a las tareas de un acta y no
+    // la convoca.
+    fab: puedeCrearLista(store.sesion())
+      ? fabMas(nueva, { etiqueta: 'Nueva lista de repasos' })
+      : null,
     contenido: [
       ...cabecera,
       filtroEstado((v) => { estado = v; cambio(); }, estado),
       filtroOficio((v) => { oficioId = v; cambio(); }, oficioId),
       contador,
-      // Un acta la abre quien puede darla por buena. Al jefe de obra no
-      // se le enseña el botón: responde a las tareas de un acta, no la
-      // convoca.
-      puedeCrearLista(store.sesion()) ? ctaNuevaLista(nueva) : null,
       listado,
       // Las actas, al pie: se consultan cuando hace falta saber quién
       // firmó qué, no cada vez que se entra en la casa.
