@@ -4,7 +4,7 @@ import { h, icon, sheet, toast, confirmSheet, avatar, pesoLegible } from '../ui.
 import * as store from '../store.js';
 import * as api from '../api.js';
 import * as db from '../db.js';
-import { barraSync, chevron, cabeceraTab, cabeceraDentro, hojaFoto } from '../piezas.js';
+import { barraSync, chevron, cabeceraTab, cabeceraDentro, hojaFoto, ctaAccion, ctaCancelar } from '../piezas.js';
 import * as ejemplos from '../ejemplos.js';
 import { PROMOCIONES } from '../catalog.js';
 import { ir, refrescar } from '../app.js';
@@ -28,6 +28,14 @@ export async function render() {
 
   const admin = store.esAdmin();
   const hayEjemplos = admin ? await ejemplos.cuantos() : 0;
+
+  // Si el servidor es viejo y todavía no conoce la ruta, la fila se
+  // enseña igual como «sin poner»: es lo que hay, y al pulsarla dirá
+  // qué falta en vez de desaparecer sin explicación.
+  let claude = null;
+  if (admin && api.HAY_SERVIDOR && !u.local) {
+    try { claude = await api.claudeEstado(); } catch { claude = { puesta: false, final: '' }; }
+  }
 
   return {
     // Quien administra tiene su pestaña; el resto llega por la bolita
@@ -98,8 +106,14 @@ export async function render() {
         ? h('p.eyebrow', { style: { marginTop: '26px', marginBottom: '10px' } }, 'Servidor')
         : null,
       admin && api.HAY_SERVIDOR && !u.local
-        ? h('div.stack', null, fila('cloud', 'Comprobar la salida a internet',
-            'Si el hosting puede llamar a servicios de fuera', (e) => probarSalida(e)))
+        ? h('div.stack', null,
+            fila('cloud', 'Comprobar la salida a internet',
+              'Si el hosting puede llamar a servicios de fuera', (e) => probarSalida(e)),
+            // La clave de Anthropic: se pega una vez y se queda en el
+            // servidor, en la misma carpeta cerrada que la base de datos.
+            fila('key', 'Clave de Anthropic',
+              claude?.puesta ? `Puesta · termina en ${claude.final}` : 'Sin poner · el recorrido no redacta solo',
+              () => hojaClave(claude)))
         : null,
 
       h('p.eyebrow', { style: { marginTop: '26px', marginBottom: '10px' } }, 'Sesión'),
@@ -150,6 +164,79 @@ async function probarSalida(evento) {
   } finally {
     boton.disabled = false;
   }
+}
+
+/**
+ * La clave de Anthropic. Se pega aquí una vez, desde el móvil, y se
+ * queda en el servidor —en api/datos/, la carpeta que el navegador
+ * tiene prohibida, junto a la base de datos—. No vuelve nunca: de ahí
+ * en adelante lo único que se ve son sus cuatro últimos caracteres.
+ *
+ * Se pide aquí y no en un fichero del hosting porque el fichero habría
+ * que editarlo por FTP, y esto se hace desde el teléfono en veinte
+ * segundos y se puede deshacer igual de rápido.
+ */
+function hojaClave(estado) {
+  return sheet((cerrar) => {
+    const campo = h('input.input', {
+      type: 'password', placeholder: 'sk-ant-…',
+      autocomplete: 'off', autocapitalize: 'off', autocorrect: 'off', spellcheck: 'false',
+    });
+    const aviso = h('p.hint.err', { style: { display: 'none' } });
+    const guardar = ctaAccion('GUARDAR LA CLAVE', { icono: 'check' });
+
+    const fallo = (texto) => {
+      aviso.textContent = texto;
+      aviso.style.display = 'block';
+      guardar.disabled = false;
+      guardar.querySelector('.grow').textContent = 'GUARDAR LA CLAVE';
+    };
+
+    guardar.addEventListener('click', async () => {
+      aviso.style.display = 'none';
+      const clave = campo.value.trim();
+      if (!clave) return fallo('No has pegado nada.');
+      guardar.disabled = true;
+      guardar.querySelector('.grow').textContent = 'GUARDANDO…';
+      try {
+        await api.claudePonerClave(clave);
+        cerrar(true);
+        toast('Clave guardada · el recorrido ya puede redactar solo');
+        refrescar();
+      } catch (e) {
+        fallo(e?.message || 'No se ha podido guardar.');
+      }
+    });
+
+    return [
+      h('h2.title', null, 'Clave de Anthropic'),
+      h('p.sub', { style: { marginTop: '6px' } },
+        'Con ella, al terminar un recorrido las tareas salen escritas a partir '
+        + 'de lo que dijiste, y tú solo repasas. Se guarda en el servidor y no '
+        + 'vuelve a salir de ahí.'),
+      estado?.puesta
+        ? h('p.hint', { style: { marginTop: '10px' } },
+            `Ahora hay una puesta que termina en ${estado.final}. Si pegas otra, la sustituye.`)
+        : null,
+      h('div.stack', { style: { marginTop: '14px' } }, campo),
+      aviso,
+      h('p.hint', { style: { marginTop: '10px' } },
+        `Modelo: ${estado?.modelo || 'claude-opus-5'}. Cada recorrido cuesta unos céntimos.`),
+      guardar,
+      estado?.puesta
+        ? h('button.btn.ghost.full', {
+            style: { marginTop: '8px' },
+            onclick: async () => {
+              await api.claudeQuitarClave();
+              cerrar(true);
+              toast('Clave retirada');
+              refrescar();
+            },
+          }, 'Quitar la clave del servidor')
+        : null,
+      ctaCancelar(() => cerrar(false)),
+    ];
+  });
 }
 
 async function espacioUsado() {

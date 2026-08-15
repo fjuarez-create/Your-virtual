@@ -175,6 +175,38 @@ PHP_CLI_SERVER_WORKERS=10 php -S 127.0.0.1:8099 -t .
 (El servidor interno de PHP es de un solo proceso: sin `PHP_CLI_SERVER_WORKERS`
 se queda bloqueado en cuanto el navegador abre varias conexiones.)
 
+## Que las tareas se escriban solas
+
+Al terminar un recorrido, en vez de escribir una a una las quince tareas, se
+dicta de corrido lo que se iba comentando y **Claude las reparte entre las
+fotos**, cada una con su gremio, para repasarlas después.
+
+Hace falta una clave de Anthropic. Se pone **una sola vez, desde el móvil**:
+Ajustes → Servidor → *Clave de Anthropic*. Solo la ve quien administra.
+
+Cómo funciona por dentro:
+
+- La clave se guarda en `api/datos/claude.key`, la misma carpeta cerrada por
+  `.htaccess` donde vive la base de datos, con permisos `0600`. **Nunca viaja al
+  repositorio ni la escribe el despliegue**, y de la API solo salen sus cuatro
+  últimos caracteres, para reconocerla.
+- La llamada la hace el servidor (`api/lib/claude.php`), no el móvil. Una clave
+  metida en el JavaScript de la app se la lleva cualquiera que abra las
+  herramientas del navegador.
+- Modelo `claude-opus-5`, esfuerzo `medium`. La respuesta viene con esquema
+  fijo, así que el gremio solo puede ser uno de los quince del catálogo.
+- **Claude no oye: solo lee.** El audio del recorrido se queda en el móvil como
+  respaldo y lo que se le manda es el texto dictado. Si algún día se enchufa una
+  transcripción automática, entra por este mismo sitio sin tocar nada más.
+- Si de una foto no se dijo nada, la ficha se deja **en blanco y marcada**, y no
+  se inventa el defecto: un parte con un hueco se arregla; uno con una tarea
+  inventada manda a alguien a reparar algo que no existe.
+- Todo esto es opcional. Sin clave, sin salida a internet o si se prefiere
+  escribir a mano, la pantalla funciona exactamente igual que antes.
+
+Cuesta unos céntimos por recorrido. Para saber si el hosting puede siquiera
+llamar hacia fuera: Ajustes → Servidor → *Comprobar la salida a internet*.
+
 ## Seguridad
 
 - Contraseñas con `password_hash` (bcrypt), nunca en claro ni recuperables.

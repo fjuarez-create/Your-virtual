@@ -15,8 +15,9 @@
    vez de escribir.
    ═══════════════════════════════════════════════════════════════ */
 import { h, icon, toast, openViewer, sheet, fechaCorta } from '../ui.js';
-import { promocion, unidad, FASE_UNICA, OFICIO_POR_DEFECTO, oficio, puedeCrearLista } from '../catalog.js';
+import { promocion, unidad, FASE_UNICA, OFICIO_POR_DEFECTO, OFICIOS, oficio, puedeCrearLista } from '../catalog.js';
 import * as store from '../store.js';
+import * as api from '../api.js';
 import * as grabadora from '../recorrido.js';
 import { cabeceraDentro, hojaOficios, ctaAccion, ctaCancelar } from '../piezas.js';
 import { ir, refrescar } from '../app.js';
@@ -195,7 +196,7 @@ export async function render({ promoId, unidadId }) {
     // trabajo administrativo, y todos se pueden cambiar de un toque.
     let ultimo = sugeridos[0] || OFICIO_POR_DEFECTO;
     const fichas = rec.marcas.map((m) => ({
-      marca: m, texto: '', oficio: ultimo, tocado: false, fuera: false,
+      marca: m, texto: '', oficio: ultimo, tocado: false, fuera: false, confianza: null,
     }));
 
     const audio = h('audio', { controls: true, preload: 'metadata', style: { width: '100%' } });
@@ -294,7 +295,7 @@ export async function render({ promoId, unidadId }) {
       f.pintarGremio = pintarGremio;
       pintarGremio();
 
-      return h('div.rec-ficha', null,
+      return h('div.rec-ficha', { class: f.confianza === 'baja' ? 'dudosa' : '' },
         h('div.rec-ficha-cab', null,
           h('div.rec-foto', {
             style: { backgroundImage: `url("${url}")` },
@@ -314,6 +315,94 @@ export async function render({ promoId, unidadId }) {
         ),
         texto,
         gremios,
+      );
+    };
+
+    /**
+     * Lo que dijiste durante el recorrido, escrito, para que se reparta
+     * solo entre las fotos.
+     *
+     * El audio ya está grabado, pero Claude no oye: solo lee. Así que
+     * aquí se escribe —o se dicta con el micrófono del teclado del
+     * móvil, que es lo rápido— escuchando el audio de arriba, y de ahí
+     * salen las tareas redactadas y con su gremio.
+     *
+     * Es opcional a propósito. Si no hay clave puesta, si el hosting no
+     * sale a internet o si sencillamente prefieres escribirlas tú, las
+     * fichas siguen ahí debajo esperando, exactamente igual que antes.
+     */
+    const dictado = () => {
+      if (!api.HAY_SERVIDOR) return null;
+
+      const campo = h('textarea.textarea', {
+        rows: 3, autocapitalize: 'sentences',
+        placeholder: 'Escucha el audio y dicta aquí lo que ibas diciendo…',
+      });
+      const aviso = h('p.hint');
+      const boton = ctaAccion('REDACTAR LAS TAREAS', { icono: 'check', claro: true, disabled: true });
+      const rotulo = boton.querySelector('.grow');
+
+      campo.addEventListener('input', () => { boton.disabled = !campo.value.trim(); });
+
+      boton.addEventListener('click', async () => {
+        const vivas = fichas.filter((f) => !f.fuera);
+        if (!vivas.length) return;
+        boton.disabled = true;
+        rotulo.textContent = 'REDACTANDO…';
+        aviso.className = 'hint';
+        aviso.textContent = 'Puede tardar medio minuto. No cierres la pantalla.';
+
+        try {
+          const r = await api.claudeRedactar(
+            campo.value.trim(),
+            vivas.map((f) => ({ id: f.marca.id, ms: f.marca.ms })),
+            OFICIOS.map((o) => ({ id: o.id, nombre: o.nombre })),
+          );
+          const porId = new Map(vivas.map((f) => [String(f.marca.id), f]));
+          let escritas = 0;
+          for (const ficha of r.fichas || []) {
+            const f = porId.get(String(ficha.id));
+            if (!f) continue;
+            const texto = String(ficha.texto || '').trim();
+            f.confianza = ficha.confianza || null;
+            if (!texto) continue;
+            f.texto = texto;
+            // Lo redactado cuenta como decidido: el contagio de gremios
+            // no debe pisarlo después.
+            if (ficha.oficio && OFICIOS.some((o) => o.id === ficha.oficio)) {
+              f.oficio = ficha.oficio;
+              f.tocado = true;
+            }
+            escritas += 1;
+          }
+          pintarFichas();
+          const sinNada = vivas.length - escritas;
+          aviso.className = 'hint';
+          aviso.textContent = sinNada
+            ? `${escritas} de ${vivas.length} redactadas. ${sinNada === 1
+                ? 'La otra no tenía nada dicho que atribuirle: escríbela'
+                : `Las ${sinNada} restantes no tenían nada dicho que atribuirles: escríbelas`} mirando la foto.`
+            : `${escritas} ${escritas === 1 ? 'tarea redactada' : 'tareas redactadas'}. Repásalas antes de crearlas.`;
+          rotulo.textContent = 'VOLVER A REDACTAR';
+          boton.disabled = false;
+        } catch (e) {
+          aviso.className = 'hint err';
+          aviso.textContent = e?.status === 404
+            ? 'El servidor todavía no tiene esta parte instalada.'
+            : (e?.message || 'No se ha podido redactar.');
+          rotulo.textContent = 'REDACTAR LAS TAREAS';
+          boton.disabled = false;
+        }
+      });
+
+      return h('div.rec-dictado', null,
+        h('p.eyebrow', null, 'Que las escriba solas'),
+        h('p.sub', { style: { marginTop: '4px' } },
+          'Dicta aquí lo que ibas comentando —el micrófono del teclado va bien— '
+          + 'y se reparte solo entre las fotos, con su gremio. Luego lo repasas.'),
+        h('div', { style: { marginTop: '10px' } }, campo),
+        aviso,
+        boton,
       );
     };
 
@@ -345,6 +434,7 @@ export async function render({ promoId, unidadId }) {
           `${rec.marcas.length} ${rec.marcas.length === 1 ? 'marca' : 'marcas'}. Escribe qué hay que hacer en cada una; el gremio va propuesto y se cambia de un toque. Lo que no valga, lo tiras.`),
         h('div', { style: { marginTop: '12px' } }, audio),
       ),
+      dictado(),
       listado,
       pista,
       guardar,

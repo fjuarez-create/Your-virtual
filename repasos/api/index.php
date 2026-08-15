@@ -12,6 +12,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/lib/nucleo.php';
 require __DIR__ . '/lib/auth.php';
+require __DIR__ . '/lib/claude.php';
 
 /**
  * Tipos admitidos y extensión con la que se guardan. Las funciones se
@@ -155,7 +156,131 @@ function despachar(string $metodo, array $p): void
         diagnostico_salida();
     }
 
+    if ($r0 === 'claude') {
+        $accion = $p[1] ?? '';
+        if ($accion === 'estado' && $metodo === 'GET') {
+            claude_estado();
+        }
+        if ($accion === 'clave' && $metodo === 'POST') {
+            claude_poner_clave();
+        }
+        if ($accion === 'clave' && $metodo === 'DELETE') {
+            claude_quitar_clave();
+        }
+        if ($accion === 'redactar' && $metodo === 'POST') {
+            claude_redactar_recorrido();
+        }
+        responder_error(404, 'Ruta de Claude desconocida.');
+    }
+
     responder_error(404, 'Ruta desconocida.');
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Claude: redactar las tareas de un recorrido
+   ═══════════════════════════════════════════════════════════════ */
+/**
+ * Si hay clave puesta y cuál, a medias. Se devuelven los cuatro últimos
+ * caracteres y nada más: sirve para reconocer «esta es la que puse» sin
+ * que la clave entera vuelva a salir del servidor nunca más.
+ */
+function claude_estado(): void
+{
+    exigir_admin();
+    $clave = claude_clave();
+    responder([
+        'puesta' => $clave !== '',
+        'final' => $clave === '' ? '' : substr($clave, -4),
+        'modelo' => CLAUDE_MODELO,
+    ]);
+}
+
+function claude_poner_clave(): void
+{
+    exigir_admin();
+    $datos = cuerpo();
+    $clave = trim((string) ($datos['clave'] ?? ''));
+
+    if ($clave === '') {
+        responder_error(400, 'No has escrito ninguna clave.', 'clave-vacia');
+    }
+    // El formato lo pone Anthropic; comprobarlo aquí evita guardar un
+    // recorte a medias del portapapeles y descubrirlo en mitad de una obra.
+    if (strpos($clave, 'sk-ant-') !== 0 || strlen($clave) < 40) {
+        responder_error(400, 'Eso no parece una clave de Anthropic (empiezan por sk-ant-).', 'clave-rara');
+    }
+    if (strlen($clave) > 500 || preg_match('/\s/', $clave)) {
+        responder_error(400, 'La clave tiene espacios o es demasiado larga; cópiala otra vez.', 'clave-rara');
+    }
+
+    claude_guardar_clave($clave);
+    responder(['puesta' => true, 'final' => substr($clave, -4), 'modelo' => CLAUDE_MODELO]);
+}
+
+function claude_quitar_clave(): void
+{
+    exigir_admin();
+    claude_borrar_clave();
+    responder(['puesta' => false, 'final' => '']);
+}
+
+/**
+ * Lo que dijo durante el recorrido + las marcas → una tarea por marca.
+ *
+ * Lo puede pedir quien pueda abrir un acta: es su trabajo el que se está
+ * redactando. La clave es de la casa, no suya, y no la ve.
+ */
+function claude_redactar_recorrido(): void
+{
+    $u = exigir_sesion();
+    if (!($u['rol'] === 'admin' || !empty($u['verifica']))) {
+        responder_error(403, 'Solo quien puede abrir un acta puede pedir esto.', 'sin-permiso');
+    }
+
+    $datos = cuerpo();
+    $texto = trim((string) ($datos['texto'] ?? ''));
+    $marcas = $datos['marcas'] ?? [];
+    $oficios = $datos['oficios'] ?? [];
+
+    if ($texto === '') {
+        responder_error(400, 'No hay nada dicho que redactar.', 'sin-texto');
+    }
+    if (mb_strlen($texto) > 60000) {
+        responder_error(413, 'El texto del recorrido es demasiado largo.', 'texto-largo');
+    }
+    if (!is_array($marcas) || !count($marcas)) {
+        responder_error(400, 'No hay marcas que redactar.', 'sin-marcas');
+    }
+    if (count($marcas) > 100) {
+        responder_error(400, 'Demasiadas marcas en un solo recorrido.', 'muchas-marcas');
+    }
+    if (!is_array($oficios) || !count($oficios)) {
+        responder_error(400, 'Falta la lista de gremios.', 'sin-oficios');
+    }
+
+    // Se normaliza lo que llega del móvil antes de armar la petición: al
+    // otro lado hay una cuenta que paga por token.
+    $limpias = [];
+    foreach ($marcas as $m) {
+        $id = (string) ($m['id'] ?? '');
+        if ($id === '') {
+            continue;
+        }
+        $limpias[] = ['id' => mb_substr($id, 0, 64), 'ms' => (float) ($m['ms'] ?? 0)];
+    }
+    $gremios = [];
+    foreach ($oficios as $o) {
+        $id = (string) ($o['id'] ?? '');
+        if ($id === '') {
+            continue;
+        }
+        $gremios[] = ['id' => mb_substr($id, 0, 40), 'nombre' => mb_substr((string) ($o['nombre'] ?? $id), 0, 60)];
+    }
+    if (!count($limpias) || !count($gremios)) {
+        responder_error(400, 'Las marcas o los gremios no vienen bien.', 'datos-raros');
+    }
+
+    responder(claude_redactar($texto, $limpias, $gremios));
 }
 
 /* ═══════════════════════════════════════════════════════════════

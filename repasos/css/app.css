@@ -1299,3 +1299,19 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
   font-size: 12.5px; border-radius: 11px;
 }
 .chips.filtro.rec-gremios .chip.quitar { color: var(--muted-oscuro); font-weight: 500; }
+
+/* ─── Que las escriba solas ──────────────────────────────────────
+   La caja donde se dicta lo que se dijo en el recorrido. Va aparte
+   de las fichas, con su propio fondo, porque es un paso opcional:
+   quien prefiera escribir a mano la ignora y baja. */
+.rec-dictado {
+  background: var(--surface); border-radius: var(--r-lg);
+  padding: 18px 18px 16px; margin-top: 12px;
+  border-left: 3px solid var(--accent-deep);
+}
+.rec-dictado .textarea { background: var(--bg); min-height: 96px; }
+.rec-dictado .cta-accion { margin-top: 10px; }
+
+/* Una marca de la que no se dijo nada y ha salido a ojo: se marca
+   para que se mire, no para que se descarte. */
+.rec-ficha.dudosa { box-shadow: inset 0 0 0 2px var(--accent); }

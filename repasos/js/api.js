@@ -140,6 +140,18 @@ export const urlMedio = (id) => API_BASE + 'medios/' + encodeURIComponent(id) + 
  */
 export const salidaAInternet = () => pedir('diagnostico/salida');
 
+/* ─── Claude ──────────────────────────────────────────────────────
+   La clave vive en el servidor y no vuelve nunca: de aquí solo sale
+   si hay una puesta y sus cuatro últimos caracteres, para reconocerla. */
+export const claudeEstado = () => pedir('claude/estado');
+export const claudePonerClave = (clave) =>
+  pedir('claude/clave', { metodo: 'POST', json: { clave } });
+export const claudeQuitarClave = () => pedir('claude/clave', { metodo: 'DELETE' });
+
+/** Lo dicho en el recorrido + las marcas → una tarea redactada por marca. */
+export const claudeRedactar = (texto, marcas, oficios) =>
+  pedir('claude/redactar', { metodo: 'POST', json: { texto, marcas, oficios } });
+
 function extension(mime) {
   const m = {
     'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp',
