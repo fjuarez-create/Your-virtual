@@ -1257,7 +1257,12 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
   width: 78px; height: 78px; flex: 0 0 78px; border-radius: 15px;
   background: var(--surface-2) center / cover no-repeat;
 }
-.rec-ficha .textarea { background: var(--bg); }
+/* Dos líneas bastan —«rozar y repasar la junta del alicatado»— y con
+   quince fichas seguidas, los 120px de siempre son cinco pantallas de
+   scroll de más. Crece sola si hace falta escribir más. */
+.rec-ficha .textarea {
+  background: var(--bg); min-height: 76px; padding: 12px 14px; overflow: hidden;
+}
 .rec-ficha .selector { background: var(--bg); }
 .rec-ficha .tag { display: inline-flex; align-items: center; gap: 6px; }
 
@@ -1284,3 +1289,13 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
    justo el texto que hay que leer entero y copiar al correo del
    hosting cuando dice que no. */
 .row .row-sub.libre { white-space: normal; overflow: visible; text-overflow: clip; }
+
+/* Los gremios de la ficha: pastillas pequeñas, que aquí van quince
+   fichas seguidas y las del filtro de pantalla ocuparían media
+   pantalla cada una. */
+.chips.filtro.rec-gremios { margin-top: 2px; gap: 6px; }
+.chips.filtro.rec-gremios .chip {
+  flex: 0 0 auto; min-height: 34px; padding: 0 12px;
+  font-size: 12.5px; border-radius: 11px;
+}
+.chips.filtro.rec-gremios .chip.quitar { color: var(--muted-oscuro); font-weight: 500; }

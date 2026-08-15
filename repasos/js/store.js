@@ -476,6 +476,38 @@ export function oficiosSegun(c, estado) {
   return (estado === 'pendiente' || estado === 'resuelta') ? c.oficiosAbiertos : c.oficios;
 }
 
+/**
+ * Los gremios que de verdad se usan, del más al menos frecuente.
+ *
+ * Primero cuentan los de esta vivienda —si en la Villa 07 lo que sale
+ * siempre es pintura, esa va delante— y detrás se completan con los del
+ * resto de la promoción, para que la lista corta esté llena desde el
+ * primer repaso de una casa recién empezada. Al final, «General», que
+ * es la salida cuando no encaja ninguno.
+ */
+export async function oficiosMasUsados(unidadId, cuantos = 5) {
+  const listas = (await db.getAll('listas')).filter((l) => !l.borrada);
+  const deAqui = new Set(listas.filter((l) => l.unidadId === unidadId).map((l) => l.id));
+  const vivas = new Set(listas.map((l) => l.id));
+  const tareas = (await db.getAll('tareas')).filter((t) => !t.borrada && vivas.has(t.listaId));
+
+  const contar = (lista) => {
+    const cuenta = new Map();
+    for (const t of lista) {
+      const o = t.oficio || OFICIO_POR_DEFECTO;
+      cuenta.set(o, (cuenta.get(o) || 0) + 1);
+    }
+    return [...cuenta.entries()].sort((a, b) => b[1] - a[1]).map(([o]) => o);
+  };
+
+  const orden = [];
+  for (const o of [...contar(tareas.filter((t) => deAqui.has(t.listaId))),
+    ...contar(tareas), OFICIO_POR_DEFECTO]) {
+    if (!orden.includes(o)) orden.push(o);
+  }
+  return orden.slice(0, cuantos);
+}
+
 /* ─── Recorridos ──────────────────────────────────────────────────
    Un recorrido es material de trabajo, no el repaso: vive solo en este
    dispositivo y no viaja al servidor. Cuando se convierte en tareas,

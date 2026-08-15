@@ -31,6 +31,9 @@ export async function render({ promoId, unidadId }) {
   const lienzo = h('div.recorrido');
   let mando = null;
 
+  // Los gremios que más salen aquí, para tenerlos a un toque al repasar.
+  const sugeridos = await store.oficiosMasUsados(unidadId, 4);
+
   // Un recorrido grabado y no repasado todavía. Pasa cuando se sale de
   // la pantalla a media faena —una llamada, un resbalón hacia atrás— y
   // es justo el trabajo que más duele perder: el paseo ya está dado.
@@ -186,10 +189,14 @@ export async function render({ promoId, unidadId }) {
 
   /* ─── 3. Repasando ─── */
   const pintarRepaso = (rec) => {
-    // Lo que se elija en una marca se hereda en las siguientes: en una
-    // misma estancia casi todo es del mismo gremio.
-    let ultimo = OFICIO_POR_DEFECTO;
-    const fichas = rec.marcas.map((m) => ({ marca: m, texto: '', oficio: null, fuera: false }));
+    // Ninguna marca llega sin gremio: se propone el que más sale en esta
+    // vivienda. Con quince fotos delante, obligar a abrir quince
+    // desplegables es lo que convierte un buen recorrido en un rato de
+    // trabajo administrativo, y todos se pueden cambiar de un toque.
+    let ultimo = sugeridos[0] || OFICIO_POR_DEFECTO;
+    const fichas = rec.marcas.map((m) => ({
+      marca: m, texto: '', oficio: ultimo, tocado: false, fuera: false,
+    }));
 
     const audio = h('audio', { controls: true, preload: 'metadata', style: { width: '100%' } });
     audio.src = URL.createObjectURL(rec.audio);
@@ -205,15 +212,40 @@ export async function render({ promoId, unidadId }) {
       guardar.querySelector('.grow').textContent = listas.length === vivas.length && vivas.length
         ? `CREAR ${vivas.length} ${vivas.length === 1 ? 'TAREA' : 'TAREAS'}`
         : 'CREAR LAS TAREAS';
+      const faltan = vivas.length - listas.length;
       pista.textContent = !vivas.length
         ? 'No queda ninguna marca. Descarta el recorrido o vuelve a grabar.'
-        : listas.length === vivas.length
+        : !faltan
           ? ''
-          : `Falta el texto o el gremio en ${vivas.length - listas.length} de ${vivas.length}.`;
+          : `Falta escribir ${faltan} ${faltan === 1 ? 'marca' : 'marcas'} de ${vivas.length}.`;
+    };
+
+    /**
+     * El gremio elegido en una marca se propaga a las de después. Un
+     * recorrido va habitación por habitación: si en el baño dices
+     * «alicatado», lo que viene detrás casi siempre es lo mismo hasta
+     * que cambias de sitio.
+     *
+     * Se para en la primera marca que ya hayas decidido tú, y hacia
+     * atrás no toca nada: tus decisiones mandan sobre todo lo que viene
+     * después de ellas, y nunca se deshacen.
+     */
+    const contagiar = (desde, gremio) => {
+      let visto = false;
+      for (const f of fichas) {
+        if (f === desde) { visto = true; continue; }
+        if (!visto || f.fuera) continue;
+        if (f.tocado) break;
+        f.oficio = gremio;
+        f.pintarGremio?.();
+      }
     };
 
     const pintarFichas = () => {
-      listado.replaceChildren(...fichas.filter((f) => !f.fuera).map((f) => ficha(f)));
+      const vivas = fichas.filter((f) => !f.fuera);
+      listado.replaceChildren(...vivas.map((f) => ficha(f)));
+      // El alto solo se puede medir con la caja ya puesta en la página.
+      for (const f of vivas) if (f.texto) f.crecer?.();
       validar();
     };
 
@@ -223,20 +255,44 @@ export async function render({ promoId, unidadId }) {
         rows: 2, placeholder: 'Qué hay que hacer aquí…', autocapitalize: 'sentences',
       });
       texto.value = f.texto;
-      texto.addEventListener('input', () => { f.texto = texto.value; validar(); });
+      // Crece con lo que se escribe en vez de dejar una barra de scroll
+      // de tres líneas dentro de una caja de tres líneas.
+      const crecer = () => {
+        texto.style.height = 'auto';
+        texto.style.height = texto.scrollHeight + 'px';
+      };
+      texto.addEventListener('input', () => { f.texto = texto.value; crecer(); validar(); });
+      f.crecer = crecer;
 
-      const rotulo = h('span.grow', null, f.oficio ? oficio(f.oficio).nombre : 'Elegir gremio');
-      const selector = h('button.selector', {
-        class: f.oficio ? 'puesto' : '',
-        onclick: async () => {
-          const elegido = await hojaOficios(f.oficio || ultimo);
-          if (!elegido) return;
-          f.oficio = elegido; ultimo = elegido;
-          rotulo.textContent = oficio(elegido).nombre;
-          selector.classList.add('puesto');
-          validar();
-        },
-      }, rotulo, icon('chevron', 16));
+      // Los gremios de siempre, a un toque. Con quince marcas, abrir
+      // quince veces el desplegable es lo que hace que esto dé pereza;
+      // los cinco que de verdad se usan en esta obra caben aquí.
+      const gremios = h('div.chips.filtro.envuelve.rec-gremios');
+      const poner = (elegido, propio = true) => {
+        f.oficio = elegido;
+        if (propio) { f.tocado = true; ultimo = elegido; contagiar(f, elegido); }
+        pintarGremio();
+        validar();
+      };
+      const pintarGremio = () => {
+        // El elegido va delante aunque no esté entre los habituales:
+        // si se ha buscado en la lista larga, tiene que verse puesto.
+        const lista = sugeridos.includes(f.oficio) ? sugeridos : [f.oficio, ...sugeridos];
+        gremios.replaceChildren(
+          ...lista.map((id) => h('button.chip.accent', {
+            'aria-pressed': f.oficio === id ? 'true' : 'false',
+            onclick: () => poner(id),
+          }, oficio(id).corto)),
+          h('button.chip.quitar', {
+            onclick: async () => {
+              const elegido = await hojaOficios(f.oficio || ultimo);
+              if (elegido) poner(elegido);
+            },
+          }, 'Otro…'),
+        );
+      };
+      f.pintarGremio = pintarGremio;
+      pintarGremio();
 
       return h('div.rec-ficha', null,
         h('div.rec-ficha-cab', null,
@@ -257,7 +313,7 @@ export async function render({ promoId, unidadId }) {
           }, icon('trash', 16)),
         ),
         texto,
-        selector,
+        gremios,
       );
     };
 
@@ -286,7 +342,7 @@ export async function render({ promoId, unidadId }) {
       h('div.rec-resumen', null,
         h('p.eyebrow', null, `Recorrido de ${grabadora.reloj(rec.duracion)}`),
         h('p.sub', { style: { marginTop: '4px' } },
-          `${rec.marcas.length} ${rec.marcas.length === 1 ? 'marca' : 'marcas'}. Escribe qué es cada una y elige el gremio; lo que no valga, lo tiras.`),
+          `${rec.marcas.length} ${rec.marcas.length === 1 ? 'marca' : 'marcas'}. Escribe qué hay que hacer en cada una; el gremio va propuesto y se cambia de un toque. Lo que no valga, lo tiras.`),
         h('div', { style: { marginTop: '12px' } }, audio),
       ),
       listado,
