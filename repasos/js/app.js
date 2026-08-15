@@ -235,6 +235,20 @@ function registrarServiceWorker() {
   navigator.serviceWorker.register('sw.js').catch(() => { /* sin caché offline */ });
 }
 
+/**
+ * El pellizco no encoge la app.
+ *
+ * En Android basta con `minimum-scale=1` en el <meta>, pero Safari en
+ * iOS se salta esa clave —y también `user-scalable`— cuando la app se
+ * abre en una pestaña, así que allí hay que cortar el gesto a mano.
+ * `gesturestart` y compañía son eventos propios de Safari y solo saltan
+ * con dos dedos: el desplazamiento normal y el carrete de fotos, que se
+ * arrastra de lado con un dedo, siguen funcionando igual.
+ */
+for (const gesto of ['gesturestart', 'gesturechange', 'gestureend']) {
+  document.addEventListener(gesto, (e) => e.preventDefault(), { passive: false });
+}
+
 // Un fallo no capturado no debe dejar la pantalla en blanco sin explicación.
 window.addEventListener('unhandledrejection', (e) => {
   if (e.reason instanceof api.ApiError && e.reason.codigo === 'red') return;

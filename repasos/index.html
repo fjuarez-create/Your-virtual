@@ -3,7 +3,10 @@
 <head>
 <meta charset="utf-8">
 <title>UNIK repasos</title>
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<!-- minimum-scale=1 es lo que impide que el pellizco encoja la página.
+     Sin él el mínimo por defecto es 0,25: maximum-scale solo cerraba la
+     puerta de agrandar y la de empequeñecer se quedaba abierta. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="description" content="Repasos de pre-entrega y post-entrega de las viviendas de UNIK.">
 <meta name="robots" content="noindex, nofollow">
 
