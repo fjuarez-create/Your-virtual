@@ -12,7 +12,7 @@ import { h, icon, emptyState } from '../ui.js';
 import * as store from '../store.js';
 import { PROMOCIONES, puedeCrearLista } from '../catalog.js';
 import { tarjetaActa, ctaNuevaLista, filtroEstado, filtroOficio, cabeceraDentro } from '../piezas.js';
-import { ir } from '../app.js';
+import { ir, filtrosDeRuta, anotarFiltros } from '../app.js';
 
 export async function render() {
   const activas = PROMOCIONES.filter((p) => p.activa);
@@ -39,14 +39,14 @@ export async function render() {
     };
   }
 
-  let estado = 'todas';
-  let oficioId = 'todos';
+  let { estado, oficio: oficioId } = filtrosDeRuta();
   const lista = h('div.stack.actas');
   const contador = h('p.contador');
 
   const pintar = () => {
     const visibles = actas.filter((a) => encaja(a, estado, oficioId));
-    lista.replaceChildren(...visibles.map((a) => tarjetaActa(a)));
+    lista.replaceChildren(...visibles.map((a) =>
+      tarjetaActa(a, { filtros: { estado, oficio: oficioId } })));
     if (!visibles.length) {
       lista.append(h('p.sub.center', { style: { padding: '30px 0' } },
         'Ninguna acta encaja con este filtro.'));
@@ -55,14 +55,15 @@ export async function render() {
       ? `${actas.length} ${actas.length === 1 ? 'acta' : 'actas'}`
       : `${visibles.length} de ${actas.length} actas`;
   };
+  const cambio = () => { anotarFiltros({ estado, oficio: oficioId }); pintar(); };
   pintar();
 
   return {
     sinTabs: true,
     contenido: [
       ...cabeceraDentro('ACTAS', { volverA: '#/', sub: p.nombre }),
-      filtroEstado((v) => { estado = v; pintar(); }),
-      filtroOficio((v) => { oficioId = v; pintar(); }),
+      filtroEstado((v) => { estado = v; cambio(); }, estado),
+      filtroOficio((v) => { oficioId = v; cambio(); }, oficioId),
       contador,
       cta,
       lista,

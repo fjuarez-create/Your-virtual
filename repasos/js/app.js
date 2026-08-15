@@ -50,6 +50,40 @@ export function ir(ruta, { reemplazar = false } = {}) {
   else location.hash = ruta;
 }
 
+/* ─── Los filtros viajan en la dirección ──────────────────────────
+   Si estás mirando lo que hay abierto de pintura y entras en una
+   vivienda, lo que quieres ver es lo abierto de pintura de esa casa, no
+   empezar de cero. Van en la propia dirección y no en una variable
+   suelta por dos motivos: al volver atrás la pantalla anterior se
+   recupera tal y como la dejaste, y un enlace copiado lleva puesto lo
+   que estabas mirando. */
+
+/** Lee el filtro de la dirección actual. */
+export function filtrosDeRuta() {
+  const p = new URLSearchParams(location.hash.split('?')[1] || '');
+  return { estado: p.get('estado') || 'todas', oficio: p.get('oficio') || 'todos' };
+}
+
+/** Pega el filtro a una ruta. Lo que no filtra no se escribe. */
+export function conFiltros(ruta, { estado = 'todas', oficio = 'todos' } = {}) {
+  const p = new URLSearchParams();
+  if (estado && estado !== 'todas') p.set('estado', estado);
+  if (oficio && oficio !== 'todos') p.set('oficio', oficio);
+  const q = p.toString();
+  return q ? `${ruta}?${q}` : ruta;
+}
+
+/**
+ * Deja el filtro escrito en la dirección sin repintar la pantalla ni
+ * ensuciar el historial: es el mismo sitio mirado de otra manera, no un
+ * sitio nuevo. `replaceState` cambia la dirección sin disparar
+ * `hashchange`, que es justo lo que hace falta.
+ */
+export function anotarFiltros(filtros) {
+  const base = location.hash.split('?')[0] || '#/';
+  history.replaceState(history.state, '', conFiltros(base, filtros));
+}
+
 /** Vuelve atrás sin salirse de la app si se entró por enlace directo. */
 export function atras(porDefecto = '#/') {
   if (history.length > 1 && document.referrer !== '' || history.state?.dentro) history.back();

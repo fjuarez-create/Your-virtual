@@ -8,7 +8,7 @@ import { h, toast, grupoAvatares, desdeHace, diasDesde } from '../ui.js';
 import { PROMOCIONES, promocion, unidades } from '../catalog.js';
 import * as store from '../store.js';
 import { filtroEstado, filtroOficio, cabeceraTab } from '../piezas.js';
-import { ir } from '../app.js';
+import { ir, conFiltros, filtrosDeRuta, anotarFiltros } from '../app.js';
 
 export async function render({ promoId, desdeTab = false }) {
   if (!promoId) {
@@ -22,14 +22,17 @@ export async function render({ promoId, desdeTab = false }) {
   const todas = unidades(promoId);
   const resumen = await store.resumenPorUnidad(promoId);
 
-  let estado = 'todas';
-  let oficioId = 'todos';
+  // El filtro viene en la dirección, si es que se venía filtrando.
+  let { estado, oficio: oficioId } = filtrosDeRuta();
   const lista = h('div.stack.villas');
   const contador = h('p.contador');
 
+  const cambio = () => { anotarFiltros({ estado, oficio: oficioId }); pintar(); };
+
   const pintar = () => {
     const visibles = todas.filter((u) => encaja(resumen.get(u.id), estado, oficioId));
-    lista.replaceChildren(...visibles.map((u) => fila(u, resumen.get(u.id), promoId)));
+    lista.replaceChildren(...visibles.map((u) =>
+      fila(u, resumen.get(u.id), promoId, { estado, oficio: oficioId })));
     if (!visibles.length) {
       lista.append(h('p.sub.center', { style: { padding: '30px 0' } },
         'Ninguna vivienda encaja con este filtro.'));
@@ -44,8 +47,8 @@ export async function render({ promoId, desdeTab = false }) {
     tab: 'viviendas',
     contenido: [
       ...cabeceraTab('VIVIENDAS'),
-      filtroEstado((v) => { estado = v; pintar(); }),
-      filtroOficio((v) => { oficioId = v; pintar(); }),
+      filtroEstado((v) => { estado = v; cambio(); }, estado),
+      filtroOficio((v) => { oficioId = v; cambio(); }, oficioId),
       contador,
       lista,
     ],
@@ -83,7 +86,7 @@ const DIAS_PARADA = 14;
  *   viva    — le queda algo abierto o por validar
  *   hecha   — todas sus tareas están validadas
  */
-function fila(u, r, promoId) {
+function fila(u, r, promoId, filtros) {
   const total = r?.total || 0;
   const hechas = r?.hechas || 0;
   const esperando = r?.esperando || 0;
@@ -98,7 +101,7 @@ function fila(u, r, promoId) {
 
   return h('button', {
     class: clase + (esperando ? ' por-validar' : ''),
-    onclick: () => ir(`#/p/${promoId}/v/${u.id.split(':')[1]}`),
+    onclick: () => ir(conFiltros(`#/p/${promoId}/v/${u.id.split(':')[1]}`, filtros)),
   },
     h('div.villa-cab', null,
       // Tres como mucho, y sin «+n»: quien pase de ahí se ve igualmente

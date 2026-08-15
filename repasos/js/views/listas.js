@@ -8,7 +8,7 @@ import { h, icon, toast, emptyState } from '../ui.js';
 import { promocion, unidad, FASE_UNICA, puedeCrearLista } from '../catalog.js';
 import * as store from '../store.js';
 import { cabeceraDentro, ctaNuevaLista, tareaFila, tarjetaActa, filtroEstado, filtroOficio } from '../piezas.js';
-import { ir } from '../app.js';
+import { ir, conFiltros, filtrosDeRuta, anotarFiltros } from '../app.js';
 
 export async function render({ promoId, unidadId }) {
   const p = promocion(promoId);
@@ -28,7 +28,8 @@ export async function render({ promoId, unidadId }) {
     ir('#/l/' + l.id);
   };
 
-  const cabecera = cabeceraDentro(u.nombre.toUpperCase(), { volverA: '#/viviendas', sub: p.nombre });
+  const cabecera = cabeceraDentro(u.nombre.toUpperCase(),
+    { volverA: conFiltros('#/viviendas', filtrosDeRuta()), sub: p.nombre });
 
   if (!tareas.length) {
     return {
@@ -49,14 +50,18 @@ export async function render({ promoId, unidadId }) {
     };
   }
 
-  let estado = 'todas';
-  let oficioId = 'todos';
+  // El filtro llega puesto desde la lista de viviendas: si venías
+  // buscando lo abierto de pintura, aquí sigues viendo eso.
+  let { estado, oficio: oficioId } = filtrosDeRuta();
   const listado = h('div.stack', { style: { gap: '8px' } });
   const contador = h('p.contador');
 
+  const cambio = () => { anotarFiltros({ estado, oficio: oficioId }); pintar(); };
+
   const pintar = () => {
     const visibles = tareas.filter((t) => encaja(t, estado, oficioId));
-    listado.replaceChildren(...visibles.map((t) => tareaFila(t, { portada: portadas.get(t.id) })));
+    listado.replaceChildren(...visibles.map((t) =>
+      tareaFila(t, { portada: portadas.get(t.id), filtros: { estado, oficio: oficioId } })));
     if (!visibles.length) {
       listado.append(h('p.sub.center', { style: { padding: '30px 0' } },
         'Ninguna tarea encaja con este filtro.'));
@@ -74,8 +79,8 @@ export async function render({ promoId, unidadId }) {
     fab: null,
     contenido: [
       ...cabecera,
-      filtroEstado((v) => { estado = v; pintar(); }),
-      filtroOficio((v) => { oficioId = v; pintar(); }),
+      filtroEstado((v) => { estado = v; cambio(); }, estado),
+      filtroOficio((v) => { oficioId = v; cambio(); }, oficioId),
       contador,
       // Un acta la abre quien puede darla por buena. Al jefe de obra no
       // se le enseña el botón: responde a las tareas de un acta, no la
@@ -84,7 +89,7 @@ export async function render({ promoId, unidadId }) {
       listado,
       // Las actas, al pie: se consultan cuando hace falta saber quién
       // firmó qué, no cada vez que se entra en la casa.
-      pieDeActas(actas),
+      pieDeActas(actas, { estado, oficio: oficioId }),
     ],
   };
 }
@@ -95,7 +100,7 @@ export async function render({ promoId, unidadId }) {
  * validadas del todo quedan detrás, bajo su propio epígrafe, pero se
  * ven: son la firma de quién vio qué y cuándo, y a eso se vuelve.
  */
-function pieDeActas(actas) {
+function pieDeActas(actas, filtros = null) {
   if (!actas.length) return null;
   const abiertas = actas.filter((a) => !store.actaTerminada(a.conteo));
   const terminadas = actas.filter((a) => store.actaTerminada(a.conteo));
@@ -104,14 +109,14 @@ function pieDeActas(actas) {
     h('p.eyebrow', null, actas.length === 1 ? 'Su acta' : `Sus ${actas.length} actas`),
     abiertas.length
       ? h('div.stack.actas', { style: { marginTop: '10px' } },
-          abiertas.map((a) => tarjetaActa(a, { dentroDeVivienda: true })))
+          abiertas.map((a) => tarjetaActa(a, { dentroDeVivienda: true, filtros })))
       : null,
     // El epígrafe solo cuando hay de las dos: con todas terminadas
     // sobra, y con ninguna terminada no habría nada debajo.
     terminadas.length
       ? h('div', { style: { marginTop: abiertas.length ? '20px' : '10px' } },
           abiertas.length ? h('p.eyebrow', { style: { marginBottom: '10px' } }, 'Validadas') : null,
-          h('div.stack.actas', null, terminadas.map((a) => tarjetaActa(a, { dentroDeVivienda: true }))),
+          h('div.stack.actas', null, terminadas.map((a) => tarjetaActa(a, { dentroDeVivienda: true, filtros }))),
         )
       : null,
   );

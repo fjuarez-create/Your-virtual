@@ -2,11 +2,11 @@
    Se ve la foto y el texto de cada una sin tener que abrirla, que es
    como se repasa una vivienda andando. */
 import { h, icon, sheet, toast, confirmSheet, emptyState, fechaCorta, hora } from '../ui.js';
-import { unidad, estado, promocion, ESTADOS, OFICIOS, oficio } from '../catalog.js';
+import { unidad, estado, promocion, ESTADOS, OFICIOS, oficio, OFICIO_POR_DEFECTO } from '../catalog.js';
 import * as store from '../store.js';
 import * as media from '../media.js';
-import { cabeceraDentro, barraSync, filtroEstado, ctaAccion, ctaCancelar } from '../piezas.js';
-import { ir, refrescar } from '../app.js';
+import { cabeceraDentro, barraSync, filtroEstado, filtroOficio, ctaAccion, ctaCancelar } from '../piezas.js';
+import { ir, refrescar, conFiltros, filtrosDeRuta, anotarFiltros } from '../app.js';
 import { informe } from '../informe.js';
 import { hojaDePuerta, nombreDeFichero } from '../pdf.js';
 
@@ -32,29 +32,35 @@ export async function render({ listaId }) {
 
   const conteo = { total: tareas.length };
 
-  let filtro = 'todas';
+  // Los mismos dos filtros que en las otras tres pantallas, y llegan
+  // puestos si se venía filtrando desde fuera. Aquí lo que se filtra son
+  // tareas, así que el valor del chip es el estado tal cual.
+  let { estado: filtro, oficio: oficioId } = filtrosDeRuta();
   const listado = h('div.stack');
   const contador = h('p.contador');
 
-  // Los mismos chips, las mismas palabras y el mismo contador debajo
-  // que en las otras tres pantallas que filtran. Aquí lo que se filtra
-  // son tareas, así que el valor del chip es el estado tal cual.
+  const cambio = () => { anotarFiltros({ estado: filtro, oficio: oficioId }); pintar(); };
+
   const pintar = () => {
-    const visibles = tareas.filter((t) => filtro === 'todas' || t.estado === filtro);
+    const visibles = tareas.filter((t) =>
+      (filtro === 'todas' || t.estado === filtro)
+      && (oficioId === 'todos' || (t.oficio || OFICIO_POR_DEFECTO) === oficioId));
     listado.replaceChildren();
     if (!visibles.length) {
       listado.append(h('p.sub.center', { style: { padding: '26px 0' } },
-        'Ninguna tarea de esta lista está así.'));
+        'Ninguna tarea de esta lista encaja con este filtro.'));
     } else {
       visibles.forEach((t) => listado.append(
-        tarjetaTarea(t, tareas.indexOf(t) + 1, portadas.get(t.id), tipos.get(t.id), listaId)));
+        tarjetaTarea(t, tareas.indexOf(t) + 1, portadas.get(t.id), tipos.get(t.id), listaId,
+          { estado: filtro, oficio: oficioId })));
     }
     contador.textContent = visibles.length === tareas.length
       ? `${tareas.length} ${tareas.length === 1 ? 'tarea' : 'tareas'}`
       : `${visibles.length} de ${tareas.length} tareas`;
   };
 
-  const chips = filtroEstado((v) => { filtro = v; pintar(); });
+  const chips = filtroEstado((v) => { filtro = v; cambio(); }, filtro);
+  const selector = filtroOficio((v) => { oficioId = v; cambio(); }, oficioId);
   pintar();
 
   const fab = h('button.fab', { onclick: () => nuevaTarea(listaId) }, icon('camera'), 'Nueva tarea');
@@ -68,7 +74,7 @@ export async function render({ listaId }) {
       // se está hablando. Y empieza por «ACTA» porque, si no, el acta y
       // la vivienda se llaman igual y no hay forma de saber dónde estás.
       ...cabeceraDentro(lista.nombre || `ACTA ${(u?.nombre || '').toUpperCase()}`.trim(), {
-        volverA: `#/p/${lista.promoId}/v/${String(lista.unidadId).split(':')[1]}`,
+        volverA: conFiltros(`#/p/${lista.promoId}/v/${String(lista.unidadId).split(':')[1]}`, filtrosDeRuta()),
         sub: fechaCorta(lista.creado),
         acciones: [h('button.icon-btn', {
           'aria-label': 'Opciones del acta',
@@ -88,6 +94,7 @@ export async function render({ listaId }) {
       }, icon('documento'), 'Hoja PDF para la puerta') : null,
 
       conteo.total ? chips : null,
+      conteo.total ? selector : null,
       conteo.total ? contador : null,
       tareas.length ? listado : emptyState('camera', 'Lista vacía',
         'Recorre la vivienda y añade una tarea por cada remate, defecto o detalle que encuentres.',
@@ -97,7 +104,7 @@ export async function render({ listaId }) {
 }
 
 /* ─── Tarjeta de tarea ────────────────────────────────────────── */
-function tarjetaTarea(t, numero, urlPortada, tipos, listaId) {
+function tarjetaTarea(t, numero, urlPortada, tipos, listaId, filtros = null) {
   const e = estado(t.estado);
   const thumb = urlPortada
     ? h('div.thumb', { style: { backgroundImage: `url("${urlPortada}")` } }, etiquetaNumero(numero), marcasMedios(tipos))
@@ -105,7 +112,7 @@ function tarjetaTarea(t, numero, urlPortada, tipos, listaId) {
 
   return h('button.task', {
     class: t.estado !== 'pendiente' ? 'done' : '',
-    onclick: () => ir(`#/l/${listaId}/t/${t.id}`),
+    onclick: () => ir(conFiltros(`#/l/${listaId}/t/${t.id}`, filtros || {})),
   },
     thumb,
     h('div.body', null,

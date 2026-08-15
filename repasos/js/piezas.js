@@ -10,7 +10,7 @@ import * as media from './media.js';
 import * as store from './store.js';
 import * as api from './api.js';
 import { unidad, oficio, estado, ESTADOS, OFICIOS } from './catalog.js';
-import { ir } from './app.js';
+import { ir, conFiltros } from './app.js';
 
 /* Medidas de la cabecera, en un sitio para que las dos —la de las
    raíces y la de dentro— no se puedan separar nunca. */
@@ -314,7 +314,7 @@ export function hojaFoto(u) {
  * vivienda es; dentro de esa misma vivienda eso ya se sabe, y lo que
  * distingue un acta de otra es su fecha. De ahí `dentroDeVivienda`.
  */
-export function tarjetaActa({ lista, conteo, gente }, { dentroDeVivienda = false } = {}) {
+export function tarjetaActa({ lista, conteo, gente }, { dentroDeVivienda = false, filtros = null } = {}) {
   const u = unidad(lista.unidadId);
   // «Acta Villa 26» y no «Villa 26»: si el acta se llamara igual que la
   // vivienda, en un listado no habría manera de saber qué se está
@@ -325,7 +325,7 @@ export function tarjetaActa({ lista, conteo, gente }, { dentroDeVivienda = false
     : `Acta ${u?.nombre || lista.unidadId}`;
   const titulo = lista.nombre || porDefecto;
 
-  return h('button.acta', { onclick: () => ir('#/l/' + lista.id) },
+  return h('button.acta', { onclick: () => ir(conFiltros('#/l/' + lista.id, filtros || {})) },
     grupoAvatares(gente.map((g) => store.persona(g.id, g.nombre)), { tam: 55 }),
     h('div.grow', null,
       h('div.acta-tit', null, titulo),
@@ -367,14 +367,16 @@ export function filtroEstado(alCambiar, inicial = 'todas') {
 /** Selector de oficio. Abre una hoja con los doce a dos columnas. */
 export function filtroOficio(alCambiar, inicial = 'todos') {
   let activo = inicial;
-  const texto = h('span.grow', null, 'Todos los oficios');
+  const rotulo = (id) => (id === 'todos' ? 'Todos los oficios' : oficio(id).nombre);
+  const texto = h('span.grow', null, rotulo(activo));
 
   const boton = h('button.selector', {
+    class: activo !== 'todos' ? 'puesto' : '',
     onclick: async () => {
       const elegido = await hojaOficios(activo, { conTodos: true });
       if (elegido === null || elegido === activo) return;
       activo = elegido;
-      texto.textContent = activo === 'todos' ? 'Todos los oficios' : oficio(activo).nombre;
+      texto.textContent = rotulo(activo);
       boton.classList.toggle('puesto', activo !== 'todos');
       alCambiar(activo);
     },
@@ -490,7 +492,7 @@ export function barraAvance(c) {
  * viviendas (la portada), porque ahí «rodapié sin sellar» no dice nada
  * si no se sabe de qué villa es.
  */
-export function tareaFila(t, { portada, donde } = {}) {
+export function tareaFila(t, { portada, donde, filtros = null } = {}) {
   const e = estado(t.estado);
   const clases = ['tarea-fila'];
   if (t.rechazada) clases.push('rechazada');
@@ -498,7 +500,7 @@ export function tareaFila(t, { portada, donde } = {}) {
 
   return h('button', {
     class: clases.join(' '),
-    onclick: () => ir(`#/l/${t.listaId}/t/${t.id}`),
+    onclick: () => ir(conFiltros(`#/l/${t.listaId}/t/${t.id}`, filtros || {})),
   },
     portada
       ? h('div.tarea-foto', { style: { backgroundImage: `url("${portada}")` } })

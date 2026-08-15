@@ -5,7 +5,7 @@ import { ESTADOS, estado, unidad, estadosPermitidos } from '../catalog.js';
 import * as store from '../store.js';
 import * as media from '../media.js';
 import { cabecera } from '../piezas.js';
-import { ir, refrescar } from '../app.js';
+import { ir, refrescar, conFiltros, filtrosDeRuta } from '../app.js';
 
 export async function render({ listaId, tareaId }) {
   const t = await store.tarea(tareaId);
@@ -113,7 +113,7 @@ export async function render({ listaId, tareaId }) {
         `Tarea ${indice + 1} de ${hermanas.length}`,
         u ? `${u.nombre} · ${fechaCorta(lista.creado)}` : '',
         {
-          volverA: '#/l/' + listaId,
+          volverA: conFiltros('#/l/' + listaId, filtrosDeRuta()),
           acciones: [h('button.icon-btn', {
             'aria-label': 'Opciones', onclick: () => menuTarea(t, listaId),
           }, icon('gear'))],
@@ -199,9 +199,9 @@ function navegacionHermanas(hermanas, indice, listaId) {
   const siguiente = hermanas[indice + 1];
   if (!anterior && !siguiente) return null;
   return h('div.btn-row', { style: { marginTop: '20px' } },
-    h('button.btn.ghost', { disabled: !anterior, onclick: () => ir(`#/l/${listaId}/t/${anterior.id}`) },
+    h('button.btn.ghost', { disabled: !anterior, onclick: () => ir(conFiltros(`#/l/${listaId}/t/${anterior.id}`, filtrosDeRuta())) },
       icon('arrowLeft'), 'Anterior'),
-    h('button.btn.ghost', { disabled: !siguiente, onclick: () => ir(`#/l/${listaId}/t/${siguiente.id}`) },
+    h('button.btn.ghost', { disabled: !siguiente, onclick: () => ir(conFiltros(`#/l/${listaId}/t/${siguiente.id}`, filtrosDeRuta())) },
       'Siguiente', icon('arrowRight')),
   );
 }
@@ -517,6 +517,6 @@ async function menuTarea(t, listaId) {
     })) return;
     await store.borrarTarea(t.id);
     toast('Tarea borrada');
-    ir('#/l/' + listaId);
+    ir(conFiltros('#/l/' + listaId, filtrosDeRuta()));
   }
 }
