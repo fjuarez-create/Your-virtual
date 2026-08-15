@@ -214,12 +214,15 @@ function hojaTexto(imagenes, oficioPrevio) {
     const otra = h('button.btn.ghost.full', null, icon('plus'), 'Guardar y añadir otra');
     const pista = h('p.hint');
 
-    const rejilla = h('div.rejilla-oficios', null,
-      ...OFICIOS.map((o) => h('button.oficio', {
-        class: elegido === o.id ? 'on' : '',
+    // Los mismos chips que los filtros y que la hoja del selector de
+    // oficio: fluyen y caben los que quepan en cada línea.
+    const rejilla = h('div.chips.filtro', null,
+      ...OFICIOS.map((o) => h('button.chip.accent', {
+        'aria-pressed': elegido === o.id ? 'true' : 'false',
         onclick: (e) => {
           elegido = o.id;
-          [...rejilla.children].forEach((c) => c.classList.toggle('on', c === e.currentTarget));
+          [...rejilla.children].forEach((c) =>
+            c.setAttribute('aria-pressed', c === e.currentTarget ? 'true' : 'false'));
           validar();
         },
       }, o.corto)),

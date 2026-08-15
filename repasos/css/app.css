@@ -945,22 +945,6 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 .selector svg { transform: rotate(90deg); color: var(--muted); flex: none; }
 .selector.puesto { background: var(--accent-soft); color: var(--accent-deep); font-weight: 600; }
 
-/* Los doce oficios a dos columnas: caben de una vez, sin desplazar. */
-.rejilla-oficios {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 7px;
-  margin-top: 8px;
-}
-.oficio {
-  padding: 12px 12px; border-radius: 13px;
-  background: var(--surface); color: var(--text);
-  font-size: 13px; font-weight: 600; letter-spacing: -0.01em;
-  text-align: left;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  transition: background var(--mov-corto) var(--sal-estandar),
-              color var(--mov-corto) var(--sal-estandar);
-}
-.oficio.on { background: var(--ink); color: #fff; }
-.rejilla-oficios .oficio:first-child:only-child { grid-column: 1 / -1; }
 
 /* ─── Viviendas, en una columna ────────────────────────────────
    El color dice el estado antes de leer nada: apagada sin tareas,
