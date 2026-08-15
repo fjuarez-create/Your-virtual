@@ -24,8 +24,31 @@ const CLAUDE_MODELO = 'claude-opus-5';
  */
 const CLAUDE_ESFUERZO = 'medium';
 
-/** Tope de la respuesta. Cuenta lo que piensa además de lo que escribe. */
+/**
+ * Tope de la respuesta para un recorrido corto. Cuenta lo que el modelo
+ * piensa además de lo que escribe —en Opus 5 pensar viene puesto de
+ * fábrica—, así que no es el tamaño de las tareas: es el de las tareas
+ * más el rato que tarda en repartirlas.
+ *
+ * Con quince fotos sobra. Un recorrido de sesenta necesita más sitio, y
+ * eso lo pone `claude_tope_salida()`.
+ */
 const CLAUDE_TOPE_SALIDA = 16000;
+
+/** Cuánto puede tardar el hosting en esta llamada, en segundos. */
+const CLAUDE_MARGEN_PHP = 300;
+
+/**
+ * El tope de la respuesta según lo largo que haya sido el recorrido.
+ *
+ * Repartir sesenta frases entre sesenta fotos se piensa más que
+ * repartir quince entre quince, y si se queda sin sitio a media
+ * respuesta el JSON llega cortado y no hay nada que salvar.
+ */
+function claude_tope_salida(int $marcas): int
+{
+    return min(40000, CLAUDE_TOPE_SALIDA + max(0, $marcas - 20) * 400);
+}
 
 function claude_fichero_clave(): string
 {
@@ -196,9 +219,15 @@ function claude_redactar(string $texto, array $marcas, array $oficios): array
         responder_error(500, 'Este servidor no tiene cURL y no puede llamar a la API.', 'php-curl');
     }
 
+    // Muchos alojamientos compartidos cortan un PHP a los 30 segundos, y
+    // esta llamada tarda más que eso. Si la corta el hosting, el móvil ve
+    // «sin conexión» y en Anthropic ya se ha pagado la llamada igual: el
+    // trabajo estaba hecho, lo que faltó fue esperar a recogerlo.
+    @set_time_limit(CLAUDE_MARGEN_PHP);
+
     $cuerpo = [
         'model' => CLAUDE_MODELO,
-        'max_tokens' => CLAUDE_TOPE_SALIDA,
+        'max_tokens' => claude_tope_salida(count($marcas)),
         'system' => claude_instrucciones($oficios),
         'messages' => [
             ['role' => 'user', 'content' => claude_mensaje($texto, $marcas)],
@@ -223,6 +252,12 @@ function claude_redactar(string $texto, array $marcas, array $oficios): array
 
     if (($json['stop_reason'] ?? '') === 'refusal') {
         responder_error(422, 'El modelo ha declinado redactar esto. Escribe las tareas a mano.', 'declinado');
+    }
+    // Se quedó sin sitio a mitad de la respuesta: el JSON llega cortado y
+    // no se puede leer. Se dice lo que pasó, que si no parece que el
+    // modelo conteste raro cuando lo que pasa es que el recorrido es largo.
+    if (($json['stop_reason'] ?? '') === 'max_tokens') {
+        responder_error(502, 'El recorrido es tan largo que la respuesta se ha cortado. Divídelo en dos.', 'sin-sitio');
     }
 
     $texto_salida = '';
@@ -274,8 +309,10 @@ function claude_pedir(string $clave, array $cuerpo, bool $con_fallback): array
         CURLOPT_HTTPHEADER => $cabeceras,
         CURLOPT_POSTFIELDS => json_encode($cuerpo, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         // Pensar y escribir veinte tareas lleva su tiempo; el móvil
-        // espera con su propio aviso mientras tanto.
-        CURLOPT_TIMEOUT => 180,
+        // espera con su propio aviso mientras tanto. Se corta antes que
+        // el margen de PHP a propósito: así el que avisa es este código,
+        // que sabe decir qué ha pasado, y no el hosting a medias.
+        CURLOPT_TIMEOUT => 240,
         CURLOPT_CONNECTTIMEOUT => 15,
     ]);
     $salida = curl_exec($ch);
