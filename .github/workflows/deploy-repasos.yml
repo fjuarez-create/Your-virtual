@@ -135,8 +135,35 @@ jobs:
           fi
           echo "Sin credenciales ni páginas de instalación en la carpeta de publicación."
 
+      # lftp suele venir ya en la imagen del runner. Cuando no viene, el
+      # «apt-get update» es lo que se cuelga: los espejos de paquetes de
+      # GitHub fallan cada cierto tiempo y el paso se queda colgado hasta
+      # agotar los veinte minutos del job, con el despliegue a medias.
+      #
+      # Así que primero se mira si ya está —el caso normal, y cero red—,
+      # y si hay que instalarlo se hace con un tope de tiempo y tres
+      # intentos, para que un espejo malo cueste un minuto y no el
+      # despliegue entero.
       - name: Instalar lftp
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq lftp
+        timeout-minutes: 6
+        run: |
+          set -eu
+          if command -v lftp > /dev/null; then
+            echo "lftp ya está en la imagen: $(lftp --version | head -1)"
+            exit 0
+          fi
+          for intento in 1 2 3; do
+            echo "Instalando lftp (intento $intento de 3)…"
+            if timeout 90 sudo apt-get update -qq \
+               && timeout 90 sudo apt-get install -y -qq lftp; then
+              echo "lftp instalado."
+              exit 0
+            fi
+            echo "Ha fallado o se ha colgado; se reintenta." >&2
+            sleep $((intento * 5))
+          done
+          echo "No se ha podido instalar lftp tras tres intentos." >&2
+          exit 1
 
       # Antes de escribir nada: comprobar que la carpeta a la que apuntan
       # los secretos es la de repasos. Es la red que evita el peor
