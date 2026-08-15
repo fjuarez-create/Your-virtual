@@ -133,6 +133,13 @@ export const cambios = (desde) =>
 /** URL pública de un medio ya subido. */
 export const urlMedio = (id) => API_BASE + 'medios/' + encodeURIComponent(id) + '/fichero';
 
+/**
+ * Pregunta al servidor si puede llamar él solo a un servicio de fuera.
+ * Se comprueba desde el móvil porque es donde está quien lo necesita
+ * saber, pero lo que se mide es la salida del hosting, no la del móvil.
+ */
+export const salidaAInternet = () => pedir('diagnostico/salida');
+
 function extension(mime) {
   const m = {
     'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp',

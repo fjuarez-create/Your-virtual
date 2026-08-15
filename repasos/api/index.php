@@ -151,7 +151,82 @@ function despachar(string $metodo, array $p): void
         cambios();
     }
 
+    if ($r0 === 'diagnostico' && ($p[1] ?? '') === 'salida' && $metodo === 'GET') {
+        diagnostico_salida();
+    }
+
     responder_error(404, 'Ruta desconocida.');
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Diagnóstico
+   ═══════════════════════════════════════════════════════════════ */
+/**
+ * ¿Puede este hosting llamar por su cuenta a un servicio de fuera?
+ *
+ * Hace falta saberlo antes de montar la transcripción de los
+ * recorridos: el audio lo tiene que mandar el servidor, no el móvil, y
+ * muchos alojamientos compartidos tienen la salida cerrada. Se prueba
+ * contra un sitio cualquiera con HTTPS, sin mandar nada de nadie: solo
+ * se comprueba que la puerta está abierta.
+ *
+ * No devuelve un sí o un no a secas, sino qué es lo que falla —el
+ * cortafuegos, los certificados, la falta de cURL—, que es lo que
+ * luego hay que pedirle al hosting.
+ */
+function diagnostico_salida(): void
+{
+    exigir_sesion();
+
+    if (!function_exists('curl_init')) {
+        responder([
+            'puede' => false,
+            'motivo' => 'Este servidor no tiene cURL instalado.',
+            'detalle' => 'php-curl',
+        ]);
+    }
+
+    $t0 = microtime(true);
+    $ch = curl_init('https://api.anthropic.com/v1/models');
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 8,
+        CURLOPT_CONNECTTIMEOUT => 5,
+        CURLOPT_FOLLOWLOCATION => false,
+    ]);
+    curl_exec($ch);
+    $codigo = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    $errno = curl_errno($ch);
+    $error = curl_error($ch);
+    curl_close($ch);
+    $ms = (int) round((microtime(true) - $t0) * 1000);
+
+    // Un 401 es la mejor noticia posible: significa que la petición ha
+    // llegado hasta el otro lado y solo falta la clave.
+    if ($codigo > 0) {
+        responder([
+            'puede' => true,
+            'motivo' => $codigo === 401
+                ? 'La salida funciona: el servicio contesta y solo falta la clave.'
+                : "La salida funciona (respuesta $codigo).",
+            'ms' => $ms,
+            'php' => PHP_VERSION,
+        ]);
+    }
+
+    $motivos = [
+        CURLE_COULDNT_RESOLVE_HOST => 'El servidor no puede resolver nombres: no hay DNS de salida.',
+        CURLE_COULDNT_CONNECT => 'La conexión de salida está cerrada por el cortafuegos del hosting.',
+        CURLE_OPERATION_TIMEDOUT => 'La conexión se ha quedado colgada: casi siempre es el cortafuegos.',
+        CURLE_SSL_CACERT => 'Faltan los certificados raíz del servidor.',
+        CURLE_SSL_CONNECT_ERROR => 'El servidor no consigue negociar el cifrado con el exterior.',
+    ];
+    responder([
+        'puede' => false,
+        'motivo' => $motivos[$errno] ?? 'No se ha podido salir a internet.',
+        'detalle' => $error !== '' ? $error : "cURL $errno",
+        'ms' => $ms,
+    ]);
 }
 
 /* ═══════════════════════════════════════════════════════════════

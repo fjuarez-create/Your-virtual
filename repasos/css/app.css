@@ -1279,3 +1279,8 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 .screen.grabando .titulo-pantalla,
 .screen.grabando .topbar .eyebrow { display: none; }
 .screen.grabando .rec-visor { aspect-ratio: auto; height: min(62vh, 620px); }
+
+/* Un resultado de diagnóstico no se corta con puntos suspensivos: es
+   justo el texto que hay que leer entero y copiar al correo del
+   hosting cuando dice que no. */
+.row .row-sub.libre { white-space: normal; overflow: visible; text-overflow: clip; }

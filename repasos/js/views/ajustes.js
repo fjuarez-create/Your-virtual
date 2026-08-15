@@ -90,6 +90,18 @@ export async function render() {
           () => quitarEjemplos(), true) : null,
       ) : null,
 
+      // La transcripción de los recorridos la tendrá que mandar el
+      // servidor, no el móvil. Muchos alojamientos compartidos tienen la
+      // salida cerrada, y esto lo dice en diez segundos desde el propio
+      // teléfono en vez de a base de correos con el hosting.
+      admin && api.HAY_SERVIDOR && !u.local
+        ? h('p.eyebrow', { style: { marginTop: '26px', marginBottom: '10px' } }, 'Servidor')
+        : null,
+      admin && api.HAY_SERVIDOR && !u.local
+        ? h('div.stack', null, fila('cloud', 'Comprobar la salida a internet',
+            'Si el hosting puede llamar a servicios de fuera', (e) => probarSalida(e)))
+        : null,
+
       h('p.eyebrow', { style: { marginTop: '26px', marginBottom: '10px' } }, 'Sesión'),
       h('div.stack', null,
         fila('logout', 'Cerrar sesión', null, () => cerrarSesion(), true),
@@ -110,6 +122,34 @@ function fila(ico, titulo, sub, onclick, peligro = false) {
     ),
     chevron(),
   );
+}
+
+/**
+ * Comprueba, desde el móvil, si el hosting puede salir a internet por
+ * su cuenta. El resultado se escribe en la propia fila en vez de en un
+ * aviso que se va: es un dato que hay que poder leer con calma y, si
+ * dice que no, copiar tal cual en el correo al hosting.
+ */
+async function probarSalida(evento) {
+  const boton = evento.currentTarget;
+  const sub = boton.querySelector('.row-sub');
+  sub.classList.add('libre');
+  sub.textContent = 'Probando…';
+  boton.disabled = true;
+  try {
+    const r = await api.salidaAInternet();
+    sub.textContent = r.puede
+      ? `${r.motivo} (${r.ms} ms)`
+      : `${r.motivo} — ${r.detalle || ''}`.trim();
+    boton.classList.toggle('danger', !r.puede);
+  } catch (e) {
+    sub.textContent = e?.status === 404
+      ? 'El servidor todavía no tiene esta comprobación instalada.'
+      : 'No se ha podido preguntar al servidor.';
+    boton.classList.add('danger');
+  } finally {
+    boton.disabled = false;
+  }
 }
 
 async function espacioUsado() {
