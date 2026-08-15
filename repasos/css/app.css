@@ -874,14 +874,25 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
   font-size: clamp(28px, 8vw, 34px); font-weight: 800;
   letter-spacing: -0.02em; text-transform: uppercase;
 }
-/* Repartidos a partes iguales y sin envolver. Con cuatro estados y
-   palabras de largos distintos, dejarlos crecer con el texto hacía que
-   el último saltara solo a una segunda línea; así ocupan la fila entera
-   y da igual cómo de largo sea cada nombre. */
+/* La fila ocupa el ancho entero y la sangría interior es la misma en
+   todos, aunque las palabras midan distinto.
+
+   La clave es `flex: 1 1 auto` y no `flex: 1`. Con `flex: 1` la base
+   es cero y todos acaban con el MISMO ANCHO, así que «Todas» queda con
+   una sangría enorme y «Validadas» pegada al borde. Con base `auto`,
+   cada pastilla parte de lo que mide su palabra y el hueco sobrante se
+   reparte a partes iguales: cada una crece lo mismo, ese crecimiento se
+   parte por igual a izquierda y derecha, y la sangría acaba siendo
+   idéntica en las cuatro. Los anchos salen distintos, que es justo lo
+   que tiene que pasar. */
 .chips.filtro { gap: 9px; flex-wrap: nowrap; }
 .chips.filtro .chip {
-  flex: 1; min-width: 0;
-  padding: 13px 6px; font-size: 14px;
+  flex: 1 1 auto; min-width: 0;
+  /* El alto lo fija min-height y no el relleno: así es exacto y no
+     depende de las métricas de la tipografía. */
+  min-height: 54px; padding: 0 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 14px;
   border-radius: 17px;
   background: var(--bg);
   box-shadow: inset 0 0 0 1.5px var(--line);
@@ -903,7 +914,7 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
    El texto a la izquierda y la flecha pegada al borde derecho. */
 .selector {
   display: flex; align-items: center; gap: 10px;
-  width: 100%; padding: 13px 18px;
+  width: 100%; min-height: 54px; padding: 0 18px;
   background: var(--surface); border-radius: 17px;
   font-size: 14px; color: var(--text); text-align: left;
 }
