@@ -8,7 +8,7 @@
    ═══════════════════════════════════════════════════════════════ */
 import * as db from './db.js';
 import * as api from './api.js';
-import { puedeVerificar, hecha, esperandoVisto, OFICIO_POR_DEFECTO } from './catalog.js';
+import { puedeVerificar, hecha, esperandoVisto, OFICIO_POR_DEFECTO, FASE_UNICA } from './catalog.js';
 
 /* ─── Identificadores y sellos de tiempo ──────────────────────── */
 export function nuevoId() {
@@ -123,11 +123,14 @@ export async function lista(id) {
  * usa la creación de datos de ejemplo; el trabajo de verdad lo firma
  * siempre quien tiene la sesión abierta.
  */
-export async function crearLista({ unidadId, promoId, fase, nombre = '', autor = null }) {
+export async function crearLista({ unidadId, promoId, fase = FASE_UNICA, nombre = '', autor = null }) {
   const quien = autor || usuario;
   const l = {
     id: nuevoId(),
-    unidadId, promoId, fase,
+    unidadId, promoId,
+    // El campo sigue en el esquema del servidor y en las actas ya
+    // firmadas; la app dejó de dividirlas en pre y post.
+    fase,
     // Vacío a propósito: el acta se llama como la vivienda hasta que
     // alguien decida ponerle otro nombre, y así renombrar la vivienda
     // no deja actas con un nombre viejo pegado.

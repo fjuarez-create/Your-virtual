@@ -2,14 +2,14 @@
    informe.js — informe imprimible de una lista de repaso.
 
    Es lo que se le pasa al jefe de obra o a la constructora: cabecera
-   con promoción, vivienda, fase, fecha y firma, y después una ficha por
+   con promoción, vivienda, fecha y firma, y después una ficha por
    tarea con su foto y su texto. Se monta fuera de #app para que la hoja
    de estilos de impresión pueda esconder la app entera y dejar solo el
    informe; desde ahí, «Guardar como PDF» del propio navegador.
    ═══════════════════════════════════════════════════════════════ */
 import { h, icon, fechaLarga, hora, toast } from './ui.js';
 import * as store from './store.js';
-import { unidad, promocion, fase, estado } from './catalog.js';
+import { unidad, promocion, estado } from './catalog.js';
 
 export async function informe(lista, { abrirImpresion = false } = {}) {
   const tareas = await store.tareasDeLista(lista.id);
@@ -17,7 +17,6 @@ export async function informe(lista, { abrirImpresion = false } = {}) {
 
   const u = unidad(lista.unidadId);
   const p = promocion(lista.promoId);
-  const f = fase(lista.fase);
 
   const pendientes = tareas.filter((t) => t.estado === 'pendiente').length;
 

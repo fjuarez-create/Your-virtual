@@ -69,11 +69,17 @@ function slug(s) {
     .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
-/** Fases de repaso. El orden define el de los selectores. */
-export const FASES = [
-  { id: 'pre', nombre: 'Pre-entrega', corto: 'Pre' },
-  { id: 'post', nombre: 'Post-entrega', corto: 'Post' },
-];
+/**
+ * Las actas ya no se dividen en pre-entrega y post-entrega. La idea es
+ * que el cliente entre y esté todo bien, y se sigue trabajando hasta
+ * que lo esté, entre antes o después: la etiqueta no cambiaba nada de
+ * lo que había que hacer y solo servía para clasificar el papel.
+ *
+ * El campo sigue viajando a la base con este valor, porque está en el
+ * esquema del servidor y en las actas ya firmadas. No se enseña, no se
+ * pregunta y no se filtra por él.
+ */
+export const FASE_UNICA = 'pre';
 
 /**
  * Los tres estados de una tarea, y el vocabulario de toda la app.
@@ -173,9 +179,6 @@ export function oficio(id) {
 
 export function estado(id) {
   return ESTADOS.find((e) => e.id === id) || ESTADOS[0];
-}
-export function fase(id) {
-  return FASES.find((f) => f.id === id) || FASES[0];
 }
 
 /* ═══════════════════════════════════════════════════════════════

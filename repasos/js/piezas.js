@@ -9,7 +9,7 @@ import {
 import * as media from './media.js';
 import * as store from './store.js';
 import * as api from './api.js';
-import { unidad, fase, oficio, estado, ESTADOS, OFICIOS } from './catalog.js';
+import { unidad, oficio, estado, ESTADOS, OFICIOS } from './catalog.js';
 import { ir } from './app.js';
 
 /* Medidas de la cabecera, en un sitio para que las dos —la de las
@@ -220,12 +220,11 @@ export function avisoLocal() {
 /** Fila de una lista de repaso. `conteo` = { total, pendientes }. */
 export function filaLista(lista, conteo, { mostrarVivienda = false } = {}) {
   const u = unidad(lista.unidadId);
-  const f = fase(lista.fase);
   const titulo = mostrarVivienda
     ? `${u?.nombre || lista.unidadId} · ${fechaCorta(lista.creado)}`
     : `Inspección ${fechaCorta(lista.creado)}`;
 
-  const partes = [f.nombre, lista.creadoPorNombre];
+  const partes = [lista.creadoPorNombre];
   if (conteo) {
     partes.push(conteo.total === 0
       ? 'sin tareas'
@@ -305,20 +304,10 @@ export function hojaFoto(u) {
 }
 
 /**
- * Etiqueta de fase. Pre-entrega en gris, porque es lo corriente;
- * post-entrega en el color de marca, porque es lo que hay que mirar
- * primero: la vivienda ya está entregada y el cliente está dentro.
- */
-export function chipFase(faseId) {
-  const f = fase(faseId);
-  return h('span.chip-fase' + (faseId === 'post' ? '.post' : ''), null, f.corto.toUpperCase());
-}
-
-/**
  * Tarjeta de un acta. La misma en la portada, en la pestaña de ACTAS y
  * al pie de cada vivienda: quién ha participado, de qué acta se trata,
- * cuándo se hizo, si es pre o post, y cuánto lleva verificado. Se toca
- * aquí y cambia en los tres sitios.
+ * cuándo se hizo y cuánto lleva validado. Se toca aquí y cambia en los
+ * tres sitios.
  *
  * Lo único que depende de dónde se enseñe es el título cuando el acta
  * no tiene nombre puesto. En la lista general hace falta decir de qué
@@ -342,7 +331,6 @@ export function tarjetaActa({ lista, conteo, gente }, { dentroDeVivienda = false
       h('div.acta-tit', null, titulo),
       h('div.acta-pie', null,
         h('span', null, fechaRelativa(lista.creado)),
-        chipFase(lista.fase),
       ),
     ),
     anillo(store.avance(conteo), { tam: 46 }),
@@ -417,7 +405,7 @@ export function hojaOficios(actual, { conTodos = false } = {}) {
         onclick: () => cerrar('todos'),
       }, 'Quitar filtro') : null,
     ),
-    h('button.cta-claro', { onclick: () => cerrar(null) }, 'Cancelar'),
+    ctaCancelar(() => cerrar(null)),
   ]);
 }
 
@@ -446,11 +434,16 @@ export function ctaNuevaLista(alPulsar) {
  * reconozca sin leer cuál es la acción que cierra lo que estás
  * haciendo.
  */
-export function ctaAccion(texto, { onclick, icono = 'plus', disabled = false } = {}) {
-  return h('button.cta-negro', { onclick, disabled: disabled || null },
+export function ctaAccion(texto, { onclick, icono = 'plus', claro = false, disabled = false } = {}) {
+  return h('button.cta-accion' + (claro ? '.claro' : ''), { onclick, disabled: disabled || null },
     h('span.grow', null, texto),
     h('span.cta-mas', null, icon(icono, 18)),
   );
+}
+
+/** La salida de una hoja: la misma caja, en claro y con la cruz. */
+export function ctaCancelar(onclick) {
+  return ctaAccion('CANCELAR', { onclick, icono: 'x', claro: true });
 }
 
 /**

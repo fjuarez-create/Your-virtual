@@ -17,7 +17,7 @@
    ═══════════════════════════════════════════════════════════════ */
 import * as store from './store.js';
 import * as db from './db.js';
-import { unidades } from './catalog.js';
+import { unidades, FASE_UNICA } from './catalog.js';
 
 export const PREFIJO = 'Ejemplo · ';
 
@@ -84,7 +84,7 @@ export async function crear(promoId) {
     const lista = await store.crearLista({
       unidadId: u.id,
       promoId,
-      fase: i === 1 ? 'post' : 'pre',
+      fase: FASE_UNICA,
       nombre: PREFIJO + u.nombre,
       autor: gente[0],
     });

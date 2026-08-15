@@ -809,19 +809,28 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 /* ─── Botón negro ancho y su bolita ────────────────────────────
    Son el mismo botón: cuando el ancho sale de pantalla al desplazar,
    entra la bolita. Nunca están los dos a la vez. */
-.cta-negro {
+/* La llamada a la acción de todo el proyecto: rótulo a la izquierda,
+   icono en una bolita a la derecha. La variante clara es la misma caja
+   —mismo alto, mismo ancho, mismo redondeo— para las salidas, que no
+   son la acción principal pero tampoco un enlace suelto. */
+.cta-accion {
   display: flex; align-items: center; gap: 12px;
   width: 100%; padding: 0 8px 0 22px; height: 62px;
   background: var(--ink); color: #fff;
   border-radius: var(--r-lg);
   font-size: 13.5px; font-weight: 700; letter-spacing: 0.06em;
-  transition: transform var(--mov-corto) var(--sal-estandar);
+  transition: transform var(--mov-corto) var(--sal-estandar),
+              background var(--mov-corto) var(--sal-estandar);
 }
-.cta-negro:active { transform: scale(0.985); }
-.cta-negro:disabled { opacity: 0.4; pointer-events: none; }
-/* Sin flex:1 el texto no empuja, y la bola del «+» se queda a media
+.cta-accion:active { transform: scale(0.985); }
+.cta-accion:disabled { opacity: 0.4; pointer-events: none; }
+/* Sin flex:1 el texto no empuja, y la bola del icono se queda a media
    tarjeta en vez de pegada al borde derecho. */
-.cta-negro .grow { flex: 1; min-width: 0; text-align: left; }
+.cta-accion .grow { flex: 1; min-width: 0; text-align: left; }
+
+.cta-accion.claro { background: var(--surface); color: var(--text); }
+.cta-accion.claro:active { background: var(--surface-2); }
+.cta-accion.claro .cta-mas { background: var(--bg); color: var(--text); }
 .cta-mas {
   width: 46px; height: 46px; flex: 0 0 46px; border-radius: 50%;
   background: rgba(255, 255, 255, 0.14);
@@ -863,18 +872,6 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 .opcion.principal .bola { background: var(--ink); color: #fff; }
 .opcion.principal .pie { color: rgba(17, 17, 18, 0.6); }
 
-/* La misma caja que .cta-negro —alto, ancho y redondeo— pero clara: es
-   una salida, no la acción principal de la pantalla. */
-.cta-claro {
-  display: flex; align-items: center; justify-content: center;
-  width: 100%; height: 62px;
-  background: var(--surface); color: var(--text);
-  border-radius: var(--r-lg);
-  font-size: 13.5px; font-weight: 700; letter-spacing: 0.06em;
-  transition: transform var(--mov-corto) var(--sal-estandar),
-              background var(--mov-corto) var(--sal-estandar);
-}
-.cta-claro:active { transform: scale(0.985); background: var(--surface-2); }
 .fab-bola {
   position: absolute; right: var(--pad); z-index: 45;
   bottom: calc(env(safe-area-inset-bottom) + var(--tab-h) + 8px);
@@ -923,14 +920,6 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 }
 .acta-tit { min-width: 0; }
 
-/* Pre en gris porque es lo corriente; post en el color de marca
-   porque la vivienda ya está entregada y el cliente está dentro. */
-.chip-fase {
-  padding: 3px 9px; border-radius: 7px;
-  background: var(--surface-2); color: var(--muted);
-  font-size: 10px; font-weight: 700; letter-spacing: 0.09em;
-}
-.chip-fase.post { background: var(--accent); color: var(--on-accent); }
 
 /* ─── Filtros ──────────────────────────────────────────────────── */
 .titulo-promo {

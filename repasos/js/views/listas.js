@@ -4,8 +4,8 @@
    04 quiere saber qué queda por hacer en esa casa, no en cuál de las
    tres visitas salió cada cosa. Las actas siguen existiendo —son la
    firma de quién vio qué y cuándo— y se abren desde el pie. */
-import { h, icon, sheet, toast, emptyState } from '../ui.js';
-import { promocion, unidad, FASES, puedeCrearLista } from '../catalog.js';
+import { h, icon, toast, emptyState } from '../ui.js';
+import { promocion, unidad, FASE_UNICA, puedeCrearLista } from '../catalog.js';
 import * as store from '../store.js';
 import { cabeceraDentro, ctaNuevaLista, tareaFila, tarjetaActa, filtroEstado, filtroOficio } from '../piezas.js';
 import { ir } from '../app.js';
@@ -19,10 +19,12 @@ export async function render({ promoId, unidadId }) {
   const portadas = new Map();
   for (const t of tareas) portadas.set(t.id, await store.urlDePortada(t));
 
+  // Sin preguntar nada: ya no hay pre ni post que elegir, así que la
+  // hoja que había en medio solo pedía confirmar lo que se acababa de
+  // pulsar. Se crea, se avisa y se entra dentro.
   const nueva = async () => {
-    const faseId = await elegirFase();
-    if (!faseId) return;
-    const l = await store.crearLista({ unidadId, promoId, fase: faseId });
+    const l = await store.crearLista({ unidadId, promoId, fase: FASE_UNICA });
+    toast('Acta abierta · se firma con tu nombre y la fecha de hoy');
     ir('#/l/' + l.id);
   };
 
@@ -125,21 +127,3 @@ function encaja(t, estado, oficioId) {
   return true;
 }
 
-function elegirFase() {
-  return sheet((cerrar) => [
-    h('h2.title', null, 'Nueva lista de repaso'),
-    h('p.sub', null, 'Se firma con la fecha de hoy y tu nombre.'),
-    h('div.stack', { style: { marginTop: '6px' } },
-      FASES.map((f) => h('button.row', { onclick: () => cerrar(f.id) },
-        h('div.row-lead', null, f.corto.toUpperCase()),
-        h('div.grow', null,
-          h('div.row-title', null, f.nombre),
-          h('div.row-sub', null, f.id === 'pre'
-            ? 'Antes de entregar la vivienda'
-            : 'Con el cliente ya dentro'),
-        ),
-      )),
-    ),
-    h('button.btn.ghost.full', { onclick: () => cerrar(null) }, 'Cancelar'),
-  ]);
-}

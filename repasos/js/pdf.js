@@ -144,7 +144,7 @@ function ensamblar(paginas) {
  *
  * @returns {Blob} el PDF listo para descargar o compartir
  */
-export function hojaDePuerta({ vivienda, promocion, fase, fecha, autor, tareas }) {
+export function hojaDePuerta({ vivienda, promocion, fecha, autor, tareas }) {
   const anchoUtil = A4.ancho - MARGEN * 2;
   const paginas = [];
   let pag = new Pagina();
@@ -156,14 +156,14 @@ export function hojaDePuerta({ vivienda, promocion, fase, fecha, autor, tareas }
       y -= 30;
       pag.texto(MARGEN, y, vivienda, { tam: 30, negrita: true });
       y -= 20;
-      pag.texto(MARGEN, y, `${promocion}  ·  ${fase}`, { tam: 13, gris: 0.35 });
+      pag.texto(MARGEN, y, promocion, { tam: 13, gris: 0.35 });
       y -= 18;
       pag.texto(MARGEN, y, `Inspección ${fecha}  ·  ${autor}`, { tam: 11, gris: 0.45 });
       y -= 14;
       pag.linea(MARGEN, y, A4.ancho - MARGEN, y, 1.6);
       y -= 26;
     } else {
-      pag.texto(MARGEN, y, `${vivienda}  ·  ${promocion}  ·  ${fase}`, { tam: 10, negrita: true, gris: 0.4 });
+      pag.texto(MARGEN, y, `${vivienda}  ·  ${promocion}`, { tam: 10, negrita: true, gris: 0.4 });
       y -= 12;
       pag.linea(MARGEN, y, A4.ancho - MARGEN, y, 0.8, 0.6);
       y -= 22;

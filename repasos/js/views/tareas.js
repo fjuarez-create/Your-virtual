@@ -2,10 +2,10 @@
    Se ve la foto y el texto de cada una sin tener que abrirla, que es
    como se repasa una vivienda andando. */
 import { h, icon, sheet, toast, confirmSheet, emptyState, fechaCorta, hora } from '../ui.js';
-import { unidad, fase, estado, promocion, ESTADOS, OFICIOS, oficio } from '../catalog.js';
+import { unidad, estado, promocion, ESTADOS, OFICIOS, oficio } from '../catalog.js';
 import * as store from '../store.js';
 import * as media from '../media.js';
-import { cabeceraDentro, barraSync, filtroEstado, ctaAccion } from '../piezas.js';
+import { cabeceraDentro, barraSync, filtroEstado, ctaAccion, ctaCancelar } from '../piezas.js';
 import { ir, refrescar } from '../app.js';
 import { informe } from '../informe.js';
 import { hojaDePuerta, nombreDeFichero } from '../pdf.js';
@@ -15,7 +15,6 @@ export async function render({ listaId }) {
   if (!lista) { toast('La lista ya no existe', 'err'); ir('#/', { reemplazar: true }); return { contenido: [] }; }
 
   const u = unidad(lista.unidadId);
-  const f = fase(lista.fase);
   const tareas = await store.tareasDeLista(listaId);
 
   // Portadas y tipos de medio, para pintar cada tarjeta de una vez.
@@ -70,7 +69,7 @@ export async function render({ listaId }) {
       // la vivienda se llaman igual y no hay forma de saber dónde estás.
       ...cabeceraDentro(lista.nombre || `ACTA ${(u?.nombre || '').toUpperCase()}`.trim(), {
         volverA: `#/p/${lista.promoId}/v/${String(lista.unidadId).split(':')[1]}`,
-        sub: `${f.nombre} · ${fechaCorta(lista.creado)}`,
+        sub: fechaCorta(lista.creado),
         acciones: [h('button.icon-btn', {
           'aria-label': 'Opciones del acta',
           onclick: () => menuLista(lista, tareas),
@@ -155,7 +154,7 @@ export async function nuevaTarea(listaId) {
         h('span.pie', null, 'Fotos ya hechas'),
       ),
     ),
-    h('button.cta-claro', { onclick: () => cerrar(null) }, 'Cancelar'),
+    ctaCancelar(() => cerrar(null)),
   ]);
   if (!origen) return;
 
@@ -280,7 +279,6 @@ async function descargarHoja(lista, tareas) {
     const blob = hojaDePuerta({
       vivienda: u?.nombre || lista.unidadId,
       promocion: p?.nombre || lista.promoId,
-      fase: fase(lista.fase).nombre,
       fecha: fechaCorta(lista.creado),
       autor: lista.creadoPorNombre,
       tareas,
