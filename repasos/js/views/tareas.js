@@ -5,7 +5,7 @@ import { h, icon, sheet, toast, confirmSheet, emptyState, fechaCorta, hora } fro
 import { unidad, fase, estado, promocion, ESTADOS, OFICIOS, oficio } from '../catalog.js';
 import * as store from '../store.js';
 import * as media from '../media.js';
-import { cabeceraDentro, barraSync } from '../piezas.js';
+import { cabeceraDentro, barraSync, filtroEstado } from '../piezas.js';
 import { ir, refrescar } from '../app.js';
 import { informe } from '../informe.js';
 import { hojaDePuerta, nombreDeFichero } from '../pdf.js';
@@ -31,40 +31,31 @@ export async function render({ listaId }) {
     });
   }
 
-  const conteo = {
-    total: tareas.length,
-    pendientes: tareas.filter((t) => t.estado === 'pendiente').length,
-  };
+  const conteo = { total: tareas.length };
 
   let filtro = 'todas';
   const listado = h('div.stack');
+  const contador = h('p.contador');
 
+  // Los mismos chips, las mismas palabras y el mismo contador debajo
+  // que en las otras tres pantallas que filtran. Aquí lo que se filtra
+  // son tareas, así que el valor del chip es el estado tal cual.
   const pintar = () => {
+    const visibles = tareas.filter((t) => filtro === 'todas' || t.estado === filtro);
     listado.replaceChildren();
-    const visibles = tareas.filter((t) =>
-      filtro === 'todas' ? true : filtro === 'pendientes' ? t.estado === 'pendiente' : t.estado !== 'pendiente');
     if (!visibles.length) {
-      listado.append(h('p.sub', { style: { padding: '26px 0', textAlign: 'center' } },
-        filtro === 'pendientes' ? 'No queda nada pendiente en esta lista.' : 'Todavía no hay ninguna tarea cerrada.'));
-      return;
+      listado.append(h('p.sub.center', { style: { padding: '26px 0' } },
+        'Ninguna tarea de esta lista está así.'));
+    } else {
+      visibles.forEach((t) => listado.append(
+        tarjetaTarea(t, tareas.indexOf(t) + 1, portadas.get(t.id), tipos.get(t.id), listaId)));
     }
-    visibles.forEach((t) => listado.append(tarjetaTarea(t, tareas.indexOf(t) + 1, portadas.get(t.id), tipos.get(t.id), listaId)));
+    contador.textContent = visibles.length === tareas.length
+      ? `${tareas.length} ${tareas.length === 1 ? 'tarea' : 'tareas'}`
+      : `${visibles.length} de ${tareas.length} tareas`;
   };
 
-  // `.filtro`: los mismos chips altos y con el mismo redondeo que los
-  // de las pantallas de actas, viviendas y vivienda.
-  const chips = h('div.chips.filtro', null,
-    ...[['todas', `Todas ${conteo.total}`], ['pendientes', `Pendientes ${conteo.pendientes}`], ['cerradas', 'Cerradas']]
-      .map(([id, txt]) => h('button.chip.accent', {
-        'aria-pressed': id === filtro ? 'true' : 'false',
-        onclick: (e) => {
-          filtro = id;
-          [...chips.children].forEach((c) => c.setAttribute('aria-pressed', c === e.currentTarget ? 'true' : 'false'));
-          pintar();
-        },
-      }, txt)),
-  );
-
+  const chips = filtroEstado((v) => { filtro = v; pintar(); });
   pintar();
 
   const fab = h('button.fab', { onclick: () => nuevaTarea(listaId) }, icon('camera'), 'Nueva tarea');
@@ -98,6 +89,7 @@ export async function render({ listaId }) {
       }, icon('documento'), 'Hoja PDF para la puerta') : null,
 
       conteo.total ? chips : null,
+      conteo.total ? contador : null,
       tareas.length ? listado : emptyState('camera', 'Lista vacía',
         'Recorre la vivienda y añade una tarea por cada remate, defecto o detalle que encuentres.',
         h('button.btn.accent', { onclick: () => nuevaTarea(listaId) }, icon('camera'), 'Primera tarea')),

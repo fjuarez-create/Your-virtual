@@ -5,7 +5,7 @@
    tres visitas salió cada cosa. Las actas siguen existiendo —son la
    firma de quién vio qué y cuándo— y se abren desde el pie. */
 import { h, icon, sheet, toast, emptyState } from '../ui.js';
-import { promocion, unidad, FASES, hecha } from '../catalog.js';
+import { promocion, unidad, FASES, puedeCrearLista } from '../catalog.js';
 import * as store from '../store.js';
 import { cabeceraDentro, ctaNuevaLista, tareaFila, tarjetaActa, filtroEstado, filtroOficio } from '../piezas.js';
 import { ir } from '../app.js';
@@ -37,7 +37,9 @@ export async function render({ promoId, unidadId }) {
           actas.length
             ? `Ya hay un acta abierta en ${u.nombre.toLowerCase()}, pero todavía sin tareas dentro. Ábrela y ve añadiendo lo que encuentres.`
             : `Crea la primera lista de repaso de ${u.nombre.toLowerCase()} y ve añadiendo lo que encuentres mientras la recorres.`,
-          h('button.btn.ink', { onclick: nueva }, icon('plus'), 'Nueva lista de repaso')),
+          puedeCrearLista(store.sesion())
+            ? h('button.btn.ink', { onclick: nueva }, icon('plus'), 'Nueva lista de repaso')
+            : null),
         // Un acta recién creada aún no tiene tareas. Si no se enseñara
         // aquí, quedaría invisible desde su propia vivienda.
         pieDeActas(actas),
@@ -73,7 +75,10 @@ export async function render({ promoId, unidadId }) {
       filtroEstado((v) => { estado = v; pintar(); }),
       filtroOficio((v) => { oficioId = v; pintar(); }),
       contador,
-      ctaNuevaLista(nueva),
+      // Un acta la abre quien puede darla por buena. Al jefe de obra no
+      // se le enseña el botón: responde a las tareas de un acta, no la
+      // convoca.
+      puedeCrearLista(store.sesion()) ? ctaNuevaLista(nueva) : null,
       listado,
       // Las actas, al pie: se consultan cuando hace falta saber quién
       // firmó qué, no cada vez que se entra en la casa.
@@ -84,9 +89,9 @@ export async function render({ promoId, unidadId }) {
 
 /**
  * Las actas de la vivienda, con la misma tarjeta que la pestaña de
- * ACTAS. Delante van las que tienen algo por resolver; las terminadas
- * quedan detrás, bajo su propio epígrafe, pero se ven: son la firma de
- * quién vio qué y cuándo, y a eso se vuelve.
+ * ACTAS. Delante van las que tienen algo abierto o por validar; las
+ * validadas del todo quedan detrás, bajo su propio epígrafe, pero se
+ * ven: son la firma de quién vio qué y cuándo, y a eso se vuelve.
  */
 function pieDeActas(actas) {
   if (!actas.length) return null;
@@ -103,17 +108,19 @@ function pieDeActas(actas) {
     // sobra, y con ninguna terminada no habría nada debajo.
     terminadas.length
       ? h('div', { style: { marginTop: abiertas.length ? '20px' : '10px' } },
-          abiertas.length ? h('p.eyebrow', { style: { marginBottom: '10px' } }, 'Terminadas') : null,
+          abiertas.length ? h('p.eyebrow', { style: { marginBottom: '10px' } }, 'Validadas') : null,
           h('div.stack.actas', null, terminadas.map((a) => tarjetaActa(a, { dentroDeVivienda: true }))),
         )
       : null,
   );
 }
 
-/** Mismos criterios que en las pantallas de actas y viviendas. */
+/**
+ * Aquí lo que se filtra son tareas, no viviendas, así que el chip se
+ * compara con el estado tal cual: el valor del filtro ES el id.
+ */
 function encaja(t, estado, oficioId) {
-  if (estado === 'pendientes' && hecha(t)) return false;
-  if (estado === 'terminadas' && !hecha(t)) return false;
+  if (estado !== 'todas' && t.estado !== estado) return false;
   if (oficioId !== 'todos' && (t.oficio || 'general') !== oficioId) return false;
   return true;
 }

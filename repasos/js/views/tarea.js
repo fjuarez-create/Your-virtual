@@ -100,8 +100,8 @@ export async function render({ listaId, tareaId }) {
   if (permitidos.length < ESTADOS.length) {
     chipsEstado.append(h('span.chip', {
       style: { opacity: '.45', pointerEvents: 'none' },
-      title: 'Solo la dirección facultativa y UNIK pueden verificar',
-    }, 'Verificada'));
+      title: 'Solo la dirección facultativa y UNIK pueden validar',
+    }, 'Validada'));
   }
 
   const e = estado(t.estado);
@@ -220,13 +220,15 @@ async function cambiarEstadoTarea(t, nuevo) {
     const nota = await hojaRechazo(t);
     if (!nota) return;
     await store.cambiarEstado(t.id, nuevo, nota);
-    toast('Devuelta a pendiente');
+    toast('Devuelta a abierta');
     return refrescar();
   }
 
   try {
     await store.cambiarEstado(t.id, nuevo);
-    toast('Marcada como ' + nuevo);
+    // El nombre visible, no el identificador: al usuario «resuelta» no
+    // le dice nada, porque en pantalla eso se llama «Revisar».
+    toast('Marcada como ' + estado(nuevo).nombre.toLowerCase());
     refrescar();
   } catch (e) {
     toast(e.message, 'err');

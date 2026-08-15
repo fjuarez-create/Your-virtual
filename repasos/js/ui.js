@@ -185,8 +185,14 @@ export function avatar(usuario, { tam = 44, radio = '50%', onclick, etiqueta } =
  * el mismo punto: si el hueco creciera con la gente, los nombres
  * bailarían de fila en fila y no habría manera de recorrerlos con la
  * vista. En una tarjeta suelta no hace falta y se deja a cero.
+ *
+ * `vacio` pinta una bolita apagada cuando no hay nadie, para que la
+ * fila no se quede coja. Es un disco liso, sin cara y sin iniciales, y
+ * eso es deliberado: en una app cuyo objeto es dejar constancia de
+ * quién vio qué, una cara inventada acabaría leyéndose como una
+ * persona de verdad.
  */
-export function grupoAvatares(gente = [], { tam = 38, max = 3, hueco = 0 } = {}) {
+export function grupoAvatares(gente = [], { tam = 38, max = 3, hueco = 0, vacio = false } = {}) {
   const lista = gente.slice(0, max);
   const resto = gente.length - lista.length;
   // De cada bolita tapada asoma una cuarta parte. No se trata de
@@ -216,6 +222,13 @@ export function grupoAvatares(gente = [], { tam = 38, max = 3, hueco = 0 } = {})
     b.style.zIndex = String(lista.length - i);
     caja.append(b);
   });
+
+  if (!lista.length && vacio) {
+    caja.append(h('div.avatar.apilado.vacia', {
+      style: { width: tam + 'px', height: tam + 'px', flex: `0 0 ${tam}px`, left: '0' },
+      'aria-hidden': 'true',
+    }));
+  }
 
   if (resto > 0) {
     caja.append(h('div.avatar.apilado.mas', {

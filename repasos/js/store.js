@@ -445,6 +445,34 @@ export async function resumenPorUnidad(promoId) {
   return salida;
 }
 
+/**
+ * Si un contenedor —una vivienda o un acta— encaja con el filtro de
+ * estado. Lo usan las tres pantallas que listan contenedores, para que
+ * el mismo chip signifique lo mismo en todas.
+ *
+ * «Abiertas» y «Revisar» preguntan si hay AL MENOS UNA así, porque lo
+ * que se busca con ellas es dónde ir. «Validadas» exige que lo estén
+ * TODAS: una vivienda con una sola tarea validada y nueve abiertas no
+ * está validada, y si apareciera en ese filtro no serviría de nada.
+ */
+export function encajaEstado(c, estado) {
+  if (!estado || estado === 'todas') return true;
+  if (estado === 'verificada') return c.total > 0 && c.hechas === c.total;
+  if (estado === 'resuelta') return c.esperando > 0;
+  return c.pendientes > 0;
+}
+
+/**
+ * Los oficios contra los que cruzar el filtro. Buscando lo abierto o lo
+ * que hay que revisar solo cuentan los oficios que siguen vivos; en los
+ * demás casos, todo lo que haya pasado por ahí. Si no, al pedir
+ * «pintura abierta» saldrían viviendas donde la pintura ya está
+ * validada y lo abierto es de fontanería.
+ */
+export function oficiosSegun(c, estado) {
+  return (estado === 'pendiente' || estado === 'resuelta') ? c.oficiosAbiertos : c.oficios;
+}
+
 /** Cuántas actas vivas tiene una promoción. Para el enlace al archivo. */
 export async function cuantasActas(promoId = null) {
   return (await db.getAll('listas'))
@@ -464,7 +492,7 @@ function contar(tareas) {
     pendientes: tareas.filter((t) => t.estado === 'pendiente').length,
     // Dos conjuntos, porque los filtros preguntan cosas distintas:
     // «pintura» a secas es «aquí hubo pintura»; «pendientes + pintura»
-    // es «aquí queda pintura por verificar».
+    // es «aquí queda pintura por cerrar».
     oficios: new Set(tareas.map(oficioDe)),
     oficiosAbiertos: new Set(tareas.filter((t) => !hecha(t)).map(oficioDe)),
   };

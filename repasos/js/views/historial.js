@@ -10,7 +10,7 @@
    vuelve por su cuenta desde el catálogo. */
 import { h, icon, emptyState } from '../ui.js';
 import * as store from '../store.js';
-import { PROMOCIONES } from '../catalog.js';
+import { PROMOCIONES, puedeCrearLista } from '../catalog.js';
 import { tarjetaActa, ctaNuevaLista, filtroEstado, filtroOficio, cabeceraDentro } from '../piezas.js';
 import { ir } from '../app.js';
 
@@ -23,7 +23,7 @@ export async function render() {
 
   // Desde aquí no se sabe de qué vivienda es, así que primero hay que
   // elegirla. Dentro de una vivienda, el mismo botón la crea directamente.
-  const cta = ctaNuevaLista(() => ir('#/viviendas'));
+  const cta = puedeCrearLista(store.sesion()) ? ctaNuevaLista(() => ir('#/viviendas')) : null;
 
   if (!actas.length) {
     return {
@@ -32,7 +32,9 @@ export async function render() {
         ...cabeceraDentro('ACTAS', { volverA: '#/', sub: p.nombre }),
         emptyState('clipboard', 'Todavía no hay actas',
           'Cuando crees la primera lista de repaso aparecerá aquí, con su fecha y quién la hizo.',
-          h('button.btn.ink', { onclick: () => ir('#/viviendas') }, icon('plus'), 'Nueva lista de repasos')),
+          puedeCrearLista(store.sesion())
+            ? h('button.btn.ink', { onclick: () => ir('#/viviendas') }, icon('plus'), 'Nueva lista de repasos')
+            : null),
       ],
     };
   }
@@ -68,22 +70,9 @@ export async function render() {
   };
 }
 
-/**
- * Los dos filtros se cruzan: «pendientes» + «pintura» deja solo las
- * actas que tienen algo de pintura sin verificar. Por eso el conteo
- * guarda los oficios de las tareas que aún no están hechas y no los de
- * todas: si no, un acta terminada de pintura seguiría saliendo al
- * buscar pintura pendiente.
- */
+/** Los dos filtros se cruzan, con el criterio común del almacén. */
 function encaja({ conteo }, estado, oficioId) {
-  const terminada = conteo.total > 0 && conteo.hechas === conteo.total;
-  if (estado === 'pendientes' && (terminada || conteo.total === 0)) return false;
-  if (estado === 'terminadas' && !terminada) return false;
-  if (oficioId !== 'todos') {
-    // Con «pendientes» se mira solo lo que queda abierto; en los demás
-    // casos, todo lo que haya pasado por el acta.
-    const donde = estado === 'pendientes' ? conteo.oficiosAbiertos : conteo.oficios;
-    if (!donde.has(oficioId)) return false;
-  }
+  if (!store.encajaEstado(conteo, estado)) return false;
+  if (oficioId !== 'todos' && !store.oficiosSegun(conteo, estado).has(oficioId)) return false;
   return true;
 }

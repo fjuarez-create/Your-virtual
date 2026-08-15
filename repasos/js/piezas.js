@@ -9,7 +9,7 @@ import {
 import * as media from './media.js';
 import * as store from './store.js';
 import * as api from './api.js';
-import { unidad, fase, oficio, estado, OFICIOS } from './catalog.js';
+import { unidad, fase, oficio, estado, ESTADOS, OFICIOS } from './catalog.js';
 import { ir } from './app.js';
 
 /**
@@ -291,13 +291,19 @@ export function tarjetaActa({ lista, conteo, gente }, { dentroDeVivienda = false
 }
 
 /**
- * Chips de estado. Mismos tres en actas y en viviendas, y con el mismo
- * significado: terminada = todo verificado.
+ * Chips de estado. Los mismos en las cuatro pantallas que filtran, y
+ * con las mismas palabras: el valor que devuelve ES el identificador
+ * del estado (`pendiente`, `resuelta`, `verificada`) o `todas`.
+ *
+ * Que el filtro hable en estados y no en palabras propias es lo que
+ * quita la ambigüedad: antes cada pantalla inventaba las suyas
+ * —«Pendientes», «Terminadas», «Cerradas»— y no había forma de saber
+ * si dos filtros distintos buscaban o no lo mismo.
  */
 export function filtroEstado(alCambiar, inicial = 'todas') {
   let activo = inicial;
   const chips = h('div.chips.filtro', null,
-    ...[['todas', 'Todas'], ['pendientes', 'Pendientes'], ['terminadas', 'Terminadas']].map(([id, txt]) =>
+    ...[['todas', 'Todas'], ...ESTADOS.map((e) => [e.id, e.plural])].map(([id, txt]) =>
       h('button.chip.accent', {
         'aria-pressed': id === activo ? 'true' : 'false',
         onclick: (e) => {
@@ -398,10 +404,12 @@ export function barraAvance(c) {
       tramo('t-revisar', c.esperando),
       tramo('t-pendiente', c.pendientes),
     ),
+    // Las mismas tres palabras que en los filtros y en los chips de
+    // estado, y en el mismo orden que recorre una tarea.
     h('div.leyenda', null,
-      dato('t-resuelta', c.hechas, 'Resueltas'),
-      dato('t-revisar', c.esperando, 'A revisar'),
-      dato('t-pendiente', c.pendientes, 'Pendientes'),
+      dato('t-resuelta', c.hechas, 'Validadas'),
+      dato('t-revisar', c.esperando, 'Revisar'),
+      dato('t-pendiente', c.pendientes, 'Abiertas'),
     ),
   );
 }

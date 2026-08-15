@@ -32,6 +32,7 @@
   --text: #161618;
   --muted: #8a8a90;
   --muted-2: #a8a8ae;
+  --muted-oscuro: #5e5e66;  /* gris de lectura, 6,4:1 sobre la tarjeta */
   --line: rgba(17, 17, 18, 0.10);
   --line-soft: rgba(17, 17, 18, 0.06);
 
@@ -873,12 +874,18 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
   font-size: clamp(28px, 8vw, 34px); font-weight: 800;
   letter-spacing: -0.02em; text-transform: uppercase;
 }
-.chips.filtro { gap: 9px; }
+/* Repartidos a partes iguales y sin envolver. Con cuatro estados y
+   palabras de largos distintos, dejarlos crecer con el texto hacía que
+   el último saltara solo a una segunda línea; así ocupan la fila entera
+   y da igual cómo de largo sea cada nombre. */
+.chips.filtro { gap: 9px; flex-wrap: nowrap; }
 .chips.filtro .chip {
-  padding: 13px 22px; font-size: 14px;
+  flex: 1; min-width: 0;
+  padding: 13px 6px; font-size: 14px;
   border-radius: 17px;
   background: var(--bg);
   box-shadow: inset 0 0 0 1.5px var(--line);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 /* Al marcarlo se rellena y pierde el contorno. El color hay que
    repetirlo aquí: el fondo de la regla de arriba empata en peso con el
@@ -934,34 +941,40 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 }
 .villa:active { transform: scale(0.985); }
 
-.villa-cab { display: flex; align-items: center; gap: 11px; }
+/* Todo en columnas fijas menos la barra, que se come lo que sobra. Así
+   el nombre y el porcentaje caen en la misma vertical en las cincuenta
+   filas y la lista se puede recorrer con la vista. */
+.villa-cab { display: flex; align-items: center; gap: 12px; }
 .villa-tit {
-  flex: 1; min-width: 0;
+  flex: none; width: 66px;
   font-size: 15px; font-weight: 700; letter-spacing: -0.02em;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap; overflow: hidden;
 }
 .villa-pct {
-  flex: none; font-size: 14px; font-weight: 700;
+  flex: none; width: 40px; text-align: right;
+  font-size: 14px; font-weight: 700;
   letter-spacing: -0.02em; font-variant-numeric: tabular-nums;
 }
 
-/* Un solo tramo, y es el de lo verificado. Aquí no se parte en tres
-   como en la portada: son cincuenta filas seguidas y lo que se lee de
-   un vistazo es cuánto hay cerrado de verdad; el desglose está justo
-   debajo en palabras. */
+/* Dos tramos: el negro es lo validado y el de marca lo que espera que
+   vayamos a validar. El segundo es la respuesta de un vistazo a «¿dónde
+   tengo cosas que mirar?», sin leer una palabra. */
 .villa-barra {
-  height: 6px; border-radius: 999px; margin-top: 11px;
+  flex: 1; min-width: 0;
+  display: flex; height: 6px; border-radius: 999px;
   background: var(--bg); overflow: hidden;
 }
 .villa-barra i {
-  display: block; height: 100%; border-radius: 999px;
-  background: var(--ink);
+  display: block; height: 100%;
   transition: width var(--mov-largo) var(--sal-estandar);
 }
+.villa-barra .t-validada { background: var(--ink); }
+.villa-barra .t-validar { background: var(--accent); }
 
 .villa-pie {
-  display: flex; align-items: baseline; gap: 10px; margin-top: 9px;
-  font-size: 12.5px; color: var(--muted);
+  display: flex; align-items: baseline; gap: 10px; margin-top: 10px;
+  font-size: 12.5px; color: var(--muted-oscuro);
 }
 .villa-pie > :first-child {
   flex: 1; min-width: 0;
@@ -980,7 +993,16 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 .villa.hecha { background: rgba(63, 125, 90, 0.10); }
 .villa.hecha .villa-pct { color: var(--ok); }
 .villa.hecha .villa-barra { background: rgba(63, 125, 90, 0.16); }
-.villa.hecha .villa-barra i { background: var(--ok); }
+.villa.hecha .villa-barra .t-validada { background: var(--ok); }
+
+/* Bolita de relleno cuando en esa vivienda no ha trabajado nadie
+   todavía: un disco liso, sin cara. Sostiene la columna sin fingir que
+   hay alguien. */
+.avatar.vacia {
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1.5px var(--line-soft);
+}
+.villa.apagada .avatar.vacia { background: var(--surface); }
 
 .vacio-suave { padding: 34px 0; }
 

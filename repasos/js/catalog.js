@@ -76,35 +76,51 @@ export const FASES = [
 ];
 
 /**
- * Los tres estados de una tarea.
+ * Los tres estados de una tarea, y el vocabulario de toda la app.
  *
- * OJO con los identificadores: `resuelta` se LLAMA «Revisar» y
- * `verificada` se LLAMA «Resuelta». Los nombres visibles cambiaron
- * después, cuando quedó claro que lo que la subcontrata da por hecho no
- * está cerrado hasta que alguien lo comprueba; los identificadores se
- * dejaron como estaban para no tener que tocar las tareas que ya
- * estaban subidas. Al leer código, fíjate en el id; al leer pantalla,
- * en el nombre.
+ * El circuito de una tarea tiene tres manos y por eso hay tres estados,
+ * ni uno más:
+ *
+ *   ABIERTA   la pone un arquitecto o la propiedad al encontrar el
+ *             defecto. Está en el tejado de la constructora.
+ *   REVISAR   el jefe de obra dice que ya está arreglada. No cierra
+ *             nada: pasa a nuestro tejado y hay que ir a mirarla.
+ *   VALIDADA  un arquitecto o la propiedad la ha visto y la da por
+ *             buena. Solo esto termina una tarea.
+ *
+ * Estas tres palabras son las únicas que se usan en pantalla —chips de
+ * estado, filtros, etiquetas de las tarjetas y el informe—, y salen
+ * todas de aquí. Antes cada pantalla decía la suya («Pendiente» aquí,
+ * «Cerradas» allá, «Terminadas» más allá) y no había manera de saber
+ * si dos palabras distintas eran o no la misma cosa.
+ *
+ * «Abierta» y no «Pendiente» porque pendiente lo están las dos
+ * primeras —una del constructor y otra nuestra—, y esa era justo la
+ * ambigüedad. Abierta/validada es además el par que se usa en obra.
+ *
+ * OJO con los identificadores: siguen siendo `pendiente`, `resuelta` y
+ * `verificada`, que es lo que hay escrito en las tareas ya subidas.
+ * Al leer código, fíjate en el id; al leer pantalla, en el nombre.
  */
 export const ESTADOS = [
-  { id: 'pendiente', nombre: 'Pendiente', tag: '' },
-  { id: 'resuelta', nombre: 'Revisar', tag: 'warn' },
-  { id: 'verificada', nombre: 'Resuelta', tag: 'ink' },
+  { id: 'pendiente', nombre: 'Abierta', plural: 'Abiertas', tag: '' },
+  { id: 'resuelta', nombre: 'Revisar', plural: 'Revisar', tag: 'warn' },
+  { id: 'verificada', nombre: 'Validada', plural: 'Validadas', tag: 'ink' },
 ];
 
 /**
- * Qué cuenta como hecha. Solo la verificada: que la subcontrata marque
- * «resuelta» no cierra nada hasta que alguien con permiso lo comprueba
- * en la vivienda.
+ * Qué cuenta como hecha. Solo la validada: que el jefe de obra la dé
+ * por arreglada no cierra nada hasta que alguien con permiso va y lo
+ * comprueba en la vivienda.
  *
  * Vive aquí, en una sola línea, porque de esta decisión cuelgan todos
- * los porcentajes de la app, los anillos de las tarjetas, el verde de
- * una vivienda terminada y el filtro «Terminadas». Cambiarla de opinión
+ * los porcentajes de la app, las barras de las viviendas, el verde de
+ * una vivienda terminada y el filtro «Validadas». Cambiarla de opinión
  * es cambiar esta función y nada más.
  */
 export const hecha = (t) => t?.estado === 'verificada';
 
-/** Resuelta pero sin comprobar todavía: la cola de verificación. */
+/** Arreglada según el jefe de obra, sin validar todavía: nuestra cola. */
 export const esperandoVisto = (t) => t?.estado === 'resuelta';
 
 /* ═══════════════════════════════════════════════════════════════
@@ -174,13 +190,20 @@ export function contrasenaInicial(nombre, empresa) {
 }
 
 /**
- * Quién puede marcar una tarea como verificada. Es un permiso por
- * usuario, no por empresa: hay técnicos externos que no verifican y
- * gente de UNIK que sí.
+ * Quién puede validar una tarea. Es un permiso por usuario, no por
+ * empresa: hay técnicos externos que no validan y gente de UNIK que sí.
  */
 export function puedeVerificar(usuario) {
   return !!usuario && (usuario.verifica === true || usuario.rol === 'admin');
 }
+
+/**
+ * Quién puede abrir una lista de repasos. El mismo permiso, y no por
+ * pereza: un acta la firma quien tiene potestad para dar una vivienda
+ * por revisada, que son los arquitectos y la propiedad. El jefe de obra
+ * responde a las tareas de un acta, no la convoca.
+ */
+export const puedeCrearLista = puedeVerificar;
 
 /** Estados que puede poner un usuario concreto. */
 export function estadosPermitidos(usuario) {

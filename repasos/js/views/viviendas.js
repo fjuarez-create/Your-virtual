@@ -57,24 +57,38 @@ export async function render({ promoId, desdeTab = false }) {
 const DIAS_PARADA = 14;
 
 /**
- * Una vivienda. Arriba, quién ha trabajado aquí y el porcentaje; en
- * medio, la barra; abajo, qué queda y desde cuándo no se toca.
+ * Una vivienda, en dos renglones:
  *
- * El porcentaje cuenta SOLO lo verificado. Que la subcontrata dé algo
- * por resuelto no lo termina: lo termina que un arquitecto lo dé por
- * bueno. Si la barra contara los «resuelta», diría que la promoción va
- * mejor de lo que va, que es la única mentira que esta pantalla no se
- * puede permitir.
+ *   [caras]  Villa 01  ▬▬▬▬▬▬▬▬▬▬▬▬▬  70%
+ *   qué falta                    hace cuánto
+ *
+ * Todo en columnas fijas —las caras, el nombre y el porcentaje— para
+ * que en cincuenta filas seguidas cada cosa caiga siempre en la misma
+ * vertical. La barra es lo único elástico: ocupa lo que sobra.
+ *
+ * El porcentaje cuenta SOLO lo validado. Que el jefe de obra dé algo
+ * por arreglado no lo termina: lo termina que un arquitecto o la
+ * propiedad lo dé por bueno. Si contara lo demás, diría que la
+ * promoción va mejor de lo que va, y esa es la única mentira que esta
+ * pantalla no se puede permitir.
+ *
+ * La barra sí lleva dos tramos, y por eso: el negro es lo validado y el
+ * de marca es lo que el jefe de obra dice que está hecho y espera que
+ * vayamos a mirar. Ese segundo tramo es la respuesta visual a «¿dónde
+ * tengo cosas que validar?»: se ve de un vistazo, sin leer, bajando por
+ * la lista.
  *
  * Tres aspectos, y se leen antes que el texto:
  *   apagada — no tiene ninguna tarea todavía
- *   viva    — le queda algo por verificar
- *   hecha   — todas sus tareas están verificadas
+ *   viva    — le queda algo abierto o por validar
+ *   hecha   — todas sus tareas están validadas
  */
 function fila(u, r, promoId) {
   const total = r?.total || 0;
   const hechas = r?.hechas || 0;
+  const esperando = r?.esperando || 0;
   const pct = total ? Math.round((100 * hechas) / total) : 0;
+  const pctEspera = total ? Math.round((100 * esperando) / total) : 0;
   const terminada = total > 0 && hechas === total;
   const clase = !total ? 'villa apagada' : terminada ? 'villa hecha' : 'villa';
 
@@ -83,23 +97,24 @@ function fila(u, r, promoId) {
   const parada = !terminada && total > 0 && dias >= DIAS_PARADA;
 
   return h('button', {
-    class: clase,
+    class: clase + (esperando ? ' por-validar' : ''),
     onclick: () => ir(`#/p/${promoId}/v/${u.id.split(':')[1]}`),
   },
     h('div.villa-cab', null,
-      // El hueco se reserva siempre, haya gente o no: son cincuenta
-      // filas seguidas y los nombres tienen que caer en la misma
-      // vertical para poder recorrerlos de un vistazo.
-      // Hueco para cinco piezas: cuatro caras y el «+n». Es lo más ancho
-      // que puede llegar a ser la pila, así que reservándolo el nombre
-      // no se mueve nunca.
-      grupoAvatares(gente, { tam: 34, max: 4, hueco: 5 }),
+      // Tres como mucho, y sin «+n»: quien pase de ahí se ve igualmente
+      // en la cara de sus tareas dentro de la vivienda. El hueco se
+      // reserva entero aunque haya una sola, para que el nombre no baile
+      // de fila en fila.
+      grupoAvatares(gente.slice(0, 3), { tam: 34, max: 3, hueco: 3, vacio: true }),
       h('div.villa-tit', null, u.nombre),
+      h('div.villa-barra', null,
+        h('i.t-validada', { style: { width: pct + '%' } }),
+        h('i.t-validar', { style: { width: pctEspera + '%' } }),
+      ),
       h('div.villa-pct', null, pct + '%'),
     ),
-    h('div.villa-barra', null, h('i', { style: { width: pct + '%' } })),
     h('div.villa-pie', null,
-      h('span', null, textoDe(total, hechas, r?.esperando || 0)),
+      h('span', null, textoDe(total, hechas, esperando)),
       r?.movimiento
         ? h('span.villa-mov', { class: parada ? 'parada' : '' }, desdeHace(r.movimiento))
         : null,
@@ -108,17 +123,18 @@ function fila(u, r, promoId) {
 }
 
 /**
- * Lo que queda, partido en las dos colas que se atascan por motivos
- * distintos: lo que nadie ha arreglado todavía y lo que está arreglado
- * esperando que alguien vaya a darlo por bueno.
+ * Qué falta en esa casa. Delante lo que espera respuesta NUESTRA —lo
+ * que el jefe de obra ha dado por arreglado y hay que ir a validar—,
+ * porque es lo único de esta pantalla sobre lo que quien la mira puede
+ * actuar hoy. Lo abierto depende de la constructora y va detrás.
  */
 function textoDe(total, hechas, esperando) {
-  if (!total) return 'Sin repasar todavía';
-  if (hechas === total) return 'Todo verificado';
-  const porResolver = total - hechas - esperando;
+  if (!total) return 'Sin repasar';
+  if (hechas === total) return 'Todo validado';
+  const abiertas = total - hechas - esperando;
   const partes = [];
-  if (porResolver) partes.push(`${porResolver} por resolver`);
-  if (esperando) partes.push(`${esperando} por verificar`);
+  if (esperando) partes.push(`${esperando} por validar`);
+  if (abiertas) partes.push(`${abiertas} ${abiertas === 1 ? 'abierta' : 'abiertas'}`);
   return partes.join(' · ');
 }
 
@@ -129,14 +145,9 @@ function textoDe(total, hechas, esperando) {
  * que cumplen, y una vivienda sin tareas no cumple ninguna de las dos.
  */
 function encaja(r, estado, oficioId) {
-  const total = r?.total || 0;
-  const terminada = total > 0 && r.hechas === total;
-  if (estado === 'pendientes' && (!total || terminada)) return false;
-  if (estado === 'terminadas' && !terminada) return false;
-  if (oficioId !== 'todos') {
-    if (!total) return false;
-    const donde = estado === 'pendientes' ? r.oficiosAbiertos : r.oficios;
-    if (!donde.has(oficioId)) return false;
-  }
+  const vacio = { total: 0, hechas: 0, pendientes: 0, esperando: 0, oficios: new Set(), oficiosAbiertos: new Set() };
+  const c = r || vacio;
+  if (!store.encajaEstado(c, estado)) return false;
+  if (oficioId !== 'todos' && !store.oficiosSegun(c, estado).has(oficioId)) return false;
   return true;
 }
