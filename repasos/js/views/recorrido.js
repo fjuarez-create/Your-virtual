@@ -155,9 +155,20 @@ export async function render({ promoId, unidadId }) {
     // lo único que importa es ver bien lo que enfoca la cámara.
     lienzo.classList.add('grabando');
     lienzo.closest('.screen')?.classList.add('grabando');
+
+    // Si el móvil se bloquea o alguien llama, Safari corta el micrófono
+    // sin avisar y lo que sigue grabándose es silencio. Antes que seguir
+    // fingiendo que se graba, se cierra el recorrido con lo que haya: al
+    // volver a la pantalla está el repaso esperando.
+    document.addEventListener('visibilitychange', alTapar);
+  };
+
+  const alTapar = () => {
+    if (document.visibilityState === 'hidden' && mando) terminar();
   };
 
   const terminar = async () => {
+    document.removeEventListener('visibilitychange', alTapar);
     const capturado = await mando.parar();
     mando = null;
     lienzo.classList.remove('grabando');
@@ -305,6 +316,7 @@ export async function render({ promoId, unidadId }) {
     // volver a entrar en la vivienda se ofrece repasarlo. Salir a mitad
     // de un recorrido casi nunca es «bórralo»; es el teléfono sonando.
     alSalir: () => {
+      document.removeEventListener('visibilitychange', alTapar);
       const m = mando;
       mando = null;
       if (!m) return;
