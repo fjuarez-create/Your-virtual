@@ -11,6 +11,8 @@ import { h, icon, sheet, toast } from './ui.js';
 
 const LADO_MAX = 1600;      // px del lado mayor tras reescalar
 const CALIDAD = 0.82;       // JPEG
+const LADO_MIRADA = 1024;   // px del lado mayor de las fotos que van a la API
+const CALIDAD_MIRADA = 0.72;
 const MAX_VIDEO = 80 * 1024 * 1024;
 const MAX_AUDIO = 25 * 1024 * 1024;
 
@@ -114,6 +116,47 @@ export async function prepararImagen(file) {
     return { blob: file, ancho, alto, mime: file.type || 'image/jpeg' };
   }
   return { blob, ancho, alto, mime: 'image/jpeg' };
+}
+
+/**
+ * Una copia pequeña de una foto, en base64 y sin la cabecera `data:`,
+ * para mandarla a que la lean.
+ *
+ * Se encoge a propósito. En la API cada foto se cobra por lo grande que
+ * sea, y para ver que una junta está abierta o que un rodapié está
+ * suelto no hacen falta cuatro megapíxeles: a 1024 px del lado mayor se
+ * distingue igual y cuesta la quinta parte.
+ */
+export async function paraMirar(blob) {
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(blob, { imageOrientation: 'from-image' });
+  } catch {
+    bitmap = await bitmapDesdeElemento(blob);
+  }
+  const escala = Math.min(1, LADO_MIRADA / Math.max(bitmap.width, bitmap.height));
+  const ancho = Math.max(1, Math.round(bitmap.width * escala));
+  const alto = Math.max(1, Math.round(bitmap.height * escala));
+
+  const lienzo = document.createElement('canvas');
+  lienzo.width = ancho; lienzo.height = alto;
+  const ctx = lienzo.getContext('2d');
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(bitmap, 0, 0, ancho, alto);
+  bitmap.close?.();
+
+  const pequena = await new Promise((res) => lienzo.toBlob(res, 'image/jpeg', CALIDAD_MIRADA));
+  return base64Pelado(pequena || blob);
+}
+
+/** Lo que hay dentro de un blob, en base64 y sin el `data:…;base64,`. */
+function base64Pelado(blob) {
+  return new Promise((resolve, reject) => {
+    const lector = new FileReader();
+    lector.onerror = () => reject(lector.error || new Error('No se ha podido leer la foto.'));
+    lector.onload = () => resolve(String(lector.result).split(',')[1] || '');
+    lector.readAsDataURL(blob);
+  });
 }
 
 /**

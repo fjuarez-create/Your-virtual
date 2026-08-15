@@ -241,10 +241,11 @@ function claude_redactar_recorrido(): void
     $texto = trim((string) ($datos['texto'] ?? ''));
     $marcas = $datos['marcas'] ?? [];
     $oficios = $datos['oficios'] ?? [];
+    $fotos = $datos['fotos'] ?? [];
 
-    if ($texto === '') {
-        responder_error(400, 'No hay nada dicho que redactar.', 'sin-texto');
-    }
+    // Con las fotos basta: de lo que se ve en ellas ya sale una tarea, y
+    // lo dicho solo sirve para afinarla. Que falten las dos cosas a la
+    // vez se comprueba abajo, cuando ya se sabe qué fotos son válidas.
     if (mb_strlen($texto) > 60000) {
         responder_error(413, 'El texto del recorrido es demasiado largo.', 'texto-largo');
     }
@@ -280,7 +281,40 @@ function claude_redactar_recorrido(): void
         responder_error(400, 'Las marcas o los gremios no vienen bien.', 'datos-raros');
     }
 
-    responder(claude_redactar($texto, $limpias, $gremios));
+    // Las fotos llegan ya encogidas desde el móvil y en base64. Aquí solo
+    // se comprueba que lo son: lo que se le mande a la API se paga, así
+    // que no viaja nada que no sea una foto de una marca de este
+    // recorrido y del tamaño que tenía que tener.
+    $miradas = [];
+    if (is_array($fotos)) {
+        $porId = [];
+        foreach ($limpias as $m) {
+            $porId[$m['id']] = true;
+        }
+        foreach ($fotos as $f) {
+            if (count($miradas) >= CLAUDE_TOPE_FOTOS) {
+                break;
+            }
+            $id = mb_substr((string) ($f['id'] ?? ''), 0, 64);
+            $b64 = (string) ($f['b64'] ?? '');
+            if ($id === '' || !isset($porId[$id]) || isset($miradas[$id])) {
+                continue;
+            }
+            if ($b64 === '' || strlen($b64) > CLAUDE_TOPE_FOTO_B64) {
+                continue;
+            }
+            if (base64_decode($b64, true) === false) {
+                continue;
+            }
+            $miradas[$id] = $b64;
+        }
+    }
+
+    if ($texto === '' && !count($miradas)) {
+        responder_error(400, 'No hay nada que redactar: ni fotos ni nada dicho.', 'sin-nada');
+    }
+
+    responder(claude_redactar($texto, $limpias, $gremios, $miradas));
 }
 
 /* ═══════════════════════════════════════════════════════════════

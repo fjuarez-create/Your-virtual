@@ -20,7 +20,47 @@ import * as store from '../store.js';
 import * as api from '../api.js';
 import * as grabadora from '../recorrido.js';
 import { cabeceraDentro, hojaOficios, ctaAccion, ctaCancelar } from '../piezas.js';
+import { paraMirar } from '../media.js';
 import { ir, refrescar } from '../app.js';
+
+/**
+ * Cuántas fotos como mucho viajan a que las miren en un recorrido.
+ *
+ * No es un capricho: cada foto se paga, y un recorrido de sesenta
+ * subiría varios megas por la línea de una obra además de costar lo que
+ * cuesta. Con treinta se cubre el repaso de una villa de sobra.
+ */
+const TOPE_FOTOS = 30;
+
+/**
+ * Lo que se le dice a quien acaba de darle a redactar.
+ *
+ * Importa distinguir de dónde sale cada tarea: las que vienen de lo que
+ * dijo son suyas y solo hay que leerlas por encima, y las que vienen de
+ * mirar la foto son una lectura ajena que conviene repasar antes de
+ * mandarle a nadie a picar una pared.
+ */
+function resumen(dichas, vistas, total, sinMirar) {
+  const escritas = dichas + vistas;
+  const cuelgan = total - escritas - sinMirar;
+  const cola = cuelgan
+    ? ` ${cuelgan === 1 ? 'En otra no se distingue nada: escríbela' : `En otras ${cuelgan} no se distingue nada: escríbelas`} mirando la foto.`
+    : '';
+  const largo = sinMirar
+    ? ` El recorrido es largo y solo se miran las primeras ${TOPE_FOTOS} fotos: las ${sinMirar} últimas van a mano.`
+    : '';
+
+  if (!escritas) {
+    return `No ha salido ninguna tarea: no había nada dicho y en las fotos no se distingue el defecto. Escríbelas mirándolas.${largo}`;
+  }
+  if (!vistas) {
+    return `${escritas} ${escritas === 1 ? 'tarea' : 'tareas'} de lo que dijiste. Repásalas antes de crearlas.${cola}${largo}`;
+  }
+  if (!dichas) {
+    return `${escritas} ${escritas === 1 ? 'tarea leída' : 'tareas leídas'} de las fotos. Repásalas con calma: salen de lo que se ve, no de lo que dijiste.${cola}${largo}`;
+  }
+  return `${escritas} redactadas: ${dichas} de lo que dijiste y ${vistas} ${vistas === 1 ? 'leída' : 'leídas'} de la foto. Repasa sobre todo ${vistas === 1 ? 'esa' : 'esas'}.${cola}${largo}`;
+}
 
 export async function render({ promoId, unidadId }) {
   const p = promocion(promoId);
@@ -319,47 +359,63 @@ export async function render({ promoId, unidadId }) {
     };
 
     /**
-     * Lo que dijiste durante el recorrido, escrito, para que se reparta
-     * solo entre las fotos.
+     * Que las tareas se escriban solas.
      *
-     * El audio ya está grabado, pero Claude no oye: solo lee. Así que
-     * aquí se escribe —o se dicta con el micrófono del teclado del
-     * móvil, que es lo rápido— escuchando el audio de arriba, y de ahí
-     * salen las tareas redactadas y con su gremio.
+     * Claude no oye —el audio de arriba no le sirve—, pero sí ve. Así
+     * que lo que viaja son las fotos, encogidas, y de cada una sale una
+     * tarea con su gremio sin que tengas que escribir nada.
      *
-     * Es opcional a propósito. Si no hay clave puesta, si el hosting no
-     * sale a internet o si sencillamente prefieres escribirlas tú, las
-     * fichas siguen ahí debajo esperando, exactamente igual que antes.
+     * La caja de texto sigue estando, y ahora es lo que siempre debió
+     * ser: opcional. Lo que escribas o dictes ahí manda sobre lo que se
+     * vea en la foto, porque tú sabes qué mirabas y la foto no lo dice.
+     * Cuando la transcripción esté enchufada, llegará puesta sola.
+     *
+     * Y si no hay clave, si el hosting no sale a internet o si prefieres
+     * escribirlas tú, las fichas siguen ahí debajo igual que antes.
      */
     const dictado = () => {
       if (!api.HAY_SERVIDOR) return null;
 
       const campo = h('textarea.textarea', {
         rows: 3, autocapitalize: 'sentences',
-        placeholder: 'Escucha el audio y dicta aquí lo que ibas diciendo…',
+        placeholder: 'Si quieres, añade aquí lo que ibas diciendo…',
       });
       const aviso = h('p.hint');
-      const boton = ctaAccion('REDACTAR LAS TAREAS', { icono: 'check', claro: true, disabled: true });
+      const boton = ctaAccion('REDACTAR LAS TAREAS', { icono: 'check', claro: true });
       const rotulo = boton.querySelector('.grow');
-
-      campo.addEventListener('input', () => { boton.disabled = !campo.value.trim(); });
 
       boton.addEventListener('click', async () => {
         const vivas = fichas.filter((f) => !f.fuera);
         if (!vivas.length) return;
         boton.disabled = true;
-        rotulo.textContent = 'REDACTANDO…';
         aviso.className = 'hint';
-        aviso.textContent = 'Puede tardar medio minuto. No cierres la pantalla.';
 
         try {
+          // Las fotos se encogen aquí, en el móvil: lo que sube por la
+          // línea de la obra son unos cientos de kilobytes y no ocho
+          // megas, y en la API se paga por lo que ocupa cada una.
+          const conFoto = vivas.slice(0, TOPE_FOTOS);
+          rotulo.textContent = 'PREPARANDO LAS FOTOS…';
+          const fotos = [];
+          for (const f of conFoto) {
+            aviso.textContent = `Preparando la foto ${fotos.length + 1} de ${conFoto.length}…`;
+            try {
+              fotos.push({ id: f.marca.id, b64: await paraMirar(f.marca.blob) });
+            } catch { /* si una foto no se deja leer, se manda sin ella */ }
+          }
+
+          rotulo.textContent = 'REDACTANDO…';
+          aviso.textContent = 'Puede tardar medio minuto. No cierres la pantalla.';
           const r = await api.claudeRedactar(
             campo.value.trim(),
             vivas.map((f) => ({ id: f.marca.id, ms: f.marca.ms })),
             OFICIOS.map((o) => ({ id: o.id, nombre: o.nombre })),
+            fotos,
           );
+
           const porId = new Map(vivas.map((f) => [String(f.marca.id), f]));
-          let escritas = 0;
+          let dichas = 0;
+          let vistas = 0;
           for (const ficha of r.fichas || []) {
             const f = porId.get(String(ficha.id));
             if (!f) continue;
@@ -373,16 +429,11 @@ export async function render({ promoId, unidadId }) {
               f.oficio = ficha.oficio;
               f.tocado = true;
             }
-            escritas += 1;
+            if (ficha.origen === 'foto') vistas += 1; else dichas += 1;
           }
           pintarFichas();
-          const sinNada = vivas.length - escritas;
           aviso.className = 'hint';
-          aviso.textContent = sinNada
-            ? `${escritas} de ${vivas.length} redactadas. ${sinNada === 1
-                ? 'La otra no tenía nada dicho que atribuirle: escríbela'
-                : `Las ${sinNada} restantes no tenían nada dicho que atribuirles: escríbelas`} mirando la foto.`
-            : `${escritas} ${escritas === 1 ? 'tarea redactada' : 'tareas redactadas'}. Repásalas antes de crearlas.`;
+          aviso.textContent = resumen(dichas, vistas, vivas.length, vivas.length - conFoto.length);
           rotulo.textContent = 'VOLVER A REDACTAR';
           boton.disabled = false;
         } catch (e) {
@@ -398,8 +449,9 @@ export async function render({ promoId, unidadId }) {
       return h('div.rec-dictado', null,
         h('p.eyebrow', null, 'Que las escriba solas'),
         h('p.sub', { style: { marginTop: '4px' } },
-          'Dicta aquí lo que ibas comentando —el micrófono del teclado va bien— '
-          + 'y se reparte solo entre las fotos, con su gremio. Luego lo repasas.'),
+          'Se miran las fotos y sale una tarea de cada una, con su gremio. '
+          + 'Si quieres afinar, añade abajo lo que ibas comentando —el micrófono '
+          + 'del teclado va bien—: lo que digas manda sobre lo que se vea.'),
         h('div', { style: { marginTop: '10px' } }, campo),
         aviso,
         boton,

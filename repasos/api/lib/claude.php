@@ -39,6 +39,18 @@ const CLAUDE_TOPE_SALIDA = 16000;
 const CLAUDE_MARGEN_PHP = 300;
 
 /**
+ * Cuántas fotos como mucho se mandan a mirar, y cuánto puede ocupar
+ * cada una ya en base64.
+ *
+ * El móvil ya las encoge a 1024 px antes de subirlas —unos 150 KB, que
+ * en base64 son 200— así que el tope de aquí no es el tamaño esperado
+ * sino el techo: lo que no lo cumpla no viaja, porque cada foto se paga
+ * por lo que ocupa.
+ */
+const CLAUDE_TOPE_FOTOS = 30;
+const CLAUDE_TOPE_FOTO_B64 = 900000;
+
+/**
  * El tope de la respuesta según lo largo que haya sido el recorrido.
  *
  * Repartir sesenta frases entre sesenta fotos se piensa más que
@@ -106,15 +118,28 @@ function claude_instrucciones(array $oficios): string
 
     return <<<TXT
 Eres el ayudante de un arquitecto que acaba de recorrer una vivienda en
-obra pasando revista a los remates. Mientras andaba iba comentando en voz
-alta lo que veía, y cada vez que encontraba algo tocaba la pantalla para
-sacar una foto.
+obra pasando revista a los remates. Cada vez que encontraba algo tocaba
+la pantalla para sacar una foto, y a veces iba comentando en voz alta lo
+que veía.
 
-Te doy dos cosas: lo que dijo, y la lista de fotos con el segundo del
-recorrido en que se tomó cada una. Tu trabajo es convertir eso en las
-órdenes de trabajo que se le van a pasar al jefe de obra.
+Te doy las fotos que tomó, cada una con el segundo del recorrido en que
+se hizo, y —si dijo algo— lo que dijo. Tu trabajo es convertir eso en
+las órdenes de trabajo que se le van a pasar al jefe de obra.
 
 Devuelve una ficha por cada foto, en el mismo orden, con su mismo id.
+
+DE DÓNDE SACAS CADA FICHA, por este orden:
+1. Si algo de lo que dijo se le puede atribuir a esa foto, manda lo que
+   dijo: él estaba delante y tú no. Pon origen «dicho».
+2. Si no dijo nada que le encaje pero en la foto se ve claramente qué
+   está mal —una junta abierta, un desconchón, un golpe, una mancha, un
+   rodapié suelto, un remate sin terminar—, escribe eso. Pon origen
+   «foto».
+3. Si no dijo nada y en la foto no distingues ningún defecto concreto,
+   deja el texto vacío, pon origen «foto» y confianza «baja». Quien lo
+   repase lo escribirá a mano mirándola.
+
+Cuando lo dicho y la foto se contradigan, manda lo dicho.
 
 EL TEXTO de cada ficha:
 - Una orden de trabajo, no una descripción. «Repasar la junta del
@@ -129,7 +154,7 @@ EL TEXTO de cada ficha:
 
 EL GREMIO de cada ficha, solo uno de estos:
 {$lista}
-Si lo que se dijo no encaja claramente en ninguno, pon `general`.
+Si no encaja claramente en ninguno, pon `general`.
 
 EMPAREJAR lo dicho con las fotos:
 - Se habla mientras se anda, así que el comentario de una foto suele
@@ -138,37 +163,64 @@ EMPAREJAR lo dicho con las fotos:
   seguidas, repártelas por orden.
 
 LO QUE NO DEBES HACER:
-- No te inventes defectos. Si de una foto no se dijo nada que puedas
-  atribuirle, deja su texto vacío y pon confianza «baja». Quien lo
-  repase lo escribirá a mano mirando la foto.
+- No adivines. Escribe lo que se ve, no lo que sueles encontrarte en una
+  obra: si en la foto no distingues ningún defecto, deja el texto vacío
+  antes que inventarte uno. Una tarea inventada manda a alguien a
+  arreglar algo que no existe y quema la confianza en toda la lista.
+- No describas la habitación ni lo que está bien. Solo lo que hay que
+  tocar.
 - No agrupes dos fotos en una ficha ni partas una foto en dos fichas.
   Una foto, una ficha, siempre.
 - No añadas tareas que no tengan foto, por mucho que se hayan
   mencionado.
 
 LA CONFIANZA de cada ficha:
-- «alta»: lo que se dijo señala claramente a esa foto.
-- «media»: encaja por el momento en que se tomó, pero cabe duda.
-- «baja»: no hay nada que atribuirle, o es una suposición tuya.
+- «alta»: lo que dijo señala a esa foto, o el defecto se ve sin lugar a
+  dudas.
+- «media»: encaja por el momento en que se tomó pero cabe duda, o lo ves
+  en la foto y podría ser otra cosa.
+- «baja»: no hay nada que atribuirle y en la foto no se distingue.
 TXT;
 }
 
 /**
- * Lo capturado, tal y como se le pasa al modelo: la transcripción y la
- * lista de marcas con su minuto.
+ * Lo capturado, tal y como se le pasa al modelo: lo que dijo, y luego
+ * cada foto precedida de su id y su minuto.
+ *
+ * Van intercaladas —rótulo, foto, rótulo, foto— y no todas las fotos
+ * detrás de una lista, porque así cada imagen queda pegada al id al que
+ * tiene que contestar y no hay forma de que se le crucen.
+ *
+ * Una marca cuya foto no haya llegado se queda con su rótulo y sin
+ * imagen: sigue habiendo que devolver su ficha, aunque salga vacía.
  */
-function claude_mensaje(string $texto, array $marcas): string
+function claude_mensaje(string $texto, array $marcas, array $fotos): array
 {
-    $lineas = '';
+    $bloques = [];
+    $bloques[] = ['type' => 'text', 'text' => $texto === ''
+        ? "NO DIJO NADA DURANTE EL RECORRIDO. Solo hay las fotos.\n\nLAS FOTOS QUE TOMÓ, por orden:"
+        : "LO QUE DIJO DURANTE EL RECORRIDO:\n\n{$texto}\n\nLAS FOTOS QUE TOMÓ, por orden:"];
+
     foreach ($marcas as $i => $m) {
         $seg = (int) round(((float) $m['ms']) / 1000);
         $reloj = sprintf('%d:%02d', intdiv($seg, 60), $seg % 60);
         $n = $i + 1;
-        $lineas .= "  {$n}. id={$m['id']} · tomada en el minuto {$reloj}\n";
+        $b64 = $fotos[$m['id']] ?? '';
+
+        $bloques[] = ['type' => 'text', 'text' => $b64 === ''
+            ? "FOTO {$n} · id={$m['id']} · tomada en el minuto {$reloj} · no ha llegado la imagen"
+            : "FOTO {$n} · id={$m['id']} · tomada en el minuto {$reloj}"];
+
+        if ($b64 !== '') {
+            $bloques[] = ['type' => 'image', 'source' => [
+                'type' => 'base64',
+                'media_type' => 'image/jpeg',
+                'data' => $b64,
+            ]];
+        }
     }
 
-    return "LO QUE DIJO DURANTE EL RECORRIDO:\n\n{$texto}\n\n"
-        . "LAS FOTOS QUE TOMÓ:\n\n{$lineas}";
+    return $bloques;
 }
 
 /** El molde de la respuesta. Con esto no hay que fiarse del formato. */
@@ -187,9 +239,13 @@ function claude_esquema(array $oficios): array
                         'id' => ['type' => 'string'],
                         'texto' => ['type' => 'string'],
                         'oficio' => ['type' => 'string', 'enum' => $ids],
+                        // De dónde ha salido la tarea. Es lo que luego se
+                        // le dice a quien repasa: lo suyo se lee por
+                        // encima, lo leído de una foto se mira dos veces.
+                        'origen' => ['type' => 'string', 'enum' => ['dicho', 'foto']],
                         'confianza' => ['type' => 'string', 'enum' => ['alta', 'media', 'baja']],
                     ],
-                    'required' => ['id', 'texto', 'oficio', 'confianza'],
+                    'required' => ['id', 'texto', 'oficio', 'origen', 'confianza'],
                     'additionalProperties' => false,
                 ],
             ],
@@ -209,7 +265,7 @@ function claude_esquema(array $oficios): array
  * poder leer por qué —sin clave, sin saldo, sin salida a internet— y
  * escribir las tareas a mano, que es lo que hacía hasta ayer.
  */
-function claude_redactar(string $texto, array $marcas, array $oficios): array
+function claude_redactar(string $texto, array $marcas, array $oficios, array $fotos = []): array
 {
     $clave = claude_clave();
     if ($clave === '') {
@@ -230,7 +286,7 @@ function claude_redactar(string $texto, array $marcas, array $oficios): array
         'max_tokens' => claude_tope_salida(count($marcas)),
         'system' => claude_instrucciones($oficios),
         'messages' => [
-            ['role' => 'user', 'content' => claude_mensaje($texto, $marcas)],
+            ['role' => 'user', 'content' => claude_mensaje($texto, $marcas, $fotos)],
         ],
         'output_config' => [
             'effort' => CLAUDE_ESFUERZO,

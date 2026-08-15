@@ -177,9 +177,11 @@ se queda bloqueado en cuanto el navegador abre varias conexiones.)
 
 ## Que las tareas se escriban solas
 
-Al terminar un recorrido, en vez de escribir una a una las quince tareas, se
-dicta de corrido lo que se iba comentando y **Claude las reparte entre las
-fotos**, cada una con su gremio, para repasarlas después.
+Al terminar un recorrido, en vez de escribir una a una las quince tareas,
+**Claude mira las fotos** y escribe la tarea de cada una con su gremio, para
+repasarlas después. Si además se dicta lo que se iba comentando, eso manda
+sobre lo que se vea: quien andaba por allí sabe qué miraba y la foto no lo
+dice.
 
 Hace falta una clave de Anthropic. Se pone **una sola vez, desde el móvil**:
 Ajustes → Servidor → *Clave de Anthropic*. Solo la ve quien administra.
@@ -195,17 +197,27 @@ Cómo funciona por dentro:
   herramientas del navegador.
 - Modelo `claude-opus-5`, esfuerzo `medium`. La respuesta viene con esquema
   fijo, así que el gremio solo puede ser uno de los quince del catálogo.
-- **Claude no oye: solo lee.** El audio del recorrido se queda en el móvil como
-  respaldo y lo que se le manda es el texto dictado. Si algún día se enchufa una
-  transcripción automática, entra por este mismo sitio sin tocar nada más.
-- Si de una foto no se dijo nada, la ficha se deja **en blanco y marcada**, y no
-  se inventa el defecto: un parte con un hueco se arregla; uno con una tarea
-  inventada manda a alguien a reparar algo que no existe.
+- **Claude ve, pero no oye.** El audio del recorrido se queda en el móvil como
+  respaldo y no se le manda: lo que viaja son las fotos y, si lo hay, el texto
+  dictado. Cuando se enchufe una transcripción automática, el texto llegará
+  puesto solo y entra por este mismo sitio sin tocar nada más.
+- Las fotos se encogen **en el móvil** a 1024 px del lado mayor antes de subir:
+  se distingue igual una junta abierta y cuesta la quinta parte. Viajan como
+  mucho 30 por recorrido, y el servidor descarta las que no correspondan a una
+  marca de ese recorrido.
+- Cada ficha dice **de dónde sale**: de lo que se dijo o de mirar la foto. Al
+  terminar se cuentan por separado, porque lo leído de una foto hay que
+  repasarlo con más calma que lo que uno mismo dictó.
+- Si no se dijo nada y en la foto no se distingue ningún defecto, la ficha se
+  deja **en blanco y marcada**, y no se inventa: un parte con un hueco se
+  arregla; uno con una tarea inventada manda a alguien a reparar algo que no
+  existe y quema la confianza en el resto de la lista.
 - Todo esto es opcional. Sin clave, sin salida a internet o si se prefiere
   escribir a mano, la pantalla funciona exactamente igual que antes.
 
-Cuesta unos céntimos por recorrido. Para saber si el hosting puede siquiera
-llamar hacia fuera: Ajustes → Servidor → *Comprobar la salida a internet*.
+Las fotos son lo que se paga: un recorrido de seis ronda los diez céntimos y
+uno de treinta, los treinta. Para saber si el hosting puede siquiera llamar
+hacia fuera: Ajustes → Servidor → *Comprobar la salida a internet*.
 
 ## Seguridad
 

@@ -148,9 +148,15 @@ export const claudePonerClave = (clave) =>
   pedir('claude/clave', { metodo: 'POST', json: { clave } });
 export const claudeQuitarClave = () => pedir('claude/clave', { metodo: 'DELETE' });
 
-/** Lo dicho en el recorrido + las marcas → una tarea redactada por marca. */
-export const claudeRedactar = (texto, marcas, oficios) =>
-  pedir('claude/redactar', { metodo: 'POST', json: { texto, marcas, oficios } });
+/**
+ * Lo dicho en el recorrido + las fotos → una tarea redactada por marca.
+ *
+ * `fotos` son las mismas marcas encogidas y en base64: Claude no oye el
+ * audio, pero sí ve lo que fotografiaste, así que de una marca de la que
+ * no dijiste nada todavía puede salir una tarea.
+ */
+export const claudeRedactar = (texto, marcas, oficios, fotos) =>
+  pedir('claude/redactar', { metodo: 'POST', json: { texto, marcas, oficios, fotos } });
 
 function extension(mime) {
   const m = {
