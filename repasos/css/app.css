@@ -1033,9 +1033,9 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 /* El tamaño no va en el CSS: lo calcula ajustarTitulo() midiendo con
    canvas. Dentro de una vivienda o de un acta el titular se estira
    hasta llenar el ancho; en las tres pantallas raíz comparten cuerpo
-   —el que hace que quepa «AJUSTES», la más larga— y se alinean por la
-   derecha, con el avatar de la cabecera. */
-.titulo-raiz { text-align: right; }
+   —el que hace que quepa la más larga de las tres— y arrancan por la
+   izquierda, alineadas con el logotipo de la cabecera. */
+.titulo-raiz { text-align: left; }
 .titulo-pantalla {
   font-family: var(--font-titulo);
   font-weight: 200;

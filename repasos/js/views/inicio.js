@@ -26,11 +26,7 @@ export async function render() {
   return {
     tab: 'inicio',
     contenido: [
-      // «INICIO» y no el nombre de la promoción: el titular dice dónde
-      // estás, igual que en VVDAS. y en AJUSTES. Mientras haya una sola
-      // promoción activa, ponerle su nombre era decir dos veces lo
-      // mismo; y en cuanto haya dos, este panel tendrá que elegir.
-      ...cabeceraTab('INICIO'),
+      ...cabeceraTab(p.nombre.toUpperCase()),
       avisoLocal() || barraSync(),
       c.total ? barraAvance(c) : null,
 

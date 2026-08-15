@@ -43,7 +43,7 @@ export async function render({ promoId, desdeTab = false }) {
   return {
     tab: 'viviendas',
     contenido: [
-      ...cabeceraTab('VVDAS.'),
+      ...cabeceraTab('VIVIENDAS'),
       filtroEstado((v) => { estado = v; pintar(); }),
       filtroOficio((v) => { oficioId = v; pintar(); }),
       contador,

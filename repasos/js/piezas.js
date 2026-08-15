@@ -26,10 +26,10 @@ export function cabeceraTab(titulo) {
       h('div.grow', null, logoUnik({ alto: 16 })),
       avatar(store.sesion(), { tam: 55, onclick: () => ir('#/ajustes') }),
     ),
-    // Las tres raíces comparten cuerpo y se alinean a la derecha, con
-    // el avatar de la cabecera: no se estiran para llenar el ancho.
+    // Las tres raíces comparten cuerpo y arrancan alineadas con el
+    // logotipo: no se estiran para llenar el ancho.
     ajustarTitulo(h('h1.titulo-pantalla.titulo-raiz', null, titulo),
-      { patron: TITULO_PATRON, optico: true }),
+      { hermanos: TITULOS_RAIZ, optico: true }),
   ];
 }
 
@@ -54,33 +54,41 @@ export function cabeceraDentro(titulo, { volverA, sub, acciones = [] } = {}) {
 }
 
 /**
- * La palabra más larga de las tres pantallas raíz. Es la que marca el
- * cuerpo de las tres: midiendo siempre contra ella, INICIO, VVDAS. y
- * AJUSTES salen exactamente del mismo tamaño y la más larga sigue
- * cabiendo justa, sea cual sea el ancho del móvil.
+ * Los titulares de las tres pantallas raíz. El cuerpo de las tres lo
+ * marca el más ancho de esta lista, así que salen exactamente del mismo
+ * tamaño y el más largo sigue cabiendo justo, sea cual sea el ancho del
+ * móvil. La lista se mide, no se supone cuál es el más largo: con esta
+ * tipografía «VIVIENDAS» y «AJUSTES» no ocupan lo que uno diría.
+ *
+ * El titular de la portada es el nombre de la promoción, que puede
+ * cambiar; por eso el propio texto entra siempre en la medida aunque no
+ * esté aquí. Si algún día una promoción se llamara más largo que
+ * «VIVIENDAS», esa pantalla saldría con el cuerpo algo menor en lugar
+ * de salirse, que es la manera correcta de fallar.
  */
-const TITULO_PATRON = 'AJUSTES';
+const TITULOS_RAIZ = ['BRASSIE', 'VIVIENDAS', 'AJUSTES'];
 
 /**
  * Ajusta el cuerpo del titular. Se mide una vez con canvas en lugar de
  * probar tamaños en el DOM: una sola medición y ninguna relectura de
  * estilos, que es lo que evita el parpadeo al entrar en la pantalla.
  *
- * `patron` fija el cuerpo midiendo OTRA palabra en lugar de la propia
- * —las tres raíces lo usan para compartir tamaño—. Sin él, cada título
- * se estira hasta llenar el ancho, que es lo que interesa dentro de una
- * vivienda o de un acta, donde los nombres son de largos muy distintos.
+ * `hermanos` fija el cuerpo midiendo también OTRAS palabras además de
+ * la propia —las tres raíces se pasan la lista entera para compartir
+ * tamaño—. Sin ellos, cada título se estira hasta llenar el ancho, que
+ * es lo que interesa dentro de una vivienda o de un acta, donde los
+ * nombres son de largos muy distintos.
  *
  * `optico` corrige el desajuste que da el TOC: una tipografía deja
  * siempre un hueco entre el borde de la caja del texto y donde empieza
- * de verdad la tinta —el prosaico «espaciado lateral» del glifo—, y ese
- * hueco no es igual en una S que en un punto. Alineando la caja, la
- * letra queda metida hacia dentro respecto al logotipo o al avatar de
- * la cabecera. Aquí se mide dónde acaba la tinta de verdad y se corre
- * el titular esos pocos píxeles, de modo que lo que se alinea es la
- * letra y no su caja, que es lo que ve el ojo.
+ * de verdad la tinta —el «espaciado lateral» del glifo—, y ese hueco no
+ * es igual en una B que en una V. Alineando la caja, la letra queda
+ * metida hacia dentro respecto al logotipo de la cabecera. Aquí se mide
+ * dónde empieza la tinta de verdad y se corre el titular esos pocos
+ * píxeles a la izquierda, de modo que lo que queda alineado es la letra
+ * y no su caja, que es lo que ve el ojo.
  */
-function ajustarTitulo(nodo, { patron = null, optico = false } = {}) {
+function ajustarTitulo(nodo, { hermanos = null, optico = false } = {}) {
   const medir = () => {
     // El ancho del PROPIO titular, no el de su contenedor: clientWidth
     // de un contenedor incluye su relleno, y medir contra él hacía los
@@ -91,7 +99,10 @@ function ajustarTitulo(nodo, { patron = null, optico = false } = {}) {
     const REF = 100;
     const familia = getComputedStyle(nodo).fontFamily;
     lienzo.font = `200 ${REF}px ${familia}`;
-    const suyo = lienzo.measureText(patron || nodo.textContent).width;
+    // El propio texto entra siempre: así ninguno se sale, aunque no
+    // estuviera en la lista de hermanos.
+    const suyo = Math.max(...[...(hermanos || []), nodo.textContent]
+      .map((t) => lienzo.measureText(t).width));
     if (suyo <= 0) return;
     // Con tope por arriba y por abajo: una palabra corta no debe salir
     // gigante ni un nombre largo quedar ilegible por caber a la fuerza.
@@ -103,14 +114,17 @@ function ajustarTitulo(nodo, { patron = null, optico = false } = {}) {
     if (!optico) return;
     lienzo.font = `200 ${cuerpo}px ${familia}`;
     const m = lienzo.measureText(nodo.textContent);
-    // Lo que sobra entre donde acaba la tinta y donde acaba la caja.
-    const holgura = m.width - (m.actualBoundingBoxRight ?? m.width);
+    // Cuánto se mete la tinta desde el borde izquierdo de la caja.
+    // `actualBoundingBoxLeft` va al revés de lo que parece: es positivo
+    // cuando la tinta se sale por la izquierda del origen, así que el
+    // hueco que buscamos es su negativo.
+    const holgura = -(m.actualBoundingBoxLeft ?? 0);
     // Se corre con margen y no con transform: los hijos de .screen
     // llevan la animación de entrada, que acaba en `transform: none` con
     // fill-mode «both», y una animación pisa siempre al estilo en línea.
-    // El margen negativo saca la caja esos píxeles y, al ir el texto
-    // alineado a la derecha, la tinta acaba justo en el borde.
-    nodo.style.marginRight = Math.abs(holgura) > 0.5 ? `${(-holgura).toFixed(2)}px` : '';
+    // El margen negativo saca la caja esos píxeles a la izquierda y la
+    // tinta cae justo bajo la U del logotipo.
+    nodo.style.marginLeft = Math.abs(holgura) > 0.5 ? `${(-holgura).toFixed(2)}px` : '';
   };
   requestAnimationFrame(medir);
   // La medida se hace con la tipografía ya cargada: si se midiera con
