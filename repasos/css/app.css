@@ -57,7 +57,7 @@
   --font: 'Open Sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
   --font-titulo: 'PP Eiko', 'Open Sans', serif;
 
-  --tab-h: 96px;            /* alto que reserva la barra inferior */
+  --tab-h: 104px;           /* alto que reserva la barra inferior */
   --pad: 20px;
 
   /* ─── Movimiento ───────────────────────────────────────────────
@@ -423,19 +423,23 @@ button.avatar:active { transform: scale(0.92); }
   box-shadow: 0 10px 30px rgba(17, 17, 18, 0.28);
 }
 /* La bolita que viaja. Va por detrás de los botones, y su posición la
-   fija el JS con --x según cuál esté activo. */
+   fija el JS con --x según cuál esté activo. --sx y --sy son el estirón
+   del viaje: el JS los sube al salir y los devuelve a uno al llegar, y
+   como el que se interpola es `transform` entero, el estirón y el
+   desplazamiento van en el mismo gesto. */
 .tabbar .marca {
   position: absolute; top: 8px; left: 8px;
-  width: 65px; height: 65px; border-radius: 50%;
+  width: 72px; height: 72px; border-radius: 50%;
   background: #fff;
-  transform: translateX(var(--x, 0));
-  transition: transform var(--mov-medio) var(--sal-muelle);
+  transform: translateX(var(--x, 0)) scale(var(--sx, 1), var(--sy, 1));
+  transform-origin: center;
+  transition: transform var(--mov-largo) var(--sal-muelle);
   pointer-events: none;
 }
 .tabbar.sin-animar .marca { transition: none; }
 .tabbar button {
   position: relative; z-index: 1;
-  width: 65px; height: 65px; border-radius: 50%;
+  width: 72px; height: 72px; border-radius: 50%;
   background: transparent; color: rgba(255, 255, 255, 0.55);
   display: grid; place-items: center;
   transition: color var(--mov-medio) var(--sal-estandar),
@@ -444,12 +448,12 @@ button.avatar:active { transform: scale(0.92); }
 .tabbar button:active { transform: scale(0.9); }
 .tabbar button[aria-current='true'] { color: var(--ink); }
 .tabbar button svg {
-  width: 29px; height: 29px;
-  transition: transform var(--mov-medio) var(--sal-muelle);
+  width: 25px; height: 25px;
+  transition: transform var(--mov-largo) var(--sal-muelle);
 }
 /* Al activarse, el icono da un pellizco de escala: confirma el cambio
    sin necesidad de más adorno. */
-.tabbar button[aria-current='true'] svg { transform: scale(1.08); }
+.tabbar button[aria-current='true'] svg { transform: scale(1.14); }
 .tabbar button:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
 
 /* Botón flotante de acción, por encima de la barra */
@@ -822,6 +826,18 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
   background: rgba(255, 255, 255, 0.14);
   display: grid; place-items: center;
 }
+/* La misma caja que .cta-negro —alto, ancho y redondeo— pero clara: es
+   una salida, no la acción principal de la pantalla. */
+.cta-claro {
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; height: 62px;
+  background: var(--surface); color: var(--text);
+  border-radius: var(--r-lg);
+  font-size: 13.5px; font-weight: 700; letter-spacing: 0.06em;
+  transition: transform var(--mov-corto) var(--sal-estandar),
+              background var(--mov-corto) var(--sal-estandar);
+}
+.cta-claro:active { transform: scale(0.985); background: var(--surface-2); }
 .fab-bola {
   position: absolute; right: var(--pad); z-index: 45;
   bottom: calc(env(safe-area-inset-bottom) + var(--tab-h) + 8px);
@@ -884,30 +900,27 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
   font-size: clamp(28px, 8vw, 34px); font-weight: 800;
   letter-spacing: -0.02em; text-transform: uppercase;
 }
-/* La fila ocupa el ancho entero y la sangría interior es la misma en
-   todos, aunque las palabras midan distinto.
-
-   La clave es `flex: 1 1 auto` y no `flex: 1`. Con `flex: 1` la base
-   es cero y todos acaban con el MISMO ANCHO, así que «Todas» queda con
-   una sangría enorme y «Validadas» pegada al borde. Con base `auto`,
-   cada pastilla parte de lo que mide su palabra y el hueco sobrante se
-   reparte a partes iguales: cada una crece lo mismo, ese crecimiento se
-   parte por igual a izquierda y derecha, y la sangría acaba siendo
-   idéntica en las cuatro. Los anchos salen distintos, que es justo lo
-   que tiene que pasar. */
-.chips.filtro { gap: 9px; flex-wrap: nowrap; }
+/* Cada pastilla mide lo que mide su palabra más la misma sangría a los
+   lados; la fila NO se estira para llenar la pantalla. Antes crecían
+   hasta el borde y eso obligaba a repartir el sobrante, que es lo que
+   deformaba la sangría. Envuelven cuando no caben, así que da igual
+   cuántas haya y cómo de largas sean. */
+.chips.filtro { gap: 8px; flex-wrap: wrap; }
 .chips.filtro .chip {
-  flex: 1 1 auto; min-width: 0;
+  flex: 0 0 auto;
   /* El alto lo fija min-height y no el relleno: así es exacto y no
      depende de las métricas de la tipografía. */
-  min-height: 54px; padding: 0 8px;
+  min-height: 54px; padding: 0 15px;
   display: inline-flex; align-items: center; justify-content: center;
   font-size: 14px;
   border-radius: 17px;
   background: var(--bg);
   box-shadow: inset 0 0 0 1.5px var(--line);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap;
 }
+/* La salida del filtro de oficio, dentro de su hoja: se distingue de un
+   oficio porque no lo es. */
+.chips.filtro .chip.quitar { color: var(--muted-oscuro); font-weight: 600; }
 /* Al marcarlo se rellena y pierde el contorno. El color hay que
    repetirlo aquí: el fondo de la regla de arriba empata en peso con el
    de .chip y, por ir después, se lo comía. */
@@ -1047,7 +1060,7 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
      leía como una sola marca de dos pisos, y pegado a lo de abajo, como
      el rótulo de la primera sección en vez de como el de la pantalla. */
   margin-top: 36px;
-  margin-bottom: 28px;
+  margin-bottom: 36px;   /* 28 + 30 % */
   font-size: 56px;   /* de partida; el JS lo ajusta al ancho real */
 }
 

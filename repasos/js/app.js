@@ -66,7 +66,7 @@ let rutaActual = '';
  * El activo no cambia de color de golpe: hay una bolita blanca que se
  * desliza por detrás hasta su sitio.
  */
-const ANCHO_BOLITA = 65;   // 52 + 25 %
+const ANCHO_BOLITA = 72;   // 65 + 10 %
 const HUECO_BOLITA = 8;
 
 function barraInferior(activo) {
@@ -184,7 +184,26 @@ async function enrutar() {
 function moverBolita(nav, activo) {
   const tabs = tabsVisibles();
   const indice = Math.max(0, tabs.findIndex((t) => t.id === activo));
-  nav.querySelector('.marca')?.style.setProperty('--x', `${indice * (ANCHO_BOLITA + HUECO_BOLITA)}px`);
+  const marca = nav.querySelector('.marca');
+  if (marca) {
+    const destino = indice * (ANCHO_BOLITA + HUECO_BOLITA);
+    const salto = Math.abs(parseFloat(marca.style.getPropertyValue('--x') || 0) - destino);
+    marca.style.setProperty('--x', `${destino}px`);
+    // Estirar y encoger: mientras viaja se alarga en la dirección de la
+    // marcha y se aplana un poco, y al llegar recupera la forma. Es lo
+    // que hace que se lea como una gota que se desplaza y no como un
+    // cuadrado que cambia de sitio. Cuanto más largo el salto, más se
+    // estira; si no se mueve, no pasa nada.
+    if (salto > 1) {
+      clearTimeout(moverBolita.reloj);
+      marca.style.setProperty('--sx', String(1 + Math.min(0.34, salto / 520)));
+      marca.style.setProperty('--sy', String(1 - Math.min(0.14, salto / 1300)));
+      moverBolita.reloj = setTimeout(() => {
+        marca.style.setProperty('--sx', '1');
+        marca.style.setProperty('--sy', '1');
+      }, 170);
+    }
+  }
   [...nav.querySelectorAll('button')].forEach((b, i) => {
     if (i === indice) b.setAttribute('aria-current', 'true');
     else b.removeAttribute('aria-current');

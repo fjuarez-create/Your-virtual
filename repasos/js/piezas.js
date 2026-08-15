@@ -12,6 +12,11 @@ import * as api from './api.js';
 import { unidad, fase, oficio, estado, ESTADOS, OFICIOS } from './catalog.js';
 import { ir } from './app.js';
 
+/* Medidas de la cabecera, en un sitio para que las dos —la de las
+   raíces y la de dentro— no se puedan separar nunca. */
+const ALTO_LOGO = 14.4;    // 16 − 10 %
+const TAM_CUENTA = 41;     // 55 − 25 %
+
 /**
  * Cabecera de las cuatro pantallas con bolitas: el logotipo a la
  * izquierda, la cuenta a la derecha y debajo el titular a todo lo ancho.
@@ -23,13 +28,13 @@ import { ir } from './app.js';
 export function cabeceraTab(titulo) {
   return [
     h('div.topbar', null,
-      h('div.grow', null, logoUnik({ alto: 16 })),
-      avatar(store.sesion(), { tam: 55, onclick: () => ir('#/ajustes') }),
+      h('div.grow', null, logoUnik({ alto: ALTO_LOGO })),
+      avatar(store.sesion(), { tam: TAM_CUENTA, onclick: () => ir('#/ajustes') }),
     ),
     // Las tres raíces comparten cuerpo y arrancan alineadas con el
     // logotipo: no se estiran para llenar el ancho.
     ajustarTitulo(h('h1.titulo-pantalla.titulo-raiz', null, titulo),
-      { hermanos: TITULOS_RAIZ, optico: true }),
+      { hermanos: TITULOS_RAIZ, optico: true, escala: 0.85 }),
   ];
 }
 
@@ -47,7 +52,7 @@ export function cabeceraDentro(titulo, { volverA, sub, acciones = [] } = {}) {
       }, icon('arrowLeft')),
       h('div.grow', null, sub ? h('p.eyebrow', null, sub) : null),
       ...acciones,
-      avatar(store.sesion(), { tam: 55, onclick: () => ir('#/ajustes') }),
+      avatar(store.sesion(), { tam: TAM_CUENTA, onclick: () => ir('#/ajustes') }),
     ),
     ajustarTitulo(h('h1.titulo-pantalla', null, titulo)),
   ];
@@ -79,6 +84,9 @@ const TITULOS_RAIZ = ['BRASSIE', 'VIVIENDAS', 'AJUSTES'];
  * es lo que interesa dentro de una vivienda o de un acta, donde los
  * nombres son de largos muy distintos.
  *
+ * `escala` deja el cuerpo por debajo de lo que cabría: las tres raíces
+ * no llenan el ancho a propósito.
+ *
  * `optico` corrige el desajuste que da el TOC: una tipografía deja
  * siempre un hueco entre el borde de la caja del texto y donde empieza
  * de verdad la tinta —el «espaciado lateral» del glifo—, y ese hueco no
@@ -88,7 +96,7 @@ const TITULOS_RAIZ = ['BRASSIE', 'VIVIENDAS', 'AJUSTES'];
  * píxeles a la izquierda, de modo que lo que queda alineado es la letra
  * y no su caja, que es lo que ve el ojo.
  */
-function ajustarTitulo(nodo, { hermanos = null, optico = false } = {}) {
+function ajustarTitulo(nodo, { hermanos = null, optico = false, escala = 1 } = {}) {
   const medir = () => {
     // El ancho del PROPIO titular, no el de su contenedor: clientWidth
     // de un contenedor incluye su relleno, y medir contra él hacía los
@@ -106,7 +114,7 @@ function ajustarTitulo(nodo, { hermanos = null, optico = false } = {}) {
     if (suyo <= 0) return;
     // Con tope por arriba y por abajo: una palabra corta no debe salir
     // gigante ni un nombre largo quedar ilegible por caber a la fuerza.
-    const cuerpo = Math.min(150, Math.max(26, Math.floor((REF * ancho) / suyo)));
+    const cuerpo = Math.min(150, Math.max(26, Math.floor((REF * ancho * escala) / suyo)));
     nodo.style.fontSize = cuerpo + 'px';
     // Si aun al mínimo no cabe, se deja partir en dos líneas.
     nodo.style.whiteSpace = (REF * ancho) / suyo < 26 ? 'normal' : 'nowrap';
@@ -391,18 +399,25 @@ export function filtroOficio(alCambiar, inicial = 'todos') {
  * Hoja de oficios. `conTodos` añade la opción de no filtrar; al crear
  * una tarea no aparece, porque ahí elegir uno es obligatorio.
  */
-export function hojaOficios(actual, { conTodos = false, titulo = 'Oficio' } = {}) {
+export function hojaOficios(actual, { conTodos = false } = {}) {
   return sheet((cerrar) => [
-    h('h2.title', null, titulo),
-    h('div.rejilla-oficios', null,
-      conTodos ? h('button.oficio' + (actual === 'todos' ? '.on' : ''), {
-        onclick: () => cerrar('todos'),
-      }, 'Todos los oficios') : null,
-      ...OFICIOS.map((o) => h('button.oficio' + (actual === o.id ? '.on' : ''), {
+    // Los mismos chips que los filtros, fluyendo: caben los que quepan
+    // en cada línea, dos, tres o cuatro según lo largo de la palabra. Una
+    // rejilla de dos columnas obligaba a «Carp. aluminio» y a «Cocinas»
+    // a medir lo mismo, con la mitad del aire de sobra en la corta.
+    h('div.chips.filtro.envuelve', null,
+      ...OFICIOS.map((o) => h('button.chip.accent', {
+        'aria-pressed': actual === o.id ? 'true' : 'false',
         onclick: () => cerrar(o.id),
       }, o.corto)),
+      // «Todos los oficios» no está en la lista: es el texto de reposo
+      // del selector, no un oficio. Pero si hay uno puesto hace falta
+      // una salida, y esta solo aparece entonces.
+      conTodos && actual !== 'todos' ? h('button.chip.quitar', {
+        onclick: () => cerrar('todos'),
+      }, 'Quitar filtro') : null,
     ),
-    h('button.btn.ghost.full', { onclick: () => cerrar(null) }, 'Cancelar'),
+    h('button.cta-claro', { onclick: () => cerrar(null) }, 'Cancelar'),
   ]);
 }
 
