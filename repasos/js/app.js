@@ -25,13 +25,17 @@ const RUTAS = [
 ];
 
 /**
- * Tres destinos, y un cuarto solo para quien administra. Los iconos
- * de inicio y viviendas son deliberadamente distintos: uno es una
- * retícula de resumen y el otro una casa, sin parecido posible.
+ * Dos destinos, y un tercero solo para quien administra.
+ *
+ * Las actas NO están aquí, y es a propósito. Una vivienda es un sitio:
+ * hay cincuenta y habrá cincuenta siempre. Un acta es un hecho: hay
+ * nueve hoy y habrá cuatrocientas en un año. Una barra de pestañas
+ * guarda sitios, no archivos que crecen sin techo. Y nadie busca un
+ * acta sin saber de qué casa es, así que el camino natural pasa por la
+ * vivienda; el archivo completo se abre desde la portada.
  */
 const TABS = [
   { id: 'inicio', ruta: '#/', icono: 'inicio', etiqueta: 'Inicio' },
-  { id: 'listas', ruta: '#/listas', icono: 'listas', etiqueta: 'Repasos' },
   { id: 'viviendas', ruta: '#/viviendas', icono: 'viviendas', etiqueta: 'Viviendas' },
   { id: 'ajustes', ruta: '#/ajustes', icono: 'gear', etiqueta: 'Ajustes', soloAdmin: true },
 ];

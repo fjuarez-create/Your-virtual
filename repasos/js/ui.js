@@ -176,29 +176,42 @@ export function avatar(usuario, { tam = 44, radio = '50%', onclick, etiqueta } =
 }
 
 /**
- * Varias personas en una sola bolita: las que han tocado el acta. Se
- * apilan solapadas, la primera delante. A partir de la tercera se
- * resume con «+n», que es cuando dejarían de leerse las iniciales.
+ * Varias personas en una sola bolita: las que han tocado esto. Se
+ * apilan solapadas, la primera delante. Pasado el tope se resume con
+ * «+n», que es cuando dejarían de leerse las iniciales.
+ *
+ * `hueco` reserva sitio para ese número de bolitas aunque no las haya.
+ * En un listado sirve para que el texto de al lado empiece siempre en
+ * el mismo punto: si el hueco creciera con la gente, los nombres
+ * bailarían de fila en fila y no habría manera de recorrerlos con la
+ * vista. En una tarjeta suelta no hace falta y se deja a cero.
  */
-export function grupoAvatares(gente = [], { tam = 38, max = 3 } = {}) {
+export function grupoAvatares(gente = [], { tam = 38, max = 3, hueco = 0 } = {}) {
   const lista = gente.slice(0, max);
   const resto = gente.length - lista.length;
-  // Cada bolita tapada asoma la mitad. Con este solape, tres caras y el
-  // «+n» ocupan menos que antes tres sueltas, así que caben las tres sin
-  // estrujar el texto de la tarjeta.
-  const solape = Math.round(tam * 0.5);
+  // De cada bolita tapada asoma una cuarta parte. No se trata de
+  // reconocer la cara —para eso está el nombre— sino de ver de un
+  // vistazo cuánta gente hay detrás de esto; apretadas ocupan poco y
+  // dejan sitio al texto.
+  const solape = Math.round(tam * 0.75);
+
+  const paso = tam - solape;
+  const piezas = lista.length + (resto > 0 ? 1 : 0);
+  const anchoPila = piezas ? tam + (piezas - 1) * paso : 0;
+  const anchoHueco = hueco ? tam + (hueco - 1) * paso : 0;
 
   const caja = h('div.avatares', {
-    // Sin gente no se reserva hueco; con ella, el ancho es el de la
-    // pila real para que la tarjeta no baile según cuántos haya.
-    style: { width: lista.length ? `${tam + (lista.length - 1 + (resto > 0 ? 1 : 0)) * (tam - solape)}px` : '0' },
-    'aria-label': gente.map((p) => p.nombre).join(', '),
+    // El alto va atado al tamaño de la bolita: si se dejara fijo en el
+    // CSS, una pila pequeña seguiría reservando el alto de una grande y
+    // engordaría la fila sin que se vea por qué.
+    style: { width: Math.max(anchoPila, anchoHueco) + 'px', height: tam + 'px' },
+    'aria-label': gente.length ? gente.map((p) => p.nombre).join(', ') : 'Sin nadie todavía',
   });
 
   lista.forEach((p, i) => {
     const b = avatar(p, { tam });
     b.classList.add('apilado');
-    b.style.left = `${i * (tam - solape)}px`;
+    b.style.left = `${i * paso}px`;
     // El primero delante: si no, el último taparía al que creó el acta.
     b.style.zIndex = String(lista.length - i);
     caja.append(b);
@@ -208,7 +221,7 @@ export function grupoAvatares(gente = [], { tam = 38, max = 3 } = {}) {
     caja.append(h('div.avatar.apilado.mas', {
       style: {
         width: tam + 'px', height: tam + 'px', flex: `0 0 ${tam}px`,
-        left: `${lista.length * (tam - solape)}px`,
+        left: `${lista.length * paso}px`,
         fontSize: Math.round(tam * 0.32) + 'px',
       },
     }, '+' + resto));
@@ -394,6 +407,30 @@ export function fechaRelativa(iso) {
   if (dias === 1) return 'Ayer';
   return fechaCorta(iso);
 }
+/** Días enteros transcurridos. Negativo si la fecha está por venir. */
+export function diasDesde(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return NaN;
+  const soloDia = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  return Math.round((soloDia(new Date()) - soloDia(d)) / 86400000);
+}
+
+/**
+ * «Hoy», «Hace 3 días», «Hace 2 semanas». Antigüedad y no fecha: en un
+ * listado de cincuenta casas lo que se busca no es qué día fue, sino
+ * cuáles llevan paradas.
+ */
+export function desdeHace(iso) {
+  const dias = diasDesde(iso);
+  if (Number.isNaN(dias)) return '';
+  if (dias <= 0) return 'Hoy';
+  if (dias === 1) return 'Ayer';
+  if (dias < 7) return `Hace ${dias} días`;
+  if (dias < 14) return 'Hace 1 semana';
+  if (dias < 60) return `Hace ${Math.floor(dias / 7)} semanas`;
+  return `Hace ${Math.floor(dias / 30)} meses`;
+}
+
 export function iniciales(nombre) {
   const partes = String(nombre || '?').trim().split(/\s+/).filter(Boolean);
   if (!partes.length) return '?';

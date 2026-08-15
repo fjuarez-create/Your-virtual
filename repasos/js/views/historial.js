@@ -1,4 +1,9 @@
-/* Segunda bolita: las actas de la promoción.
+/* El archivo de actas de la promoción, entero y en orden.
+
+   Ya no es una bolita: se entra desde la portada. Un acta se busca
+   sabiendo de qué vivienda es —siempre—, y para eso está el pie de
+   cada vivienda. Aquí se viene a otra cosa: a recorrer lo firmado de
+   toda la promoción, que es una consulta de despacho y no de obra.
 
    Mientras solo haya una promoción activa se entra directo a la suya y
    no se pierde un toque en elegirla. En cuanto haya dos, el selector
@@ -6,7 +11,7 @@
 import { h, icon, emptyState } from '../ui.js';
 import * as store from '../store.js';
 import { PROMOCIONES } from '../catalog.js';
-import { tarjetaActa, ctaNuevaLista, filtroEstado, filtroOficio, cabeceraTab } from '../piezas.js';
+import { tarjetaActa, ctaNuevaLista, filtroEstado, filtroOficio, cabeceraDentro } from '../piezas.js';
 import { ir } from '../app.js';
 
 export async function render() {
@@ -22,9 +27,9 @@ export async function render() {
 
   if (!actas.length) {
     return {
-      tab: 'listas',
+      sinTabs: true,
       contenido: [
-        ...cabeceraTab('ACTAS'),
+        ...cabeceraDentro('ACTAS', { volverA: '#/', sub: p.nombre }),
         emptyState('clipboard', 'Todavía no hay actas',
           'Cuando crees la primera lista de repaso aparecerá aquí, con su fecha y quién la hizo.',
           h('button.btn.ink', { onclick: () => ir('#/viviendas') }, icon('plus'), 'Nueva lista de repasos')),
@@ -51,10 +56,9 @@ export async function render() {
   pintar();
 
   return {
-    tab: 'listas',
-    fab: null,
+    sinTabs: true,
     contenido: [
-      ...cabeceraTab('ACTAS'),
+      ...cabeceraDentro('ACTAS', { volverA: '#/', sub: p.nombre }),
       filtroEstado((v) => { estado = v; pintar(); }),
       filtroOficio((v) => { oficioId = v; pintar(); }),
       contador,

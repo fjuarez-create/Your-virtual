@@ -6,7 +6,7 @@
 import { h, icon, avatar, logoUnik } from '../ui.js';
 import * as store from '../store.js';
 import { PROMOCIONES, unidad } from '../catalog.js';
-import { barraSync, avisoLocal, cabeceraTab, barraAvance, tareaFila } from '../piezas.js';
+import { barraSync, avisoLocal, cabeceraTab, barraAvance, tareaFila, chevron } from '../piezas.js';
 import { ir } from '../app.js';
 
 export async function render() {
@@ -19,6 +19,7 @@ export async function render() {
 
   const c = await store.resumenPromocion(p.id);
   const recientes = await store.tareasRecientes(12, { promoId: p.id });
+  const nActas = await store.cuantasActas(p.id);
 
   // Aquí no hay botón de crear: esta pantalla es para mirar, y crear
   // empieza eligiendo vivienda, que es la tercera bolita.
@@ -28,6 +29,19 @@ export async function render() {
       ...cabeceraTab(p.nombre.toUpperCase()),
       avisoLocal() || barraSync(),
       c.total ? barraAvance(c) : null,
+
+      // El archivo de actas. Vive aquí y no en la barra de abajo porque
+      // es una consulta de despacho: se viene cuando hace falta el
+      // documento firmado, no cada vez que se abre la app.
+      nActas ? h('button.row', { onclick: () => ir('#/listas') },
+        h('div.row-lead', null, icon('clipboard', 18)),
+        h('div.grow', null,
+          h('div.row-title', null, 'Todas las actas'),
+          h('div.row-sub', null, `${nActas} ${nActas === 1 ? 'acta firmada' : 'actas firmadas'}`),
+        ),
+        chevron(),
+      ) : null,
+
       recientes.length
         ? h('div', { style: { marginTop: '22px' } },
             h('p.eyebrow', null, 'Actividad reciente'),

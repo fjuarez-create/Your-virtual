@@ -398,15 +398,27 @@ export async function resumenPorUnidad(promoId) {
       salida.set(unidadId, {
         listas: 0, total: 0, hechas: 0, pendientes: 0, esperando: 0,
         oficios: new Set(), oficiosAbiertos: new Set(), ultima: null,
+        // `movimiento` es la última vez que se tocó algo aquí, no la
+        // última acta abierta: una casa con un acta de hace un mes y
+        // una tarea resuelta ayer se está moviendo.
+        movimiento: null, autores: new Map(), gente: [],
       });
     }
     return salida.get(unidadId);
+  };
+  const mover = (v, cuando) => { if (cuando && (!v.movimiento || cuando > v.movimiento)) v.movimiento = cuando; };
+  const apuntar = (v, id, nombre) => {
+    if (!nombre) return;
+    const a = v.autores.get(nombre);
+    if (a) a.n++;
+    else v.autores.set(nombre, { id: id || nombre, nombre, n: 1 });
   };
 
   for (const l of listas) {
     const v = dame(l.unidadId);
     v.listas++;
     if (!v.ultima || l.creado > v.ultima) v.ultima = l.creado;
+    mover(v, l.actualizado || l.creado);
   }
   for (const t of tareas) {
     const unidadId = unidadDeLista.get(t.listaId);
@@ -414,12 +426,29 @@ export async function resumenPorUnidad(promoId) {
     const v = dame(unidadId);
     v.total++;
     v.oficios.add(oficioDe(t));
+    apuntar(v, t.creadoPor, t.creadoPorNombre);
+    mover(v, t.actualizado || t.creado);
     if (hecha(t)) { v.hechas++; continue; }
     v.oficiosAbiertos.add(oficioDe(t));
     if (esperandoVisto(t)) v.esperando++;
     else v.pendientes++;
   }
+
+  // Delante quien más ha metido mano: la pila de caras es ornamental,
+  // pero si va a decir algo que diga quién lleva el peso de esa casa.
+  for (const v of salida.values()) {
+    v.gente = [...v.autores.values()]
+      .sort((a, b) => b.n - a.n || a.nombre.localeCompare(b.nombre))
+      .map(({ id, nombre }) => ({ id, nombre }));
+    delete v.autores;
+  }
   return salida;
+}
+
+/** Cuántas actas vivas tiene una promoción. Para el enlace al archivo. */
+export async function cuantasActas(promoId = null) {
+  return (await db.getAll('listas'))
+    .filter((l) => !l.borrada && (!promoId || l.promoId === promoId)).length;
 }
 
 /** Conteo de un acta. `hechas` son las verificadas y solo esas. */

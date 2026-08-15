@@ -730,7 +730,8 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
    Un acta la tocan varias personas. Se solapan en vez de ponerse
    en fila para que la tarjeta no cambie de ancho según cuántas
    hayan pasado por ella. */
-.avatares { position: relative; height: 55px; flex: none; }
+/* El alto lo pone grupoAvatares según el tamaño de la bolita. */
+.avatares { position: relative; flex: none; }
 .avatar.apilado { position: absolute; top: 0; }
 .avatar.mas {
   background: var(--surface-2); color: var(--muted);
@@ -925,35 +926,61 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
    clara con trabajo abierto, verde cuando está todo verificado. */
 .villas { gap: 7px; }
 .villa {
-  display: flex; align-items: center; gap: 13px;
-  width: 100%; padding: 11px 14px;
+  display: block; width: 100%;
+  padding: 13px 15px 14px;
   background: var(--surface); border-radius: var(--r-md);
   text-align: left;
   transition: transform var(--mov-corto) var(--sal-estandar);
 }
 .villa:active { transform: scale(0.985); }
-.villa-n {
-  width: 44px; height: 44px; flex: 0 0 44px; border-radius: 13px;
-  background: var(--bg); color: var(--text);
-  display: grid; place-items: center;
-  font-size: 15px; font-weight: 800; letter-spacing: -0.03em;
-  font-variant-numeric: tabular-nums;
+
+.villa-cab { display: flex; align-items: center; gap: 11px; }
+.villa-tit {
+  flex: 1; min-width: 0;
+  font-size: 15px; font-weight: 700; letter-spacing: -0.02em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.villa-tit { font-size: 15px; font-weight: 700; letter-spacing: -0.02em; }
-.villa-sub { font-size: 12.5px; color: var(--muted); margin-top: 3px; }
+.villa-pct {
+  flex: none; font-size: 14px; font-weight: 700;
+  letter-spacing: -0.02em; font-variant-numeric: tabular-nums;
+}
+
+/* Un solo tramo, y es el de lo verificado. Aquí no se parte en tres
+   como en la portada: son cincuenta filas seguidas y lo que se lee de
+   un vistazo es cuánto hay cerrado de verdad; el desglose está justo
+   debajo en palabras. */
+.villa-barra {
+  height: 6px; border-radius: 999px; margin-top: 11px;
+  background: var(--bg); overflow: hidden;
+}
+.villa-barra i {
+  display: block; height: 100%; border-radius: 999px;
+  background: var(--ink);
+  transition: width var(--mov-largo) var(--sal-estandar);
+}
+
+.villa-pie {
+  display: flex; align-items: baseline; gap: 10px; margin-top: 9px;
+  font-size: 12.5px; color: var(--muted);
+}
+.villa-pie > :first-child {
+  flex: 1; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.villa-mov { flex: none; }
+/* Con trabajo abierto y dos semanas sin tocarse, la antigüedad deja de
+   ser un dato y pasa a ser un aviso. */
+.villa-mov.parada { color: var(--danger); font-weight: 700; }
 
 .villa.apagada { background: transparent; box-shadow: inset 0 0 0 1px var(--line-soft); }
-.villa.apagada .villa-n { background: var(--surface); color: var(--muted-2); }
 .villa.apagada .villa-tit { color: var(--muted); font-weight: 600; }
-.villa.apagada .villa-sub { color: var(--muted-2); }
+.villa.apagada .villa-pct { color: var(--muted-2); }
+.villa.apagada .villa-barra { background: var(--surface); }
 
 .villa.hecha { background: rgba(63, 125, 90, 0.10); }
-.villa.hecha .villa-n { background: rgba(63, 125, 90, 0.16); color: var(--ok); }
-.villa-ok {
-  width: 30px; height: 30px; flex: none; border-radius: 50%;
-  background: var(--ok); color: #fff;
-  display: grid; place-items: center;
-}
+.villa.hecha .villa-pct { color: var(--ok); }
+.villa.hecha .villa-barra { background: rgba(63, 125, 90, 0.16); }
+.villa.hecha .villa-barra i { background: var(--ok); }
 
 .vacio-suave { padding: 34px 0; }
 

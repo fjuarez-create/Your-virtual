@@ -4,7 +4,7 @@
    distintas y la fecha de cualquiera de ellas no diría nada. Lo que
    importa es cuántas tareas tiene y en qué estado están, y eso lo dice
    el color de la fila antes de leer un número. */
-import { h, icon, toast, anillo } from '../ui.js';
+import { h, toast, grupoAvatares, desdeHace, diasDesde } from '../ui.js';
 import { PROMOCIONES, promocion, unidades } from '../catalog.js';
 import * as store from '../store.js';
 import { filtroEstado, filtroOficio, cabeceraTab } from '../piezas.js';
@@ -52,8 +52,21 @@ export async function render({ promoId, desdeTab = false }) {
   };
 }
 
+/* Una casa parada más de dos semanas con trabajo abierto ya no es «va
+   despacio»: es que se ha caído de la lista de alguien. */
+const DIAS_PARADA = 14;
+
 /**
- * Una vivienda. Tres aspectos, y se leen antes que el texto:
+ * Una vivienda. Arriba, quién ha trabajado aquí y el porcentaje; en
+ * medio, la barra; abajo, qué queda y desde cuándo no se toca.
+ *
+ * El porcentaje cuenta SOLO lo verificado. Que la subcontrata dé algo
+ * por resuelto no lo termina: lo termina que un arquitecto lo dé por
+ * bueno. Si la barra contara los «resuelta», diría que la promoción va
+ * mejor de lo que va, que es la única mentira que esta pantalla no se
+ * puede permitir.
+ *
+ * Tres aspectos, y se leen antes que el texto:
  *   apagada — no tiene ninguna tarea todavía
  *   viva    — le queda algo por verificar
  *   hecha   — todas sus tareas están verificadas
@@ -61,33 +74,52 @@ export async function render({ promoId, desdeTab = false }) {
 function fila(u, r, promoId) {
   const total = r?.total || 0;
   const hechas = r?.hechas || 0;
+  const pct = total ? Math.round((100 * hechas) / total) : 0;
   const terminada = total > 0 && hechas === total;
   const clase = !total ? 'villa apagada' : terminada ? 'villa hecha' : 'villa';
+
+  const gente = (r?.gente || []).map((g) => store.persona(g.id, g.nombre));
+  const dias = r?.movimiento ? diasDesde(r.movimiento) : NaN;
+  const parada = !terminada && total > 0 && dias >= DIAS_PARADA;
 
   return h('button', {
     class: clase,
     onclick: () => ir(`#/p/${promoId}/v/${u.id.split(':')[1]}`),
   },
-    h('span.villa-n', null, u.corto),
-    h('div.grow', null,
+    h('div.villa-cab', null,
+      // El hueco se reserva siempre, haya gente o no: son cincuenta
+      // filas seguidas y los nombres tienen que caer en la misma
+      // vertical para poder recorrerlos de un vistazo.
+      // Hueco para cinco piezas: cuatro caras y el «+n». Es lo más ancho
+      // que puede llegar a ser la pila, así que reservándolo el nombre
+      // no se mueve nunca.
+      grupoAvatares(gente, { tam: 34, max: 4, hueco: 5 }),
       h('div.villa-tit', null, u.nombre),
-      h('div.villa-sub', null, textoDe(total, hechas, r?.esperando || 0)),
+      h('div.villa-pct', null, pct + '%'),
     ),
-    total
-      ? (terminada
-          ? h('span.villa-ok', null, icon('check', 16))
-          : anillo(Math.round((100 * hechas) / total), { tam: 42 }))
-      : null,
+    h('div.villa-barra', null, h('i', { style: { width: pct + '%' } })),
+    h('div.villa-pie', null,
+      h('span', null, textoDe(total, hechas, r?.esperando || 0)),
+      r?.movimiento
+        ? h('span.villa-mov', { class: parada ? 'parada' : '' }, desdeHace(r.movimiento))
+        : null,
+    ),
   );
 }
 
+/**
+ * Lo que queda, partido en las dos colas que se atascan por motivos
+ * distintos: lo que nadie ha arreglado todavía y lo que está arreglado
+ * esperando que alguien vaya a darlo por bueno.
+ */
 function textoDe(total, hechas, esperando) {
-  if (!total) return 'Sin tareas';
-  if (hechas === total) return `${total} ${total === 1 ? 'tarea' : 'tareas'} · terminada`;
-  const quedan = total - hechas;
-  return esperando
-    ? `${quedan} por verificar · ${esperando} ${esperando === 1 ? 'resuelta' : 'resueltas'}`
-    : `${quedan} de ${total} por verificar`;
+  if (!total) return 'Sin repasar todavía';
+  if (hechas === total) return 'Todo verificado';
+  const porResolver = total - hechas - esperando;
+  const partes = [];
+  if (porResolver) partes.push(`${porResolver} por resolver`);
+  if (esperando) partes.push(`${esperando} por verificar`);
+  return partes.join(' · ');
 }
 
 /**
