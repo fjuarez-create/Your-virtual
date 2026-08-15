@@ -268,9 +268,13 @@ export function chipFase(faseId) {
  */
 export function tarjetaActa({ lista, conteo, gente }, { dentroDeVivienda = false } = {}) {
   const u = unidad(lista.unidadId);
+  // «Acta Villa 26» y no «Villa 26»: si el acta se llamara igual que la
+  // vivienda, en un listado no habría manera de saber qué se está
+  // abriendo. Dentro de la vivienda eso ya se sabe, y lo que distingue
+  // un acta de otra es su fecha.
   const porDefecto = dentroDeVivienda
     ? `Acta de ${fechaCorta(lista.creado)}`
-    : (u?.nombre || lista.unidadId);
+    : `Acta ${u?.nombre || lista.unidadId}`;
   const titulo = lista.nombre || porDefecto;
 
   return h('button.acta', { onclick: () => ir('#/l/' + lista.id) },
@@ -350,6 +354,20 @@ export function chevron() {
   const svg = icon('chevron');
   svg.classList.add('chev');
   return svg;
+}
+
+/**
+ * La llamada a la acción negra de «nueva lista de repasos». La misma en
+ * la pestaña de ACTAS y dentro de una vivienda, y en el mismo sitio de
+ * la pantalla: debajo de los filtros y encima del listado. Lo único que
+ * cambia es a dónde lleva — en ACTAS hay que elegir vivienda primero, y
+ * dentro de una ya se sabe cuál es.
+ */
+export function ctaNuevaLista(alPulsar) {
+  return h('button.cta-negro', { onclick: alPulsar },
+    h('span.grow', null, 'NUEVA LISTA DE REPASOS'),
+    h('span.cta-mas', null, icon('plus', 18)),
+  );
 }
 
 /**

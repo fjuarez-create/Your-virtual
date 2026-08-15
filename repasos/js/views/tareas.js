@@ -51,7 +51,9 @@ export async function render({ listaId }) {
     visibles.forEach((t) => listado.append(tarjetaTarea(t, tareas.indexOf(t) + 1, portadas.get(t.id), tipos.get(t.id), listaId)));
   };
 
-  const chips = h('div.chips', null,
+  // `.filtro`: los mismos chips altos y con el mismo redondeo que los
+  // de las pantallas de actas, viviendas y vivienda.
+  const chips = h('div.chips.filtro', null,
     ...[['todas', `Todas ${conteo.total}`], ['pendientes', `Pendientes ${conteo.pendientes}`], ['cerradas', 'Cerradas']]
       .map(([id, txt]) => h('button.chip.accent', {
         'aria-pressed': id === filtro ? 'true' : 'false',
@@ -71,10 +73,11 @@ export async function render({ listaId }) {
     sinTabs: true,
     fab,
     contenido: [
-      // El titular es la vivienda y no la fecha: al entrar desde una
+      // El titular lleva la vivienda y no la fecha: al entrar desde una
       // lista de actas, lo primero que hay que reconocer es de qué casa
-      // se está hablando.
-      ...cabeceraDentro(lista.nombre || (u?.nombre || 'Acta').toUpperCase(), {
+      // se está hablando. Y empieza por «ACTA» porque, si no, el acta y
+      // la vivienda se llaman igual y no hay forma de saber dónde estás.
+      ...cabeceraDentro(lista.nombre || `ACTA ${(u?.nombre || '').toUpperCase()}`.trim(), {
         volverA: `#/p/${lista.promoId}/v/${String(lista.unidadId).split(':')[1]}`,
         sub: `${f.nombre} · ${fechaCorta(lista.creado)}`,
         acciones: [h('button.icon-btn', {
@@ -83,28 +86,10 @@ export async function render({ listaId }) {
         }, icon('gear'))],
       }),
 
-      h('div.card-ink', null,
-        // Quién firmó la inspección y a qué hora, que es lo que se
-        // consulta cuando se repasa una lista de otra persona.
-        h('p.eyebrow', null, `${lista.creadoPorNombre} · ${hora(lista.creado)}`),
-        h('div.stats', { style: { marginTop: '16px' } },
-          h('div', null,
-            h('div.n', null, String(conteo.total)),
-            h('div.l', null, conteo.total === 1 ? 'Tarea' : 'Tareas'),
-          ),
-          h('div', null,
-            h('div.n', { class: conteo.pendientes ? 'accent' : '' }, String(conteo.pendientes)),
-            h('div.l', null, 'Pendientes'),
-          ),
-          h('div', null,
-            h('div.n', null, String(conteo.total - conteo.pendientes)),
-            h('div.l', null, 'Cerradas'),
-          ),
-        ),
-        conteo.total > 0 && h('div', { style: { marginTop: '16px' } },
-          h('div.bar', null, h('i', { style: { width: Math.round(100 * (conteo.total - conteo.pendientes) / conteo.total) + '%' } })),
-        ),
-      ),
+      // La firma. Iba dentro del recuadro de cifras que se ha quitado, y
+      // no puede perderse: un acta existe justamente para dejar dicho
+      // quién vio la vivienda y cuándo.
+      h('p.hint', null, `Firmada por ${lista.creadoPorNombre} a las ${hora(lista.creado)}.`),
 
       barraSync(),
 

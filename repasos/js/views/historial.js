@@ -6,7 +6,7 @@
 import { h, icon, emptyState } from '../ui.js';
 import * as store from '../store.js';
 import { PROMOCIONES } from '../catalog.js';
-import { tarjetaActa, filtroEstado, filtroOficio, cabeceraTab } from '../piezas.js';
+import { tarjetaActa, ctaNuevaLista, filtroEstado, filtroOficio, cabeceraTab } from '../piezas.js';
 import { ir } from '../app.js';
 
 export async function render() {
@@ -16,10 +16,9 @@ export async function render() {
 
   const actas = await store.actasConDatos({ promoId: p.id });
 
-  const cta = h('button.cta-negro', { onclick: () => ir('#/viviendas') },
-    h('span.grow', null, 'NUEVA LISTA DE REPASOS'),
-    h('span.cta-mas', null, icon('plus', 18)),
-  );
+  // Desde aquí no se sabe de qué vivienda es, así que primero hay que
+  // elegirla. Dentro de una vivienda, el mismo botón la crea directamente.
+  const cta = ctaNuevaLista(() => ir('#/viviendas'));
 
   if (!actas.length) {
     return {

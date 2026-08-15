@@ -87,7 +87,10 @@ export async function render({ listaId, tareaId }) {
   const yo = store.sesion();
   const permitidos = estadosPermitidos(yo);
 
-  const chipsEstado = h('div.chips', null,
+  // Mismo alto y mismo redondeo que los filtros del resto de pantallas.
+  // Aquí el marcado se rellena en negro y no en el color de marca: no
+  // es un filtro, es el estado en el que está la tarea.
+  const chipsEstado = h('div.chips.filtro', null,
     permitidos.map((op) => h('button.chip', {
       'aria-pressed': t.estado === op.id ? 'true' : 'false',
       onclick: () => cambiarEstadoTarea(t, op.id),

@@ -5,9 +5,9 @@
    tres visitas salió cada cosa. Las actas siguen existiendo —son la
    firma de quién vio qué y cuándo— y se abren desde el pie. */
 import { h, icon, sheet, toast, emptyState } from '../ui.js';
-import { promocion, unidad, FASES, hecha, esperandoVisto } from '../catalog.js';
+import { promocion, unidad, FASES, hecha } from '../catalog.js';
 import * as store from '../store.js';
-import { cabeceraDentro, barraAvance, tareaFila, tarjetaActa, filtroEstado, filtroOficio } from '../piezas.js';
+import { cabeceraDentro, ctaNuevaLista, tareaFila, tarjetaActa, filtroEstado, filtroOficio } from '../piezas.js';
 import { ir } from '../app.js';
 
 export async function render({ promoId, unidadId }) {
@@ -15,7 +15,7 @@ export async function render({ promoId, unidadId }) {
   const u = unidad(unidadId);
   if (!p || !u) { toast('Vivienda desconocida', 'err'); ir('#/viviendas', { reemplazar: true }); return { contenido: [] }; }
 
-  const { actas, tareas, conteo } = await store.tareasDeUnidad(unidadId);
+  const { actas, tareas } = await store.tareasDeUnidad(unidadId);
   const portadas = new Map();
   for (const t of tareas) portadas.set(t.id, await store.urlDePortada(t));
 
@@ -65,13 +65,15 @@ export async function render({ promoId, unidadId }) {
 
   return {
     sinTabs: true,
-    fab: h('button.fab', { onclick: nueva }, icon('plus'), 'Nueva lista'),
+    // Sin botón flotante: la llamada a la acción negra hace lo mismo y
+    // está siempre a la vista, igual que en la pestaña de ACTAS.
+    fab: null,
     contenido: [
       ...cabecera,
-      barraAvance(conteo),
       filtroEstado((v) => { estado = v; pintar(); }),
       filtroOficio((v) => { oficioId = v; pintar(); }),
       contador,
+      ctaNuevaLista(nueva),
       listado,
       // Las actas, al pie: se consultan cuando hace falta saber quién
       // firmó qué, no cada vez que se entra en la casa.
