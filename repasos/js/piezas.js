@@ -26,7 +26,10 @@ export function cabeceraTab(titulo) {
       h('div.grow', null, logoUnik({ alto: 16 })),
       avatar(store.sesion(), { tam: 55, onclick: () => ir('#/ajustes') }),
     ),
-    ajustarTitulo(h('h1.titulo-pantalla', null, titulo)),
+    // Las tres raíces comparten cuerpo y se alinean a la derecha, con
+    // el avatar de la cabecera: no se estiran para llenar el ancho.
+    ajustarTitulo(h('h1.titulo-pantalla.titulo-raiz', null, titulo),
+      { patron: TITULO_PATRON, optico: true }),
   ];
 }
 
@@ -51,12 +54,33 @@ export function cabeceraDentro(titulo, { volverA, sub, acciones = [] } = {}) {
 }
 
 /**
- * Ajusta el cuerpo del titular para que la palabra ocupe justo el ancho
- * disponible. Se mide una vez con canvas en lugar de probar tamaños en
- * el DOM: una sola medición y ninguna relectura de estilos, que es lo
- * que evita el parpadeo al entrar en la pantalla.
+ * La palabra más larga de las tres pantallas raíz. Es la que marca el
+ * cuerpo de las tres: midiendo siempre contra ella, INICIO, VVDAS. y
+ * AJUSTES salen exactamente del mismo tamaño y la más larga sigue
+ * cabiendo justa, sea cual sea el ancho del móvil.
  */
-function ajustarTitulo(nodo) {
+const TITULO_PATRON = 'AJUSTES';
+
+/**
+ * Ajusta el cuerpo del titular. Se mide una vez con canvas en lugar de
+ * probar tamaños en el DOM: una sola medición y ninguna relectura de
+ * estilos, que es lo que evita el parpadeo al entrar en la pantalla.
+ *
+ * `patron` fija el cuerpo midiendo OTRA palabra en lugar de la propia
+ * —las tres raíces lo usan para compartir tamaño—. Sin él, cada título
+ * se estira hasta llenar el ancho, que es lo que interesa dentro de una
+ * vivienda o de un acta, donde los nombres son de largos muy distintos.
+ *
+ * `optico` corrige el desajuste que da el TOC: una tipografía deja
+ * siempre un hueco entre el borde de la caja del texto y donde empieza
+ * de verdad la tinta —el prosaico «espaciado lateral» del glifo—, y ese
+ * hueco no es igual en una S que en un punto. Alineando la caja, la
+ * letra queda metida hacia dentro respecto al logotipo o al avatar de
+ * la cabecera. Aquí se mide dónde acaba la tinta de verdad y se corre
+ * el titular esos pocos píxeles, de modo que lo que se alinea es la
+ * letra y no su caja, que es lo que ve el ojo.
+ */
+function ajustarTitulo(nodo, { patron = null, optico = false } = {}) {
   const medir = () => {
     // El ancho del PROPIO titular, no el de su contenedor: clientWidth
     // de un contenedor incluye su relleno, y medir contra él hacía los
@@ -65,8 +89,9 @@ function ajustarTitulo(nodo) {
     if (!ancho) return;
     const lienzo = ajustarTitulo.lienzo ||= document.createElement('canvas').getContext('2d');
     const REF = 100;
-    lienzo.font = `200 ${REF}px ${getComputedStyle(nodo).fontFamily}`;
-    const suyo = lienzo.measureText(nodo.textContent).width;
+    const familia = getComputedStyle(nodo).fontFamily;
+    lienzo.font = `200 ${REF}px ${familia}`;
+    const suyo = lienzo.measureText(patron || nodo.textContent).width;
     if (suyo <= 0) return;
     // Con tope por arriba y por abajo: una palabra corta no debe salir
     // gigante ni un nombre largo quedar ilegible por caber a la fuerza.
@@ -74,6 +99,18 @@ function ajustarTitulo(nodo) {
     nodo.style.fontSize = cuerpo + 'px';
     // Si aun al mínimo no cabe, se deja partir en dos líneas.
     nodo.style.whiteSpace = (REF * ancho) / suyo < 26 ? 'normal' : 'nowrap';
+
+    if (!optico) return;
+    lienzo.font = `200 ${cuerpo}px ${familia}`;
+    const m = lienzo.measureText(nodo.textContent);
+    // Lo que sobra entre donde acaba la tinta y donde acaba la caja.
+    const holgura = m.width - (m.actualBoundingBoxRight ?? m.width);
+    // Se corre con margen y no con transform: los hijos de .screen
+    // llevan la animación de entrada, que acaba en `transform: none` con
+    // fill-mode «both», y una animación pisa siempre al estilo en línea.
+    // El margen negativo saca la caja esos píxeles y, al ir el texto
+    // alineado a la derecha, la tinta acaba justo en el borde.
+    nodo.style.marginRight = Math.abs(holgura) > 0.5 ? `${(-holgura).toFixed(2)}px` : '';
   };
   requestAnimationFrame(medir);
   // La medida se hace con la tipografía ya cargada: si se midiera con
