@@ -476,6 +476,59 @@ export function oficiosSegun(c, estado) {
   return (estado === 'pendiente' || estado === 'resuelta') ? c.oficiosAbiertos : c.oficios;
 }
 
+/* ─── Recorridos ──────────────────────────────────────────────────
+   Un recorrido es material de trabajo, no el repaso: vive solo en este
+   dispositivo y no viaja al servidor. Cuando se convierte en tareas,
+   son las tareas las que se suben; el recorrido se queda de respaldo
+   —con el audio dentro— hasta que alguien lo retire. */
+export async function guardarRecorrido(rec) {
+  await db.put('recorridos', rec);
+  return rec;
+}
+
+export async function recorridosDeUnidad(unidadId) {
+  return db.porIndice('recorridos', 'unidadId', unidadId);
+}
+
+/**
+ * El recorrido ya es un acta con sus tareas. Se sueltan las fotos —cada
+ * una está ya copiada dentro de su tarea, y guardarlas dos veces llena
+ * el móvil— y se conserva el audio, que es lo único que no está en
+ * ningún otro sitio: es lo que se dijo mientras se andaba.
+ */
+export async function marcarRecorridoUsado(id, listaId) {
+  const r = await db.get('recorridos', id);
+  if (!r) return null;
+  const nuevo = {
+    ...r, usado: true, listaId, usadoEn: ahora(),
+    marcas: (r.marcas || []).map(({ blob, ...resto }) => resto),
+  };
+  await db.put('recorridos', nuevo);
+  await barrerRecorridos();
+  return nuevo;
+}
+
+/**
+ * Los recorridos usados no son para siempre. Pasado un mes ya nadie
+ * vuelve a oír el audio de un repaso cuyas tareas están en marcha, y en
+ * un iPhone que se queda sin sitio el navegador borra la base entera
+ * sin preguntar. Se limpia solo, cuando toca.
+ */
+const VIDA_RECORRIDO = 30 * 24 * 60 * 60 * 1000;
+
+async function barrerRecorridos() {
+  const limite = Date.now() - VIDA_RECORRIDO;
+  for (const r of await db.getAll('recorridos')) {
+    if (r.usado && new Date(r.usadoEn || r.creado).getTime() < limite) {
+      await db.borrar('recorridos', r.id);
+    }
+  }
+}
+
+export async function borrarRecorrido(id) {
+  return db.borrar('recorridos', id);
+}
+
 /** Cuántas actas vivas tiene una promoción. Para el enlace al archivo. */
 export async function cuantasActas(promoId = null) {
   return (await db.getAll('listas'))

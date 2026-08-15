@@ -17,6 +17,7 @@ const RUTAS = [
   { patron: /^\/promociones$/,                vista: () => import('./views/promociones.js'),  params: () => ({}) },
   { patron: /^\/p\/([^/]+)$/,                 vista: () => import('./views/viviendas.js'),    params: (m) => ({ promoId: m[1] }) },
   { patron: /^\/p\/([^/]+)\/v\/([^/]+)$/,     vista: () => import('./views/listas.js'),       params: (m) => ({ promoId: m[1], unidadId: `${m[1]}:${m[2]}` }) },
+  { patron: /^\/p\/([^/]+)\/v\/([^/]+)\/recorrido$/, vista: () => import('./views/recorrido.js'), params: (m) => ({ promoId: m[1], unidadId: `${m[1]}:${m[2]}` }) },
   { patron: /^\/l\/([^/]+)$/,                 vista: () => import('./views/tareas.js'),       params: (m) => ({ listaId: m[1] }) },
   { patron: /^\/l\/([^/]+)\/t\/([^/]+)$/,     vista: () => import('./views/tarea.js'),        params: (m) => ({ listaId: m[1], tareaId: m[2] }) },
   { patron: /^\/listas$/,                     vista: () => import('./views/historial.js'),    params: () => ({}) },
@@ -132,7 +133,14 @@ function barraInferior(activo) {
 }
 let barraPrevia = null;
 
-function pintar({ contenido, tab, fab, sinTabs, clase }) {
+/* Lo que hay que soltar al abandonar la pantalla actual —la cámara del
+   recorrido, por ejemplo—. Si no se llamara, el piloto de la cámara se
+   quedaría encendido y la batería se iría sin explicación. */
+let limpiarVista = null;
+
+function pintar({ contenido, tab, fab, sinTabs, clase, alSalir = null }) {
+  if (limpiarVista) { try { limpiarVista(); } catch { /* daba igual */ } }
+  limpiarVista = alSalir;
   // `clase` la pone la pantalla que necesita un fondo o un ritmo
   // propios (la de entrada, por ejemplo, que no es una lista).
   const screen = h('div.screen', {
@@ -274,7 +282,10 @@ function vigilarDatosNuevos() {
   let vista = store.estadoSync.revision;
   store.alCambiarSync((e) => {
     if (e.revision === vista) return;
-    const ocupado = document.querySelector('.sheet, .viewer.on, .informe')
+    // El recorrido se queda fuera del repintado pase lo que pase:
+    // repintar mientras se graba tira por tierra el paseo entero, y en
+    // la pantalla de repaso se llevaría por delante los textos escritos.
+    const ocupado = document.querySelector('.sheet, .viewer.on, .informe, .pantalla-recorrido')
       || ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName);
     if (ocupado) return;
     vista = e.revision;

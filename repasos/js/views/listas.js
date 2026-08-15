@@ -19,14 +19,11 @@ export async function render({ promoId, unidadId }) {
   const portadas = new Map();
   for (const t of tareas) portadas.set(t.id, await store.urlDePortada(t));
 
-  // Sin preguntar nada: ya no hay pre ni post que elegir, así que la
-  // hoja que había en medio solo pedía confirmar lo que se acababa de
-  // pulsar. Se crea, se avisa y se entra dentro.
-  const nueva = async () => {
-    const l = await store.crearLista({ unidadId, promoId, fase: FASE_UNICA });
-    toast('Acta abierta · se firma con tu nombre y la fecha de hoy');
-    ir('#/l/' + l.id);
-  };
+  // El «+» abre el recorrido: plantarse en la puerta y recorrer la casa
+  // grabando es la manera rápida de levantar veinte tareas de una vez.
+  // Desde allí se puede abrir el acta a secas, sin grabar nada, para
+  // quien solo quiera apuntar una cosa suelta.
+  const nueva = () => ir(`#/p/${promoId}/v/${String(unidadId).split(':')[1]}/recorrido`);
 
   const cabecera = cabeceraDentro(u.nombre.toUpperCase(),
     { volverA: conFiltros('#/viviendas', filtrosDeRuta()), sub: p.nombre });

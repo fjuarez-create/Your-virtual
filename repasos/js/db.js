@@ -11,10 +11,11 @@
      tareas       tareas de cada lista        índice: listaId
      medios       fotos, vídeos y audios      índice: tareaId
      comentarios  hilo de cada tarea          índice: tareaId
+     recorridos   grabaciones de un paseo por una vivienda
      outbox       cambios pendientes de subir (orden de llegada)
    ═══════════════════════════════════════════════════════════════ */
 const NOMBRE = 'unik-repasos';
-const VERSION = 3;
+const VERSION = 4;
 
 let dbPromise = null;
 
@@ -43,6 +44,12 @@ export function abrir() {
       // Versión 2: el hilo de una tarea (rechazos y notas).
       if (!db.objectStoreNames.contains('comentarios')) {
         db.createObjectStore('comentarios', { keyPath: 'id' }).createIndex('tareaId', 'tareaId');
+      }
+      // Versión 4: el recorrido de una vivienda. Vive solo en el
+      // dispositivo hasta que se convierte en tareas: es material de
+      // trabajo, no el repaso en sí.
+      if (!db.objectStoreNames.contains('recorridos')) {
+        db.createObjectStore('recorridos', { keyPath: 'id' }).createIndex('unidadId', 'unidadId');
       }
       if (!db.objectStoreNames.contains('outbox')) {
         db.createObjectStore('outbox', { keyPath: 'seq', autoIncrement: true });
@@ -128,5 +135,5 @@ export async function numPendientes() {
 
 /** Borra todo el contenido local (cierre de sesión). */
 export async function limpiarTodo() {
-  for (const s of ['meta', 'listas', 'tareas', 'medios', 'comentarios', 'personas', 'outbox']) await vaciar(s);
+  for (const s of ['meta', 'listas', 'tareas', 'medios', 'comentarios', 'personas', 'recorridos', 'outbox']) await vaciar(s);
 }

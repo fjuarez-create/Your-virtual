@@ -1170,3 +1170,112 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 .tarea-pie { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
 
 .tarea-donde { font-size: 11.5px; color: var(--muted); }
+
+/* ═══════════════════════════════════════════════════════════════
+   Recorrido: grabar un paseo por una vivienda
+   ═══════════════════════════════════════════════════════════════ */
+.rec-intro { padding: 6px 0 2px; }
+.rec-ico {
+  width: 66px; height: 66px; border-radius: 50%; margin-bottom: 16px;
+  background: var(--surface); display: grid; place-items: center; color: var(--accent-deep);
+}
+.rec-intro .title { margin-bottom: 8px; }
+
+/* ─── Grabando ───────────────────────────────────────────────────
+   La imagen ocupa lo que puede y es toda ella el botón de marcar: en
+   obra, con guantes y andando, no se acierta a un botón pequeño. */
+.rec-visor {
+  position: relative;
+  border-radius: var(--r-lg); overflow: hidden;
+  background: var(--ink);
+  aspect-ratio: 3 / 4;
+  cursor: pointer;
+}
+.rec-video { width: 100%; height: 100%; object-fit: cover; }
+
+/* El fogonazo de la instantánea: sin él no se sabe si el toque ha
+   entrado, y andando se acaba tocando dos veces. */
+.rec-destello {
+  position: absolute; inset: 0; background: #fff;
+  opacity: 0; pointer-events: none;
+}
+.rec-destello.on { animation: fogonazo 260ms var(--sal-salida); }
+@keyframes fogonazo { from { opacity: 0.85; } to { opacity: 0; } }
+
+.rec-barra {
+  display: flex; align-items: center; gap: 12px;
+  margin-top: 12px; min-height: 46px;
+}
+.rec-estado { display: flex; align-items: center; gap: 8px; flex: none; }
+.rec-punto {
+  width: 10px; height: 10px; border-radius: 50%; background: var(--rojo);
+  animation: latido 1.4s ease-in-out infinite;
+}
+@keyframes latido { 50% { opacity: 0.25; } }
+.rec-crono { font-size: 16px; font-weight: 700; letter-spacing: -0.02em; }
+.rec-marcas {
+  display: flex; align-items: center; gap: 6px; flex: none;
+  font-size: 14px; font-weight: 700; color: var(--muted-oscuro);
+}
+.rec-marcas svg { color: var(--muted); }
+
+/* Las capturas van saliendo aquí, la última la primera. */
+.rec-tira {
+  display: flex; gap: 6px; overflow-x: auto;
+  scrollbar-width: none; padding: 2px 0;
+}
+.rec-tira::-webkit-scrollbar { display: none; }
+.rec-mini {
+  width: 46px; height: 46px; flex: 0 0 46px; border-radius: 11px;
+  background: var(--surface-2) center / cover no-repeat;
+  animation: entra-mini 300ms var(--sal-muelle) both;
+}
+@keyframes entra-mini { from { transform: scale(0.4); opacity: 0; } }
+
+.rec-botones { display: grid; place-items: center; margin-top: 14px; }
+.rec-parar {
+  width: 76px; height: 76px; border-radius: 50%;
+  background: var(--rojo); display: grid; place-items: center;
+  box-shadow: 0 10px 26px rgba(198, 58, 48, 0.32);
+  transition: transform var(--mov-corto) var(--sal-estandar);
+}
+.rec-parar:active { transform: scale(0.9); }
+.rec-cuadro { width: 26px; height: 26px; border-radius: 7px; background: #fff; }
+
+/* ─── Repasando lo capturado ─────────────────────────────────── */
+.rec-resumen {
+  background: var(--surface); border-radius: var(--r-lg);
+  padding: 18px 18px 16px;
+}
+.rec-ficha {
+  background: var(--surface); border-radius: var(--r-lg);
+  padding: 12px 12px 14px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.rec-ficha-cab { display: flex; align-items: center; gap: 12px; }
+.rec-foto {
+  width: 78px; height: 78px; flex: 0 0 78px; border-radius: 15px;
+  background: var(--surface-2) center / cover no-repeat;
+}
+.rec-ficha .textarea { background: var(--bg); }
+.rec-ficha .selector { background: var(--bg); }
+.rec-ficha .tag { display: inline-flex; align-items: center; gap: 6px; }
+
+/* ─── Un recorrido que se quedó a medias ─────────────────────────
+   Se grabó el paseo pero no se convirtió en tareas. Va en amarillo
+   porque no es un error, es trabajo esperando. */
+.rec-pendiente {
+  background: var(--surface); border-radius: var(--r-lg);
+  padding: 16px 18px 14px; margin-bottom: 18px;
+  border-left: 3px solid var(--accent-deep);
+}
+.rec-pendiente-pies { display: flex; gap: 8px; margin-top: 12px; }
+.rec-pendiente-pies .btn { flex: 1 1 auto; }
+
+/* ─── Con la cámara abierta, la pantalla es la cámara ────────────
+   El titular de la vivienda se sabe de sobra: lo acabas de tocar
+   para llegar aquí. Estorbando arriba le quita alto al visor, que
+   es lo único que se mira mientras se anda. */
+.screen.grabando .titulo-pantalla,
+.screen.grabando .topbar .eyebrow { display: none; }
+.screen.grabando .rec-visor { aspect-ratio: auto; height: min(62vh, 620px); }
