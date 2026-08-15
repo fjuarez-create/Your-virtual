@@ -4,10 +4,10 @@
    04 quiere saber qué queda por hacer en esa casa, no en cuál de las
    tres visitas salió cada cosa. Las actas siguen existiendo —son la
    firma de quién vio qué y cuándo— y se abren desde el pie. */
-import { h, icon, sheet, toast, emptyState, fechaCorta } from '../ui.js';
+import { h, icon, sheet, toast, emptyState } from '../ui.js';
 import { promocion, unidad, FASES, hecha, esperandoVisto } from '../catalog.js';
 import * as store from '../store.js';
-import { cabeceraDentro, barraAvance, tareaFila, filtroEstado, filtroOficio } from '../piezas.js';
+import { cabeceraDentro, barraAvance, tareaFila, tarjetaActa, filtroEstado, filtroOficio } from '../piezas.js';
 import { ir } from '../app.js';
 
 export async function render({ promoId, unidadId }) {
@@ -15,7 +15,7 @@ export async function render({ promoId, unidadId }) {
   const u = unidad(unidadId);
   if (!p || !u) { toast('Vivienda desconocida', 'err'); ir('#/viviendas', { reemplazar: true }); return { contenido: [] }; }
 
-  const { listas, tareas, conteo } = await store.tareasDeUnidad(unidadId);
+  const { actas, tareas, conteo } = await store.tareasDeUnidad(unidadId);
   const portadas = new Map();
   for (const t of tareas) portadas.set(t.id, await store.urlDePortada(t));
 
@@ -34,8 +34,13 @@ export async function render({ promoId, unidadId }) {
       contenido: [
         ...cabecera,
         emptyState('camera', 'Sin tareas todavía',
-          `Crea la primera lista de repaso de ${u.nombre.toLowerCase()} y ve añadiendo lo que encuentres mientras la recorres.`,
+          actas.length
+            ? `Ya hay un acta abierta en ${u.nombre.toLowerCase()}, pero todavía sin tareas dentro. Ábrela y ve añadiendo lo que encuentres.`
+            : `Crea la primera lista de repaso de ${u.nombre.toLowerCase()} y ve añadiendo lo que encuentres mientras la recorres.`,
           h('button.btn.ink', { onclick: nueva }, icon('plus'), 'Nueva lista de repaso')),
+        // Un acta recién creada aún no tiene tareas. Si no se enseñara
+        // aquí, quedaría invisible desde su propia vivienda.
+        pieDeActas(actas),
       ],
     };
   }
@@ -70,23 +75,37 @@ export async function render({ promoId, unidadId }) {
       listado,
       // Las actas, al pie: se consultan cuando hace falta saber quién
       // firmó qué, no cada vez que se entra en la casa.
-      h('div', { style: { marginTop: '26px' } },
-        h('p.eyebrow', null, listas.length === 1 ? 'Su acta' : `Sus ${listas.length} actas`),
-        h('div.stack', { style: { marginTop: '10px' } },
-          listas
-            .slice()
-            .sort((a, b) => b.creado.localeCompare(a.creado))
-            .map((l) => h('button.row', { onclick: () => ir('#/l/' + l.id) },
-              h('div.row-lead', null, icon('clipboard', 18)),
-              h('div.grow', null,
-                h('div.row-title', null, l.nombre || `Acta de ${fechaCorta(l.creado)}`),
-                h('div.row-sub', null, `${l.creadoPorNombre} · ${fechaCorta(l.creado)}`),
-              ),
-            )),
-        ),
-      ),
+      pieDeActas(actas),
     ],
   };
+}
+
+/**
+ * Las actas de la vivienda, con la misma tarjeta que la pestaña de
+ * ACTAS. Delante van las que tienen algo por resolver; las terminadas
+ * quedan detrás, bajo su propio epígrafe, pero se ven: son la firma de
+ * quién vio qué y cuándo, y a eso se vuelve.
+ */
+function pieDeActas(actas) {
+  if (!actas.length) return null;
+  const abiertas = actas.filter((a) => !store.actaTerminada(a.conteo));
+  const terminadas = actas.filter((a) => store.actaTerminada(a.conteo));
+
+  return h('div', { style: { marginTop: '26px' } },
+    h('p.eyebrow', null, actas.length === 1 ? 'Su acta' : `Sus ${actas.length} actas`),
+    abiertas.length
+      ? h('div.stack.actas', { style: { marginTop: '10px' } },
+          abiertas.map((a) => tarjetaActa(a, { dentroDeVivienda: true })))
+      : null,
+    // El epígrafe solo cuando hay de las dos: con todas terminadas
+    // sobra, y con ninguna terminada no habría nada debajo.
+    terminadas.length
+      ? h('div', { style: { marginTop: abiertas.length ? '20px' : '10px' } },
+          abiertas.length ? h('p.eyebrow', { style: { marginBottom: '10px' } }, 'Terminadas') : null,
+          h('div.stack.actas', null, terminadas.map((a) => tarjetaActa(a, { dentroDeVivienda: true }))),
+        )
+      : null,
+  );
 }
 
 /** Mismos criterios que en las pantallas de actas y viviendas. */

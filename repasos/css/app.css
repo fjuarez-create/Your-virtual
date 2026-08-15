@@ -838,6 +838,10 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
               background var(--mov-corto) var(--sal-estandar);
 }
 .acta:active { transform: scale(0.985); background: var(--surface-2); }
+/* Sin min-width:0 el centro no puede encoger —el título va en una sola
+   línea— y un acta con nombre largo empuja el anillo fuera de la
+   tarjeta. Con esto, el que se recorta es el título. */
+.acta .grow { flex: 1; min-width: 0; }
 .acta-tit {
   font-size: 15.5px; font-weight: 700; letter-spacing: -0.02em;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;

@@ -256,13 +256,22 @@ export function chipFase(faseId) {
 }
 
 /**
- * Tarjeta de un acta. Es la misma en la portada y en la pestaña de
- * actas: quién ha participado, de qué vivienda es, cuándo se hizo, si
- * es pre o post, y cuánto lleva verificado.
+ * Tarjeta de un acta. La misma en la portada, en la pestaña de ACTAS y
+ * al pie de cada vivienda: quién ha participado, de qué acta se trata,
+ * cuándo se hizo, si es pre o post, y cuánto lleva verificado. Se toca
+ * aquí y cambia en los tres sitios.
+ *
+ * Lo único que depende de dónde se enseñe es el título cuando el acta
+ * no tiene nombre puesto. En la lista general hace falta decir de qué
+ * vivienda es; dentro de esa misma vivienda eso ya se sabe, y lo que
+ * distingue un acta de otra es su fecha. De ahí `dentroDeVivienda`.
  */
-export function tarjetaActa({ lista, conteo, gente }) {
+export function tarjetaActa({ lista, conteo, gente }, { dentroDeVivienda = false } = {}) {
   const u = unidad(lista.unidadId);
-  const titulo = lista.nombre || u?.nombre || lista.unidadId;
+  const porDefecto = dentroDeVivienda
+    ? `Acta de ${fechaCorta(lista.creado)}`
+    : (u?.nombre || lista.unidadId);
+  const titulo = lista.nombre || porDefecto;
 
   return h('button.acta', { onclick: () => ir('#/l/' + lista.id) },
     grupoAvatares(gente.map((g) => store.persona(g.id, g.nombre)), { tam: 55 }),

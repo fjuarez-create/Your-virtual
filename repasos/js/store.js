@@ -457,18 +457,51 @@ export async function actasConDatos({ promoId = null } = {}) {
     .filter((l) => !l.borrada && (!promoId || l.promoId === promoId));
   const tareas = (await db.getAll('tareas')).filter((t) => !t.borrada);
 
+  return fichasDeActa(listas, tareas)
+    .sort((a, b) => b.lista.actualizado.localeCompare(a.lista.actualizado));
+}
+
+/**
+ * Monta lo que pide la tarjeta de un acta: el acta, sus cifras y quién
+ * ha participado. Vive aquí, y no en cada pantalla, porque la pestaña
+ * de ACTAS y el pie de cada vivienda enseñan la misma tarjeta y tienen
+ * que contar exactamente lo mismo. Si una contara distinto de la otra,
+ * el porcentaje del anillo cambiaría según por dónde se mire.
+ */
+function fichasDeActa(listas, tareas) {
   const porLista = new Map();
   for (const t of tareas) {
     if (!porLista.has(t.listaId)) porLista.set(t.listaId, []);
     porLista.get(t.listaId).push(t);
   }
+  return listas.map((l) => {
+    const suyas = porLista.get(l.id) || [];
+    return { lista: l, conteo: contar(suyas), gente: participantes(l, suyas) };
+  });
+}
 
-  return listas
-    .map((l) => {
-      const suyas = porLista.get(l.id) || [];
-      return { lista: l, conteo: contar(suyas), gente: participantes(l, suyas) };
-    })
-    .sort((a, b) => b.lista.actualizado.localeCompare(a.lista.actualizado));
+/**
+ * Un acta está terminada cuando tiene tareas y todas están verificadas.
+ * Una sin tareas no lo está: está abierta y vacía, que es otra cosa.
+ */
+export const actaTerminada = (c) => !!(c && c.total > 0 && c.hechas === c.total);
+
+/**
+ * Primero lo que queda por hacer y después lo terminado, cada grupo de
+ * lo más reciente a lo más antiguo.
+ *
+ * Las terminadas no se esconden, se apartan: un acta firmada sigue
+ * siendo el documento al que se vuelve cuando alguien pregunta quién
+ * vio qué y cuándo. Lo que no puede es estorbar por encima de lo que
+ * todavía hay que resolver.
+ */
+export function ordenarActas(actas) {
+  return actas.slice().sort((a, b) => {
+    const ta = actaTerminada(a.conteo) ? 1 : 0;
+    const tb = actaTerminada(b.conteo) ? 1 : 0;
+    if (ta !== tb) return ta - tb;
+    return b.lista.creado.localeCompare(a.lista.creado);
+  });
 }
 
 /**
@@ -553,8 +586,12 @@ export async function tareasDeUnidad(unidadId) {
   const listas = (await db.getAll('listas')).filter((l) => !l.borrada && l.unidadId === unidadId);
   const suyas = new Set(listas.map((l) => l.id));
   const tareas = (await db.getAll('tareas')).filter((t) => !t.borrada && suyas.has(t.listaId));
+  // Las fichas se montan antes de ordenar las tareas para que la pila de
+  // caras salga igual que en la pestaña de ACTAS, que las recibe tal
+  // cual vienen de la base.
+  const actas = ordenarActas(fichasDeActa(listas, tareas));
   return {
-    listas,
+    actas,
     tareas: tareas.sort((a, b) => b.actualizado.localeCompare(a.actualizado)),
     conteo: contar(tareas),
   };
