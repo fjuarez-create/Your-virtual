@@ -378,8 +378,20 @@ export async function render({ promoId, unidadId }) {
 
       const campo = h('textarea.textarea', {
         rows: 3, autocapitalize: 'sentences',
-        placeholder: 'Si quieres, añade aquí lo que ibas diciendo…',
+        placeholder: 'Se rellena solo con lo que dijiste. Si escribes aquí, manda lo tuyo…',
       });
+      // La transcripción de un recorrido de cuatro minutos no cabe en
+      // tres líneas: la caja crece con lo que le echen, igual que las de
+      // las fichas de abajo.
+      const crecerCampo = () => {
+        campo.style.height = 'auto';
+        campo.style.height = campo.scrollHeight + 'px';
+      };
+      campo.addEventListener('input', crecerCampo);
+      if (rec.transcripcion) {
+        campo.value = rec.transcripcion;
+        requestAnimationFrame(crecerCampo);
+      }
       const aviso = h('p.hint');
       const boton = ctaAccion('REDACTAR LAS TAREAS', { icono: 'check', claro: true });
       const rotulo = boton.querySelector('.grow');
@@ -389,8 +401,31 @@ export async function render({ promoId, unidadId }) {
         if (!vivas.length) return;
         boton.disabled = true;
         aviso.className = 'hint';
+        let nota = '';
 
         try {
+          // Primero se escucha. Solo si no hay ya texto: lo que haya
+          // escrito la persona manda sobre la grabación, y lo que ya se
+          // transcribió una vez no se vuelve a pagar.
+          if (!campo.value.trim() && rec.audio) {
+            rotulo.textContent = 'ESCUCHANDO…';
+            aviso.textContent = 'Pasando a texto lo que dijiste.';
+            try {
+              const t = await api.oidoTranscribir(rec.audio, rec.duracion);
+              campo.value = t.texto || '';
+              crecerCampo();
+              rec.transcripcion = campo.value;
+              await store.guardarRecorrido(rec);
+            } catch (e) {
+              // Que falle el oído no puede dejarte sin tareas: las fotos
+              // siguen ahí y de ellas ya sale un parte. Pero se dice, que
+              // si es la clave o el crédito hay que ir a arreglarlo.
+              nota = e?.codigo === 'sin-clave'
+                ? ''
+                : ` No se ha podido escuchar la grabación: ${e?.message || 'ha fallado'}`;
+            }
+          }
+
           // Las fotos se encogen aquí, en el móvil: lo que sube por la
           // línea de la obra son unos cientos de kilobytes y no ocho
           // megas, y en la API se paga por lo que ocupa cada una.
@@ -433,7 +468,7 @@ export async function render({ promoId, unidadId }) {
           }
           pintarFichas();
           aviso.className = 'hint';
-          aviso.textContent = resumen(dichas, vistas, vivas.length, vivas.length - conFoto.length);
+          aviso.textContent = resumen(dichas, vistas, vivas.length, vivas.length - conFoto.length) + nota;
           rotulo.textContent = 'VOLVER A REDACTAR';
           boton.disabled = false;
         } catch (e) {
@@ -449,9 +484,9 @@ export async function render({ promoId, unidadId }) {
       return h('div.rec-dictado', null,
         h('p.eyebrow', null, 'Que las escriba solas'),
         h('p.sub', { style: { marginTop: '4px' } },
-          'Se miran las fotos y sale una tarea de cada una, con su gremio. '
-          + 'Si quieres afinar, añade abajo lo que ibas comentando —el micrófono '
-          + 'del teclado va bien—: lo que digas manda sobre lo que se vea.'),
+          'Se escucha lo que dijiste, se miran las fotos y sale una tarea de cada '
+          + 'una con su gremio. Un solo toque. Si prefieres escribirlo tú, hazlo '
+          + 'abajo: lo tuyo manda sobre la grabación y sobre lo que se vea.'),
         h('div', { style: { marginTop: '10px' } }, campo),
         aviso,
         boton,

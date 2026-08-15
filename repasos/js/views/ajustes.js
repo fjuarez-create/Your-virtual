@@ -33,8 +33,10 @@ export async function render() {
   // enseña igual como «sin poner»: es lo que hay, y al pulsarla dirá
   // qué falta en vez de desaparecer sin explicación.
   let claude = null;
+  let oido = null;
   if (admin && api.HAY_SERVIDOR && !u.local) {
     try { claude = await api.claudeEstado(); } catch { claude = { puesta: false, final: '' }; }
+    try { oido = await api.oidoEstado(); } catch { oido = { puesta: false, final: '' }; }
   }
 
   return {
@@ -113,7 +115,13 @@ export async function render() {
             // servidor, en la misma carpeta cerrada que la base de datos.
             fila('key', 'Clave de Anthropic',
               claude?.puesta ? `Puesta · termina en ${claude.final}` : 'Sin poner · el recorrido no redacta solo',
-              () => hojaClave(claude)))
+              () => hojaClave(claude)),
+            // La de OpenAI es la del oído: sin ella el recorrido se
+            // redacta igual mirando las fotos, pero lo que se dijo en voz
+            // alta se queda en el audio y hay que escribirlo a mano.
+            fila('mic', 'Clave de OpenAI',
+              oido?.puesta ? `Puesta · termina en ${oido.final}` : 'Sin poner · lo que digas no se transcribe',
+              () => hojaClaveOido(oido)))
         : null,
 
       h('p.eyebrow', { style: { marginTop: '26px', marginBottom: '10px' } }, 'Sesión'),
@@ -228,6 +236,77 @@ function hojaClave(estado) {
             style: { marginTop: '8px' },
             onclick: async () => {
               await api.claudeQuitarClave();
+              cerrar(true);
+              toast('Clave retirada');
+              refrescar();
+            },
+          }, 'Quitar la clave del servidor')
+        : null,
+      ctaCancelar(() => cerrar(false)),
+    ];
+  });
+}
+
+/**
+ * La clave de OpenAI: la del oído.
+ *
+ * Va aparte de la de Anthropic porque son dos cuentas y dos facturas
+ * distintas, y porque se puede tener una sin la otra: con la de
+ * Anthropic sola el recorrido se redacta mirando las fotos, y esta lo
+ * que añade es que además se use lo que se dijo en voz alta.
+ */
+function hojaClaveOido(estado) {
+  return sheet((cerrar) => {
+    const campo = h('input.input', {
+      type: 'password', placeholder: 'sk-…',
+      autocomplete: 'off', autocapitalize: 'off', autocorrect: 'off', spellcheck: 'false',
+    });
+    const aviso = h('p.hint.err', { style: { display: 'none' } });
+    const guardar = ctaAccion('GUARDAR LA CLAVE', { icono: 'check' });
+
+    const fallo = (texto) => {
+      aviso.textContent = texto;
+      aviso.style.display = 'block';
+      guardar.disabled = false;
+      guardar.querySelector('.grow').textContent = 'GUARDAR LA CLAVE';
+    };
+
+    guardar.addEventListener('click', async () => {
+      aviso.style.display = 'none';
+      const clave = campo.value.trim();
+      if (!clave) return fallo('No has pegado nada.');
+      guardar.disabled = true;
+      guardar.querySelector('.grow').textContent = 'GUARDANDO…';
+      try {
+        await api.oidoPonerClave(clave);
+        cerrar(true);
+        toast('Clave guardada · lo que digas ya se transcribe solo');
+        refrescar();
+      } catch (e) {
+        fallo(e?.message || 'No se ha podido guardar.');
+      }
+    });
+
+    return [
+      h('h2.title', null, 'Clave de OpenAI'),
+      h('p.sub', { style: { marginTop: '6px' } },
+        'Es la que pasa a texto lo que vas diciendo durante el recorrido, para '
+        + 'que las tareas salgan de tus palabras y no solo de lo que se ve en '
+        + 'la foto. Se guarda en el servidor y no vuelve a salir de ahí.'),
+      estado?.puesta
+        ? h('p.hint', { style: { marginTop: '10px' } },
+            `Ahora hay una puesta que termina en ${estado.final}. Si pegas otra, la sustituye.`)
+        : null,
+      h('div.stack', { style: { marginTop: '14px' } }, campo),
+      aviso,
+      h('p.hint', { style: { marginTop: '10px' } },
+        `Modelo: ${estado?.modelo || 'gpt-4o-transcribe'}. Medio céntimo por minuto grabado.`),
+      guardar,
+      estado?.puesta
+        ? h('button.btn.ghost.full', {
+            style: { marginTop: '8px' },
+            onclick: async () => {
+              await api.oidoQuitarClave();
               cerrar(true);
               toast('Clave retirada');
               refrescar();

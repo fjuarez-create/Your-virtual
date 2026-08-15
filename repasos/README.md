@@ -177,14 +177,24 @@ se queda bloqueado en cuanto el navegador abre varias conexiones.)
 
 ## Que las tareas se escriban solas
 
-Al terminar un recorrido, en vez de escribir una a una las quince tareas,
-**Claude mira las fotos** y escribe la tarea de cada una con su gremio, para
-repasarlas después. Si además se dicta lo que se iba comentando, eso manda
-sobre lo que se vea: quien andaba por allí sabe qué miraba y la foto no lo
-dice.
+Al terminar un recorrido se toca **REDACTAR LAS TAREAS** una vez y pasan tres
+cosas seguidas: se **escucha** la grabación y se pasa a texto, se **miran** las
+fotos, y de cada una sale su tarea escrita y con su gremio. Lo que se dijo en
+voz alta manda sobre lo que se vea en la foto: quien andaba por allí sabe qué
+miraba y la foto no lo dice.
 
-Hace falta una clave de Anthropic. Se pone **una sola vez, desde el móvil**:
-Ajustes → Servidor → *Clave de Anthropic*. Solo la ve quien administra.
+Son dos proveedores porque hacen falta dos cosas distintas, y **Claude ve pero
+no oye**. Las dos claves se ponen **una sola vez, desde el móvil**, y solo las
+ve quien administra:
+
+| Clave | Dónde | Para qué | Si falta |
+|---|---|---|---|
+| Anthropic | Ajustes → Servidor → *Clave de Anthropic* | Redactar las tareas | El recorrido no redacta solo |
+| OpenAI | Ajustes → Servidor → *Clave de OpenAI* | Pasar a texto lo que se dijo | Se redacta igual, pero solo con las fotos |
+
+Se puede tener la de Anthropic sola: entonces las tareas salen de mirar las
+fotos, y lo que se dijo se escribe a mano. La de OpenAI sin la otra no sirve de
+nada.
 
 Cómo funciona por dentro:
 
@@ -197,10 +207,19 @@ Cómo funciona por dentro:
   herramientas del navegador.
 - Modelo `claude-opus-5`, esfuerzo `medium`. La respuesta viene con esquema
   fijo, así que el gremio solo puede ser uno de los quince del catálogo.
-- **Claude ve, pero no oye.** El audio del recorrido se queda en el móvil como
-  respaldo y no se le manda: lo que viaja son las fotos y, si lo hay, el texto
-  dictado. Cuando se enchufe una transcripción automática, el texto llegará
-  puesto solo y entra por este mismo sitio sin tocar nada más.
+- **Claude ve, pero no oye.** Por eso el audio va antes por otro sitio
+  (`api/lib/oido.php`, modelo `gpt-4o-transcribe`), y a Claude le llegan las
+  fotos y el texto ya transcrito. Está en un fichero aparte a propósito: es
+  otra cuenta y otra factura, y cambiar de proveedor —o pasarlo algún día al
+  propio servidor— se hace ahí sin que se entere nadie más.
+- **La transcripción se paga una vez.** Se guarda en el recorrido del móvil, de
+  modo que volver a darle a redactar no la vuelve a cobrar. Y si ya hay texto
+  escrito a mano, no se escucha nada: lo escrito manda.
+- Al oído se le pasa una **pista de vocabulario de obra** —rodapié, gotelé,
+  guarnecido, vierteaguas…—, que es lo que evita que un transcriptor genérico
+  escriba de oído las palabras que aquí se usan todos los días.
+- Si el oído falla —sin clave, sin crédito, sin salida— **no te quedas sin
+  tareas**: se sigue con las fotos y se dice en el aviso qué ha pasado.
 - Las fotos se encogen **en el móvil** a 1024 px del lado mayor antes de subir:
   se distingue igual una junta abierta y cuesta la quinta parte. Viajan como
   mucho 30 por recorrido, y el servidor descarta las que no correspondan a una
@@ -216,7 +235,8 @@ Cómo funciona por dentro:
   escribir a mano, la pantalla funciona exactamente igual que antes.
 
 Las fotos son lo que se paga: un recorrido de seis ronda los diez céntimos y
-uno de treinta, los treinta. Para saber si el hosting puede siquiera llamar
+uno de treinta, los treinta. Escuchar es casi gratis al lado de eso —medio
+céntimo por minuto grabado—. Para saber si el hosting puede siquiera llamar
 hacia fuera: Ajustes → Servidor → *Comprobar la salida a internet*.
 
 ## Seguridad

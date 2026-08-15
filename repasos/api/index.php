@@ -13,6 +13,7 @@ declare(strict_types=1);
 require __DIR__ . '/lib/nucleo.php';
 require __DIR__ . '/lib/auth.php';
 require __DIR__ . '/lib/claude.php';
+require __DIR__ . '/lib/oido.php';
 
 /**
  * Tipos admitidos y extensión con la que se guardan. Las funciones se
@@ -173,6 +174,23 @@ function despachar(string $metodo, array $p): void
         responder_error(404, 'Ruta de Claude desconocida.');
     }
 
+    if ($r0 === 'oido') {
+        $accion = $p[1] ?? '';
+        if ($accion === 'estado' && $metodo === 'GET') {
+            oido_estado();
+        }
+        if ($accion === 'clave' && $metodo === 'POST') {
+            oido_poner_clave();
+        }
+        if ($accion === 'clave' && $metodo === 'DELETE') {
+            oido_quitar_clave();
+        }
+        if ($accion === 'transcribir' && $metodo === 'POST') {
+            oido_transcribir_recorrido();
+        }
+        responder_error(404, 'Ruta del oído desconocida.');
+    }
+
     responder_error(404, 'Ruta desconocida.');
 }
 
@@ -222,6 +240,91 @@ function claude_quitar_clave(): void
     exigir_admin();
     claude_borrar_clave();
     responder(['puesta' => false, 'final' => '']);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   El oído: pasar a texto lo que se dijo
+   ═══════════════════════════════════════════════════════════════ */
+function oido_estado(): void
+{
+    exigir_admin();
+    $clave = oido_clave();
+    responder([
+        'puesta' => $clave !== '',
+        'final' => $clave === '' ? '' : substr($clave, -4),
+        'modelo' => OIDO_MODELO,
+    ]);
+}
+
+function oido_poner_clave(): void
+{
+    exigir_admin();
+    $datos = cuerpo();
+    $clave = trim((string) ($datos['clave'] ?? ''));
+
+    if ($clave === '') {
+        responder_error(400, 'No has escrito ninguna clave.', 'clave-vacia');
+    }
+    // Las dos claves empiezan por `sk-`, así que se descarta a mano la de
+    // Anthropic: pegar una en el sitio de la otra es el error fácil de
+    // cometer y el difícil de diagnosticar luego.
+    if (strpos($clave, 'sk-ant-') === 0) {
+        responder_error(400, 'Esa es la clave de Anthropic, no la de OpenAI.', 'clave-cambiada');
+    }
+    if (strpos($clave, 'sk-') !== 0 || strlen($clave) < 40) {
+        responder_error(400, 'Eso no parece una clave de OpenAI (empiezan por sk-).', 'clave-rara');
+    }
+    if (strlen($clave) > 500 || preg_match('/\s/', $clave)) {
+        responder_error(400, 'La clave tiene espacios o es demasiado larga; cópiala otra vez.', 'clave-rara');
+    }
+
+    oido_guardar_clave($clave);
+    responder(['puesta' => true, 'final' => substr($clave, -4), 'modelo' => OIDO_MODELO]);
+}
+
+function oido_quitar_clave(): void
+{
+    exigir_admin();
+    oido_borrar_clave();
+    responder(['puesta' => false, 'final' => '']);
+}
+
+/**
+ * La grabación de un recorrido → lo que se dijo, en texto.
+ *
+ * Lo puede pedir quien pueda abrir un acta, igual que la redacción: es
+ * su propia voz la que se está pasando a limpio.
+ */
+function oido_transcribir_recorrido(): void
+{
+    $u = exigir_sesion();
+    if (!($u['rol'] === 'admin' || !empty($u['verifica']))) {
+        responder_error(403, 'Solo quien puede abrir un acta puede pedir esto.', 'sin-permiso');
+    }
+
+    if (!isset($_FILES['fichero']) || $_FILES['fichero']['error'] !== UPLOAD_ERR_OK) {
+        $codigo = $_FILES['fichero']['error'] ?? -1;
+        $mensaje = in_array($codigo, [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true)
+            ? 'La grabación es más grande de lo que admite este servidor.'
+            : 'No ha llegado la grabación.';
+        responder_error(400, $mensaje, 'sin-fichero');
+    }
+
+    $temporal = $_FILES['fichero']['tmp_name'];
+    if (!is_uploaded_file($temporal)) {
+        responder_error(400, 'La grabación no ha llegado bien.', 'sin-fichero');
+    }
+    if ((int) $_FILES['fichero']['size'] > OIDO_TOPE_BYTES) {
+        responder_error(413, 'La grabación pasa de 25 MB, que es lo que admite la transcripción.', 'audio-grande');
+    }
+
+    $mime = (string) ($_POST['mime'] ?? $_FILES['fichero']['type'] ?? '');
+    $segundos = (float) ($_POST['duracion'] ?? 0);
+    if ($segundos > OIDO_TOPE_SEGUNDOS) {
+        responder_error(413, 'La grabación pasa de 25 minutos, que es lo que admite la transcripción.', 'audio-largo');
+    }
+
+    responder(oido_transcribir($temporal, $mime));
 }
 
 /**

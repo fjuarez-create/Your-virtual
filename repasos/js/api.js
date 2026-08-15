@@ -158,12 +158,34 @@ export const claudeQuitarClave = () => pedir('claude/clave', { metodo: 'DELETE' 
 export const claudeRedactar = (texto, marcas, oficios, fotos) =>
   pedir('claude/redactar', { metodo: 'POST', json: { texto, marcas, oficios, fotos } });
 
+/* ─── El oído ─────────────────────────────────────────────────────
+   Otro proveedor, otra clave y otra factura: Claude no oye, así que
+   quien pasa el audio a texto es otro. La clave vive en el servidor
+   igual que la de Anthropic y de aquí solo salen sus cuatro últimos. */
+export const oidoEstado = () => pedir('oido/estado');
+export const oidoPonerClave = (clave) =>
+  pedir('oido/clave', { metodo: 'POST', json: { clave } });
+export const oidoQuitarClave = () => pedir('oido/clave', { metodo: 'DELETE' });
+
+/** La grabación de un recorrido → lo que se dijo, en texto. */
+export function oidoTranscribir(blob, duracion) {
+  const form = new FormData();
+  const mime = blob.type || 'audio/webm';
+  form.append('fichero', blob, 'recorrido' + extension(mime));
+  form.append('mime', mime);
+  form.append('duracion', String(Math.round(duracion || 0)));
+  return pedir('oido/transcribir', { metodo: 'POST', form });
+}
+
 function extension(mime) {
+  // Lo que graba el móvil viene con coletilla —`audio/webm;codecs=opus`—
+  // y sin quitarla no encaja con ninguna de la lista.
+  const limpio = String(mime || '').split(';')[0].trim().toLowerCase();
   const m = {
     'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp',
     'video/mp4': '.mp4', 'video/quicktime': '.mov', 'video/webm': '.webm',
     'audio/webm': '.webm', 'audio/mp4': '.m4a', 'audio/mpeg': '.mp3',
     'audio/ogg': '.ogg', 'audio/wav': '.wav',
   };
-  return m[mime] || '.bin';
+  return m[limpio] || '.bin';
 }
