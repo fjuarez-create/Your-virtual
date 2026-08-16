@@ -448,8 +448,50 @@ function diagnostico_salida(): void
         ]);
     }
 
+    // Se prueban los dos, porque son dos sitios distintos y un hosting
+    // puede tener abierto uno y cerrado el otro. Saberlo por separado es
+    // la diferencia entre pedirle algo concreto al hosting y decirle que
+    // «la app no va».
+    $servicios = [
+        ['nombre' => 'Anthropic', 'para' => 'redactar', 'url' => 'https://api.anthropic.com/v1/models'],
+        ['nombre' => 'OpenAI', 'para' => 'escuchar', 'url' => 'https://api.openai.com/v1/models'],
+    ];
+
+    $resultados = [];
+    foreach ($servicios as $s) {
+        $resultados[] = $s + diagnostico_llamar($s['url']);
+    }
+
+    $abiertos = array_values(array_filter($resultados, static fn($r) => $r['puede']));
+    $cerrados = array_values(array_filter($resultados, static fn($r) => !$r['puede']));
+
+    if (!count($cerrados)) {
+        $ms = max(array_column($resultados, 'ms'));
+        responder([
+            'puede' => true,
+            'motivo' => 'La salida funciona con los dos servicios.',
+            'ms' => $ms,
+            'php' => PHP_VERSION,
+            'servicios' => $resultados,
+        ]);
+    }
+
+    responder([
+        'puede' => false,
+        'motivo' => count($abiertos)
+            ? "Sale a {$abiertos[0]['nombre']} pero no a {$cerrados[0]['nombre']}: " . lcfirst($cerrados[0]['motivo'])
+            : $cerrados[0]['motivo'],
+        'detalle' => $cerrados[0]['detalle'] ?? '',
+        'ms' => $cerrados[0]['ms'],
+        'servicios' => $resultados,
+    ]);
+}
+
+/** Una llamada de prueba a un sitio, sin mandar nada de nadie. */
+function diagnostico_llamar(string $url): array
+{
     $t0 = microtime(true);
-    $ch = curl_init('https://api.anthropic.com/v1/models');
+    $ch = curl_init($url);
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_TIMEOUT => 8,
@@ -466,29 +508,28 @@ function diagnostico_salida(): void
     // Un 401 es la mejor noticia posible: significa que la petición ha
     // llegado hasta el otro lado y solo falta la clave.
     if ($codigo > 0) {
-        responder([
+        return [
             'puede' => true,
             'motivo' => $codigo === 401
-                ? 'La salida funciona: el servicio contesta y solo falta la clave.'
-                : "La salida funciona (respuesta $codigo).",
+                ? 'contesta y solo falta la clave'
+                : "contesta (respuesta $codigo)",
             'ms' => $ms,
-            'php' => PHP_VERSION,
-        ]);
+        ];
     }
 
     $motivos = [
-        CURLE_COULDNT_RESOLVE_HOST => 'El servidor no puede resolver nombres: no hay DNS de salida.',
+        CURLE_COULDNT_RESOLVE_HOST => 'El servidor no puede resolver su nombre: no hay DNS de salida.',
         CURLE_COULDNT_CONNECT => 'La conexión de salida está cerrada por el cortafuegos del hosting.',
         CURLE_OPERATION_TIMEDOUT => 'La conexión se ha quedado colgada: casi siempre es el cortafuegos.',
         CURLE_SSL_CACERT => 'Faltan los certificados raíz del servidor.',
         CURLE_SSL_CONNECT_ERROR => 'El servidor no consigue negociar el cifrado con el exterior.',
     ];
-    responder([
+    return [
         'puede' => false,
         'motivo' => $motivos[$errno] ?? 'No se ha podido salir a internet.',
         'detalle' => $error !== '' ? $error : "cURL $errno",
         'ms' => $ms,
-    ]);
+    ];
 }
 
 /* ═══════════════════════════════════════════════════════════════
