@@ -59,13 +59,33 @@ jobs:
           fi
           echo "Token aceptado: el archivo se abre."
 
-      - name: Bajar el detalle de cada pantalla (colores, tipografías, medidas)
+      - name: Descubrir las pantallas del archivo
         run: |
           mkdir -p diseno-figma
-          # Los identificadores de las pantallas del archivo. Salen del
-          # árbol del propio archivo; si Fran añade pantallas nuevas, se
-          # añaden aquí.
-          IDS="2071:8662,2114:31310,2114:31918,2129:33627,2129:34289,2129:34579,2129:34359,2129:34399,2129:34627,2093:25786,2093:26070,2129:36657,2129:37602,2129:37810,2129:37393,2129:36942,2129:38279,5:12139,2070:15536,2070:15747,2075:10806,2079:13819,2093:17219,2093:25173,2103:27795,2105:19080,2045:10272,2129:33734,2114:32994,2129:33957,2114:33501,2129:34179,2129:34669,2129:35828,2129:36376,2129:36158,2129:35588,2114:33358,2129:34061,2125:11553,2129:33838,2129:38466"
+          # Las pantallas se descubren del propio archivo en cada
+          # bajada: así, cuando Fran añade pantallas nuevas —el login,
+          # por ejemplo—, entran solas sin tocar nada aquí. Se saltan
+          # las notas y los marcos de decoración.
+          curl -sf -H "X-Figma-Token: ${{ secrets.FIGMA_TOKEN }}" \
+            "https://api.figma.com/v1/files/$ARCHIVO?depth=2" -o /tmp/arbol.json
+          jq -r '
+            [.document.children[] | .children[]?
+             | select(.type == "FRAME")
+             | select(.name | startswith("Nota:") | not)
+             | select(.name != "-" and .name != "Slice 1")
+             | .id] | join(",")' /tmp/arbol.json > /tmp/ids.txt
+          echo "pantallas descubiertas: $(tr ',' '\n' < /tmp/ids.txt | wc -l)"
+          # La lista con nombres, para el que lea la carpeta.
+          jq -r '
+            .document.children[] | .children[]?
+            | select(.type == "FRAME")
+            | select(.name | startswith("Nota:") | not)
+            | select(.name != "-" and .name != "Slice 1")
+            | "\(.id)\t\(.name)"' /tmp/arbol.json > diseno-figma/pantallas.txt
+
+      - name: Bajar el detalle de cada pantalla (colores, tipografías, medidas)
+        run: |
+          IDS=$(cat /tmp/ids.txt)
           curl -sf -H "X-Figma-Token: ${{ secrets.FIGMA_TOKEN }}" \
             "https://api.figma.com/v1/files/$ARCHIVO/nodes?ids=$IDS" \
             -o diseno-figma/nodos.json
@@ -74,7 +94,7 @@ jobs:
       - name: Bajar la imagen de cada pantalla, para comparar al píxel
         run: |
           mkdir -p diseno-figma/pantallas
-          IDS="2071:8662,2114:31310,2114:31918,2129:33627,2129:34289,2129:34579,2129:34359,2129:34399,2129:34627,2093:25786,2093:26070,2129:36657,2129:37602,2129:37810,2129:37393,2129:36942,2129:38279,5:12139,2070:15536,2070:15747,2075:10806,2079:13819,2093:17219,2093:25173,2103:27795,2105:19080,2045:10272,2129:33734,2114:32994,2129:33957,2114:33501,2129:34179,2129:34669,2129:35828,2129:36376,2129:36158,2129:35588,2114:33358,2129:34061,2125:11553,2129:33838,2129:38466"
+          IDS=$(cat /tmp/ids.txt)
           curl -sf -H "X-Figma-Token: ${{ secrets.FIGMA_TOKEN }}" \
             "https://api.figma.com/v1/images/$ARCHIVO?ids=$IDS&format=png&scale=2" \
             -o /tmp/urls.json
