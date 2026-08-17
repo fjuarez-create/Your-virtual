@@ -156,6 +156,21 @@ Modal con la foto y el nombre de quien creó la lista, y una frase que
 | 11–15 | Repaso serio. El jefe de obra te recordará. |
 | más de 15 | «N remates. Esto ya era personal.», con N el número real |
 
+## Al completar una tarea
+
+Vuelve a la pantalla de donde se venía —normalmente el detalle de la
+vivienda— con un modal «Excelente, [nombre]» y una de estas ocho frases,
+rotando:
+
+1. Otro remate menos. Así se hace.
+2. Bien resuelto. A por el siguiente.
+3. Un remate menos. Seguimos.
+4. Resuelto. Como tiene que ser.
+5. Bien. La lista sigue bajando.
+6. Uno menos dando guerra.
+7. Un problema menos en obra.
+8. Otro frente oficialmente cerrado.
+
 ## Otras reglas del diseño
 
 - **ZONA-ESTANCIA**: variable nueva por tarea, solo para ubicar y filtrar
@@ -167,7 +182,12 @@ Modal con la foto y el nombre de quien creó la lista, y una frase que
 - Al crear una tarea desde la ficha de una vivienda, **la vivienda viene
   rellenada** pero se puede cambiar en el desplegable.
 - **Borrar la foto de un acta abre la cámara inmediatamente** para
-  reemplazarla: «NO HAY ACTA SIN FOTO, JAMÁS».
+  reemplazarla: «NO HAY ACTA SIN FOTO, JAMÁS». El menú de borrar ofrece
+  ELIMINAR IMAGEN o una «X» que vuelve sin tocar nada; si se elimina, hay
+  que sacar otra o elegirla de la galería antes de seguir.
+- El selector **Finalizadas** enseña las viviendas sin ninguna tarea por
+  verificar: contador con X igual a Y, chip verde oscuro con el fueguito
+  al 100% y el círculo de avance entero en verde oscuro.
 - Las **fotos de verificación** se ven en carrusel, con zoom y scroll
   horizontal, cada una con su papelera y confirmación al borrar. **Con
   una sola foto ya se activa DAR POR COMPLETADA.**
