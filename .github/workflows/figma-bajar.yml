@@ -49,12 +49,15 @@ jobs:
             echo "::error::Falta el secreto FIGMA_TOKEN. Crear un token en Figma (Settings → Security → Personal access tokens) y guardarlo en Settings → Secrets and variables → Actions."
             exit 1
           fi
-          QUIEN=$(curl -sf -H "X-Figma-Token: ${{ secrets.FIGMA_TOKEN }}" https://api.figma.com/v1/me | head -c 200 || true)
-          if [ -z "$QUIEN" ]; then
-            echo "::error::El token no vale: Figma no lo acepta. Generar uno nuevo con permiso de lectura de ficheros."
+          # Se prueba contra el archivo de verdad, no contra «quién
+          # soy»: un token con permiso solo de lectura de ficheros tiene
+          # vetada esa otra puerta y daría un fallo falso.
+          CODIGO=$(curl -s -o /tmp/prueba.json -w "%{http_code}" -H "X-Figma-Token: ${{ secrets.FIGMA_TOKEN }}" "https://api.figma.com/v1/files/$ARCHIVO?depth=1")
+          if [ "$CODIGO" != "200" ]; then
+            echo "::error::Figma contesta $CODIGO al abrir el archivo con este token: $(head -c 200 /tmp/prueba.json)"
             exit 1
           fi
-          echo "Token aceptado."
+          echo "Token aceptado: el archivo se abre."
 
       - name: Bajar el detalle de cada pantalla (colores, tipografías, medidas)
         run: |
