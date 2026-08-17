@@ -49,10 +49,16 @@ Así que el ciclo de una tarea rebotada es:
 y no vuelve a PENDIENTE. Cuenta como no verificada en todos los
 porcentajes, igual que pendiente.
 
-- Rechazar **obliga a poner el motivo**. Una tarea que rebota sin
-  explicación es una llamada de teléfono asegurada.
+- Rechazar **obliga a poner el motivo**, y el motivo va en **campo
+  propio**, no en el hilo de comentarios.
+- Las **fotos de verificación del intento rechazado se conservan**. Son
+  la prueba de lo que la constructora dijo que estaba arreglado, y en una
+  discusión de obra eso vale dinero.
 - El jefe de obra **ve en su home un contador de rechazadas** y entra
   desde ahí al listado filtrado.
+
+Un **verificador puede editar una tarea aunque ya esté verificada**. El
+permiso manda sobre el estado.
 
 ## La home
 
@@ -145,9 +151,10 @@ elegir de la galería, o recorrido con IA**.
 
 ## Lo que sigue abierto
 
-- Si al rechazar se **conservan las fotos de verificación** del intento
-  anterior. Recomendación: conservarlas, son la prueba de lo que se dijo
-  que estaba arreglado.
-- Si un verificador puede **editar una tarea ya verificada**.
-- Dónde vive el **motivo del rechazo**: comentario del hilo que ya existe
-  (recomendado) o campo aparte.
+- **Un motivo de rechazo o varios.** Si el campo es uno solo, el segundo
+  rechazo pisa al primero y se pierde por qué rebotó la primera vez —
+  justo lo que se quiso evitar guardando las fotos del intento fallido.
+  Habría que decidir si se guarda el historial de rechazos.
+- Si las tareas creadas **desde foto o desde galería** también pasan por
+  la IA para que redacte el texto, o ahí se escribe a mano y la IA es
+  solo cosa del recorrido.
