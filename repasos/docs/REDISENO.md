@@ -103,10 +103,11 @@ quién no**:
 
 Esto no es pantalla: es **una tabla nueva** —quién leyó qué y cuándo— que
 además tiene que **sincronizarse entre dispositivos**, porque los dos
-tics de uno dependen de lo que hayan leído los demás. Y como la app
-funciona sin cobertura, las lecturas se apuntan en el móvil y viajan
-luego: los tics van a ir con retraso a veces, y eso hay que darlo por
-bueno de antemano.
+tics de uno dependen de lo que hayan leído los demás.
+
+Que los tics y las bolitas **lleguen con retraso está aceptado**: las
+lecturas se apuntan en el móvil y viajan cuando hay señal. En Brassie hay
+cobertura el 95% del tiempo, así que el retraso será raro y corto.
 
 ## Ficha de una vivienda
 
@@ -134,6 +135,10 @@ Cada gremio pasa a tener **imagen** y **empresa**, y **una empresa como
 mucho**. Hoy el catálogo solo tiene identificador y nombre, así que son
 dos campos nuevos en los quince.
 
+Las **imágenes salen del propio Figma**, las mismas que hay puestas ahí.
+La **empresa puede quedarse vacía**: no es obligatoria, y un gremio sin
+empresa asignada tiene que verse bien igual.
+
 Los filtros —por ahora **solo por gremio**— admiten varios a la vez y
 suman: salen las viviendas en las que **alguno** de los gremios elegidos
 tenga trabajo pendiente.
@@ -149,7 +154,7 @@ Modal con la foto y el nombre de quien creó la lista, y una frase que
 | 2–5 | Todo validado. Ni una se escapó. |
 | 6–10 | Buen repaso. Hay trabajo por delante. |
 | 11–15 | Repaso serio. El jefe de obra te recordará. |
-| más de 15 | *(pendiente: la del diseño trae un número fijo)* |
+| más de 15 | «N remates. Esto ya era personal.», con N el número real |
 
 ## Otras reglas del diseño
 
@@ -232,8 +237,5 @@ Veinte tareas sueltas cuestan bastante más que un recorrido de veinte.
 
 ## Lo que sigue abierto
 
-- La frase de más de 15 tareas al cerrar un recorrido dice «34 remates»,
-  un número fijo que viene del maquetado. Falta saber si el número debe
-  ser el real de tareas o si la frase va sin número.
 - La lista de estancias trae **«baño principal» dos veces**. Se ha dejado
   una; falta saber si la segunda quería ser otra estancia.
