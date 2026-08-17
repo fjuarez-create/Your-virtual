@@ -1,129 +1,189 @@
-/* Primera bolita: el panel de la promoción.
+/* La home del rediseño 2026, calcada del Figma de Fran.
 
-   Tres banners, la barra de avance y, debajo, las últimas tareas
-   tocadas. No las últimas actas: lo que dice si la obra se mueve es el
-   trabajo, y el acta es solo la carpeta donde estaba. */
-import { h, icon } from '../ui.js';
+   De arriba a abajo: la cara de quien mira (que lleva a Ajustes), las
+   tres bolas de navegación, el saludo del día, el banner beige con lo
+   completado por verificar, los dos que acumulan —verde verificadas,
+   rojo rechazadas—, el módulo de Brassie con su anillo, y el muro de
+   comentarios y feedback coloreado por estado, con su caja de escribir.
+
+   La misma pantalla para técnicos y para constructora: solo cambia el
+   saludo, que al jefe de obra no le baila con los días. */
+import { h, icon, avatar, grupoAvatares, anillo, toast, fechaCorta, hora, fechaRelativa } from '../ui.js';
 import * as store from '../store.js';
-import { PROMOCIONES, unidad, puedeVerificar } from '../catalog.js';
-import { barraSync, avisoLocal, cabeceraTab, barraAvance, tareaFila, chevron } from '../piezas.js';
+import { PROMOCIONES, unidad, estado, puedeVerificar } from '../catalog.js';
+import { avisoLocal, barraSync } from '../piezas.js';
 import { ultimaMirada, anotarMirada } from '../ajustesLocales.js';
-import { ir, conFiltros } from '../app.js';
+import { ir, conFiltros, refrescar } from '../app.js';
 
 /**
- * El titular cambia según el día. Lunes y viernes tienen el suyo; el
- * resto de la semana comparte uno.
- *
- * El jefe de obra ve siempre el mismo, y no es un descuido del diseño:
- * a él la frase no le informa de nada —su trabajo es el mismo el lunes
- * que el jueves— y una que cambia sola acaba leyéndose como ruido.
+ * El saludo, con las frases literales del diseño: lunes y viernes
+ * tienen la suya y el resto de la semana comparte una. El jefe de obra
+ * ve siempre la misma — a él la frase no le informa de nada y una que
+ * cambia sola acaba leyéndose como ruido.
  */
-function titular(usuario) {
+function saludo(usuario) {
   if (!puedeVerificar(usuario)) return 'A por los repasos pendientes! 💪🏼';
   const dia = new Date().getDay();
-  if (dia === 1) return 'Lunes. A ver qué nos ha dejado la obra 👀';
-  if (dia === 5) return 'Viernes. A cerrar lo que se pueda 🏁';
-  return 'A por los repasos pendientes! 💪🏼';
+  if (dia === 1) return 'Qué bien sienta un lunes de repasos. 🪖';
+  if (dia === 5) return 'Magnífico viernes para pillar repasos. 🔪';
+  return 'Hoy vamos a cazar cada repaso! 👋🏻';
 }
 
-/**
- * Un banner de la portada: un rótulo, una cifra grande y adónde lleva.
- *
- * Los dos de abajo —verificadas y rechazadas— acumulan desde la última
- * vez que se pincharon. Al pinchar se anota la mirada y se entra al
- * listado filtrado por ese estado, así que la cifra vuelve a cero sola
- * la próxima vez que se pinta. El de arriba no acumula: enseña cuántas
- * hay ahora esperando revisión, que es un total, no una novedad.
- */
-function banner({ clase, rotulo, cifra, sub, adonde, alPinchar }) {
-  return h('button.banner', { class: clase, onclick: () => { alPinchar?.(); ir(adonde); } },
-    h('div.grow', null,
-      h('p.banner-rotulo', null, rotulo),
-      sub ? h('p.banner-sub', null, sub) : null,
+/** El banner con el mordisco: rótulo, cifra y botón redondo. */
+function banner({ clase, rotulo, cifra, adonde, alPinchar }) {
+  return h('button.d-banner', { class: clase, onclick: () => { alPinchar?.(); ir(adonde); } },
+    h('span.d-banner-fondo'),
+    h('span.d-banner-texto', null,
+      h('span.d-banner-rotulo', null, rotulo),
+      h('span.d-banner-cifra', null, String(cifra)),
     ),
-    h('span.banner-cifra.mono-num', null, String(cifra)),
-    chevron(),
+    h('span.d-banner-boton', null, icon('flechaSubir')),
   );
+}
+
+/** Cuándo, como lo dice el diseño: «Ayer, 20:00 h». */
+function cuandoCorto(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const hoy = new Date();
+  const ayer = new Date(hoy); ayer.setDate(hoy.getDate() - 1);
+  const dia = d.toDateString() === hoy.toDateString() ? 'Hoy'
+    : d.toDateString() === ayer.toDateString() ? 'Ayer'
+    : fechaCorta(iso);
+  return `${dia}, ${hora(iso)} h`;
+}
+
+/** Y en el muro: «Andrea, ayer a las 11:40 h». */
+function cuandoMuro(nombre, iso) {
+  const pila = String(nombre || '').trim().split(/\s+/)[0] || 'Alguien';
+  if (!iso) return pila;
+  const d = new Date(iso);
+  const hoy = new Date();
+  const ayer = new Date(hoy); ayer.setDate(hoy.getDate() - 1);
+  if (d.toDateString() === hoy.toDateString()) return `${pila}, hoy a las ${hora(iso)} h`;
+  if (d.toDateString() === ayer.toDateString()) return `${pila}, ayer a las ${hora(iso)} h`;
+  return `${pila}, ${fechaCorta(iso)}`;
 }
 
 export async function render() {
   const activas = PROMOCIONES.filter((p) => p.activa);
   const p = activas[0] || null;
   if (!p) {
-    return { tab: 'inicio', contenido: [...cabeceraTab('UNIK'),
-      h('p.sub', null, 'No hay ninguna promoción activa.')] };
+    return { sinTabs: true, clase: 'pantalla-diseno', contenido: [
+      h('p.d-epigrafe', null, 'No hay ninguna promoción activa.')] };
   }
 
   const yo = store.sesion();
-  const c = await store.resumenPromocion(p.id);
-  const recientes = await store.tareasRecientes(12, { promoId: p.id });
-  const nActas = await store.cuantasActas(p.id);
+  const d = await store.datosHome(p.id);
+  const c = d.conteo;
 
-  const desdeVerificadas = ultimaMirada(yo, 'verificadas');
-  const desdeRechazadas = ultimaMirada(yo, 'rechazadas');
-  const nuevasVerificadas = await store.cuantasDesde('verificada', desdeVerificadas, { promoId: p.id });
-  const nuevasRechazadas = await store.cuantasDesde('rechazada', desdeRechazadas, { promoId: p.id });
+  const nuevasVerificadas = await store.cuantasDesde('verificada', ultimaMirada(yo, 'verificadas'), { promoId: p.id });
+  const nuevasRechazadas = await store.cuantasDesde('rechazada', ultimaMirada(yo, 'rechazadas'), { promoId: p.id });
 
-  // Aquí no hay botón de crear: esta pantalla es para mirar, y crear
-  // empieza eligiendo vivienda, que es la tercera bolita.
+  const pct = c.total ? Math.round((100 * c.hechas) / c.total) : 0;
+
+  /* ─── El muro ─── */
+  const muro = h('div.d-muro', null, d.muro.map((n) => {
+    const e = n.estado ? estado(n.estado) : null;
+    const clase = n.estado === 'rechazada' ? 'rechazada'
+      : n.estado === 'verificada' ? 'verificada'
+      : n.estado === 'resuelta' ? 'completada' : 'pendiente';
+    const villa = n.unidadId ? (unidad(n.unidadId)?.nombre || '') : 'Brassie';
+    const abre = n.tipo === 'tarea'
+      ? () => ir(`#/l/${n.listaId}/t/${n.tareaId}`)
+      : null;
+    return h(abre ? 'button.d-nota' : 'div.d-nota', { class: clase, onclick: abre },
+      h('div.d-nota-cab', null,
+        avatar(store.persona(n.quienId, n.quien), { tam: 36 }),
+        h('div.d-nota-quien', null,
+          h('div.d-nota-villa', null, villa),
+          h('div.d-nota-cuando', null, cuandoMuro(n.quien, n.cuando)),
+        ),
+        e && n.tipo === 'tarea' ? h('span.d-nota-estado', null, e.nombre) : null,
+      ),
+      h('p.d-nota-texto', null, n.texto || 'Sin texto.'),
+    );
+  }));
+
+  /* ─── Escribir en el muro ─── */
+  const caja = h('input', { type: 'text', placeholder: 'Escribe lo que quieras contar…', autocapitalize: 'sentences' });
+  const mandar = async () => {
+    const texto = caja.value.trim();
+    if (!texto) return;
+    await store.escribirMensaje('general:' + p.id, p.id, texto);
+    caja.value = '';
+    toast('Publicado en el muro');
+    refrescar();
+  };
+  caja.addEventListener('keydown', (e) => { if (e.key === 'Enter') mandar(); });
+
   return {
-    tab: 'inicio',
+    sinTabs: true,
+    clase: 'pantalla-diseno',
     contenido: [
-      ...cabeceraTab(p.nombre.toUpperCase()),
-      h('p.titular', null, titular(yo)),
-      avisoLocal() || barraSync(),
-
-      h('div.stack', { style: { gap: '10px', marginTop: '4px' } },
-        c.esperando ? banner({
-          clase: 'beige',
-          rotulo: 'Pendiente de revisión por la DF',
-          sub: c.esperando === 1 ? 'una tarea completada esperando' : `${c.esperando} tareas completadas esperando`,
-          cifra: c.esperando,
-          adonde: conFiltros('#/viviendas', { estado: 'resuelta' }),
-        }) : null,
-
-        nuevasVerificadas ? banner({
-          clase: 'verde',
-          rotulo: 'Tareas revisadas por la DF',
-          sub: 'desde la última vez que miraste',
-          cifra: nuevasVerificadas,
-          adonde: conFiltros('#/viviendas', { estado: 'verificada' }),
-          alPinchar: () => anotarMirada(yo, 'verificadas'),
-        }) : null,
-
-        nuevasRechazadas ? banner({
-          clase: 'rojo',
-          rotulo: 'Tareas rechazadas',
-          sub: 'hay que subsanarlas y volver a completarlas',
-          cifra: nuevasRechazadas,
-          adonde: conFiltros('#/viviendas', { estado: 'rechazada' }),
-          alPinchar: () => anotarMirada(yo, 'rechazadas'),
-        }) : null,
+      /* La cabecera del diseño: la cara y las tres bolas. */
+      h('div.d-cab', null,
+        avatar(yo, { tam: 54, onclick: () => ir('#/ajustes') }),
+        h('div.d-cab-menu', null,
+          h('button.d-bola.activa', { 'aria-label': 'Inicio', 'aria-current': 'true' }, icon('brujula')),
+          h('button.d-bola', { 'aria-label': 'Viviendas', onclick: () => ir('#/viviendas') }, icon('casa')),
+          h('button.d-bola', { 'aria-label': 'Actas', onclick: () => ir('#/listas') }, icon('periodico')),
+        ),
       ),
 
-      c.total ? barraAvance(c) : null,
+      h('h1.d-saludo', null, saludo(yo)),
+      avisoLocal() || barraSync(),
 
-      // El archivo de actas. Vive aquí y no en la barra de abajo porque
-      // es una consulta de despacho: se viene cuando hace falta el
-      // documento firmado, no cada vez que se abre la app.
-      nActas ? h('button.row', { onclick: () => ir('#/listas') },
-        h('div.row-lead', null, icon('clipboard', 18)),
-        h('div.grow', null,
-          h('div.row-title', null, 'Todas las actas'),
-          h('div.row-sub', null, `${nActas} ${nActas === 1 ? 'acta firmada' : 'actas firmadas'}`),
+      h('p.d-epigrafe', null, 'Pendiente de revisión por la DF'),
+      banner({
+        clase: 'beige',
+        rotulo: 'Tareas completadas por verificar',
+        cifra: c.esperando,
+        adonde: conFiltros('#/viviendas', { estado: 'resuelta' }),
+      }),
+
+      h('p.d-epigrafe', null, 'Tareas revisadas por la DF'),
+      banner({
+        clase: 'verde',
+        rotulo: 'Tareas verificadas',
+        cifra: nuevasVerificadas,
+        adonde: conFiltros('#/viviendas', { estado: 'verificada' }),
+        alPinchar: () => anotarMirada(yo, 'verificadas'),
+      }),
+      banner({
+        clase: 'rojo',
+        rotulo: 'Tareas rechazadas',
+        cifra: nuevasRechazadas,
+        adonde: conFiltros('#/viviendas', { estado: 'rechazada' }),
+        alPinchar: () => anotarMirada(yo, 'rechazadas'),
+      }),
+
+      h('p.d-epigrafe', null, p.nombre),
+      h('button.d-brassie', { onclick: () => ir('#/viviendas') },
+        h('div.d-brassie-cab', null,
+          icon('toque', 20),
+          h('span', null, cuandoCorto(d.ultimaSinVerificar) || 'Sin tareas abiertas'),
+          h('span.d-brassie-caras', null,
+            grupoAvatares(d.caras.slice(0, 3), { tam: 36, max: 3 })),
         ),
-        chevron(),
-      ) : null,
+        h('div.d-brassie-cifra', null,
+          `${d.sinVerificar} ${d.sinVerificar === 1 ? 'tarea pendiente' : 'tareas pendientes'}`),
+        h('div.d-brassie-pie', null,
+          h('span.d-chip', null, icon('listaChecks'), `${c.hechas} / ${c.total}`),
+          h('span.d-chip', { class: pct < 30 ? 'rojo' : pct < 70 ? 'ambar' : 'verde' },
+            icon('fuego'), `${pct}%`),
+        ),
+        h('span.d-brassie-anillo', {
+          style: { '--anillo-color': '#000', '--anillo-fondo': 'var(--d-anillo-fondo)' },
+        }, anillo(pct, { tam: 44, grosor: 5, etiqueta: false })),
+      ),
 
-      recientes.length
-        ? h('div', { style: { marginTop: '22px' } },
-            h('p.eyebrow', null, 'Actividad reciente'),
-            h('div.stack', { style: { marginTop: '10px', gap: '8px' } },
-              recientes.map(({ tarea, unidadId, portada }) =>
-                tareaFila(tarea, { portada, donde: unidad(unidadId)?.nombre }))),
-          )
-        : h('div.vacio-suave', null,
-            h('p.sub.center', null, 'Todavía no hay tareas. Entra en Viviendas y crea la primera lista de repaso.')),
+      h('p.d-epigrafe', null, 'Comentarios y feedback'),
+      muro,
+      h('div.d-escribir', null,
+        caja,
+        h('button.d-escribir-mandar', { 'aria-label': 'Publicar', onclick: mandar }, icon('avionPapel')),
+      ),
     ],
   };
 }

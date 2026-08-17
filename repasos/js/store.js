@@ -1007,6 +1007,86 @@ export async function cuantasDesde(estadoBuscado, desde, { promoId = null } = {}
     && (!desde || (t.estadoEn || t.actualizado || '') > desde)).length;
 }
 
+/**
+ * Todo lo que pinta la home del rediseño, calculado de una vez.
+ *
+ * El módulo de Brassie necesita tres cosas que no da el resumen normal:
+ * la fecha de la última tarea sin verificar, las caras de quienes
+ * tienen tareas sin verificar, y el muro de acontecimientos —cada
+ * tarea que cambió de estado, con su villa, su fecha y su texto—
+ * mezclado con los mensajes generales de la promoción.
+ */
+export async function datosHome(promoId) {
+  const listas = (await db.getAll('listas')).filter((l) => !l.borrada && l.promoId === promoId);
+  const casaDe = new Map(listas.map((l) => [l.id, l.unidadId]));
+  const tareas = (await db.getAll('tareas')).filter((t) => !t.borrada && casaDe.has(t.listaId));
+  const c = contar(tareas);
+
+  const sinVerificar = tareas.filter((t) => !hecha(t));
+  const ultimaSinVerificar = sinVerificar.map((t) => t.creado).sort().pop() || null;
+
+  // Una cara por persona con trabajo sin verificar, la más activa antes.
+  const cuenta = new Map();
+  for (const t of sinVerificar) {
+    const clave = t.creadoPor || t.creadoPorNombre;
+    const ficha = cuenta.get(clave) || { persona: persona(t.creadoPor, t.creadoPorNombre), n: 0 };
+    ficha.n++;
+    cuenta.set(clave, ficha);
+  }
+  const caras = [...cuenta.values()].sort((a, b) => b.n - a.n).map((x) => x.persona);
+
+  // El muro: cada tarea con su último movimiento, más los mensajes
+  // generales. El texto de una tarea movida es su último comentario si
+  // lo hay —el motivo del rechazo, el parte del completado— y si no,
+  // la propia descripción de la tarea.
+  const comentarios = (await db.getAll('comentarios')).filter((x) => !x.borrada);
+  const ultimoComentario = new Map();
+  for (const x of comentarios.sort((a, b) => a.creado.localeCompare(b.creado))) {
+    ultimoComentario.set(x.tareaId, x);
+  }
+
+  const muro = [];
+  for (const t of tareas) {
+    const cuando = t.estadoEn || t.actualizado || t.creado;
+    const ult = ultimoComentario.get(t.id);
+    muro.push({
+      tipo: 'tarea',
+      tareaId: t.id,
+      listaId: t.listaId,
+      unidadId: casaDe.get(t.listaId),
+      estado: t.estado,
+      cuando,
+      quien: t.estado !== 'pendiente' && t.estadoPor
+        ? t.estadoPor
+        : t.creadoPorNombre,
+      quienId: t.estado !== 'pendiente' ? null : t.creadoPor,
+      texto: ult?.texto || t.texto,
+    });
+  }
+  const generales = (await db.getAll('mensajes'))
+    .filter((m) => !m.borrada && m.unidadId === 'general:' + promoId)
+    .map((m) => ({
+      tipo: 'mensaje',
+      unidadId: null,
+      estado: '',
+      cuando: m.creado,
+      quien: m.creadoPorNombre,
+      quienId: m.creadoPor,
+      texto: m.texto,
+    }));
+
+  muro.push(...generales);
+  muro.sort((a, b) => (b.cuando || '').localeCompare(a.cuando || ''));
+
+  return {
+    conteo: c,
+    ultimaSinVerificar,
+    caras,
+    sinVerificar: sinVerificar.length,
+    muro: muro.slice(0, 14),
+  };
+}
+
 /** Las últimas actas tocadas, para el listado de la portada. */
 export async function listasRecientes(n = 15) {
   return (await actasConDatos()).slice(0, n);

@@ -14,6 +14,32 @@
   font-display: swap;
 }
 
+/* La letra del rediseño. El Figma pide Neue Haas Grotesk Display Pro,
+   que es de pago; Inter Tight es su gemela libre y aquí hace su papel.
+   Si algún día llegan los ficheros con licencia, se añaden con el mismo
+   nombre de familia que abajo va primero y todo queda clavado. */
+@font-face {
+  font-family: 'Inter Tight';
+  src: url('../assets/fonts/inter-tight-latin-400-normal.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Inter Tight';
+  src: url('../assets/fonts/inter-tight-latin-500-normal.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Inter Tight';
+  src: url('../assets/fonts/inter-tight-latin-600-normal.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
 @font-face {
   font-family: 'Open Sans';
   src: url('../assets/fonts/opensans-var.woff2') format('woff2');
@@ -58,6 +84,26 @@
   --shadow: 0 14px 40px rgba(17, 17, 18, 0.10);
   --shadow-sm: 0 4px 16px rgba(17, 17, 18, 0.07);
   --font: 'Open Sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  /* ─── El rediseño 2026, con los valores exactos del Figma ───
+     La letra a peso 500 en casi todo, y estos colores medidos del
+     archivo: el fondo #f5f5f5, el verde botella de lo verificado, el
+     beige de lo completado y el rojo de lo rechazado, cada uno con su
+     versión suave para las tarjetas del muro. */
+  --d-font: 'Neue Haas Grotesk Display Pro', 'Inter Tight', 'Helvetica Neue', Arial, sans-serif;
+  --d-fondo: #f5f5f5;
+  --d-tinta: #000000;
+  --d-gris: #8c8c8c;
+  --d-verde: #064d2d;
+  --d-verde-suave: #e7f8f0;
+  --d-beige: #d6cabc;
+  --d-beige-suave: #deddd8;
+  --d-beige-tinta: #736b5c;
+  --d-rojo: #db3e32;
+  --d-rojo-suave: #feeceb;
+  --d-rojo-tinta: #683c03;
+  --d-gris-suave: #f0f0f0;
+  --d-anillo-fondo: #d9d9d9;
+  --d-radio: 16px;
   --font-titulo: 'PP Eiko', 'Open Sans', serif;
 
   --tab-h: 104px;           /* alto que reserva la barra inferior */
@@ -1478,3 +1524,148 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 /* Una marca de la que no se dijo nada y ha salido a ojo: se marca
    para que se mire, no para que se descarte. */
 .rec-ficha.dudosa { box-shadow: inset 0 0 0 2px var(--accent); }
+
+/* ═══════════════════════════════════════════════════════════════
+   EL REDISEÑO 2026 · la home
+
+   Reproduce la pantalla HOME del Figma de Fran con sus valores
+   exactos: letra a peso 500, fondo #f5f5f5, banners con el botón
+   recortado en el borde («el mordisco»), módulo de Brassie con su
+   anillo y el muro de comentarios coloreado por estado.
+
+   Todas las clases llevan el prefijo d- para convivir con las
+   pantallas que aún no se han rediseñado, sin pisarlas.
+   ═══════════════════════════════════════════════════════════════ */
+.pantalla-diseno {
+  font-family: var(--d-font);
+  background: var(--d-fondo);
+  color: var(--d-tinta);
+  font-weight: 500;
+}
+/* El fondo de la página entera, no solo del contenido. */
+.pantalla-diseno::before {
+  content: ''; position: fixed; inset: 0; z-index: -1; background: var(--d-fondo);
+}
+
+/* ─── Cabecera: la cara a la izquierda, las tres bolas a la derecha ── */
+.d-cab {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 0 8px;
+}
+.d-cab .avatar { width: 54px; height: 54px; }
+.d-cab-menu { display: flex; gap: 4px; }
+.d-bola {
+  width: 55px; height: 55px; border-radius: 999px;
+  display: grid; place-items: center;
+  background: #fff; color: var(--d-tinta);
+  transition: transform var(--mov-corto) var(--sal-estandar);
+}
+.d-bola:active { transform: scale(0.93); }
+.d-bola.activa { background: var(--d-tinta); color: #fff; }
+.d-bola svg { width: 24px; height: 24px; }
+
+/* ─── El saludo del día ── */
+.d-saludo {
+  font-size: 42px; line-height: 1.14; letter-spacing: -0.03em;
+  font-weight: 500; margin: 26px 0 10px;
+}
+
+/* ─── Epígrafes de sección ── */
+.d-epigrafe { font-size: 18px; font-weight: 500; margin: 30px 0 12px; }
+
+/* ─── Banner con mordisco ──
+   La píldora lleva un bocado circular en el borde derecho y el botón
+   redondo vive dentro del hueco, del mismo color, con el fondo de la
+   página asomando en la junta. El bocado se recorta con una máscara
+   radial centrada donde el botón. */
+.d-banner {
+  position: relative; width: 100%; min-height: 95px;
+  text-align: left; display: block;
+}
+.d-banner + .d-banner { margin-top: 10px; }
+.d-banner-fondo {
+  position: absolute; inset: 0; border-radius: 26px;
+  background: var(--banner, var(--d-beige));
+  -webkit-mask: radial-gradient(circle 31px at calc(100% - 29.5px) 50%, transparent 99%, #000 101%);
+  mask: radial-gradient(circle 31px at calc(100% - 29.5px) 50%, transparent 99%, #000 101%);
+}
+.d-banner-texto { position: relative; display: block; padding: 13px 76px 13px 16px; }
+.d-banner-rotulo { display: block; font-size: 16px; font-weight: 500; }
+.d-banner-cifra { display: block; font-size: 32px; font-weight: 500; line-height: 1.25; }
+.d-banner-boton {
+  position: absolute; right: 2px; top: 50%; transform: translateY(-50%);
+  width: 55px; height: 55px; border-radius: 999px;
+  background: var(--banner, var(--d-beige));
+  display: grid; place-items: center;
+}
+.d-banner-boton svg { width: 24px; height: 24px; }
+.d-banner.beige { --banner: var(--d-beige); color: var(--d-tinta); }
+.d-banner.beige .d-banner-boton { color: #262626; }
+.d-banner.verde { --banner: var(--d-verde); color: #f0f0fe; }
+.d-banner.verde .d-banner-boton { color: #fff; }
+.d-banner.rojo { --banner: var(--d-rojo); color: #f0f0fe; }
+.d-banner.rojo .d-banner-boton { color: #fff; }
+
+/* ─── El módulo de Brassie ── */
+.d-brassie {
+  width: 100%; text-align: left;
+  background: #fff; border-radius: var(--d-radio);
+  padding: 14px 16px 16px; position: relative;
+}
+.d-brassie-cab { display: flex; align-items: center; gap: 8px; color: var(--d-gris); font-size: 14px; }
+.d-brassie-cab svg { width: 20px; height: 20px; }
+.d-brassie-caras { margin-left: auto; }
+.d-brassie-cifra { font-size: 24px; font-weight: 500; margin-top: 14px; }
+.d-brassie-pie { display: flex; align-items: center; gap: 8px; margin-top: 16px; padding-right: 64px; }
+.d-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 9px 14px; border-radius: 999px;
+  font-size: 14px; font-weight: 500;
+  background: var(--d-gris-suave); color: var(--d-gris);
+}
+.d-chip svg { width: 17px; height: 17px; }
+.d-chip.rojo { background: var(--d-rojo-suave); color: var(--d-rojo); }
+.d-chip.ambar { background: #f6ead9; color: #683c03; }
+.d-chip.verde { background: var(--d-verde-suave); color: var(--d-verde); }
+/* El anillo de avance, abajo a la derecha, con su cuenta. */
+.d-brassie-anillo { position: absolute; right: 14px; bottom: 12px; }
+
+/* ─── El muro de comentarios y feedback ── */
+.d-muro { display: flex; flex-direction: column; gap: 10px; }
+.d-nota {
+  width: 100%; text-align: left;
+  border-radius: var(--d-radio); background: #fff; padding: 12px;
+}
+.d-nota-cab { display: flex; align-items: flex-start; gap: 10px; }
+.d-nota-cab .avatar { width: 36px; height: 36px; flex: none; margin-top: 3px; }
+.d-nota-quien { min-width: 0; }
+.d-nota-villa { font-size: 16px; font-weight: 500; }
+.d-nota-cuando { font-size: 14px; color: var(--d-gris); margin-top: 1px; }
+.d-nota-estado { margin-left: auto; font-size: 14px; font-weight: 500; flex: none; padding-top: 2px; }
+.d-nota-texto { font-size: 14px; line-height: 1.35; margin-top: 8px; }
+.d-nota.rechazada { background: var(--d-rojo-suave); }
+.d-nota.rechazada .d-nota-villa, .d-nota.rechazada .d-nota-estado,
+.d-nota.rechazada .d-nota-texto { color: var(--d-rojo-tinta); }
+.d-nota.verificada { background: var(--d-verde-suave); }
+.d-nota.verificada .d-nota-villa, .d-nota.verificada .d-nota-estado,
+.d-nota.verificada .d-nota-texto { color: var(--d-verde); }
+.d-nota.completada { background: var(--d-beige-suave); }
+.d-nota.completada .d-nota-estado, .d-nota.completada .d-nota-texto { color: var(--d-beige-tinta); }
+.d-nota.pendiente .d-nota-estado { color: #bebcb2; }
+
+/* ─── Escribir en el muro ── */
+.d-escribir {
+  display: flex; align-items: center; gap: 8px;
+  background: #fff; border-radius: 999px; padding: 6px 6px 6px 16px;
+  margin-top: 10px;
+}
+.d-escribir input {
+  flex: 1; min-width: 0; border: 0; outline: 0; background: none;
+  font: 500 14px var(--d-font); color: var(--d-tinta);
+}
+.d-escribir input::placeholder { color: var(--d-gris); }
+.d-escribir-mandar {
+  width: 36px; height: 36px; border-radius: 999px; flex: none;
+  background: var(--d-tinta); color: #fff; display: grid; place-items: center;
+}
+.d-escribir-mandar svg { width: 18px; height: 18px; }

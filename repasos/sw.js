@@ -41,6 +41,9 @@ const ARMAZON = [
   'js/views/ajustes.js',
   'js/views/usuarios.js',
   'assets/fonts/opensans-var.woff2',
+  'assets/fonts/inter-tight-latin-400-normal.woff2',
+  'assets/fonts/inter-tight-latin-500-normal.woff2',
+  'assets/fonts/inter-tight-latin-600-normal.woff2',
   'assets/icons/favicon.svg',
   'assets/icons/icon-192.png',
 ];
