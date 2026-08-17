@@ -128,4 +128,7 @@ jobs:
             exit 0
           fi
           git commit -m "Bajar el diseño de Figma (pantallas, estilos e imágenes)"
+          # La rama puede haberse movido mientras se bajaba; el robot se
+          # incorpora encima de lo nuevo en vez de chocar.
+          git pull --rebase origin "${GITHUB_REF_NAME}"
           git push
