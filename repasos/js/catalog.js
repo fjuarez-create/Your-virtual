@@ -82,36 +82,41 @@ function slug(s) {
 export const FASE_UNICA = 'pre';
 
 /**
- * Los tres estados de una tarea, y el vocabulario de toda la app.
+ * Los cuatro estados de una tarea, y el vocabulario de toda la app.
  *
- * El circuito de una tarea tiene tres manos y por eso hay tres estados,
- * ni uno más:
+ * El circuito tiene cuatro manos:
  *
- *   ABIERTA   la pone un arquitecto o la propiedad al encontrar el
- *             defecto. Está en el tejado de la constructora.
- *   REVISAR   el jefe de obra dice que ya está arreglada. No cierra
- *             nada: pasa a nuestro tejado y hay que ir a mirarla.
- *   VALIDADA  un arquitecto o la propiedad la ha visto y la da por
- *             buena. Solo esto termina una tarea.
+ *   PENDIENTE   la pone un arquitecto o la propiedad al encontrar el
+ *               defecto. Está en el tejado de la constructora.
+ *   COMPLETADA  el jefe de obra dice que ya está arreglada. No cierra
+ *               nada: pasa a nuestro tejado y hay que ir a mirarla.
+ *   RECHAZADA   fuimos a mirarla y no valía. Vuelve al tejado de la
+ *               constructora, pero con su propio nombre y su propio
+ *               contador, que es lo que hace que se mire.
+ *   VERIFICADA  un arquitecto o la propiedad la ha visto y la da por
+ *               buena. Solo esto termina una tarea.
  *
- * Estas tres palabras son las únicas que se usan en pantalla —chips de
+ * Una rechazada vuelve a COMPLETADA cuando la arreglan, no a pendiente:
+ * pendiente es trabajo que nadie ha tocado todavía, y confundir las dos
+ * cosas borra que esa tarea ya rebotó una vez.
+ *
+ * Estas cuatro palabras son las únicas que se usan en pantalla —chips de
  * estado, filtros, etiquetas de las tarjetas y el informe—, y salen
  * todas de aquí. Antes cada pantalla decía la suya («Pendiente» aquí,
  * «Cerradas» allá, «Terminadas» más allá) y no había manera de saber
  * si dos palabras distintas eran o no la misma cosa.
  *
- * «Abierta» y no «Pendiente» porque pendiente lo están las dos
- * primeras —una del constructor y otra nuestra—, y esa era justo la
- * ambigüedad. Abierta/validada es además el par que se usa en obra.
- *
- * OJO con los identificadores: siguen siendo `pendiente`, `resuelta` y
- * `verificada`, que es lo que hay escrito en las tareas ya subidas.
- * Al leer código, fíjate en el id; al leer pantalla, en el nombre.
+ * OJO con los identificadores: `resuelta` se llama en pantalla
+ * COMPLETADA. El id se deja como estaba a propósito, porque es lo que
+ * llevan escrito las tareas ya subidas y renombrarlo obligaría a migrar
+ * base, API y todos los móviles a la vez. Al leer código, fíjate en el
+ * id; al leer pantalla, en el nombre.
  */
 export const ESTADOS = [
-  { id: 'pendiente', nombre: 'Abierta', plural: 'Abiertas', tag: '' },
-  { id: 'resuelta', nombre: 'Revisar', plural: 'Revisar', tag: 'warn' },
-  { id: 'verificada', nombre: 'Validada', plural: 'Validadas', tag: 'ink' },
+  { id: 'pendiente', nombre: 'Pendiente', plural: 'Pendientes', tag: '' },
+  { id: 'resuelta', nombre: 'Completada', plural: 'Completadas', tag: 'warn' },
+  { id: 'rechazada', nombre: 'Rechazada', plural: 'Rechazadas', tag: 'rojo' },
+  { id: 'verificada', nombre: 'Verificada', plural: 'Verificadas', tag: 'ink' },
 ];
 
 /**
@@ -128,6 +133,16 @@ export const hecha = (t) => t?.estado === 'verificada';
 
 /** Arreglada según el jefe de obra, sin validar todavía: nuestra cola. */
 export const esperandoVisto = (t) => t?.estado === 'resuelta';
+
+/**
+ * Rebotada: la miramos y no valía. Cuenta como trabajo de la
+ * constructora, igual que una pendiente, pero se distingue de ella
+ * porque esta ya se dio por buena una vez y no coló.
+ */
+export const rebotada = (t) => t?.estado === 'rechazada';
+
+/** Lo que está en el tejado de la constructora. */
+export const enObra = (t) => t?.estado === 'pendiente' || t?.estado === 'rechazada';
 
 /* ═══════════════════════════════════════════════════════════════
    Oficios
@@ -223,10 +238,40 @@ export function puedeVerificar(usuario) {
  */
 export const puedeCrearLista = puedeVerificar;
 
-/** Estados que puede poner un usuario concreto. */
+/**
+ * Estados que puede poner un usuario concreto.
+ *
+ * Verificar y rechazar son las dos caras de lo mismo —ir a la vivienda y
+ * decir si el arreglo vale—, así que las dos piden el mismo permiso. Al
+ * jefe de obra le quedan pendiente y completada, que es su trabajo.
+ */
 export function estadosPermitidos(usuario) {
-  return puedeVerificar(usuario) ? ESTADOS : ESTADOS.filter((e) => e.id !== 'verificada');
+  return puedeVerificar(usuario)
+    ? ESTADOS
+    : ESTADOS.filter((e) => e.id !== 'verificada' && e.id !== 'rechazada');
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Estancias
+
+   Dónde está el remate dentro de la vivienda. No es una clasificación
+   del trabajo —para eso está el gremio—: es para encontrarlo sin
+   llamar por teléfono. «Repasar la junta del alicatado» en una villa
+   con cuatro baños no le sirve a nadie.
+
+   La lista es cerrada a propósito. Escrita a mano acabaría con «baño
+   ppal», «Baño Principal» y «bño principal» conviviendo, y el filtro
+   por estancia dejaría de funcionar el primer día.
+   ═══════════════════════════════════════════════════════════════ */
+export const ZONAS = [
+  'Salón', 'Cocina', 'Lavadero', 'Aseo', 'Baño secundario', 'Baño principal',
+  'Sótano', 'Pasillo', 'Escalera', 'Distribuidor', 'Entrada',
+  'Dormitorio 1', 'Dormitorio 2', 'Dormitorio principal', 'Vestidor',
+  'Acceso exterior', 'Jardín', 'Fachada', 'Cubierta',
+];
+
+/** Las tareas de antes de que existiera el campo no tienen estancia. */
+export const ZONA_VACIA = '';
 
 /**
  * Empresas y roles que se ofrecen al dar de alta, para no tener que

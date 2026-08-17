@@ -2,7 +2,9 @@
    Se ve la foto y el texto de cada una sin tener que abrirla, que es
    como se repasa una vivienda andando. */
 import { h, icon, sheet, toast, confirmSheet, emptyState, fechaCorta, hora } from '../ui.js';
-import { unidad, estado, promocion, ESTADOS, OFICIOS, oficio, OFICIO_POR_DEFECTO } from '../catalog.js';
+import {
+  unidad, estado, promocion, enObra, ESTADOS, OFICIOS, ZONAS, oficio, OFICIO_POR_DEFECTO,
+} from '../catalog.js';
 import * as store from '../store.js';
 import * as media from '../media.js';
 import { cabeceraDentro, barraSync, filtroEstado, filtroOficio, ctaAccion, ctaCancelar } from '../piezas.js';
@@ -111,15 +113,19 @@ function tarjetaTarea(t, numero, urlPortada, tipos, listaId, filtros = null) {
     : h('div.thumb.empty', null, icon('image'), etiquetaNumero(numero), marcasMedios(tipos));
 
   return h('button.task', {
-    class: t.estado !== 'pendiente' ? 'done' : '',
+    // Rechazada no es «hecha»: es trabajo de la constructora igual que
+    // pendiente, y tacharla la escondería justo cuando hay que mirarla.
+    class: enObra(t) ? '' : 'done',
     onclick: () => ir(conFiltros(`#/l/${listaId}/t/${t.id}`, filtros || {})),
   },
     thumb,
     h('div.body', null,
       h('p.txt', null, t.texto || 'Sin descripción'),
       h('div.meta', null,
-        t.rechazada ? h('span.tag.rojo', null, 'Rechazada') : null,
         h('span.tag', { class: e.tag }, e.nombre),
+        // Delante del nombre de quien la movió: en una villa con cuatro
+        // baños, saber en cuál es importa más que saber quién la tocó.
+        t.zona ? h('span.tag', null, t.zona) : null,
         t.estado !== 'pendiente' && t.estadoPor
           ? h('span.tag', null, t.estadoPor.split(/\s+/)[0])
           : null,
@@ -188,7 +194,9 @@ export async function nuevaTarea(listaId) {
   // último elegido para no repetir el toque en cada una.
   ultimoOficio = datos.oficio;
 
-  const t = await store.crearTarea({ listaId, texto: datos.texto, oficio: datos.oficio });
+  const t = await store.crearTarea({
+    listaId, texto: datos.texto, oficio: datos.oficio, zona: datos.zona,
+  });
   for (const img of preparadas) {
     await store.añadirMedio(t.id, {
       tipo: 'imagen', blob: img.blob, mime: img.mime, ancho: img.ancho, alto: img.alto,
@@ -203,14 +211,21 @@ export async function nuevaTarea(listaId) {
 let ultimoOficio = null;
 
 /**
- * Texto, fotos y oficio. El oficio es obligatorio: de él tiran los
- * filtros de las pantallas de actas y de viviendas, y una tarea sin
+ * Texto, fotos, oficio y estancia. El oficio es obligatorio: de él tiran
+ * los filtros de las pantallas de actas y de viviendas, y una tarea sin
  * gremio sería invisible al buscar por gremio. Por eso el botón de
  * guardar no se activa hasta elegirlo.
+ *
+ * La estancia NO lo es. Sirve para encontrar el remate dentro de la
+ * casa, no para clasificar el trabajo, y hay tareas que no están en
+ * ninguna habitación concreta. Además, las tareas de antes de que
+ * existiera el campo lo tienen vacío: si aquí fuera obligatorio, la
+ * pantalla exigiría algo que media base de datos no cumple.
  */
 function hojaTexto(imagenes, oficioPrevio) {
   return sheet((cerrar) => {
     let elegido = oficioPrevio || null;
+    let zona = '';
 
     const texto = h('textarea.textarea', {
       placeholder: 'Qué hay que hacer aquí…',
@@ -236,6 +251,20 @@ function hojaTexto(imagenes, oficioPrevio) {
       }, o.corto)),
     );
 
+    // La estancia se puede quitar volviendo a tocar el chip puesto: es
+    // opcional, y sin eso un toque por error no habría manera de
+    // deshacerlo sin cerrar la hoja y empezar de nuevo.
+    const estancias = h('div.chips.filtro', null,
+      ...ZONAS.map((z) => h('button.chip.accent', {
+        'aria-pressed': 'false',
+        onclick: (e) => {
+          zona = zona === z ? '' : z;
+          [...estancias.children].forEach((c) => c.setAttribute(
+            'aria-pressed', zona && c === e.currentTarget ? 'true' : 'false'));
+        },
+      }, z)),
+    );
+
     // Las tres cosas son obligatorias: foto, descripción y oficio. La
     // pista dice cuál falta, y solo una a la vez: una lista de tres
     // reproches se lee como una regañina.
@@ -251,7 +280,8 @@ function hojaTexto(imagenes, oficioPrevio) {
       return vale;
     };
     texto.addEventListener('input', validar);
-    guardar.addEventListener('click', () => validar() && cerrar({ texto: texto.value.trim(), oficio: elegido }));
+    guardar.addEventListener('click', () => validar()
+      && cerrar({ texto: texto.value.trim(), oficio: elegido, zona }));
 
     const previsualizacion = imagenes.length
       ? h('div.rail', null, imagenes.map((im) =>
@@ -267,6 +297,8 @@ function hojaTexto(imagenes, oficioPrevio) {
       texto,
       h('p.eyebrow', { style: { marginTop: '14px' } }, 'Oficio'),
       rejilla,
+      h('p.eyebrow', { style: { marginTop: '14px' } }, 'Estancia · opcional'),
+      estancias,
       pista,
       guardar,
     ];

@@ -9,7 +9,7 @@
    ═══════════════════════════════════════════════════════════════ */
 import { h, icon, fechaLarga, hora, toast } from './ui.js';
 import * as store from './store.js';
-import { unidad, promocion, estado } from './catalog.js';
+import { unidad, promocion, estado, enObra } from './catalog.js';
 
 export async function informe(lista, { abrirImpresion = false } = {}) {
   const tareas = await store.tareasDeLista(lista.id);
@@ -18,7 +18,9 @@ export async function informe(lista, { abrirImpresion = false } = {}) {
   const u = unidad(lista.unidadId);
   const p = promocion(lista.promoId);
 
-  const pendientes = tareas.filter((t) => t.estado === 'pendiente').length;
+  // Las rechazadas cuentan aquí: para quien lee el informe son trabajo
+  // por hacer igual que una pendiente, no un caso aparte.
+  const pendientes = tareas.filter(enObra).length;
 
   const fichas = [];
   for (let i = 0; i < tareas.length; i++) {

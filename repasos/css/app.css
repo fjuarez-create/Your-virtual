@@ -675,6 +675,7 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 }
 .inf-estado.pendiente { background: var(--accent-soft); color: var(--accent-deep); }
 .inf-estado.resuelta { background: rgba(63, 125, 90, 0.14); color: var(--ok); }
+.inf-estado.rechazada { background: var(--rojo-soft); color: var(--rojo); }
 .inf-estado.verificada { background: var(--ink); color: #fff; }
 .inf-txt p { font-size: 14px; line-height: 1.5; white-space: pre-wrap; }
 .inf-extras { font-size: 12px; color: var(--muted); margin-top: 6px; }
@@ -1024,9 +1025,10 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
   letter-spacing: -0.02em; font-variant-numeric: tabular-nums;
 }
 
-/* Dos tramos: el negro es lo validado y el de marca lo que espera que
-   vayamos a validar. El segundo es la respuesta de un vistazo a «¿dónde
-   tengo cosas que mirar?», sin leer una palabra. */
+/* Tres tramos: el negro es lo verificado, el de marca lo que espera que
+   vayamos a verificar, y el rojo lo que rebotó. Los dos últimos son la
+   respuesta de un vistazo a «¿dónde tengo cosas que mirar?», sin leer
+   una palabra. */
 .villa-barra {
   flex: 1; min-width: 0;
   display: flex; height: 6px; border-radius: 999px;
@@ -1038,6 +1040,7 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 }
 .villa-barra .t-validada { background: var(--ink); }
 .villa-barra .t-validar { background: var(--accent); }
+.villa-barra .t-rechazada { background: var(--rojo); }
 
 .villa-pie {
   display: flex; align-items: baseline; gap: 10px; margin-top: 10px;
@@ -1123,14 +1126,15 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 }
 .avance-barra .t-resuelta { background: var(--ink); }
 .avance-barra .t-revisar { background: var(--accent); }
+.avance-barra .t-rechazada { background: var(--rojo); }
 .avance-barra .t-pendiente { background: var(--bg); }
 
-/* Tres columnas fijas y la etiqueta debajo de la cifra. En una sola
-   fila, «33 Resueltas · 16 A revisar · 24 Pendientes» cabe por los
-   pelos y se parte en cuanto alguna cifra llega a tres dígitos. */
+/* Dos columnas y dos filas: los cuatro estados en una sola fila no
+   caben en un móvil estrecho —se parten en cuanto una cifra llega a
+   tres dígitos— y a dos por fila queda el número grande y legible. */
 .leyenda {
-  display: grid; grid-template-columns: repeat(3, 1fr);
-  gap: 4px 12px; margin-top: 24px;
+  display: grid; grid-template-columns: repeat(2, 1fr);
+  gap: 16px 12px; margin-top: 24px;
 }
 .leyenda > div { min-width: 0; }
 .leyenda-cifra { display: flex; align-items: center; gap: 8px; }
@@ -1139,6 +1143,7 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 }
 .leyenda .punto.t-resuelta { background: var(--ink); }
 .leyenda .punto.t-revisar { background: var(--accent); }
+.leyenda .punto.t-rechazada { background: var(--rojo); }
 .leyenda .punto.t-pendiente { background: var(--bg); box-shadow: inset 0 0 0 1px var(--line); }
 .leyenda b { font-size: 19px; font-weight: 800; letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums; }

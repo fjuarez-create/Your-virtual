@@ -70,6 +70,7 @@ CREATE TABLE IF NOT EXISTS tareas (
   texto             TEXT         NOT NULL,
   estado            VARCHAR(20)  NOT NULL DEFAULT 'pendiente',
   oficio            VARCHAR(30)  NOT NULL DEFAULT 'general',
+  zona              VARCHAR(40)  NOT NULL DEFAULT '',
   orden             INT          NOT NULL DEFAULT 0,
   portada_id        CHAR(36)     DEFAULT NULL,
   estado_por        VARCHAR(120) DEFAULT NULL,

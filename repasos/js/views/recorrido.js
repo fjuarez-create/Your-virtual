@@ -15,11 +15,13 @@
    vez de escribir.
    ═══════════════════════════════════════════════════════════════ */
 import { h, icon, toast, openViewer, sheet, fechaCorta } from '../ui.js';
-import { promocion, unidad, FASE_UNICA, OFICIO_POR_DEFECTO, OFICIOS, oficio, puedeCrearLista } from '../catalog.js';
+import {
+  promocion, unidad, FASE_UNICA, OFICIO_POR_DEFECTO, OFICIOS, ZONAS, oficio, puedeCrearLista,
+} from '../catalog.js';
 import * as store from '../store.js';
 import * as api from '../api.js';
 import * as grabadora from '../recorrido.js';
-import { cabeceraDentro, hojaOficios, ctaAccion, ctaCancelar } from '../piezas.js';
+import { cabeceraDentro, cerrarVuelta, hojaOficios, hojaZonas, ctaAccion, ctaCancelar } from '../piezas.js';
 import { paraMirar } from '../media.js';
 import { ir, refrescar } from '../app.js';
 
@@ -71,6 +73,11 @@ export async function render({ promoId, unidadId }) {
 
   const lienzo = h('div.recorrido');
   let mando = null;
+
+  // La cabecera se guarda en vez de montarse dentro del `return`: al
+  // pasar a validar hay que apagarle la flecha de volver, y para eso
+  // hace falta poder alcanzarla desde aquí.
+  const cabecera = cabeceraDentro(u.nombre.toUpperCase(), { volverA: volver, sub: 'Recorrido' });
 
   // Los gremios que más salen aquí, para tenerlos a un toque al repasar.
   const sugeridos = await store.oficiosMasUsados(unidadId, 4);
@@ -235,8 +242,10 @@ export async function render({ promoId, unidadId }) {
     // desplegables es lo que convierte un buen recorrido en un rato de
     // trabajo administrativo, y todos se pueden cambiar de un toque.
     let ultimo = sugeridos[0] || OFICIO_POR_DEFECTO;
+    let ultimaZona = '';
     const fichas = rec.marcas.map((m) => ({
-      marca: m, texto: '', oficio: ultimo, tocado: false, fuera: false, confianza: null,
+      marca: m, texto: '', oficio: ultimo, zona: '',
+      tocado: false, zonaTocada: false, fuera: false, confianza: null,
     }));
 
     const audio = h('audio', { controls: true, preload: 'metadata', style: { width: '100%' } });
@@ -279,6 +288,22 @@ export async function render({ promoId, unidadId }) {
         if (f.tocado) break;
         f.oficio = gremio;
         f.pintarGremio?.();
+      }
+    };
+
+    /**
+     * La estancia se contagia igual, y con más razón todavía: un
+     * recorrido se hace habitación por habitación, así que la marca
+     * siguiente está casi siempre en el mismo sitio que la anterior.
+     */
+    const contagiarZona = (desde, z) => {
+      let visto = false;
+      for (const f of fichas) {
+        if (f === desde) { visto = true; continue; }
+        if (!visto || f.fuera) continue;
+        if (f.zonaTocada) break;
+        f.zona = z;
+        f.pintarZona?.();
       }
     };
 
@@ -335,6 +360,32 @@ export async function render({ promoId, unidadId }) {
       f.pintarGremio = pintarGremio;
       pintarGremio();
 
+      // Un solo botón y no los diecinueve: con quince marcas delante,
+      // diecinueve estancias por ficha son casi trescientos botones en
+      // la pantalla y no se encuentra nada. El que hay dice dónde está
+      // puesta, y abre la lista completa al tocarlo.
+      //
+      // Con la misma pinta que el minuto que tiene al lado, no con la de
+      // los chips de gremio: las dos cosas de la cabecera son etiquetas
+      // pequeñas, y el gremio se elige abajo entre varios.
+      const zonaChip = h('button.tag');
+      const pintarZona = () => {
+        zonaChip.className = f.zona ? 'tag accent' : 'tag';
+        zonaChip.style.opacity = f.zona ? '' : '.6';
+        zonaChip.textContent = f.zona || 'Estancia…';
+      };
+      zonaChip.addEventListener('click', async () => {
+        const elegida = await hojaZonas(f.zona);
+        if (elegida === null) return;
+        f.zona = elegida;
+        f.zonaTocada = true;
+        ultimaZona = elegida;
+        pintarZona();
+        contagiarZona(f, elegida);
+      });
+      f.pintarZona = pintarZona;
+      pintarZona();
+
       return h('div.rec-ficha', { class: f.confianza === 'baja' ? 'dudosa' : '' },
         h('div.rec-ficha-cab', null,
           h('div.rec-foto', {
@@ -342,10 +393,15 @@ export async function render({ promoId, unidadId }) {
             role: 'button', 'aria-label': 'Ver la foto',
             onclick: () => openViewer(h('img', { src: url, alt: '' })),
           }),
-          h('div.grow', null,
+          // El minuto y la estancia en la misma línea, encima del texto:
+          // es lo que dice el diseño —foto, estancia, gremio,
+          // descripción— y es el orden en que se lee una ficha, de lo
+          // que la sitúa a lo que la explica.
+          h('div.grow', { style: { display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' } },
             h('button.tag', {
               onclick: () => { audio.currentTime = Math.max(0, f.marca.ms / 1000 - 8); audio.play(); },
             }, icon('play', 12), grabadora.reloj(f.marca.ms / 1000)),
+            zonaChip,
           ),
           h('button.icon-btn', {
             'aria-label': 'Descartar esta marca',
@@ -446,6 +502,7 @@ export async function render({ promoId, unidadId }) {
             vivas.map((f) => ({ id: f.marca.id, ms: f.marca.ms })),
             OFICIOS.map((o) => ({ id: o.id, nombre: o.nombre })),
             fotos,
+            ZONAS,
           );
 
           const porId = new Map(vivas.map((f) => [String(f.marca.id), f]));
@@ -463,6 +520,13 @@ export async function render({ promoId, unidadId }) {
             if (ficha.oficio && OFICIOS.some((o) => o.id === ficha.oficio)) {
               f.oficio = ficha.oficio;
               f.tocado = true;
+            }
+            // La estancia solo se acepta si está en la lista cerrada:
+            // un «baño de arriba» inventado rompería el filtro, que es
+            // justo para lo que existe el campo.
+            if (ficha.zona && ZONAS.includes(ficha.zona)) {
+              f.zona = ficha.zona;
+              f.zonaTocada = true;
             }
             if (ficha.origen === 'foto') vistas += 1; else dichas += 1;
           }
@@ -500,7 +564,9 @@ export async function render({ promoId, unidadId }) {
       toast('Creando las tareas…');
       const lista = await store.crearLista({ unidadId, promoId, fase: FASE_UNICA });
       for (const f of vivas) {
-        const t = await store.crearTarea({ listaId: lista.id, texto: f.texto.trim(), oficio: f.oficio });
+        const t = await store.crearTarea({
+          listaId: lista.id, texto: f.texto.trim(), oficio: f.oficio, zona: f.zona,
+        });
         await store.añadirMedio(t.id, {
           tipo: 'imagen', blob: f.marca.blob, mime: 'image/jpeg',
           ancho: f.marca.ancho, alto: f.marca.alto,
@@ -514,11 +580,18 @@ export async function render({ promoId, unidadId }) {
 
     pintarFichas();
 
+    // De aquí se sale creando las tareas o descartándolas. La flecha de
+    // volver se apaga a propósito: irse por ahí deja el recorrido a
+    // medias sin decirlo, y lo que se ve en la pantalla —quince fichas
+    // ya escritas— parece guardado y no lo está. El recorrido sigue en
+    // el móvil, así que cerrar la app por accidente no pierde nada.
+    cerrarVuelta(cabecera, 'Crea las tareas o descarta el recorrido');
+
     lienzo.replaceChildren(
       h('div.rec-resumen', null,
-        h('p.eyebrow', null, `Recorrido de ${grabadora.reloj(rec.duracion)}`),
+        h('p.eyebrow', null, `Nueva lista · ${u.nombre}`),
         h('p.sub', { style: { marginTop: '4px' } },
-          `${rec.marcas.length} ${rec.marcas.length === 1 ? 'marca' : 'marcas'}. Escribe qué hay que hacer en cada una; el gremio va propuesto y se cambia de un toque. Lo que no valga, lo tiras.`),
+          `${grabadora.reloj(rec.duracion)} y ${rec.marcas.length} ${rec.marcas.length === 1 ? 'marca' : 'marcas'}. Escribe qué hay que hacer en cada una; el gremio va propuesto y se cambia de un toque. Lo que no valga, lo tiras.`),
         h('div', { style: { marginTop: '12px' } }, audio),
       ),
       dictado(),
@@ -538,7 +611,7 @@ export async function render({ promoId, unidadId }) {
     sinTabs: true,
     clase: 'pantalla-recorrido',
     contenido: [
-      ...cabeceraDentro(u.nombre.toUpperCase(), { volverA: volver, sub: 'Recorrido' }),
+      ...cabecera,
       lienzo,
     ],
     // Al salir de la pantalla hay que soltar cámara y micrófono sí o sí:

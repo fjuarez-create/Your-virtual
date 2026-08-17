@@ -179,6 +179,14 @@ rotando:
   pasillo, escalera, distribuidor, entrada, dormitorio 1, dormitorio 2,
   dormitorio principal, vestidor, acceso exterior, jardín, fachada,
   cubierta.
+
+  **No es obligatoria.** Hay remates que no están en ninguna habitación,
+  y las ciento y pico tareas que ya existen la tienen vacía: exigirla
+  sería pedir en pantalla algo que media base de datos no cumple. En el
+  recorrido, la estancia elegida en una marca se propaga a las de
+  después —se repasa habitación por habitación— y se para en la primera
+  que ya hayas puesto tú, igual que el gremio. La IA también la propone
+  cuando la foto la identifica sin dudar; si duda, la deja vacía.
 - Al crear una tarea desde la ficha de una vivienda, **la vivienda viene
   rellenada** pero se puede cambiar en el desplegable.
 - **Borrar la foto de un acta abre la cámara inmediatamente** para

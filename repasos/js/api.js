@@ -155,8 +155,8 @@ export const claudeQuitarClave = () => pedir('claude/clave', { metodo: 'DELETE' 
  * audio, pero sí ve lo que fotografiaste, así que de una marca de la que
  * no dijiste nada todavía puede salir una tarea.
  */
-export const claudeRedactar = (texto, marcas, oficios, fotos) =>
-  pedir('claude/redactar', { metodo: 'POST', json: { texto, marcas, oficios, fotos } });
+export const claudeRedactar = (texto, marcas, oficios, fotos, zonas) =>
+  pedir('claude/redactar', { metodo: 'POST', json: { texto, marcas, oficios, fotos, zonas } });
 
 /* ─── El oído ─────────────────────────────────────────────────────
    Otro proveedor, otra clave y otra factura: Claude no oye, así que

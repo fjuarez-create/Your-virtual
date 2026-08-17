@@ -345,6 +345,7 @@ function claude_redactar_recorrido(): void
     $marcas = $datos['marcas'] ?? [];
     $oficios = $datos['oficios'] ?? [];
     $fotos = $datos['fotos'] ?? [];
+    $zonas = $datos['zonas'] ?? [];
 
     // Con las fotos basta: de lo que se ve en ellas ya sale una tarea, y
     // lo dicho solo sirve para afinarla. Que falten las dos cosas a la
@@ -384,6 +385,20 @@ function claude_redactar_recorrido(): void
         responder_error(400, 'Las marcas o los gremios no vienen bien.', 'datos-raros');
     }
 
+    // Las estancias son opcionales: si no llegan, el modelo deja el
+    // campo vacío y se pone a mano. Lo que no puede es llegar una lista
+    // larguísima, que iría en cada llamada y se paga por token.
+    $sitios = [];
+    if (is_array($zonas)) {
+        foreach ($zonas as $z) {
+            $z = trim((string) $z);
+            if ($z === '' || count($sitios) >= 40) {
+                continue;
+            }
+            $sitios[] = mb_substr($z, 0, 40);
+        }
+    }
+
     // Las fotos llegan ya encogidas desde el móvil y en base64. Aquí solo
     // se comprueba que lo son: lo que se le mande a la API se paga, así
     // que no viaja nada que no sea una foto de una marca de este
@@ -417,7 +432,7 @@ function claude_redactar_recorrido(): void
         responder_error(400, 'No hay nada que redactar: ni fotos ni nada dicho.', 'sin-nada');
     }
 
-    responder(claude_redactar($texto, $limpias, $gremios, $miradas));
+    responder(claude_redactar($texto, $limpias, $gremios, $miradas, $sitios));
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -920,17 +935,22 @@ function guardar_tareas(): void
         if (!is_array($t) || !es_uuid($t['id'] ?? null) || !es_uuid($t['listaId'] ?? null)) {
             continue;
         }
-        $estado = in_array($t['estado'] ?? '', ['pendiente', 'resuelta', 'verificada'], true)
+        $estado = in_array($t['estado'] ?? '', ['pendiente', 'resuelta', 'rechazada', 'verificada'], true)
             ? $t['estado'] : 'pendiente';
 
-        // Verificar es un permiso, y el navegador no es de fiar: si quien
-        // manda el cambio no puede verificar, la tarea se queda como
-        // estaba en el servidor en lugar de pasar a verificada.
-        if ($estado === 'verificada' && !(bool) $yo['verifica'] && $yo['rol'] !== 'admin') {
+        // Verificar y rechazar son el mismo permiso —ir a la vivienda y
+        // decir si el arreglo vale— y el navegador no es de fiar: si quien
+        // manda el cambio no puede, la tarea se queda como estaba en el
+        // servidor en lugar de moverse.
+        $decide = in_array($estado, ['verificada', 'rechazada'], true);
+        if ($decide && !(bool) $yo['verifica'] && $yo['rol'] !== 'admin') {
             $previo = bd()->prepare('SELECT estado FROM tareas WHERE id = ?');
             $previo->execute([$t['id']]);
             $guardado = $previo->fetchColumn();
-            $estado = $guardado === 'verificada' ? 'verificada' : 'resuelta';
+            // Lo que ya hubiera decidido un verificador no lo deshace
+            // quien no puede; y si no había nada, se queda en completada,
+            // que es lo más lejos que llega el jefe de obra.
+            $estado = in_array($guardado, ['verificada', 'rechazada'], true) ? $guardado : 'resuelta';
         }
 
         $registro = [
@@ -939,6 +959,7 @@ function guardar_tareas(): void
             'texto'             => mb_substr((string) ($t['texto'] ?? ''), 0, 4000),
             'estado'            => $estado,
             'oficio'            => texto($t, 'oficio', 30, 'general') ?: 'general',
+            'zona'              => texto($t, 'zona', 40),
             'orden'             => entero($t, 'orden'),
             'portada_id'        => es_uuid($t['portadaId'] ?? null) ? $t['portadaId'] : null,
             'estado_por'        => texto($t, 'estadoPor', 120) ?: null,
@@ -1308,6 +1329,7 @@ function tarea_salida(array $f): array
     return [
         'id' => $f['id'], 'listaId' => $f['lista_id'], 'texto' => $f['texto'],
         'estado' => $f['estado'], 'oficio' => (string) ($f['oficio'] ?? 'general'),
+        'zona' => (string) ($f['zona'] ?? ''),
         'orden' => (int) $f['orden'], 'portadaId' => $f['portada_id'],
         'estadoPor' => $f['estado_por'], 'estadoEn' => $f['estado_en'],
         'rechazada' => (int) ($f['rechazada'] ?? 0) === 1,

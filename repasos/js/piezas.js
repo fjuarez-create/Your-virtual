@@ -9,7 +9,7 @@ import {
 import * as media from './media.js';
 import * as store from './store.js';
 import * as api from './api.js';
-import { unidad, oficio, estado, ESTADOS, OFICIOS } from './catalog.js';
+import { unidad, oficio, estado, rebotada, ESTADOS, OFICIOS, ZONAS } from './catalog.js';
 import { ir, conFiltros } from './app.js';
 
 /* Medidas de la cabecera, en un sitio para que las dos —la de las
@@ -56,6 +56,27 @@ export function cabeceraDentro(titulo, { volverA, sub, acciones = [] } = {}) {
     ),
     ajustarTitulo(h('h1.titulo-pantalla', null, titulo)),
   ];
+}
+
+/**
+ * Cierra la puerta de atrás de una cabecera ya montada: la flecha y los
+ * botones de acción se quedan a la vista pero apagados.
+ *
+ * Lo usa la pantalla de validar un recorrido, de la que se sale creando
+ * las tareas o descartándolas y no por la flecha. Se apagan y no se
+ * esconden porque un hueco donde siempre hay una flecha se lee como un
+ * fallo de la app; una flecha gris se lee como «por aquí no».
+ *
+ * Vive aquí, con la cabecera, para que quien la cambie vea también a
+ * quién le está tocando el botón.
+ */
+export function cerrarVuelta(cabecera, motivo) {
+  for (const b of cabecera[0].querySelectorAll('.icon-btn')) {
+    b.disabled = true;
+    b.style.opacity = '.35';
+    b.style.pointerEvents = 'none';
+    if (motivo) b.title = motivo;
+  }
 }
 
 /**
@@ -306,8 +327,8 @@ export function hojaFoto(u) {
 /**
  * Tarjeta de un acta. La misma en la portada, en la pestaña de ACTAS y
  * al pie de cada vivienda: quién ha participado, de qué acta se trata,
- * cuándo se hizo y cuánto lleva validado. Se toca aquí y cambia en los
- * tres sitios.
+ * cuándo se hizo y cuánto lleva verificado. Se toca aquí y cambia en
+ * los tres sitios.
  *
  * Lo único que depende de dónde se enseñe es el título cuando el acta
  * no tiene nombre puesto. En la lista general hace falta decir de qué
@@ -411,6 +432,28 @@ export function hojaOficios(actual, { conTodos = false } = {}) {
   ]);
 }
 
+/**
+ * Hoja de estancias. Igual que la de oficios, con una diferencia: aquí
+ * «ninguna» es una respuesta válida —hay remates que no están en una
+ * habitación concreta— así que siempre hay por dónde salir sin poner
+ * nada. Devuelve `null` si se cancela y `''` si se quita la estancia,
+ * que no son lo mismo: uno deja las cosas como están y el otro las
+ * cambia a vacío.
+ */
+export function hojaZonas(actual) {
+  return sheet((cerrar) => [
+    h('h2.title', null, 'Estancia'),
+    h('div.chips.filtro.envuelve', { style: { marginTop: '12px' } },
+      ...ZONAS.map((z) => h('button.chip.accent', {
+        'aria-pressed': actual === z ? 'true' : 'false',
+        onclick: () => cerrar(z),
+      }, z)),
+      actual ? h('button.chip.quitar', { onclick: () => cerrar('') }, 'Sin estancia') : null,
+    ),
+    ctaCancelar(() => cerrar(null)),
+  ]);
+}
+
 /** Flecha «>» del final de las píldoras. */
 export function chevron() {
   const svg = icon('chevron');
@@ -473,13 +516,20 @@ export function ctaCancelar(onclick) {
 }
 
 /**
- * Barra de avance de tres tramos con su leyenda. Un anillo de un solo
- * color no puede decir la proporción entre tres estados; esta sí, y de
- * paso pone a la vista la cola de «Revisar», que es donde se atasca el
- * trabajo cuando la subcontrata va por delante de quien comprueba.
+ * Barra de avance de cuatro tramos con su leyenda. Un anillo de un solo
+ * color no puede decir la proporción entre cuatro estados; esta sí, y de
+ * paso pone a la vista la cola de «Completadas», que es donde se atasca
+ * el trabajo cuando la subcontrata va por delante de quien comprueba.
+ *
+ * Las rechazadas salen aparte aunque el resumen las tenga sumadas dentro
+ * de las pendientes: para el porcentaje son lo mismo —trabajo sin
+ * verificar— pero en la leyenda no, porque una rechazada ya se dio por
+ * buena una vez y esa es la que hay que ir a mirar antes.
  */
 export function barraAvance(c) {
   const total = c.total || 0;
+  const rechazadas = c.rechazadas || 0;
+  const abiertas = Math.max(0, (c.pendientes || 0) - rechazadas);
   const pct = (n) => (total ? (100 * n) / total : 0);
   const tramo = (clase, n) => (n > 0
     ? h('i', { class: clase, style: { width: pct(n) + '%' } })
@@ -493,19 +543,24 @@ export function barraAvance(c) {
     h('span', null, etiqueta),
   );
 
+  // Los rótulos salen del catálogo, no escritos aquí: es lo que impide
+  // que esta leyenda diga «Validadas» el día que los chips ya dicen
+  // «Verificadas», que es exactamente lo que había pasado.
+  const rotulo = (id) => estado(id).plural;
+
   return h('div.widget-avance', null,
     h('p.eyebrow', null, 'Avance'),
     h('div.avance-barra', null,
       tramo('t-resuelta', c.hechas),
       tramo('t-revisar', c.esperando),
-      tramo('t-pendiente', c.pendientes),
+      tramo('t-rechazada', rechazadas),
+      tramo('t-pendiente', abiertas),
     ),
-    // Las mismas tres palabras que en los filtros y en los chips de
-    // estado, y en el mismo orden que recorre una tarea.
     h('div.leyenda', null,
-      dato('t-resuelta', c.hechas, 'Validadas'),
-      dato('t-revisar', c.esperando, 'Revisar'),
-      dato('t-pendiente', c.pendientes, 'Abiertas'),
+      dato('t-resuelta', c.hechas, rotulo('verificada')),
+      dato('t-revisar', c.esperando, rotulo('resuelta')),
+      dato('t-rechazada', rechazadas, rotulo('rechazada')),
+      dato('t-pendiente', abiertas, rotulo('pendiente')),
     ),
   );
 }
@@ -519,7 +574,7 @@ export function barraAvance(c) {
 export function tareaFila(t, { portada, donde, filtros = null } = {}) {
   const e = estado(t.estado);
   const clases = ['tarea-fila'];
-  if (t.rechazada) clases.push('rechazada');
+  if (rebotada(t)) clases.push('rechazada');
   else if (t.estado === 'verificada') clases.push('resuelta');
 
   return h('button', {
@@ -533,7 +588,7 @@ export function tareaFila(t, { portada, donde, filtros = null } = {}) {
       h('p.tarea-txt', null, t.texto || 'Sin descripción'),
       h('div.tarea-pie', null,
         avatar(store.persona(t.creadoPor, t.creadoPorNombre), { tam: 35 }),
-        t.rechazada ? h('span.tag.rojo', null, 'Rechazada') : h('span.tag', { class: e.tag }, e.nombre),
+        h('span.tag', { class: e.tag }, e.nombre),
         donde ? h('span.tarea-donde', null, donde) : null,
       ),
     ),

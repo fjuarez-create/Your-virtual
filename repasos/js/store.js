@@ -8,7 +8,7 @@
    ═══════════════════════════════════════════════════════════════ */
 import * as db from './db.js';
 import * as api from './api.js';
-import { puedeVerificar, hecha, esperandoVisto, OFICIO_POR_DEFECTO, FASE_UNICA } from './catalog.js';
+import { puedeVerificar, hecha, esperandoVisto, rebotada, enObra, OFICIO_POR_DEFECTO, FASE_UNICA } from './catalog.js';
 
 /* ─── Identificadores y sellos de tiempo ──────────────────────── */
 export function nuevoId() {
@@ -173,7 +173,7 @@ export async function tarea(id) {
   return t && !t.borrada ? t : null;
 }
 
-export async function crearTarea({ listaId, texto, oficio = OFICIO_POR_DEFECTO, autor = null }) {
+export async function crearTarea({ listaId, texto, oficio = OFICIO_POR_DEFECTO, zona = '', autor = null }) {
   const hermanas = await tareasDeLista(listaId);
   const quien = autor || usuario;
   const t = {
@@ -181,6 +181,7 @@ export async function crearTarea({ listaId, texto, oficio = OFICIO_POR_DEFECTO, 
     listaId,
     texto: texto || '',
     oficio: oficio || OFICIO_POR_DEFECTO,
+    zona: zona || '',
     estado: 'pendiente',
     orden: hermanas.length ? Math.max(...hermanas.map((x) => x.orden || 0)) + 1 : 1,
     portadaId: null,
@@ -211,11 +212,19 @@ export async function actualizarTarea(id, cambios) {
 /**
  * Cambia el estado de una tarea dejando constancia de por qué.
  *
- * Devolver a pendiente algo que estaba resuelto es un rechazo: quien lo
- * hace tiene que explicarlo, y la tarea queda marcada para que el
- * constructor lo vea sin tener que abrirla. Es el hilo de la tarea.
+ * Rechazar es decir que un arreglo no vale: quien lo hace tiene que
+ * explicarlo, y la explicación queda en el hilo de la tarea marcada como
+ * rechazo, con su fecha y su firma. Ese hilo es el historial de rechazos:
+ * si una tarea rebota tres veces, quedan los tres motivos, y no se pisan
+ * unos a otros.
  *
- * @param {string} nuevo  'pendiente' | 'resuelta' | 'verificada'
+ * La bandera `rechazada` se sigue escribiendo aunque el estado ya lo
+ * diga. Es para los móviles que todavía tengan la versión anterior en
+ * caché: ellos no conocen el estado `rechazada` y sin la bandera verían
+ * la tarea como pendiente y sin la banda roja. Se puede quitar cuando
+ * haga tiempo que no queda ninguno.
+ *
+ * @param {string} nuevo  'pendiente' | 'resuelta' | 'rechazada' | 'verificada'
  * @param {{texto?: string, imagen?: {blob: Blob, mime: string, ancho: number, alto: number}}} nota
  */
 export async function cambiarEstado(tareaId, nuevo, nota = {}) {
@@ -223,16 +232,15 @@ export async function cambiarEstado(tareaId, nuevo, nota = {}) {
   if (!t) return null;
   if (t.estado === nuevo) return t;
 
-  if (nuevo === 'verificada' && !puedeVerificar(usuario)) {
-    throw new Error('No tienes permiso para verificar tareas.');
+  if ((nuevo === 'verificada' || nuevo === 'rechazada') && !puedeVerificar(usuario)) {
+    throw new Error('No tienes permiso para verificar ni rechazar tareas.');
   }
 
-  const rechazo = t.estado === 'resuelta' && nuevo === 'pendiente';
-  const cambios = { estado: nuevo };
-  if (rechazo) cambios.rechazada = true;
-  else if (nuevo !== 'pendiente') cambios.rechazada = false;
-
-  const actualizada = await actualizarTarea(tareaId, cambios);
+  const rechazo = nuevo === 'rechazada';
+  const actualizada = await actualizarTarea(tareaId, {
+    estado: nuevo,
+    rechazada: rechazo,
+  });
 
   if (nota.texto || nota.imagen) {
     await añadirComentario(tareaId, {
@@ -244,9 +252,9 @@ export async function cambiarEstado(tareaId, nuevo, nota = {}) {
   return actualizada;
 }
 
-/** ¿Devolver esta tarea a pendiente exige explicación? */
+/** Rechazar siempre exige explicación; lo demás, no. */
 export function exigeExplicacion(tarea, nuevo) {
-  return !!tarea && tarea.estado === 'resuelta' && nuevo === 'pendiente';
+  return !!tarea && nuevo === 'rechazada' && tarea.estado !== 'rechazada';
 }
 
 /* ─── Hilo de la tarea ────────────────────────────────────────── */
@@ -399,7 +407,7 @@ export async function resumenPorUnidad(promoId) {
   const dame = (unidadId) => {
     if (!salida.has(unidadId)) {
       salida.set(unidadId, {
-        listas: 0, total: 0, hechas: 0, pendientes: 0, esperando: 0,
+        listas: 0, total: 0, hechas: 0, pendientes: 0, esperando: 0, rechazadas: 0,
         oficios: new Set(), oficiosAbiertos: new Set(), ultima: null,
         // `movimiento` es la última vez que se tocó algo aquí, no la
         // última acta abierta: una casa con un acta de hace un mes y
@@ -435,6 +443,10 @@ export async function resumenPorUnidad(promoId) {
     v.oficiosAbiertos.add(oficioDe(t));
     if (esperandoVisto(t)) v.esperando++;
     else v.pendientes++;
+    // Las rechazadas van ya contadas arriba como pendientes —es trabajo
+    // de la constructora igual—; esto es aparte, para poder decir
+    // cuántas rebotaron sin sacarlas de donde les toca.
+    if (rebotada(t)) v.rechazadas++;
   }
 
   // Delante quien más ha metido mano: la pila de caras es ornamental,
@@ -453,27 +465,35 @@ export async function resumenPorUnidad(promoId) {
  * estado. Lo usan las tres pantallas que listan contenedores, para que
  * el mismo chip signifique lo mismo en todas.
  *
- * «Abiertas» y «Revisar» preguntan si hay AL MENOS UNA así, porque lo
- * que se busca con ellas es dónde ir. «Validadas» exige que lo estén
- * TODAS: una vivienda con una sola tarea validada y nueve abiertas no
- * está validada, y si apareciera en ese filtro no serviría de nada.
+ * «Pendientes», «Completadas» y «Rechazadas» preguntan si hay AL MENOS
+ * UNA así, porque lo que se busca con ellas es dónde ir. «Verificadas»
+ * exige que lo estén TODAS: una vivienda con una sola tarea verificada
+ * y nueve pendientes no está verificada, y si apareciera en ese filtro
+ * no serviría de nada.
+ *
+ * Pendiente descuenta las rechazadas aunque el resumen las lleve
+ * sumadas: son dos chips distintos y tienen que enseñar cosas
+ * distintas, o pedir «pendientes» sacaría casas donde lo único que hay
+ * es trabajo rebotado.
  */
 export function encajaEstado(c, estado) {
   if (!estado || estado === 'todas') return true;
   if (estado === 'verificada') return c.total > 0 && c.hechas === c.total;
   if (estado === 'resuelta') return c.esperando > 0;
-  return c.pendientes > 0;
+  if (estado === 'rechazada') return (c.rechazadas || 0) > 0;
+  return c.pendientes - (c.rechazadas || 0) > 0;
 }
 
 /**
- * Los oficios contra los que cruzar el filtro. Buscando lo abierto o lo
- * que hay que revisar solo cuentan los oficios que siguen vivos; en los
- * demás casos, todo lo que haya pasado por ahí. Si no, al pedir
- * «pintura abierta» saldrían viviendas donde la pintura ya está
- * validada y lo abierto es de fontanería.
+ * Los oficios contra los que cruzar el filtro. Buscando lo pendiente,
+ * lo completado o lo rechazado solo cuentan los oficios que siguen
+ * vivos; en los demás casos, todo lo que haya pasado por ahí. Si no, al
+ * pedir «pintura pendiente» saldrían viviendas donde la pintura ya está
+ * verificada y lo que queda abierto es de fontanería.
  */
 export function oficiosSegun(c, estado) {
-  return (estado === 'pendiente' || estado === 'resuelta') ? c.oficiosAbiertos : c.oficios;
+  const vivos = estado === 'pendiente' || estado === 'resuelta' || estado === 'rechazada';
+  return vivos ? c.oficiosAbiertos : c.oficios;
 }
 
 /**
@@ -577,7 +597,13 @@ function contar(tareas) {
     total: tareas.length,
     hechas: tareas.filter(hecha).length,
     esperando: tareas.filter(esperandoVisto).length,
-    pendientes: tareas.filter((t) => t.estado === 'pendiente').length,
+    // `pendientes` es todo lo que está en el tejado de la constructora,
+    // rechazadas incluidas: si contara solo las de estado `pendiente`,
+    // las cuatro cifras no sumarían el total y la barra de avance
+    // dejaría un hueco sin explicar. `rechazadas` va aparte, como
+    // subconjunto, para poder sacarlas en su propio tramo.
+    pendientes: tareas.filter(enObra).length,
+    rechazadas: tareas.filter(rebotada).length,
     // Dos conjuntos, porque los filtros preguntan cosas distintas:
     // «pintura» a secas es «aquí hubo pintura»; «pendientes + pintura»
     // es «aquí queda pintura por cerrar».
@@ -678,6 +704,7 @@ export async function resumenGeneral() {
     hechas: c.hechas,
     esperando: c.esperando,
     pendientes: c.pendientes,
+    rechazadas: c.rechazadas,
     ultima: listas.map((l) => l.creado).sort().pop() || null,
   };
 }
@@ -986,6 +1013,7 @@ const bool = (v) => v === true || v === 1 || v === '1';
 const normalizarLista = (l) => ({ ...l, cerrada: bool(l.cerrada), borrada: bool(l.borrada) });
 const normalizarTarea = (t) => ({
   ...t, orden: Number(t.orden) || 0, borrada: bool(t.borrada), rechazada: bool(t.rechazada),
+  zona: typeof t.zona === 'string' ? t.zona : '',
 });
 const normalizarComentario = (c) => ({ ...c, borrada: bool(c.borrada) });
 const normalizarMedio = (m) => ({

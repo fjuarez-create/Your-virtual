@@ -18,7 +18,7 @@
 declare(strict_types=1);
 
 /** Se sube al añadir campos o tablas. */
-const ESQUEMA_VERSION = 5;
+const ESQUEMA_VERSION = 6;
 
 /**
  * Campos que tienen que existir, por tabla, con el tipo que usa MySQL.
@@ -37,6 +37,10 @@ const ESQUEMA_CAMPOS = [
         // Las tareas de antes de que existiera el campo se quedan en
         // «general», que es justo lo que eran: un remate sin gremio.
         'oficio'    => "VARCHAR(30) NOT NULL DEFAULT 'general'",
+        // Dónde está el remate dentro de la vivienda. Vacío en las
+        // tareas de antes: nadie las va a reetiquetar a mano, y una
+        // estancia inventada engaña más que un hueco.
+        'zona'      => "VARCHAR(40) NOT NULL DEFAULT ''",
     ],
     'listas' => [
         // Vacío = se muestra el nombre de la vivienda. Solo se guarda
@@ -154,6 +158,39 @@ function esquema_aplicar(PDO $pdo): array
             }
             $pdo->exec("ALTER TABLE {$tabla} ADD COLUMN {$nombre} " . esquema_tipo($tipo));
             $hechos[] = "{$tabla}.{$nombre}";
+        }
+    }
+
+    $hechos = array_merge($hechos, esquema_arreglar_datos($pdo));
+
+    return $hechos;
+}
+
+/**
+ * Arreglos de datos, no de estructura.
+ *
+ * Añadir una columna es inofensivo; esto toca filas que ya existen, así
+ * que cada arreglo tiene que poder pasar dos veces sin estropear nada
+ * —si la migración se queda a medias, el siguiente arranque la repite— y
+ * tiene que dejar dicho por qué se hizo.
+ */
+function esquema_arreglar_datos(PDO $pdo): array
+{
+    $hechos = [];
+
+    // Antes, rechazar una tarea la devolvía a «pendiente» con una bandera
+    // encima. Ahora «rechazada» es un estado, y sin esto las tareas que
+    // ya habían rebotado se quedarían contadas como pendientes: no
+    // saldrían en el contador de rechazadas ni en su filtro, que es justo
+    // para lo que se hizo el estado.
+    if (in_array('rechazada', esquema_columnas($pdo, 'tareas'), true)) {
+        $sent = $pdo->prepare(
+            "UPDATE tareas SET estado = 'rechazada' WHERE estado = 'pendiente' AND rechazada = 1"
+        );
+        $sent->execute();
+        $cuantas = $sent->rowCount();
+        if ($cuantas > 0) {
+            $hechos[] = "tareas: {$cuantas} rechazadas rescatadas de pendiente";
         }
     }
 

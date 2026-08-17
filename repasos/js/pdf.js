@@ -10,6 +10,8 @@
    la eñe y los signos de apertura del castellano.
    ═══════════════════════════════════════════════════════════════ */
 
+import { estado } from './catalog.js';
+
 const A4 = { ancho: 595.28, alto: 841.89 };
 const MARGEN = 48;
 
@@ -195,8 +197,11 @@ export function hojaDePuerta({ vivienda, promocion, fecha, autor, tareas }) {
     });
 
     y -= lineas.length * INTERLINEA + 4;
+    // El nombre sale del catálogo: esta hoja se imprime y se manda por
+    // WhatsApp, y poner «RESUELTA» debajo de una tarea rechazada sería
+    // decir en papel lo contrario de lo que pasó.
     if (t.estado && t.estado !== 'pendiente') {
-      pag.texto(MARGEN + SANGRIA, y, t.estado === 'verificada' ? 'VERIFICADA' : 'RESUELTA',
+      pag.texto(MARGEN + SANGRIA, y, estado(t.estado).nombre.toUpperCase(),
         { tam: 8.5, negrita: true, gris: 0.5 });
       y -= 11;
     }

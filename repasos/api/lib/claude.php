@@ -109,12 +109,23 @@ function claude_borrar_clave(): void
  * es peor que un parte con un hueco: manda a alguien a arreglar algo
  * que no existe y quema la confianza en el resto de la lista.
  */
-function claude_instrucciones(array $oficios): string
+function claude_instrucciones(array $oficios, array $zonas = []): string
 {
     $lista = '';
     foreach ($oficios as $o) {
         $lista .= "  - {$o['id']}: {$o['nombre']}\n";
     }
+
+    // Sin estancias que ofrecer no se pide el campo: mejor no preguntar
+    // que preguntar por una lista vacía y recibir cualquier cosa.
+    $estancias = $zonas
+        ? "\nLA ESTANCIA de cada ficha, exactamente una de estas y escrita\nigual:\n  " . implode("\n  ", $zonas) . "\n"
+            . "- Si él dijo dónde estaba, esa manda.\n"
+            . "- Si no lo dijo pero la foto la identifica sin dudar —un inodoro,\n"
+            . "  una encimera de cocina, una escalera—, ponla.\n"
+            . "- Si no estás seguro, déjala vacía. Una estancia equivocada manda a\n"
+            . "  alguien al baño que no era; una vacía solo pide que la escriban.\n"
+        : "\nNo pongas estancia: deja ese campo vacío siempre.\n";
 
     return <<<TXT
 Eres el ayudante de un arquitecto que acaba de recorrer una vivienda en
@@ -146,8 +157,9 @@ EL TEXTO de cada ficha:
   alicatado en la esquina de la ducha», no «se ve una junta abierta».
 - Corta y concreta: lo que hay que hacer y dónde. Una frase, dos si el
   sitio necesita explicarse.
-- Si dijo en qué estancia estaba, ponla. Es lo que convierte una tarea
-  en algo que se puede encontrar sin llamar por teléfono.
+- El sitio exacto dentro de la estancia sí va en el texto: «en la
+  esquina de la ducha», «detrás de la puerta». La estancia a secas no,
+  que tiene su propio campo.
 - El idioma y el vocabulario, los suyos. Si dice «rodapié», no lo
   cambies por «zócalo».
 - Nada de preámbulos, comillas, numeración ni coletillas.
@@ -155,6 +167,7 @@ EL TEXTO de cada ficha:
 EL GREMIO de cada ficha, solo uno de estos:
 {$lista}
 Si no encaja claramente en ninguno, pon `general`.
+{$estancias}
 
 EMPAREJAR lo dicho con las fotos:
 - Se habla mientras se anda, así que el comentario de una foto suele
@@ -224,9 +237,14 @@ function claude_mensaje(string $texto, array $marcas, array $fotos): array
 }
 
 /** El molde de la respuesta. Con esto no hay que fiarse del formato. */
-function claude_esquema(array $oficios): array
+function claude_esquema(array $oficios, array $zonas = []): array
 {
     $ids = array_map(static fn ($o) => $o['id'], $oficios);
+    // El vacío es una respuesta válida y por eso está en la lista: el
+    // campo es obligatorio —los esquemas estructurados exigen que todas
+    // las propiedades declaradas vengan— pero la estancia no lo es, y
+    // sin un hueco al que ir acabaría inventándose una.
+    $sitios = array_values(array_unique(array_merge([''], $zonas)));
 
     return [
         'type' => 'object',
@@ -239,13 +257,17 @@ function claude_esquema(array $oficios): array
                         'id' => ['type' => 'string'],
                         'texto' => ['type' => 'string'],
                         'oficio' => ['type' => 'string', 'enum' => $ids],
+                        // Dónde está el remate dentro de la casa. Sale
+                        // de una lista cerrada para que el filtro por
+                        // estancia funcione; vacío si no está claro.
+                        'zona' => ['type' => 'string', 'enum' => $sitios],
                         // De dónde ha salido la tarea. Es lo que luego se
                         // le dice a quien repasa: lo suyo se lee por
                         // encima, lo leído de una foto se mira dos veces.
                         'origen' => ['type' => 'string', 'enum' => ['dicho', 'foto']],
                         'confianza' => ['type' => 'string', 'enum' => ['alta', 'media', 'baja']],
                     ],
-                    'required' => ['id', 'texto', 'oficio', 'origen', 'confianza'],
+                    'required' => ['id', 'texto', 'oficio', 'zona', 'origen', 'confianza'],
                     'additionalProperties' => false,
                 ],
             ],
@@ -265,7 +287,7 @@ function claude_esquema(array $oficios): array
  * poder leer por qué —sin clave, sin saldo, sin salida a internet— y
  * escribir las tareas a mano, que es lo que hacía hasta ayer.
  */
-function claude_redactar(string $texto, array $marcas, array $oficios, array $fotos = []): array
+function claude_redactar(string $texto, array $marcas, array $oficios, array $fotos = [], array $zonas = []): array
 {
     $clave = claude_clave();
     if ($clave === '') {
@@ -284,7 +306,7 @@ function claude_redactar(string $texto, array $marcas, array $oficios, array $fo
     $cuerpo = [
         'model' => CLAUDE_MODELO,
         'max_tokens' => claude_tope_salida(count($marcas)),
-        'system' => claude_instrucciones($oficios),
+        'system' => claude_instrucciones($oficios, $zonas),
         'messages' => [
             ['role' => 'user', 'content' => claude_mensaje($texto, $marcas, $fotos)],
         ],
@@ -292,7 +314,7 @@ function claude_redactar(string $texto, array $marcas, array $oficios, array $fo
             'effort' => CLAUDE_ESFUERZO,
             'format' => [
                 'type' => 'json_schema',
-                'schema' => claude_esquema($oficios),
+                'schema' => claude_esquema($oficios, $zonas),
             ],
         ],
     ];

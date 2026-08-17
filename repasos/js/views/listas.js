@@ -95,8 +95,8 @@ export async function render({ promoId, unidadId }) {
 
 /**
  * Las actas de la vivienda, con la misma tarjeta que la pestaña de
- * ACTAS. Delante van las que tienen algo abierto o por validar; las
- * validadas del todo quedan detrás, bajo su propio epígrafe, pero se
+ * ACTAS. Delante van las que tienen algo pendiente o por verificar; las
+ * verificadas del todo quedan detrás, bajo su propio epígrafe, pero se
  * ven: son la firma de quién vio qué y cuándo, y a eso se vuelve.
  */
 function pieDeActas(actas, filtros = null) {
@@ -114,7 +114,7 @@ function pieDeActas(actas, filtros = null) {
     // sobra, y con ninguna terminada no habría nada debajo.
     terminadas.length
       ? h('div', { style: { marginTop: abiertas.length ? '20px' : '10px' } },
-          abiertas.length ? h('p.eyebrow', { style: { marginBottom: '10px' } }, 'Validadas') : null,
+          abiertas.length ? h('p.eyebrow', { style: { marginBottom: '10px' } }, 'Verificadas') : null,
           h('div.stack.actas', null, terminadas.map((a) => tarjetaActa(a, { dentroDeVivienda: true, filtros }))),
         )
       : null,

@@ -69,17 +69,16 @@ const DIAS_PARADA = 14;
  * que en cincuenta filas seguidas cada cosa caiga siempre en la misma
  * vertical. La barra es lo único elástico: ocupa lo que sobra.
  *
- * El porcentaje cuenta SOLO lo validado. Que el jefe de obra dé algo
+ * El porcentaje cuenta SOLO lo verificado. Que el jefe de obra dé algo
  * por arreglado no lo termina: lo termina que un arquitecto o la
  * propiedad lo dé por bueno. Si contara lo demás, diría que la
  * promoción va mejor de lo que va, y esa es la única mentira que esta
  * pantalla no se puede permitir.
  *
- * La barra sí lleva dos tramos, y por eso: el negro es lo validado y el
+ * La barra lleva tres tramos, y por eso: el negro es lo verificado, el
  * de marca es lo que el jefe de obra dice que está hecho y espera que
- * vayamos a mirar. Ese segundo tramo es la respuesta visual a «¿dónde
- * tengo cosas que validar?»: se ve de un vistazo, sin leer, bajando por
- * la lista.
+ * vayamos a mirar, y el rojo lo que fuimos a mirar y no valía. Se leen
+ * de un vistazo, sin leer una palabra, bajando por la lista.
  *
  * Tres aspectos, y se leen antes que el texto:
  *   apagada — no tiene ninguna tarea todavía
@@ -90,8 +89,10 @@ function fila(u, r, promoId, filtros) {
   const total = r?.total || 0;
   const hechas = r?.hechas || 0;
   const esperando = r?.esperando || 0;
+  const rechazadas = r?.rechazadas || 0;
   const pct = total ? Math.round((100 * hechas) / total) : 0;
   const pctEspera = total ? Math.round((100 * esperando) / total) : 0;
+  const pctRechazo = total ? Math.round((100 * rechazadas) / total) : 0;
   const terminada = total > 0 && hechas === total;
   const clase = !total ? 'villa apagada' : terminada ? 'villa hecha' : 'villa';
 
@@ -113,11 +114,12 @@ function fila(u, r, promoId, filtros) {
       h('div.villa-barra', null,
         h('i.t-validada', { style: { width: pct + '%' } }),
         h('i.t-validar', { style: { width: pctEspera + '%' } }),
+        h('i.t-rechazada', { style: { width: pctRechazo + '%' } }),
       ),
       h('div.villa-pct', null, pct + '%'),
     ),
     h('div.villa-pie', null,
-      h('span', null, textoDe(total, hechas, esperando)),
+      h('span', null, textoDe(total, hechas, esperando, rechazadas)),
       r?.movimiento
         ? h('span.villa-mov', { class: parada ? 'parada' : '' }, desdeHace(r.movimiento))
         : null,
@@ -127,17 +129,20 @@ function fila(u, r, promoId, filtros) {
 
 /**
  * Qué falta en esa casa. Delante lo que espera respuesta NUESTRA —lo
- * que el jefe de obra ha dado por arreglado y hay que ir a validar—,
+ * que el jefe de obra ha dado por arreglado y hay que ir a verificar—,
  * porque es lo único de esta pantalla sobre lo que quien la mira puede
- * actuar hoy. Lo abierto depende de la constructora y va detrás.
+ * actuar hoy. Lo que depende de la constructora va detrás, y de eso
+ * primero lo rechazado: una tarea que ya rebotó una vez pesa más que
+ * una que nadie ha tocado todavía.
  */
-function textoDe(total, hechas, esperando) {
+function textoDe(total, hechas, esperando, rechazadas = 0) {
   if (!total) return 'Sin repasar';
-  if (hechas === total) return 'Todo validado';
-  const abiertas = total - hechas - esperando;
+  if (hechas === total) return 'Todo verificado';
+  const pendientes = total - hechas - esperando - rechazadas;
   const partes = [];
-  if (esperando) partes.push(`${esperando} por validar`);
-  if (abiertas) partes.push(`${abiertas} ${abiertas === 1 ? 'abierta' : 'abiertas'}`);
+  if (esperando) partes.push(`${esperando} por verificar`);
+  if (rechazadas) partes.push(`${rechazadas} ${rechazadas === 1 ? 'rechazada' : 'rechazadas'}`);
+  if (pendientes) partes.push(`${pendientes} ${pendientes === 1 ? 'pendiente' : 'pendientes'}`);
   return partes.join(' · ');
 }
 
@@ -148,7 +153,10 @@ function textoDe(total, hechas, esperando) {
  * que cumplen, y una vivienda sin tareas no cumple ninguna de las dos.
  */
 function encaja(r, estado, oficioId) {
-  const vacio = { total: 0, hechas: 0, pendientes: 0, esperando: 0, oficios: new Set(), oficiosAbiertos: new Set() };
+  const vacio = {
+    total: 0, hechas: 0, pendientes: 0, esperando: 0, rechazadas: 0,
+    oficios: new Set(), oficiosAbiertos: new Set(),
+  };
   const c = r || vacio;
   if (!store.encajaEstado(c, estado)) return false;
   if (oficioId !== 'todos' && !store.oficiosSegun(c, estado).has(oficioId)) return false;

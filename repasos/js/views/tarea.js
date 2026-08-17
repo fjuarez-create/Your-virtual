@@ -1,7 +1,9 @@
 /* Detalle de una tarea: la foto en grande, el texto completo y el resto
    de material de apoyo (más fotos, vídeo y notas de voz). */
 import { h, icon, sheet, toast, confirmSheet, openViewer, fechaCorta, hora, pesoLegible } from '../ui.js';
-import { ESTADOS, estado, unidad, estadosPermitidos } from '../catalog.js';
+import {
+  ESTADOS, ZONAS, OFICIOS, estado, oficio, unidad, estadosPermitidos, rebotada,
+} from '../catalog.js';
 import * as store from '../store.js';
 import * as media from '../media.js';
 import { cabecera } from '../piezas.js';
@@ -97,11 +99,15 @@ export async function render({ listaId, tareaId }) {
     }, op.nombre)),
   );
 
-  if (permitidos.length < ESTADOS.length) {
+  // Los estados que este usuario no puede poner salen igual, apagados.
+  // Esconderlos dejaría al jefe de obra sin ver dónde acaba su trabajo y
+  // dónde empieza el nuestro; verlos y no poder pulsarlos lo explica solo.
+  for (const op of ESTADOS.filter((x) => !permitidos.some((p) => p.id === x.id))) {
     chipsEstado.append(h('span.chip', {
+      'aria-pressed': t.estado === op.id ? 'true' : 'false',
       style: { opacity: '.45', pointerEvents: 'none' },
-      title: 'Solo la dirección facultativa y UNIK pueden validar',
-    }, 'Validada'));
+      title: 'Solo la dirección facultativa y UNIK verifican y rechazan',
+    }, op.nombre));
   }
 
   const e = estado(t.estado);
@@ -120,7 +126,7 @@ export async function render({ listaId, tareaId }) {
         },
       ),
 
-      t.rechazada ? avisoRechazo(comentarios) : null,
+      rebotada(t) ? avisoRechazo(comentarios) : null,
 
       hero,
       rail,
@@ -133,6 +139,21 @@ export async function render({ listaId, tareaId }) {
         h('p', {
           style: { fontSize: '16px', lineHeight: '1.5', letterSpacing: '-0.005em', marginTop: '6px', whiteSpace: 'pre-wrap' },
         }, t.texto || 'Sin descripción.'),
+      ),
+
+      // Gremio y estancia juntos: son las dos cosas que sitúan la tarea
+      // —quién la arregla y dónde está— y se leen de un golpe.
+      h('div', { style: { marginTop: '18px' } },
+        h('div.topbar', null,
+          h('div.grow', null, h('p.eyebrow', null, 'Gremio y estancia')),
+          h('button.tag', { onclick: () => editarEstancia(t) }, 'Cambiar'),
+        ),
+        h('div.chips', { style: { marginTop: '8px' } },
+          h('span.tag', null, oficio(t.oficio).nombre),
+          t.zona
+            ? h('span.tag', null, t.zona)
+            : h('span.tag', { style: { opacity: '.55' } }, 'Sin estancia'),
+        ),
       ),
 
       h('div', { style: { marginTop: '20px' } },
@@ -208,26 +229,26 @@ function navegacionHermanas(hermanas, indice, listaId) {
 
 /* ─── Rechazo e hilo ──────────────────────────────────────────── */
 /**
- * Cambia el estado. Devolver a pendiente algo que estaba resuelto no se
- * puede hacer en silencio: quien lo hace tiene que explicar por qué, y
- * puede adjuntar una foto de cómo está la cosa. Eso queda en el hilo y
- * el constructor lo ve nada más abrir la tarea.
+ * Cambia el estado. Rechazar no se puede hacer en silencio: quien lo hace
+ * tiene que explicar por qué, y puede adjuntar una foto de cómo está la
+ * cosa. Eso queda en el hilo y el constructor lo ve nada más abrir la
+ * tarea. Los motivos no se pisan: si rebota tres veces, quedan los tres.
  */
 async function cambiarEstadoTarea(t, nuevo) {
   if (t.estado === nuevo) return;
 
-  if (store.exigeExplicacion(t, nuevo)) {
-    const nota = await hojaRechazo(t);
-    if (!nota) return;
-    await store.cambiarEstado(t.id, nuevo, nota);
-    toast('Devuelta a abierta');
-    return refrescar();
-  }
-
   try {
+    if (store.exigeExplicacion(t, nuevo)) {
+      const nota = await hojaRechazo(t);
+      if (!nota) return;
+      await store.cambiarEstado(t.id, nuevo, nota);
+      toast('Rechazada. La constructora la verá arriba del todo');
+      return refrescar();
+    }
+
     await store.cambiarEstado(t.id, nuevo);
     // El nombre visible, no el identificador: al usuario «resuelta» no
-    // le dice nada, porque en pantalla eso se llama «Revisar».
+    // le dice nada, porque en pantalla eso se llama «Completada».
     toast('Marcada como ' + estado(nuevo).nombre.toLowerCase());
     refrescar();
   } catch (e) {
@@ -271,8 +292,8 @@ function hojaRechazo(t) {
     setTimeout(() => area.focus(), 320);
 
     return [
-      h('h2.title', null, 'Devolver a pendiente'),
-      h('p.sub', null, 'Esta tarea estaba dada por resuelta. Explica por qué la rechazas: quien la resolvió verá el aviso y tu explicación.'),
+      h('h2.title', null, 'Rechazar la tarea'),
+      h('p.sub', null, 'Explica qué sigue mal: quien la dio por completada verá el aviso y tu explicación, y tendrá que volver a completarla.'),
       area,
       previa,
       adjuntar,
@@ -288,22 +309,32 @@ function hojaRechazo(t) {
           }
           cerrar({ texto, imagen });
         },
-      }, 'Rechazar y devolver a pendiente'),
+      }, 'Rechazar'),
       h('button.btn.ghost.full', { onclick: () => cerrar(null) }, 'Cancelar'),
     ];
   });
 }
 
-/** Banda de aviso cuando la tarea viene rechazada. */
+/**
+ * Banda de aviso cuando la tarea viene rechazada.
+ *
+ * Manda el último motivo, que es lo que hay que arreglar ahora. Los
+ * anteriores no se pierden: siguen abajo, en el hilo. Cuando hay más de
+ * uno se dice cuántos, porque una tarea que ha rebotado tres veces es un
+ * problema distinto de una que rebotó una.
+ */
 function avisoRechazo(comentarios) {
-  const ultimo = [...comentarios].reverse().find((c) => c.tipo === 'rechazo');
+  const rechazos = comentarios.filter((c) => c.tipo === 'rechazo');
+  const ultimo = rechazos[rechazos.length - 1];
   return h('div.alerta', null,
     h('div.alerta-ico', null, icon('rechazo', 20)),
     h('div.grow', null,
-      h('p.alerta-titulo', null, 'Rechazada'),
+      h('p.alerta-titulo', null, rechazos.length > 1
+        ? `Rechazada · ${rechazos.length} veces`
+        : 'Rechazada'),
       h('p.alerta-texto', null, ultimo
-        ? `${ultimo.creadoPorNombre} la devolvió a pendiente: «${ultimo.texto}»`
-        : 'Se devolvió a pendiente tras darse por resuelta.'),
+        ? `${ultimo.creadoPorNombre}: «${ultimo.texto}»`
+        : 'Se rechazó tras darse por completada.'),
     ),
   );
 }
@@ -387,6 +418,58 @@ function editarTexto(t) {
           await store.actualizarTarea(t.id, { texto: area.value.trim() });
           cerrar(true);
           toast('Texto actualizado');
+          refrescar();
+        },
+      }, 'Guardar'),
+      h('button.btn.ghost.full', { onclick: () => cerrar(false) }, 'Cancelar'),
+    ];
+  });
+}
+
+/**
+ * Gremio y estancia en la misma hoja: se corrigen juntos porque los dos
+ * se ponen al vuelo mientras se anda por la casa, y equivocarse en uno
+ * suele ir con equivocarse en el otro.
+ *
+ * El gremio no se puede dejar vacío —de él tiran los filtros— y la
+ * estancia sí: se quita volviendo a tocar el chip que está puesto.
+ */
+function editarEstancia(t) {
+  return sheet((cerrar) => {
+    let gremio = t.oficio || OFICIOS[0].id;
+    let zona = t.zona || '';
+
+    const marcar = (caja, valor) => [...caja.children].forEach((c) =>
+      c.setAttribute('aria-pressed', c.dataset.v === valor && valor ? 'true' : 'false'));
+
+    const gremios = h('div.chips.filtro', null,
+      ...OFICIOS.map((o) => h('button.chip.accent', {
+        'data-v': o.id,
+        'aria-pressed': gremio === o.id ? 'true' : 'false',
+        onclick: () => { gremio = o.id; marcar(gremios, gremio); },
+      }, o.corto)),
+    );
+
+    const estancias = h('div.chips.filtro', null,
+      ...ZONAS.map((z) => h('button.chip.accent', {
+        'data-v': z,
+        'aria-pressed': zona === z ? 'true' : 'false',
+        onclick: () => { zona = zona === z ? '' : z; marcar(estancias, zona); },
+      }, z)),
+    );
+
+    return [
+      h('h2.title', null, 'Gremio y estancia'),
+      h('p.eyebrow', { style: { marginTop: '10px' } }, 'Gremio'),
+      gremios,
+      h('p.eyebrow', { style: { marginTop: '14px' } }, 'Estancia · opcional'),
+      estancias,
+      h('button.btn.accent.full', {
+        style: { marginTop: '14px' },
+        onclick: async () => {
+          await store.actualizarTarea(t.id, { oficio: gremio, zona });
+          cerrar(true);
+          toast(zona ? `Guardado · ${zona}` : 'Guardado');
           refrescar();
         },
       }, 'Guardar'),
