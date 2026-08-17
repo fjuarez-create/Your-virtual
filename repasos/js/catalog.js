@@ -167,22 +167,32 @@ export const enObra = (t) => t?.estado === 'pendiente' || t?.estado === 'rechaza
  * invisibles al filtrar y sin nombre en el informe. Al leer código,
  * fíjate en el id; al leer pantalla, en el nombre.
  */
+/*
+ * `empresa` es quién lleva ese gremio en Brassie. Como mucho una, y
+ * puede quedarse vacía: hay gremios que todavía no están adjudicados y
+ * uno sin empresa tiene que verse bien igual.
+ *
+ * `imagen` es el fichero de assets/gremios/. Sin él, la pantalla dibuja
+ * la inicial del gremio sobre un fondo de color, así que no falta nada
+ * mientras las fotos no estén puestas: se ven distintas entre sí y se
+ * reconocen. Las definitivas salen del propio Figma.
+ */
 export const OFICIOS = [
-  { id: 'general', nombre: 'General', corto: 'General' },
-  { id: 'aire', nombre: 'Aire acondicionado', corto: 'Aire' },
-  { id: 'carp-aluminio', nombre: 'Aluminio', corto: 'Aluminio' },
-  { id: 'barandillas', nombre: 'Barandillas', corto: 'Barandillas' },
-  { id: 'barandillas-vidrio', nombre: 'Barandillas de vidrio', corto: 'Barandillas vidrio' },
-  { id: 'cocinas', nombre: 'Cocinas', corto: 'Cocinas' },
-  { id: 'electricidad', nombre: 'Electricidad', corto: 'Electricidad' },
-  { id: 'fachada', nombre: 'Fachada', corto: 'Fachada' },
-  { id: 'fontaneria', nombre: 'Fontanería', corto: 'Fontanería' },
-  { id: 'jardines', nombre: 'Jardines', corto: 'Jardines' },
-  { id: 'pavimentos', nombre: 'Pavimentos', corto: 'Pavimentos' },
-  { id: 'pintura', nombre: 'Pintura', corto: 'Pintura' },
-  { id: 'piscinas', nombre: 'Piscinas', corto: 'Piscinas' },
-  { id: 'pladur', nombre: 'Pladur', corto: 'Pladur' },
-  { id: 'carp-madera', nombre: 'Puertas y rodapiés', corto: 'Puertas y rodapiés' },
+  { id: 'general', nombre: 'General', corto: 'General', empresa: '', imagen: '' },
+  { id: 'aire', nombre: 'Aire acondicionado', corto: 'Aire', empresa: '', imagen: '' },
+  { id: 'carp-aluminio', nombre: 'Aluminio', corto: 'Aluminio', empresa: '', imagen: '' },
+  { id: 'barandillas', nombre: 'Barandillas', corto: 'Barandillas', empresa: '', imagen: '' },
+  { id: 'barandillas-vidrio', nombre: 'Barandillas de vidrio', corto: 'Barandillas vidrio', empresa: '', imagen: '' },
+  { id: 'cocinas', nombre: 'Cocinas', corto: 'Cocinas', empresa: '', imagen: '' },
+  { id: 'electricidad', nombre: 'Electricidad', corto: 'Electricidad', empresa: '', imagen: '' },
+  { id: 'fachada', nombre: 'Fachada', corto: 'Fachada', empresa: '', imagen: '' },
+  { id: 'fontaneria', nombre: 'Fontanería', corto: 'Fontanería', empresa: '', imagen: '' },
+  { id: 'jardines', nombre: 'Jardines', corto: 'Jardines', empresa: '', imagen: '' },
+  { id: 'pavimentos', nombre: 'Pavimentos', corto: 'Pavimentos', empresa: '', imagen: '' },
+  { id: 'pintura', nombre: 'Pintura', corto: 'Pintura', empresa: '', imagen: '' },
+  { id: 'piscinas', nombre: 'Piscinas', corto: 'Piscinas', empresa: '', imagen: '' },
+  { id: 'pladur', nombre: 'Pladur', corto: 'Pladur', empresa: '', imagen: '' },
+  { id: 'carp-madera', nombre: 'Puertas y rodapiés', corto: 'Puertas y rodapiés', empresa: '', imagen: '' },
 ];
 
 /** El que llevan las tareas creadas antes de que existiera el campo. */
@@ -190,6 +200,12 @@ export const OFICIO_POR_DEFECTO = 'general';
 
 export function oficio(id) {
   return OFICIOS.find((o) => o.id === id) || OFICIOS[0];
+}
+
+/** Dónde vive la foto de un gremio, o '' si todavía no tiene. */
+export function imagenDeOficio(id) {
+  const o = oficio(id);
+  return o.imagen ? `assets/gremios/${o.imagen}` : '';
 }
 
 export function estado(id) {

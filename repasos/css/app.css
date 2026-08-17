@@ -588,6 +588,20 @@ button.avatar:active { transform: scale(0.92); }
 .btn.pdf { background: var(--rojo); color: #fff; }
 .btn.pdf:active { filter: brightness(0.94); }
 .tag.rojo { background: var(--rojo-soft); color: var(--rojo); }
+/* ─── Gremios ──────────────────────────────────────────────────
+   Cada uno con su imagen y la empresa que lo lleva. Con quince
+   nombres seguidos y nada más, encontrar el tuyo era leerlos todos;
+   la foto y la empresa dan dos asideros más. */
+.stack.gremios { gap: 6px; max-height: 58vh; overflow-y: auto; }
+.row.gremio { padding: 8px 14px 8px 8px; }
+.row.gremio[aria-pressed='true'] { box-shadow: inset 0 0 0 1.5px var(--ink); }
+.gremio-cara {
+  border-radius: 12px; overflow: hidden;
+  background: var(--surface-2) center / cover no-repeat;
+  display: grid; place-items: center;
+  font-size: 15px; font-weight: 800; letter-spacing: -0.02em;
+}
+
 /* Chips con la cara de cada persona que tiene trabajo sin verificar en
    una casa. Filtran por quién. La cara delante del nombre y no al revés
    porque en obra se reconoce antes una cara que un nombre de pila, y

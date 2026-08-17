@@ -9,7 +9,9 @@ import {
 import * as media from './media.js';
 import * as store from './store.js';
 import * as api from './api.js';
-import { unidad, oficio, estado, rebotada, ESTADOS, OFICIOS, ZONAS } from './catalog.js';
+import {
+  unidad, oficio, estado, rebotada, imagenDeOficio, ESTADOS, OFICIOS, ZONAS,
+} from './catalog.js';
 import { ir, conFiltros } from './app.js';
 
 /* Medidas de la cabecera, en un sitio para que las dos —la de las
@@ -412,24 +414,58 @@ export function filtroOficio(alCambiar, inicial = 'todos') {
  */
 export function hojaOficios(actual, { conTodos = false } = {}) {
   return sheet((cerrar) => [
-    // Los mismos chips que los filtros, fluyendo: caben los que quepan
-    // en cada línea, dos, tres o cuatro según lo largo de la palabra. Una
-    // rejilla de dos columnas obligaba a «Carp. aluminio» y a «Cocinas»
-    // a medir lo mismo, con la mitad del aire de sobra en la corta.
-    h('div.chips.filtro.envuelve', null,
-      ...OFICIOS.map((o) => h('button.chip.accent', {
+    h('h2.title', null, 'Gremio'),
+    // Una fila por gremio, con su imagen y la empresa que lo lleva. Antes
+    // eran chips a secas, y con quince nombres seguidos y sin nada más,
+    // encontrar el tuyo era leerlos todos. La foto y la empresa dan dos
+    // asideros más: se reconoce «los de la piscina» sin leer la palabra.
+    h('div.stack.gremios', { style: { marginTop: '12px' } },
+      ...OFICIOS.map((o) => h('button.row.gremio', {
         'aria-pressed': actual === o.id ? 'true' : 'false',
         onclick: () => cerrar(o.id),
-      }, o.corto)),
-      // «Todos los oficios» no está en la lista: es el texto de reposo
-      // del selector, no un oficio. Pero si hay uno puesto hace falta
-      // una salida, y esta solo aparece entonces.
-      conTodos && actual !== 'todos' ? h('button.chip.quitar', {
-        onclick: () => cerrar('todos'),
-      }, 'Quitar filtro') : null,
+      },
+        caraDeGremio(o),
+        h('div.grow', null,
+          h('div.row-title', null, o.nombre),
+          // Sin empresa asignada no se escribe nada: un «sin empresa» en
+          // gris debajo de cada gremio sería quince veces la misma
+          // disculpa por algo que no hace falta para trabajar.
+          o.empresa ? h('div.row-sub', null, o.empresa) : null,
+        ),
+        actual === o.id ? icon('check', 18) : null,
+      )),
     ),
+    // «Todos los oficios» no está en la lista: es el texto de reposo del
+    // selector, no un oficio. Pero si hay uno puesto hace falta una
+    // salida, y esta solo aparece entonces.
+    conTodos && actual !== 'todos'
+      ? h('button.btn.ghost.full', { onclick: () => cerrar('todos') }, 'Quitar el filtro')
+      : null,
     ctaCancelar(() => cerrar(null)),
   ]);
+}
+
+/**
+ * La cara de un gremio. Si todavía no hay foto, la inicial sobre un
+ * color sacado de su propio identificador: se ven distintos entre sí y
+ * se reconocen por sitio, que es el 90% de lo que hace la foto. Así la
+ * pantalla está terminada aunque las imágenes lleguen después.
+ */
+export function caraDeGremio(o, tam = 40) {
+  const ruta = imagenDeOficio(o.id);
+  const caja = h('div.gremio-cara', {
+    style: { width: tam + 'px', height: tam + 'px', flex: `0 0 ${tam}px` },
+  });
+  if (ruta) {
+    caja.style.backgroundImage = `url("${ruta}")`;
+    return caja;
+  }
+  let n = 0;
+  for (let i = 0; i < o.id.length; i++) n = (n * 31 + o.id.charCodeAt(i)) >>> 0;
+  caja.style.background = `hsl(${n % 360} 24% 82%)`;
+  caja.style.color = `hsl(${n % 360} 40% 26%)`;
+  caja.append(h('span', null, (o.nombre || '?').trim()[0].toUpperCase()));
+  return caja;
 }
 
 /**
