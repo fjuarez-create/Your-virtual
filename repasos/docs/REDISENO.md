@@ -234,6 +234,19 @@ Se mantiene tal cual está construido, y **se le añade PAUSAR**: hoy, si
 paras, se acaba. Alguien que graba mientras anda por una villa recibe
 una llamada, y sin pausa pierde el recorrido entero.
 
+El rato en pausa **no cuenta ni se graba**, y eso no es cosmética:
+`MediaRecorder` deja de escribir audio al pausar, así que si el reloj
+siguiera corriendo, una marca hecha tras cinco minutos de pausa diría
+«minuto 8» sobre una grabación de tres, y darle al play para oír lo que
+se dijo ahí llevaría más allá del final. El tope de diez minutos cuenta
+lo mismo: lo grabado, no lo que duró el paseo.
+
+**Irse de la app pausa, no termina.** Antes terminaba, y era lo correcto
+mientras no había pausa. Al volver se comprueba si el grabador ha
+sobrevivido —Safari corta el micrófono en segundo plano sin avisar— y si
+no, se cierra el recorrido con lo grabado, igual que antes, pero cuando
+ya se sabe que se ha roto y no por si acaso.
+
 Lo demás del diseño coincide con lo construido —tocar en cualquier sitio
 de la pantalla saca un fotograma, menos en el botón del cerebro; la caja
 de descripción tiene el alto justo de lo escrito— salvo tres cosas:

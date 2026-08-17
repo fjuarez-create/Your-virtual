@@ -1303,6 +1303,20 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 }
 @keyframes latido { 50% { opacity: 0.25; } }
 .rec-crono { font-size: 16px; font-weight: 700; letter-spacing: -0.02em; }
+
+/* En pausa. El punto rojo deja de latir y se queda gris —lo que late es
+   «esto está grabando», y en pausa no lo está—, y la imagen se apaga a
+   medias para que se vea desde el otro lado de la habitación que ahí no
+   se está guardando nada. */
+.rec-barra.pausado .rec-punto { background: var(--muted); animation: none; }
+.rec-barra.pausado .rec-crono { color: var(--muted-oscuro); }
+.rec-visor.pausado .rec-video { filter: grayscale(1) brightness(.55); }
+.rec-visor.pausado::after {
+  content: 'EN PAUSA · toca para seguir';
+  position: absolute; inset: auto 0 0 0; padding: 12px;
+  text-align: center; color: #fff; font-size: 12.5px; font-weight: 800;
+  letter-spacing: 0.08em; background: linear-gradient(transparent, rgba(17, 17, 18, .72));
+}
 .rec-marcas {
   display: flex; align-items: center; gap: 6px; flex: none;
   font-size: 14px; font-weight: 700; color: var(--muted-oscuro);

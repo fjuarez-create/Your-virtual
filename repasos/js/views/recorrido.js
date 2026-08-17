@@ -158,12 +158,27 @@ export async function render({ promoId, unidadId }) {
     const tira = h('div.rec-tira');
     const visor = h('div.rec-visor');
     const destello = h('div.rec-destello');
+    const barra = h('div.rec-barra', null,
+      h('div.rec-estado', null, h('span.rec-punto'), crono),
+      h('div.grow', null, tira),
+      h('div.rec-marcas', null, icon('camera', 15), cuenta),
+    );
+    const pista = h('p.hint.center', { style: { marginTop: '2px' } },
+      'Toca la imagen cuando veas algo');
 
     try {
       mando = await grabadora.empezar({
-        alAvisar: ({ segundos, marcas }) => {
+        alAvisar: ({ segundos, marcas, pausado }) => {
           crono.textContent = grabadora.reloj(segundos);
           cuenta.textContent = String(marcas);
+          visor.classList.toggle('pausado', !!pausado);
+          barra.classList.toggle('pausado', !!pausado);
+          // La pista de abajo dice lo contrario según el momento, y en
+          // pausa la buena es la de reanudar: pedir que marque algo
+          // cuando marcar no hace nada es la peor de las dos.
+          pista.textContent = pausado
+            ? 'En pausa. Toca la imagen para seguir grabando'
+            : 'Toca la imagen cuando veas algo';
         },
         alTope: () => toast('Diez minutos: se corta aquí'),
       });
@@ -180,6 +195,7 @@ export async function render({ promoId, unidadId }) {
     // Toda la imagen es el botón de marcar: en obra, con guantes, no se
     // acierta a un botón pequeño mientras andas.
     visor.addEventListener('click', async () => {
+      if (mando?.pausado) { reanudar(); return; }
       const marca = await mando.marcar();
       if (!marca) return;
       destello.classList.remove('on');
@@ -195,15 +211,11 @@ export async function render({ promoId, unidadId }) {
 
     lienzo.replaceChildren(
       visor,
-      h('div.rec-barra', null,
-        h('div.rec-estado', null, h('span.rec-punto'), crono),
-        h('div.grow', null, tira),
-        h('div.rec-marcas', null, icon('camera', 15), cuenta),
-      ),
+      barra,
       h('div.rec-botones', null,
-        h('button.rec-parar', { onclick: () => terminar() }, h('span.rec-cuadro')),
+        h('button.rec-parar', { onclick: () => menuGrabando() }, h('span.rec-cuadro')),
       ),
-      h('p.hint.center', { style: { marginTop: '2px' } }, 'Toca la imagen cuando veas algo'),
+      pista,
     );
     // Mientras se graba, el titular sobra: se sujeta el móvil en alto y
     // lo único que importa es ver bien lo que enfoca la cámara.
@@ -217,8 +229,84 @@ export async function render({ promoId, unidadId }) {
     document.addEventListener('visibilitychange', alTapar);
   };
 
+  /**
+   * El menú del botón de parar: las tres salidas del diseño.
+   *
+   * Se graba mientras el menú está abierto, y por eso la «X» dice
+   * «Seguir grabando» en vez de solo cerrar: el recorrido no se ha
+   * interrumpido, así que decirlo evita el susto de creer que sí.
+   */
+  const menuGrabando = async () => {
+    if (!mando) return;
+    const enPausa = mando.pausado;
+    const accion = await sheet((cerrar) => [
+      h('h2.title', null, enPausa ? 'Recorrido en pausa' : 'Recorrido en marcha'),
+      h('p.sub', null, enPausa
+        ? 'La grabación está parada. El rato en pausa no cuenta ni se graba.'
+        : 'Sigues grabando mientras esto está abierto.'),
+      h('div.stack', { style: { marginTop: '14px' } },
+        h('button.row', { onclick: () => cerrar('fin') },
+          h('div.row-lead', null, icon('check', 18)),
+          h('div.grow', null,
+            h('div.row-title', null, 'Finalizar el recorrido'),
+            h('div.row-sub', null, 'Pasa a escribir las tareas'),
+          ),
+        ),
+        h('button.row', { onclick: () => cerrar(enPausa ? 'sigue' : 'pausa') },
+          h('div.row-lead', null, icon(enPausa ? 'play' : 'stop', 18)),
+          h('div.grow', null,
+            h('div.row-title', null, enPausa ? 'Reanudar' : 'Pausar'),
+            h('div.row-sub', null, enPausa
+              ? 'Vuelve a grabar donde lo dejaste'
+              : 'Para atender una llamada sin perder el paseo'),
+          ),
+        ),
+      ),
+      h('button.btn.ghost.full', { onclick: () => cerrar(null) },
+        enPausa ? 'Dejarlo en pausa' : 'Seguir grabando'),
+    ]);
+
+    if (accion === 'fin') return terminar();
+    if (accion === 'pausa') return pausar();
+    if (accion === 'sigue') return reanudar();
+  };
+
+  const pausar = () => {
+    if (!mando?.pausar()) return;
+    toast('En pausa. Toca la imagen para seguir');
+  };
+
+  /**
+   * Reanudar puede fallar, y ahí es donde importa. Safari corta el
+   * micrófono al irse la app a segundo plano y no avisa: el grabador se
+   * queda muerto por su cuenta. Si no se puede reanudar, se cierra el
+   * recorrido con lo que haya en vez de enseñar un cronómetro que corre
+   * sobre silencio, que es lo peor que podría pasar aquí.
+   */
+  const reanudar = () => {
+    if (!mando) return;
+    if (mando.reanudar()) { toast('Seguimos'); return; }
+    toast('El móvil ha cortado el micrófono. Se cierra el recorrido con lo grabado.', 'err');
+    terminar();
+  };
+
+  /**
+   * Irse de la app pausa, no termina.
+   *
+   * Antes terminaba, y era lo correcto mientras no hubiera pausa: seguir
+   * «grabando» silencio es peor que cortar. Ahora se pausa, que es lo
+   * que quiere alguien a quien le entra una llamada a mitad de una
+   * villa, y al volver se comprueba si el grabador ha sobrevivido. Si
+   * no, se cierra el recorrido igual que antes —pero cuando ya se sabe
+   * que se ha roto, no por si acaso.
+   */
   const alTapar = () => {
-    if (document.visibilityState === 'hidden' && mando) terminar();
+    if (!mando) return;
+    if (document.visibilityState === 'hidden') { mando.pausar(); return; }
+    if (!mando.vivo()) {
+      toast('El móvil ha cortado el micrófono. Se cierra el recorrido con lo grabado.', 'err');
+      terminar();
+    }
   };
 
   const terminar = async () => {

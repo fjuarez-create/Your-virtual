@@ -119,6 +119,22 @@ export async function empezar({ alAvisar, alTope } = {}) {
   let parado = false;
   let candado = null;
 
+  /**
+   * Pausa.
+   *
+   * El reloj no cuenta el rato en pausa, y no es un detalle de
+   * presentación: `MediaRecorder.pause()` deja de escribir audio, así
+   * que si los segundos siguieran corriendo, una marca hecha después de
+   * una pausa de cinco minutos diría «minuto 8» sobre una grabación de
+   * tres, y darle al play para oír lo que se dijo en esa marca llevaría
+   * más allá del final. El tope de diez minutos cuenta lo mismo: lo
+   * grabado, no lo que duró el paseo.
+   */
+  let pausado = false;
+  let pausaDesde = 0;
+  let pausadoTotal = 0;
+  const enPausa = () => (pausado ? Date.now() - pausaDesde : 0);
+
   // Que no se apague la pantalla: en iOS, bloquearla corta la
   // grabación, y andando por una casa se tarda un minuto largo entre
   // toque y toque.
@@ -126,17 +142,19 @@ export async function empezar({ alAvisar, alTope } = {}) {
 
   rec.start(1000);   // troceado por segundos: si algo casca, se pierde uno
 
-  const transcurrido = () => Math.round((Date.now() - t0) / 1000);
+  const transcurrido = () => Math.round((Date.now() - t0 - pausadoTotal - enPausa()) / 1000);
   const aviso = setInterval(() => {
     if (parado) return;
-    alAvisar?.({ segundos: transcurrido(), marcas: marcas.length });
-    if (transcurrido() >= TOPE_SEGUNDOS) { alTope?.(); mando.parar(); }
+    alAvisar?.({ segundos: transcurrido(), marcas: marcas.length, pausado });
+    if (!pausado && transcurrido() >= TOPE_SEGUNDOS) { alTope?.(); mando.parar(); }
   }, 250);
 
   /** Congela el instante: tres fotogramas y nos quedamos con el mejor. */
   async function marcar() {
-    if (parado) return null;
-    const ms = Date.now() - t0;
+    // En pausa no se marca: la foto se guardaría con un minuto que no
+    // existe en el audio, y quien luego le diera al play oiría otra cosa.
+    if (parado || pausado) return null;
+    const ms = transcurrido() * 1000;
     const ancho = video.videoWidth || 1280;
     const alto = video.videoHeight || 720;
     const escala = Math.min(1, LADO_MAX / Math.max(ancho, alto));
@@ -166,10 +184,44 @@ export async function empezar({ alAvisar, alTope } = {}) {
     marcas,
     marcar,
     get segundos() { return transcurrido(); },
+    get pausado() { return pausado; },
+
+    /**
+     * ¿Sigue vivo el grabador?
+     *
+     * Safari corta el micrófono cuando la app se va a segundo plano y no
+     * avisa: el objeto se queda en `inactive` por su cuenta. Preguntarlo
+     * al volver es la diferencia entre reanudar de verdad y seguir
+     * enseñando un cronómetro que no graba nada.
+     */
+    vivo() { return !parado && rec.state !== 'inactive'; },
+
+    /** Deja de grabar sin cerrar nada. La cámara se sigue viendo. */
+    pausar() {
+      if (parado || pausado) return false;
+      try { rec.pause(); } catch { return false; }
+      pausado = true;
+      pausaDesde = Date.now();
+      alAvisar?.({ segundos: transcurrido(), marcas: marcas.length, pausado: true });
+      return true;
+    },
+
+    /** Vuelve a grabar. Devuelve false si el grabador ya no está vivo. */
+    reanudar() {
+      if (parado || !pausado) return false;
+      if (rec.state === 'inactive') return false;
+      try { rec.resume(); } catch { return false; }
+      pausadoTotal += Date.now() - pausaDesde;
+      pausado = false;
+      alAvisar?.({ segundos: transcurrido(), marcas: marcas.length, pausado: false });
+      return true;
+    },
 
     /** Corta, suelta cámara y micrófono y devuelve lo capturado. */
     async parar() {
       if (parado) return null;
+      // Si se para estando en pausa, ese rato no cuenta como grabado.
+      if (pausado) { pausadoTotal += Date.now() - pausaDesde; pausado = false; }
       parado = true;
       clearInterval(aviso);
       const fin = new Promise((r) => { rec.onstop = r; });
