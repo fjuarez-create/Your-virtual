@@ -257,5 +257,9 @@ Veinte tareas sueltas cuestan bastante más que un recorrido de veinte.
 
 ## Lo que sigue abierto
 
-- La lista de estancias trae **«baño principal» dos veces**. Se ha dejado
-  una; falta saber si la segunda quería ser otra estancia.
+Nada. Las treinta y dos notas del diseño están leídas y todas las
+preguntas que salieron de ellas están decididas arriba.
+
+Lo que falta para poder implementar no son decisiones, son datos: **qué
+empresa lleva cada gremio** (el campo admite quedarse vacío) y **bajar
+del Figma las quince imágenes** de los gremios.
