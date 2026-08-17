@@ -13,33 +13,6 @@ import { ir, refrescar } from '../app.js';
 export async function render() {
   const u = store.sesion();
   const ocupacion = await espacioUsado();
-
-  const filas = [];
-
-  if (api.HAY_SERVIDOR && !u.local) {
-    filas.push(fila('user', u.avatar ? 'Cambiar mi foto' : 'Poner una foto',
-      'Si no hay foto se ven tus iniciales', async () => {
-        if (await hojaFoto(u)) { await store.refrescarSesion(); refrescar(); }
-      }));
-    filas.push(fila('key', 'Cambiar mi contraseña', null, () => cambiarPassword()));
-  }
-
-  // La IA al crear tareas de una en una. Es una preferencia de cada
-  // uno y no del administrador: la enciende o la apaga quien crea las
-  // tareas, que es quien nota si le ayuda o le estorba.
-  if (api.HAY_SERVIDOR) {
-    filas.push(interruptor(
-      'edit',
-      'Que la IA proponga el texto',
-      'Al crear una tarea desde una foto o la galería',
-      usaIA(u),
-      (valor) => { ponerUsaIA(u, valor); },
-    ));
-  }
-  if (store.esAdmin() && api.HAY_SERVIDOR && !u.local) {
-    filas.push(fila('users', 'Usuarios', 'Alta y baja del equipo', () => ir('#/usuarios')));
-  }
-
   const admin = store.esAdmin();
   const hayEjemplos = admin ? await ejemplos.cuantos() : 0;
 
@@ -53,97 +26,102 @@ export async function render() {
     try { oido = await api.oidoEstado(); } catch { oido = { puesta: false, final: '' }; }
   }
 
-  return {
-    // Quien administra tiene su pestaña; el resto llega por la bolita
-    // de la esquina, así que aquí necesita la flecha de vuelta.
-    tab: admin ? 'ajustes' : undefined,
-    sinTabs: !admin,
-    contenido: [
-      // Para quien administra es una pestaña y no hay atrás; para el
-      // resto se llega desde su bolita de cuenta, y ahí sí hay vuelta.
-      ...(admin ? cabeceraTab('AJUSTES') : cabeceraDentro('AJUSTES', { volverA: '#/' })),
+  /** Una fila de tarjeta: icono, rótulo, detalle y lo que haya a la derecha. */
+  const item = (ico, rotulo, sub, onclick, { derecha = null, rojo = false } = {}) =>
+    h(onclick ? 'button.d-item' : 'div.d-item', { class: rojo ? 'rojo' : '', onclick },
+      icon(ico, 22),
+      h('span.grow', null, rotulo, sub ? h('span.d-item-sub', null, sub) : null),
+      derecha !== null ? derecha : (onclick ? chevron() : null),
+    );
 
-      // Tarjeta de cuenta, con el mismo aire que el perfil de la referencia.
-      h('div', { style: { display: 'flex', alignItems: 'center', gap: '14px', margin: '22px 0 6px' } },
-        avatar(u, { tam: 64 }),
+  /** El interruptor de la IA, con la palanca del diseño. */
+  const casillaIA = h('input', { type: 'checkbox', role: 'switch', checked: usaIA(u) || null });
+  casillaIA.addEventListener('change', () => ponerUsaIA(u, casillaIA.checked));
+
+  return {
+    sinTabs: true,
+    clase: 'pantalla-diseno',
+    contenido: [
+      // La cabecera de la plantilla: flecha en bola blanca, título en
+      // el centro y la propia cara a la derecha, quieta, para saber de
+      // quién son estos ajustes.
+      h('div.d-cab-dentro', null,
+        h('button.d-bola', { 'aria-label': 'Volver', onclick: () => ir('#/') }, icon('arrowLeft')),
+        h('span.d-titulo', null, 'Ajustes'),
+        avatar(u, { tam: 54 }),
+      ),
+
+      // Quién eres. La plantilla no lo trae, pero en una app con diez
+      // usuarios que comparten móviles de obra, verlo evita sustos.
+      h('div', { style: { display: 'flex', alignItems: 'center', gap: '14px', margin: '18px 2px 4px' } },
+        avatar(u, { tam: 56 }),
         h('div.grow', { style: { minWidth: 0 } },
-          h('h2.title', null, u?.nombre || 'Sin identificar'),
-          h('p.sub', null, u?.email || (u?.local ? 'Modo local' : '')),
+          h('div', { style: { fontSize: '18px', fontWeight: '500' } }, u?.nombre || 'Sin identificar'),
+          h('div', { style: { fontSize: '14px', color: 'var(--d-gris)' } },
+            u?.email || (u?.local ? 'Modo local' : '')),
         ),
       ),
-      h('div.chips', null,
-        h('span.chip', { 'aria-pressed': 'true' }, store.esAdmin() ? 'Administrador' : 'Arquitecto'),
-        u?.local ? h('span.chip', null, 'Sin servidor') : null,
+
+      h('div.d-grupo', null,
+        h('p.d-grupo-titulo', null, 'Cuenta'),
+        api.HAY_SERVIDOR && !u.local ? item('user', u.avatar ? 'Cambiar mi foto' : 'Poner una foto',
+          'Si no hay foto se ven tus iniciales', async () => {
+            if (await hojaFoto(u)) { await store.refrescarSesion(); refrescar(); }
+          }) : null,
+        api.HAY_SERVIDOR && !u.local ? item('key', 'Cambiar mi contraseña', null, () => cambiarPassword()) : null,
+        admin && api.HAY_SERVIDOR && !u.local
+          ? item('users', 'Usuarios', 'Alta y baja del equipo', () => ir('#/usuarios'))
+          : null,
       ),
 
-      h('p.eyebrow', { style: { marginTop: '26px', marginBottom: '10px' } }, 'Sincronización'),
-      barraSync(),
-      h('div.stack', null,
-        fila('refresh', 'Sincronizar ahora', 'Sube lo pendiente y baja lo nuevo', async () => {
+      api.HAY_SERVIDOR ? h('div.d-grupo', null,
+        h('p.d-grupo-titulo', null, 'Preferencias'),
+        item('edit', 'Que la IA proponga el texto',
+          'Al crear una tarea desde una foto o la galería', null, { derecha: casillaIA }),
+      ) : null,
+
+      h('div.d-grupo', null,
+        h('p.d-grupo-titulo', null, 'Datos y sincronización'),
+        barraSync(),
+        item('refresh', 'Sincronizar ahora', 'Sube lo pendiente y baja lo nuevo', async () => {
           if (!navigator.onLine) return toast('Sin conexión', 'err');
           await store.sincronizar({ forzar: true });
           toast(store.estadoSync.error ? 'No se pudo sincronizar' : 'Sincronizado',
             store.estadoSync.error ? 'err' : '');
         }),
+        item('image', `${ocupacion.medios} archivos en este móvil`,
+          [pesoLegible(ocupacion.bytes), ocupacion.sinSubir ? `${ocupacion.sinSubir} sin subir` : ''].filter(Boolean).join(' · '),
+          null, { derecha: h('span') }),
+        item('trash', 'Vaciar la caché local', 'No borra nada del servidor', () => vaciarCache()),
       ),
 
-      filas.length ? h('p.eyebrow', { style: { marginTop: '26px', marginBottom: '10px' } }, 'Cuenta') : null,
-      filas.length ? h('div.stack', null, filas) : null,
-
-      h('p.eyebrow', { style: { marginTop: '26px', marginBottom: '10px' } }, 'En este dispositivo'),
-      h('div.stack', null,
-        h('div.row', null,
-          h('div.row-lead', null, icon('image', 18)),
-          h('div.grow', null,
-            h('div.row-title', null, `${ocupacion.medios} archivos guardados`),
-            h('div.row-sub', null, [pesoLegible(ocupacion.bytes), `${ocupacion.sinSubir} sin subir`].filter(Boolean).join(' · ')),
-          ),
-        ),
-        fila('trash', 'Vaciar la caché local', 'No borra nada del servidor', () => vaciarCache(), true),
-      ),
-
-      // Solo para quien administra: montar trabajo de muestra firmado
-      // por el equipo, y quitarlo después sin dejar rastro.
-      admin ? h('p.eyebrow', { style: { marginTop: '26px', marginBottom: '10px' } }, 'Datos de ejemplo') : null,
-      admin ? h('div.stack', null,
-        fila('users', 'Crear actas de ejemplo',
-          'Tres actas firmadas por el equipo, para ver cómo queda',
-          () => montarEjemplos()),
-        hayEjemplos ? fila('trash', 'Quitar las actas de ejemplo',
+      // Solo para quien administra: los datos de muestra y el servidor.
+      admin ? h('div.d-grupo', null,
+        h('p.d-grupo-titulo', null, 'Datos de ejemplo'),
+        item('users', 'Crear actas de ejemplo',
+          'Tres actas firmadas por el equipo, para ver cómo queda', () => montarEjemplos()),
+        hayEjemplos ? item('trash', 'Quitar las actas de ejemplo',
           `${hayEjemplos} ${hayEjemplos === 1 ? 'acta puesta' : 'actas puestas'}`,
-          () => quitarEjemplos(), true) : null,
+          () => quitarEjemplos()) : null,
       ) : null,
 
-      // La transcripción de los recorridos la tendrá que mandar el
-      // servidor, no el móvil. Muchos alojamientos compartidos tienen la
-      // salida cerrada, y esto lo dice en diez segundos desde el propio
-      // teléfono en vez de a base de correos con el hosting.
-      admin && api.HAY_SERVIDOR && !u.local
-        ? h('p.eyebrow', { style: { marginTop: '26px', marginBottom: '10px' } }, 'Servidor')
-        : null,
-      admin && api.HAY_SERVIDOR && !u.local
-        ? h('div.stack', null,
-            fila('cloud', 'Comprobar la salida a internet',
-              'Si el hosting puede llamar a servicios de fuera', (e) => probarSalida(e)),
-            // La clave de Anthropic: se pega una vez y se queda en el
-            // servidor, en la misma carpeta cerrada que la base de datos.
-            fila('key', 'Clave de Anthropic',
-              claude?.puesta ? `Puesta · termina en ${claude.final}` : 'Sin poner · el recorrido no redacta solo',
-              () => hojaClave(claude)),
-            // La de OpenAI es la del oído: sin ella el recorrido se
-            // redacta igual mirando las fotos, pero lo que se dijo en voz
-            // alta se queda en el audio y hay que escribirlo a mano.
-            fila('mic', 'Clave de OpenAI',
-              oido?.puesta ? `Puesta · termina en ${oido.final}` : 'Sin poner · lo que digas no se transcribe',
-              () => hojaClaveOido(oido)))
-        : null,
+      admin && api.HAY_SERVIDOR && !u.local ? h('div.d-grupo', null,
+        h('p.d-grupo-titulo', null, 'Servidor'),
+        item('cloud', 'Comprobar la salida a internet',
+          'Si el hosting puede llamar a servicios de fuera', (e) => probarSalida(e)),
+        item('key', 'Clave de Anthropic',
+          claude?.puesta ? `Puesta · termina en ${claude.final}` : 'Sin poner · el recorrido no redacta solo',
+          () => hojaClave(claude)),
+        item('mic', 'Clave de OpenAI',
+          oido?.puesta ? `Puesta · termina en ${oido.final}` : 'Sin poner · lo que digas no se transcribe',
+          () => hojaClaveOido(oido)),
+      ) : null,
 
-      h('p.eyebrow', { style: { marginTop: '26px', marginBottom: '10px' } }, 'Sesión'),
-      h('div.stack', null,
-        fila('logout', 'Cerrar sesión', null, () => cerrarSesion(), true),
+      h('div.d-grupo', null,
+        item('logout', 'Cerrar sesión', null, () => cerrarSesion(), { rojo: true, derecha: h('span') }),
       ),
 
-      h('p.hint', { style: { marginTop: '30px', textAlign: 'center' } },
+      h('p', { style: { margin: '24px 0 8px', textAlign: 'center', fontSize: '13px', color: 'var(--d-gris)' } },
         'UNIK repasos · versión ' + (window.REPASOS_CONFIG?.build || 'local')),
     ],
   };
