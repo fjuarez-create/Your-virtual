@@ -88,10 +88,54 @@ El contador que «se acumula salvo que pinches» es **estado nuevo que hoy
 no existe**: hay que guardar, por usuario, cuándo miró por última vez
 cada uno de los dos banners.
 
+## Mensajería con acuse de lectura
+
+Lo más grande de todo el rediseño, y lo que más trabajo tiene detrás.
+
+En la ficha de cada vivienda hay un **listado de mensajes** entre todos
+los usuarios del proyecto, y cada mensaje sabe **quién lo ha leído y
+quién no**:
+
+- **Bolita azul** en los que uno no ha leído. Cada usuario ve la suya.
+- Se abre en un modal y **cuenta como leído a los tres segundos** dentro.
+- **Un tic** cuando lo ha leído una persona, **dos** cuando los han leído
+  todos.
+
+Esto no es pantalla: es **una tabla nueva** —quién leyó qué y cuándo— que
+además tiene que **sincronizarse entre dispositivos**, porque los dos
+tics de uno dependen de lo que hayan leído los demás. Y como la app
+funciona sin cobertura, las lecturas se apuntan en el móvil y viajan
+luego: los tics van a ir con retraso a veces, y eso hay que darlo por
+bueno de antemano.
+
+## Ficha de una vivienda
+
+- **Botón de PDF** con el listado de repasos al momento de pulsarlo, para
+  mandar por WhatsApp o adjuntar en un correo.
+- **Chips con la cara de cada persona** que tenga tareas sin verificar;
+  sirven para filtrar por quién.
+- Las **verificadas van siempre al final**, en gris claro, tachadas y con
+  su check.
+- La descripción de cada tarea ocupa **dos líneas como mucho** y se corta
+  con puntos suspensivos.
+- La **flecha de atrás conserva los filtros** que estuvieran aplicados.
+- **Nueva inspección desde una vivienda** llega con esa vivienda ya
+  seleccionada.
+- El widget de avance usa la misma banda de color que la home según el
+  porcentaje.
+
+La home del **jefe de obra** es el mismo panel que la de técnicos, con una
+sola diferencia: el título es siempre `A por los repasos pendientes! 💪🏼`,
+sin las frases que cambian por día de la semana.
+
 ## Otras reglas del diseño
 
 - **ZONA-ESTANCIA**: variable nueva por tarea, solo para ubicar y filtrar
-  por estancia dentro de una vivienda. Hoy no existe.
+  por estancia dentro de una vivienda. Hoy no existe. Lista cerrada:
+  salón, cocina, lavadero, aseo, baño secundario, baño principal, sótano,
+  pasillo, escalera, distribuidor, entrada, dormitorio 1, dormitorio 2,
+  dormitorio principal, vestidor, acceso exterior, jardín, fachada,
+  cubierta.
 - Al crear una tarea desde la ficha de una vivienda, **la vivienda viene
   rellenada** pero se puede cambiar en el desplegable.
 - **Borrar la foto de un acta abre la cámara inmediatamente** para
