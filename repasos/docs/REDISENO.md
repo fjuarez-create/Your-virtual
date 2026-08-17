@@ -36,10 +36,64 @@ TERMINADA; si no, INACABADA.
 
 ### Rechazar
 
+`rechazada` es un **estado de verdad**, no una marca encima de
+`pendiente`. Lo dice la nota de la home: el banner rojo lleva a «las
+tareas que están en estado de RECHAZADAS y que esperan una reacción del
+jefe de obra, y pasarla de nuevo, una vez subsanado el error en obra, **a
+COMPLETADA**».
+
+Así que el ciclo de una tarea rebotada es:
+
+    RECHAZADA → COMPLETADA → (VERIFICADA | RECHAZADA otra vez)
+
+y no vuelve a PENDIENTE. Cuenta como no verificada en todos los
+porcentajes, igual que pendiente.
+
 - Rechazar **obliga a poner el motivo**. Una tarea que rebota sin
   explicación es una llamada de teléfono asegurada.
-- El jefe de obra tiene que **ver en su home que hay tareas rechazadas**
-  para poder ir al detalle.
+- El jefe de obra **ve en su home un contador de rechazadas** y entra
+  desde ahí al listado filtrado.
+
+## La home
+
+Dos homes distintas: **técnicos y propiedad** (arquitectos y UNIK) y
+**personal de constructora**.
+
+- El título cambia según el día de la semana (lunes y viernes tienen su
+  propio texto).
+- **«Pendiente de revisión por la DF»** — beige `#DEDDD8`, con el total
+  de tareas en COMPLETADA.
+- **«Tareas revisadas por la DF»** — verde, y su gemelo **rojo** con las
+  rechazadas. Los dos son **contadores que se acumulan hasta que pinchas
+  en ellos**: al pinchar, entras al listado filtrado por ese estado y el
+  contador se pone a cero.
+- **Módulo de promoción (Brassie)** — fecha de la última tarea no
+  verificada, caras de quien tiene tareas sin verificar, número de tareas
+  no verificadas, pastilla `verificadas / total histórico`, pastilla con
+  el porcentaje redondeado sin decimales, y un círculo de avance.
+- **Comentarios y feedback**, con tres colores: rojo rechazada, verde
+  verificada, beige completada sin resolver todavía.
+
+El contador que «se acumula salvo que pinches» es **estado nuevo que hoy
+no existe**: hay que guardar, por usuario, cuándo miró por última vez
+cada uno de los dos banners.
+
+## Otras reglas del diseño
+
+- **ZONA-ESTANCIA**: variable nueva por tarea, solo para ubicar y filtrar
+  por estancia dentro de una vivienda. Hoy no existe.
+- Al crear una tarea desde la ficha de una vivienda, **la vivienda viene
+  rellenada** pero se puede cambiar en el desplegable.
+- **Borrar la foto de un acta abre la cámara inmediatamente** para
+  reemplazarla: «NO HAY ACTA SIN FOTO, JAMÁS».
+- Las **fotos de verificación** se ven en carrusel, con zoom y scroll
+  horizontal, cada una con su papelera y confirmación al borrar. **Con
+  una sola foto ya se activa DAR POR COMPLETADA.**
+- Al completar, **escribir un mensaje es opcional**; si se escribe,
+  aparece en las dos homes y en las tres pantallas de detalle de
+  vivienda.
+- El menú del **cerebrito** durante un recorrido ofrece FINALIZAR
+  RECORRIDO, PAUSAR, y una «X» que cierra el menú y sigue grabando.
 
 ## Roles
 
@@ -69,10 +123,18 @@ una llamada, y sin pausa pierde el recorrido entero.
 
 ## Lo que sigue abierto
 
-- **RECHAZADA: ¿estado o marca?** El diseño la lista como el cuarto
-  estado, pero la instrucción hablada fue «vuelve a pendiente y el jefe
-  de obra ve que hay una rechazada». Son dos modelos distintos y hay que
-  elegir uno antes de escribir nada.
-- Si al rechazar se **conservan las fotos de verificación** que se
-  subieron en el intento anterior.
+- **10 o 30 fotos.** La nota de la página de una tarea dice «el máximo
+  número de elementos a cargar es de 10»; la del completador dice «un
+  máximo de 30 fotos por tarea». Se entiende que son los dos conjuntos
+  distintos —10 del defecto, 30 de la reparación—, pero conviene
+  confirmarlo: es raro que haya el triple de fotos del arreglo que del
+  problema.
+- **«El número de viviendas verificadas»** en el banner verde. Todo lo
+  que hay alrededor cuenta tareas, no viviendas. Casi seguro es un lapsus
+  y son tareas.
+- Si al rechazar se **conservan las fotos de verificación** del intento
+  anterior. Recomendación: conservarlas, son la prueba de lo que se dijo
+  que estaba arreglado.
 - Si un verificador puede **editar una tarea ya verificada**.
+- Dónde vive el **motivo del rechazo**: comentario del hilo que ya existe
+  (recomendado) o campo aparte.
