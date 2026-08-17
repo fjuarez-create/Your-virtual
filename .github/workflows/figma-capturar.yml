@@ -111,26 +111,38 @@ jobs:
 
           let bien = 0;
           const fallos = [];
-          for (const [id, nombre] of PANTALLAS) {
+
+          /** Una pantalla, con un solo reintento si el visor no pinta. */
+          async function fotografiar([id, nombre], intento = 1) {
             const p = await ctx.newPage();
             try {
               const url = `https://embed.figma.com/design/${ARCHIVO}/UNIK-repasos`
                 + `?node-id=${id.replace(':', '-')}&embed-host=share&hide-ui=1`;
-              await p.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
-              // El visor tarda en pintar el lienzo; se le da margen de
-              // sobra y un respiro extra para las imágenes.
-              await p.waitForSelector('canvas', { timeout: 60000 });
-              await p.waitForTimeout(9000);
+              await p.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+              await p.waitForSelector('canvas', { timeout: 25000 });
+              await p.waitForTimeout(6000);
               await p.screenshot({ path: `diseno-figma/capturas/${nombre}--${id.replace(':', '-')}.png` });
               bien++;
-              console.log(`✓ ${nombre}`);
+              console.log(`✓ ${bien} · ${nombre}`);
             } catch (e) {
+              if (intento === 1) {
+                console.log(`↻ reintento · ${nombre}`);
+                await p.close();
+                return fotografiar([id, nombre], 2);
+              }
               fallos.push(nombre);
-              console.log(`✗ ${nombre}: ${String(e).slice(0, 120)}`);
+              console.log(`✗ ${nombre}: ${String(e).slice(0, 100)}`);
             } finally {
-              await p.close();
+              try { await p.close(); } catch { /* ya cerrada */ }
             }
           }
+
+          // Tres a la vez: el visor tarda unos segundos por pantalla y en
+          // fila india no se llega dentro del tiempo del trabajo.
+          const cola = [...PANTALLAS];
+          await Promise.all(Array.from({ length: 3 }, async () => {
+            while (cola.length) await fotografiar(cola.shift());
+          }));
           await nav.close();
           console.log(`\n${bien} capturas de ${PANTALLAS.length}` + (fallos.length ? ` · fallaron: ${fallos.join(', ')}` : ''));
           fs.writeFileSync('diseno-figma/capturas/RESUMEN.txt',
@@ -141,6 +153,9 @@ jobs:
           node fotografiar.mjs
 
       - name: Guardar las capturas en la rama
+        # Pase lo que pase con el carrete: veinte fotos de cuarenta y dos
+        # valen veinte fotos, no cero.
+        if: always()
         run: |
           git config user.name "Robot de Figma"
           git config user.email "noreply@unikdi.com"
