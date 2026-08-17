@@ -1,0 +1,1736 @@
+// =============================================================================
+// UMAIA · Plataforma de financiación participativa
+// Esquema de datos — fase 1
+//
+// Convenciones:
+//   · Identificadores UUID (no enumerables desde fuera).
+//   · Dinero SIEMPRE en céntimos enteros (BigInt, sufijo `_cents`). Nunca coma
+//     flotante: los importes se suman y se comparan de forma exacta.
+//   · Nombres de tabla y columna en snake_case, porque hay SQL escrito a mano
+//     (triggers, índices parciales, vistas de reporting) que los referencia.
+//   · Los CHECK, los índices únicos parciales y los triggers de inmutabilidad
+//     NO caben en Prisma: viven en `sql/` y se aplican dentro de la misma
+//     migración. Ver README de este paquete.
+//
+// Documento de referencia: docs/plataforma/01-modelo-de-datos-y-arquitectura.md
+// =============================================================================
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [citext, pgcrypto]
+}
+
+// =============================================================================
+// 1. IDENTIDAD Y ACCESO
+//
+// Dos perímetros con credenciales SEPARADAS: `investor_user` y `admin_user`
+// son tablas distintas, con sesiones distintas y cookies distintas. No existe
+// ninguna ruta de datos por la que un inversor se convierta en administrador.
+//
+// Y dentro del perímetro de inversor, una separación más: QUIEN ACCEDE
+// (`investor_user`, un humano) no es necesariamente QUIEN INVIERTE
+// (`investor_account`, que puede ser una sociedad).
+// =============================================================================
+
+enum AuthRealm {
+  INVESTOR
+  ADMIN
+
+  @@map("auth_realm")
+}
+
+enum UserStatus {
+  ACTIVE
+  LOCKED // bloqueo temporal por intentos fallidos
+  SUSPENDED // decisión de cumplimiento
+  CLOSED
+
+  @@map("user_status")
+}
+
+enum MfaType {
+  TOTP
+  WEBAUTHN
+
+  @@map("mfa_type")
+}
+
+enum IdDocumentType {
+  DNI
+  NIE
+  PASSPORT
+
+  @@map("id_document_type")
+}
+
+/// El humano que inicia sesión en el área de inversor.
+/// Contiene sus datos personales de identidad, porque todo humano que opera en
+/// la plataforma se verifica: también el apoderado que firma por una sociedad.
+model InvestorUser {
+  id              String     @id @default(uuid()) @db.Uuid
+  email           String     @unique @db.Citext
+  passwordHash    String     @map("password_hash")
+  emailVerifiedAt DateTime?  @map("email_verified_at") @db.Timestamptz(6)
+  status          UserStatus @default(ACTIVE)
+  locale          String     @default("es-ES") @db.VarChar(10)
+  lastLoginAt     DateTime?  @map("last_login_at") @db.Timestamptz(6)
+
+  // --- Identidad personal (para KYC) ---
+  firstName                 String?         @map("first_name")
+  lastName                  String?         @map("last_name")
+  birthDate                 DateTime?       @map("birth_date") @db.Date
+  /// ISO 3166-1 alfa-2
+  nationality               String?         @db.Char(2)
+  idDocumentType            IdDocumentType? @map("id_document_type")
+  /// Cifrado de sobre (AES-256-GCM). Nunca en claro, nunca en logs.
+  idDocumentNumberEncrypted Bytes?          @map("id_document_number_encrypted")
+  encryptionKeyVersion      Int?            @map("encryption_key_version")
+  phone                     String?
+  addressLine               String?         @map("address_line")
+  city                      String?
+  postalCode                String?         @map("postal_code")
+  province                  String?
+  country                   String?         @db.Char(2)
+
+  marketingConsentAt DateTime? @map("marketing_consent_at") @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  memberships          AccountMembership[]
+  sessions             InvestorSession[]
+  mfaFactors           InvestorMfaFactor[]
+  kycProfile           KycProfile?               @relation("KycOfInvestorUser")
+  placedInvestments    Investment[]              @relation("InvestmentPlacedBy")
+  acceptances          LegalDocumentAcceptance[]
+  completedAssessments SuitabilityAssessment[]
+  communications       CommunicationLog[]
+  dataSubjectRequests  DataSubjectRequest[]
+
+  @@index([status])
+  @@map("investor_user")
+}
+
+enum InvestorAccountType {
+  NATURAL
+  LEGAL
+
+  @@map("investor_account_type")
+}
+
+enum InvestorClassification {
+  NON_SOPHISTICATED
+  SOPHISTICATED
+
+  @@map("investor_classification")
+}
+
+enum OnboardingStatus {
+  REGISTERED
+  IDENTITY_PENDING
+  IDENTITY_IN_REVIEW
+  SUITABILITY_PENDING
+  READY_TO_INVEST
+  BLOCKED
+
+  @@map("onboarding_status")
+}
+
+/// La PARTE INVERSORA: quien aparece en el contrato y a quien pertenece el
+/// dinero. Para una persona física se crea automáticamente al registrarse y el
+/// usuario nunca ve el concepto. Para una sociedad es una cuenta explícita.
+model InvestorAccount {
+  id                       String                 @id @default(uuid()) @db.Uuid
+  type                     InvestorAccountType
+  displayName              String                 @map("display_name")
+  taxResidenceCountry      String?                @map("tax_residence_country") @db.Char(2)
+  /// IBAN de devoluciones y distribuciones. Cifrado de sobre.
+  ibanEncrypted            Bytes?                 @map("iban_encrypted")
+  encryptionKeyVersion     Int?                   @map("encryption_key_version")
+  classification           InvestorClassification @default(NON_SOPHISTICATED)
+  classificationValidUntil DateTime?              @map("classification_valid_until") @db.Timestamptz(6)
+  onboardingStatus         OnboardingStatus       @default(REGISTERED) @map("onboarding_status")
+  status                   UserStatus             @default(ACTIVE)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  legalEntityDetails     LegalEntityDetails?
+  beneficialOwners       BeneficialOwner[]
+  memberships            AccountMembership[]
+  kycProfile             KycProfile?             @relation("KycOfInvestorAccount")
+  suitabilityAssessments SuitabilityAssessment[]
+  sophisticationRequests SophisticationRequest[]
+  investments            Investment[]
+  ledgerAccounts         LedgerAccount[]
+
+  @@index([type, status])
+  @@map("investor_account")
+}
+
+/// Datos societarios. Solo para cuentas de tipo LEGAL.
+model LegalEntityDetails {
+  id                String    @id @default(uuid()) @db.Uuid
+  investorAccountId String    @unique @map("investor_account_id") @db.Uuid
+  legalName         String    @map("legal_name")
+  taxId             String    @map("tax_id") // CIF
+  legalForm         String?   @map("legal_form")
+  incorporatedAt    DateTime? @map("incorporated_at") @db.Date
+  registeredAddress String?   @map("registered_address")
+  registryData      String?   @map("registry_data")
+  cnae              String?
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  investorAccount InvestorAccount @relation(fields: [investorAccountId], references: [id], onDelete: Cascade)
+
+  @@map("legal_entity_details")
+}
+
+enum BeneficialOwnerControlType {
+  OWNERSHIP
+  VOTING_RIGHTS
+  OTHER_CONTROL
+  SENIOR_MANAGEMENT // supuesto residual cuando no hay titular real por propiedad
+
+  @@map("beneficial_owner_control_type")
+}
+
+/// Titular real de una sociedad. Exigencia de prevención del blanqueo:
+/// una cuenta LEGAL no puede aprobarse sin identificarlos y cribarlos.
+model BeneficialOwner {
+  id                        String                     @id @default(uuid()) @db.Uuid
+  investorAccountId         String                     @map("investor_account_id") @db.Uuid
+  fullName                  String                     @map("full_name")
+  birthDate                 DateTime?                  @map("birth_date") @db.Date
+  nationality               String?                    @db.Char(2)
+  idDocumentType            IdDocumentType?            @map("id_document_type")
+  idDocumentNumberEncrypted Bytes?                     @map("id_document_number_encrypted")
+  encryptionKeyVersion      Int?                       @map("encryption_key_version")
+  ownershipPct              Decimal?                   @map("ownership_pct") @db.Decimal(5, 2)
+  controlType               BeneficialOwnerControlType @map("control_type")
+  screenedAt                DateTime?                  @map("screened_at") @db.Timestamptz(6)
+  createdAt                 DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                 DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  investorAccount InvestorAccount @relation(fields: [investorAccountId], references: [id], onDelete: Cascade)
+  screeningChecks KycCheck[]
+
+  @@index([investorAccountId])
+  @@map("beneficial_owner")
+}
+
+enum MembershipRole {
+  OWNER // persona física sobre su propia cuenta
+  REPRESENTATIVE // apoderado de una sociedad
+  VIEWER // acceso de solo lectura (p. ej. la gestoría)
+
+  @@map("membership_role")
+}
+
+enum MembershipStatus {
+  PENDING_APPROVAL
+  ACTIVE
+  REVOKED
+  EXPIRED
+
+  @@map("membership_status")
+}
+
+/// Vincula un humano con una parte inversora. Una representación de sociedad
+/// NO se autoconcede: la aprueba cumplimiento tras revisar el poder, y caduca.
+model AccountMembership {
+  id                String           @id @default(uuid()) @db.Uuid
+  investorUserId    String           @map("investor_user_id") @db.Uuid
+  investorAccountId String           @map("investor_account_id") @db.Uuid
+  role              MembershipRole
+  status            MembershipStatus @default(PENDING_APPROVAL)
+  /// Escritura de poder o documento que acredita la representación.
+  powersDocumentId  String?          @map("powers_document_id") @db.Uuid
+  validUntil        DateTime?        @map("valid_until") @db.Timestamptz(6)
+  approvedByAdminId String?          @map("approved_by_admin_id") @db.Uuid
+  approvedAt        DateTime?        @map("approved_at") @db.Timestamptz(6)
+  revokedAt         DateTime?        @map("revoked_at") @db.Timestamptz(6)
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  investorUser    InvestorUser    @relation(fields: [investorUserId], references: [id], onDelete: Cascade)
+  investorAccount InvestorAccount @relation(fields: [investorAccountId], references: [id], onDelete: Cascade)
+  powersDocument  KycDocument?    @relation(fields: [powersDocumentId], references: [id])
+  approvedBy      AdminUser?      @relation(fields: [approvedByAdminId], references: [id])
+
+  @@unique([investorUserId, investorAccountId])
+  @@index([investorAccountId, status])
+  @@map("account_membership")
+}
+
+model InvestorSession {
+  id              String    @id @default(uuid()) @db.Uuid
+  investorUserId  String    @map("investor_user_id") @db.Uuid
+  /// Solo el hash del testigo de sesión. El valor en claro vive en la cookie.
+  tokenHash       String    @unique @map("token_hash")
+  /// Cuenta activa en la sesión: un apoderado alterna entre sus representadas.
+  activeAccountId String?   @map("active_account_id") @db.Uuid
+  mfaSatisfiedAt  DateTime? @map("mfa_satisfied_at") @db.Timestamptz(6)
+  ipAddress       String?   @map("ip_address") @db.Inet
+  userAgent       String?   @map("user_agent")
+  expiresAt       DateTime  @map("expires_at") @db.Timestamptz(6)
+  revokedAt       DateTime? @map("revoked_at") @db.Timestamptz(6)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  investorUser InvestorUser @relation(fields: [investorUserId], references: [id], onDelete: Cascade)
+
+  @@index([investorUserId])
+  @@index([expiresAt])
+  @@map("investor_session")
+}
+
+model InvestorMfaFactor {
+  id                   String    @id @default(uuid()) @db.Uuid
+  investorUserId       String    @map("investor_user_id") @db.Uuid
+  type                 MfaType
+  /// Secreto TOTP cifrado, o credencial WebAuthn.
+  secretEncrypted      Bytes     @map("secret_encrypted")
+  encryptionKeyVersion Int       @map("encryption_key_version")
+  label                String?
+  confirmedAt          DateTime? @map("confirmed_at") @db.Timestamptz(6)
+  lastUsedAt           DateTime? @map("last_used_at") @db.Timestamptz(6)
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  investorUser InvestorUser @relation(fields: [investorUserId], references: [id], onDelete: Cascade)
+
+  @@index([investorUserId])
+  @@map("investor_mfa_factor")
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  COMPLIANCE_OFFICER // aprueba sofisticados, dispone coincidencias de cribado
+  KYC_REVIEWER // cola de revisión de expedientes
+  PROJECT_MANAGER // proyectos y documentación
+  ACCOUNTING_READONLY // solo lectura, para contabilidad y asesoría
+
+  @@map("admin_role")
+}
+
+/// Personal interno. Tabla de credenciales COMPLETAMENTE separada de la de
+/// inversores: decisión explícita del promotor. 2FA obligatorio.
+model AdminUser {
+  id            String     @id @default(uuid()) @db.Uuid
+  email         String     @unique @db.Citext
+  passwordHash  String     @map("password_hash")
+  fullName      String     @map("full_name")
+  role          AdminRole
+  isActive      Boolean    @default(true) @map("is_active")
+  mfaEnrolledAt DateTime?  @map("mfa_enrolled_at") @db.Timestamptz(6)
+  lastLoginAt   DateTime?  @map("last_login_at") @db.Timestamptz(6)
+  status        UserStatus @default(ACTIVE)
+  createdAt     DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  sessions                AdminSession[]
+  mfaFactors              AdminMfaFactor[]
+  approvedMemberships     AccountMembership[]
+  kycReviews              KycReview[]
+  approvedKycProfiles     KycProfile[]              @relation("KycApprovedBy")
+  reviewedChecks          KycCheck[]                @relation("CheckReviewedBy")
+  screeningDispositions   ScreeningMatch[]
+  sophisticationDecisions SophisticationRequest[]
+  publishedDocuments      ProjectDocument[]
+  publishedLegalVersions  LegalDocumentVersion[]
+  reconciledPayments      Payment[]
+  matchedBankTransactions BankTransaction[]
+  authorizedRefunds       Refund[]
+  settingChanges          ComplianceSettingChange[]
+  handledDataRequests     DataSubjectRequest[]
+
+  @@index([role, isActive])
+  @@map("admin_user")
+}
+
+model AdminSession {
+  id             String    @id @default(uuid()) @db.Uuid
+  adminUserId    String    @map("admin_user_id") @db.Uuid
+  tokenHash      String    @unique @map("token_hash")
+  mfaSatisfiedAt DateTime? @map("mfa_satisfied_at") @db.Timestamptz(6)
+  ipAddress      String?   @map("ip_address") @db.Inet
+  userAgent      String?   @map("user_agent")
+  expiresAt      DateTime  @map("expires_at") @db.Timestamptz(6)
+  revokedAt      DateTime? @map("revoked_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  adminUser AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+
+  @@index([adminUserId])
+  @@index([expiresAt])
+  @@map("admin_session")
+}
+
+model AdminMfaFactor {
+  id                   String    @id @default(uuid()) @db.Uuid
+  adminUserId          String    @map("admin_user_id") @db.Uuid
+  type                 MfaType
+  secretEncrypted      Bytes     @map("secret_encrypted")
+  encryptionKeyVersion Int       @map("encryption_key_version")
+  label                String?
+  confirmedAt          DateTime? @map("confirmed_at") @db.Timestamptz(6)
+  lastUsedAt           DateTime? @map("last_used_at") @db.Timestamptz(6)
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  adminUser AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+
+  @@index([adminUserId])
+  @@map("admin_mfa_factor")
+}
+
+/// Códigos de recuperación de 2FA, hasheados y de un solo uso.
+model MfaRecoveryCode {
+  id        String    @id @default(uuid()) @db.Uuid
+  realm     AuthRealm
+  subjectId String    @map("subject_id") @db.Uuid
+  codeHash  String    @map("code_hash")
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([realm, subjectId])
+  @@map("mfa_recovery_code")
+}
+
+/// Registro de intentos de autenticación, para bloqueo y limitación de
+/// frecuencia. Es un registro de eventos, no un almacén de credenciales: aquí
+/// una sola tabla no debilita la separación de perímetros.
+model AuthAttempt {
+  id            String    @id @default(uuid()) @db.Uuid
+  realm         AuthRealm
+  email         String?   @db.Citext
+  ipAddress     String?   @map("ip_address") @db.Inet
+  successful    Boolean
+  failureReason String?   @map("failure_reason")
+  attemptedAt   DateTime  @default(now()) @map("attempted_at") @db.Timestamptz(6)
+
+  @@index([realm, email, attemptedAt])
+  @@index([ipAddress, attemptedAt])
+  @@map("auth_attempt")
+}
+
+enum TokenPurpose {
+  PASSWORD_RESET
+  EMAIL_VERIFICATION
+
+  @@map("token_purpose")
+}
+
+model AuthToken {
+  id        String       @id @default(uuid()) @db.Uuid
+  realm     AuthRealm
+  subjectId String       @map("subject_id") @db.Uuid
+  purpose   TokenPurpose
+  tokenHash String       @unique @map("token_hash")
+  expiresAt DateTime     @map("expires_at") @db.Timestamptz(6)
+  usedAt    DateTime?    @map("used_at") @db.Timestamptz(6)
+  createdAt DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([realm, subjectId, purpose])
+  @@map("auth_token")
+}
+
+// =============================================================================
+// 2. KYC / AML
+//
+// Con personas jurídicas hay DOS sujetos verificables: el humano (KYC) y la
+// sociedad (KYB). Comparten estructura, así que `kyc_profile` apunta a uno u
+// otro mediante dos claves ajenas anulables y un CHECK que obliga a que haya
+// exactamente una informada — conservando la integridad referencial, que un
+// identificador polimórfico suelto perdería.
+//
+// Ninguna lógica de scoring es nuestra: guardamos lo que dice el proveedor y
+// quién decidió qué, cuándo y por qué.
+// =============================================================================
+
+enum KycSubjectType {
+  INVESTOR_USER
+  INVESTOR_ACCOUNT
+
+  @@map("kyc_subject_type")
+}
+
+enum KycStatus {
+  NOT_STARTED
+  PENDING_DOCUMENTS
+  IN_REVIEW
+  APPROVED
+  REJECTED
+  EXPIRED
+  SUSPENDED
+
+  @@map("kyc_status")
+}
+
+enum RiskRating {
+  LOW
+  MEDIUM
+  HIGH
+
+  @@map("risk_rating")
+}
+
+model KycProfile {
+  id                String         @id @default(uuid()) @db.Uuid
+  subjectType       KycSubjectType @map("subject_type")
+  /// Exactamente uno de los dos, garantizado por CHECK (ver sql/).
+  investorUserId    String?        @unique @map("investor_user_id") @db.Uuid
+  investorAccountId String?        @unique @map("investor_account_id") @db.Uuid
+
+  /// 0 = sin verificar · 1 = identidad · 2 = clasificación · 3 = origen de fondos
+  levelReached        Int         @default(0) @map("level_reached") @db.SmallInt
+  status              KycStatus   @default(NOT_STARTED)
+  /// Motivo estructurado + texto libre. El inversor ve una versión del motivo.
+  rejectionReasonCode String?     @map("rejection_reason_code")
+  rejectionReasonText String?     @map("rejection_reason_text")
+  /// Asignado por revisor o proveedor. NUNCA calculado por nosotros.
+  riskRating          RiskRating? @map("risk_rating")
+  approvedAt          DateTime?   @map("approved_at") @db.Timestamptz(6)
+  approvedByAdminId   String?     @map("approved_by_admin_id") @db.Uuid
+  /// Caducidad de la verificación. Vencida obliga a repetir.
+  expiresAt           DateTime?   @map("expires_at") @db.Timestamptz(6)
+  lastScreenedAt      DateTime?   @map("last_screened_at") @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  investorUser    InvestorUser?    @relation("KycOfInvestorUser", fields: [investorUserId], references: [id], onDelete: Cascade)
+  investorAccount InvestorAccount? @relation("KycOfInvestorAccount", fields: [investorAccountId], references: [id], onDelete: Cascade)
+  approvedBy      AdminUser?       @relation("KycApprovedBy", fields: [approvedByAdminId], references: [id])
+
+  checks    KycCheck[]
+  documents KycDocument[]
+  reviews   KycReview[]
+
+  @@index([status, levelReached])
+  @@index([expiresAt])
+  @@map("kyc_profile")
+}
+
+enum KycCheckType {
+  IDENTITY_DOCUMENT
+  LIVENESS
+  ADDRESS
+  PEP_SANCTIONS
+  ADVERSE_MEDIA
+  SOURCE_OF_FUNDS
+  COMPANY_REGISTRY // KYB
+  BENEFICIAL_OWNERSHIP // KYB
+
+  @@map("kyc_check_type")
+}
+
+enum KycCheckStatus {
+  REQUESTED
+  PENDING
+  PASSED
+  FAILED
+  NEEDS_REVIEW
+  ERROR
+
+  @@map("kyc_check_status")
+}
+
+/// Una fila por comprobación individual. Es lo que permite cambiar de proveedor
+/// sin tocar el flujo, y lo que hace auditable qué se comprobó y con qué.
+model KycCheck {
+  id                String         @id @default(uuid()) @db.Uuid
+  kycProfileId      String         @map("kyc_profile_id") @db.Uuid
+  /// Para el cribado de titulares reales de una sociedad.
+  beneficialOwnerId String?        @map("beneficial_owner_id") @db.Uuid
+  checkType         KycCheckType   @map("check_type")
+  /// `mock` queda grabado de forma PERMANENTE: siempre se puede listar qué
+  /// expedientes se resolvieron sin proveedor real.
+  provider          String
+  providerReference String?        @map("provider_reference")
+  status            KycCheckStatus @default(REQUESTED)
+  /// Puntero al blob cifrado con la respuesta cruda del proveedor.
+  /// La conservamos sin interpretarla.
+  resultPayloadRef  String?        @map("result_payload_ref")
+  requestedAt       DateTime       @default(now()) @map("requested_at") @db.Timestamptz(6)
+  resolvedAt        DateTime?      @map("resolved_at") @db.Timestamptz(6)
+  reviewedByAdminId String?        @map("reviewed_by_admin_id") @db.Uuid
+
+  kycProfile      KycProfile       @relation(fields: [kycProfileId], references: [id], onDelete: Cascade)
+  beneficialOwner BeneficialOwner? @relation(fields: [beneficialOwnerId], references: [id], onDelete: Cascade)
+  reviewedBy      AdminUser?       @relation("CheckReviewedBy", fields: [reviewedByAdminId], references: [id])
+  matches         ScreeningMatch[]
+
+  @@index([kycProfileId, checkType])
+  @@index([status])
+  @@index([provider])
+  @@map("kyc_check")
+}
+
+enum ScreeningDisposition {
+  PENDING
+  TRUE_POSITIVE
+  FALSE_POSITIVE
+
+  @@map("screening_disposition")
+}
+
+/// Cada coincidencia de PEP/sanciones. NINGUNA se descarta automáticamente:
+/// un humano la dispone y queda registrado quién y por qué.
+model ScreeningMatch {
+  id                   String               @id @default(uuid()) @db.Uuid
+  kycCheckId           String               @map("kyc_check_id") @db.Uuid
+  matchType            String               @map("match_type") // PEP | SANCTION | ADVERSE_MEDIA | RCA
+  matchedName          String               @map("matched_name")
+  listSource           String?              @map("list_source")
+  /// Puntuación TAL COMO la devuelve el proveedor. No la recalculamos.
+  scoreFromProvider    Decimal?             @map("score_from_provider") @db.Decimal(6, 3)
+  rawMatch             Json?                @map("raw_match")
+  disposition          ScreeningDisposition @default(PENDING)
+  dispositionReason    String?              @map("disposition_reason")
+  dispositionByAdminId String?              @map("disposition_by_admin_id") @db.Uuid
+  dispositionAt        DateTime?            @map("disposition_at") @db.Timestamptz(6)
+  createdAt            DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  kycCheck      KycCheck   @relation(fields: [kycCheckId], references: [id], onDelete: Cascade)
+  dispositionBy AdminUser? @relation(fields: [dispositionByAdminId], references: [id])
+
+  @@index([kycCheckId])
+  @@index([disposition])
+  @@map("screening_match")
+}
+
+enum KycDocumentType {
+  ID_FRONT
+  ID_BACK
+  SELFIE
+  PROOF_OF_ADDRESS
+  SOURCE_OF_FUNDS_EVIDENCE
+  CORPORATE_DEED
+  POWERS_OF_ATTORNEY
+  BENEFICIAL_OWNERSHIP_DECLARATION
+  OTHER
+
+  @@map("kyc_document_type")
+}
+
+/// El fichero NUNCA se sirve directamente: solo por URL firmada de vida corta
+/// tras comprobar la propiedad, y cada descarga escribe en audit_log.
+model KycDocument {
+  id                   String          @id @default(uuid()) @db.Uuid
+  kycProfileId         String          @map("kyc_profile_id") @db.Uuid
+  documentType         KycDocumentType @map("document_type")
+  storageKey           String          @map("storage_key")
+  contentSha256        String          @map("content_sha256") @db.Char(64)
+  encryptionKeyVersion Int             @map("encryption_key_version")
+  mimeType             String          @map("mime_type")
+  sizeBytes            Int             @map("size_bytes")
+  uploadedAt           DateTime        @default(now()) @map("uploaded_at") @db.Timestamptz(6)
+  /// Retención PBC. Hasta esta fecha el documento NO puede borrarse, ni
+  /// siquiera ante una solicitud de supresión: ver DataSubjectRequest.
+  retentionUntil       DateTime?       @map("retention_until") @db.Timestamptz(6)
+  deletedAt            DateTime?       @map("deleted_at") @db.Timestamptz(6)
+
+  kycProfile  KycProfile          @relation(fields: [kycProfileId], references: [id], onDelete: Cascade)
+  memberships AccountMembership[]
+
+  @@index([kycProfileId, documentType])
+  @@index([retentionUntil])
+  @@map("kyc_document")
+}
+
+model KycReview {
+  id              String    @id @default(uuid()) @db.Uuid
+  kycProfileId    String    @map("kyc_profile_id") @db.Uuid
+  reviewerAdminId String    @map("reviewer_admin_id") @db.Uuid
+  decision        KycStatus
+  reasonCode      String?   @map("reason_code")
+  notes           String?
+  reviewedAt      DateTime  @default(now()) @map("reviewed_at") @db.Timestamptz(6)
+
+  kycProfile KycProfile @relation(fields: [kycProfileId], references: [id], onDelete: Cascade)
+  reviewer   AdminUser  @relation(fields: [reviewerAdminId], references: [id])
+
+  @@index([kycProfileId])
+  @@map("kyc_review")
+}
+
+enum KnowledgeOutcome {
+  PASS
+  FAIL
+
+  @@map("knowledge_outcome")
+}
+
+enum SuitabilityOutcome {
+  PASSED
+  FAILED_WARNING_ACKNOWLEDGED
+  NOT_REQUIRED_SOPHISTICATED
+
+  @@map("suitability_outcome")
+}
+
+/// Test de idoneidad: conocimientos + simulación de capacidad de soportar
+/// pérdidas. Cuelga de la CUENTA (quien se clasifica es la parte que invierte),
+/// registrando qué humano lo cumplimentó.
+model SuitabilityAssessment {
+  id                        String             @id @default(uuid()) @db.Uuid
+  investorAccountId         String             @map("investor_account_id") @db.Uuid
+  completedByUserId         String?            @map("completed_by_user_id") @db.Uuid
+  /// Versión EXACTA del cuestionario. Sin esto no se puede demostrar qué se
+  /// preguntó a cada inversor.
+  questionnaireVersion      String             @map("questionnaire_version")
+  answers                   Json
+  knowledgeOutcome          KnowledgeOutcome   @map("knowledge_outcome")
+  declaredNetWorthCents     BigInt?            @map("declared_net_worth_cents")
+  declaredAnnualIncomeCents BigInt?            @map("declared_annual_income_cents")
+  lossBearingCapacityCents  BigInt?            @map("loss_bearing_capacity_cents")
+  outcome                   SuitabilityOutcome
+  warningAcknowledgedAt     DateTime?          @map("warning_acknowledged_at") @db.Timestamptz(6)
+  completedAt               DateTime           @default(now()) @map("completed_at") @db.Timestamptz(6)
+  validUntil                DateTime           @map("valid_until") @db.Timestamptz(6)
+
+  investorAccount InvestorAccount @relation(fields: [investorAccountId], references: [id], onDelete: Cascade)
+  completedBy     InvestorUser?   @relation(fields: [completedByUserId], references: [id])
+  investments     Investment[]
+
+  @@index([investorAccountId, validUntil])
+  @@map("suitability_assessment")
+}
+
+enum SophisticationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+
+  @@map("sophistication_status")
+}
+
+/// Vía simplificada para inversores sofisticados. La autocalificación NO basta:
+/// requiere aprobación explícita de cumplimiento, y caduca.
+model SophisticationRequest {
+  id                  String               @id @default(uuid()) @db.Uuid
+  investorAccountId   String               @map("investor_account_id") @db.Uuid
+  selfCertifiedAt     DateTime             @map("self_certified_at") @db.Timestamptz(6)
+  /// Criterios alegados, con su versión de referencia normativa.
+  criteriaClaimed     Json                 @map("criteria_claimed")
+  evidenceDocumentIds String[]             @map("evidence_document_ids") @db.Uuid
+  status              SophisticationStatus @default(PENDING)
+  decidedByAdminId    String?              @map("decided_by_admin_id") @db.Uuid
+  decidedAt           DateTime?            @map("decided_at") @db.Timestamptz(6)
+  decisionNotes       String?              @map("decision_notes")
+  validUntil          DateTime?            @map("valid_until") @db.Timestamptz(6)
+  createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  investorAccount InvestorAccount @relation(fields: [investorAccountId], references: [id], onDelete: Cascade)
+  decidedBy       AdminUser?      @relation(fields: [decidedByAdminId], references: [id])
+
+  @@index([investorAccountId, status])
+  @@map("sophistication_request")
+}
+
+// =============================================================================
+// 3. PROYECTOS
+//
+// Multi-proyecto desde el día uno. UMAIA es una fila con `is_featured = true`,
+// no una página especial: añadir Brassie o Serenea es insertar filas.
+// =============================================================================
+
+enum ProjectStatus {
+  DRAFT
+  PUBLISHED // visible, aún sin captación abierta
+  FUNDING_OPEN
+  FUNDING_CLOSED
+  FULLY_FUNDED
+  FUNDING_FAILED
+  IN_EXECUTION
+  EXITED
+  CANCELLED
+
+  @@map("project_status")
+}
+
+enum AssetClass {
+  RESIDENTIAL
+  COMMERCIAL
+  MIXED
+  LAND
+
+  @@map("asset_class")
+}
+
+enum ReturnType {
+  TIR
+  MULTIPLE
+  FIXED_COUPON
+
+  @@map("return_type")
+}
+
+model Project {
+  id         String        @id @default(uuid()) @db.Uuid
+  slug       String        @unique
+  name       String
+  tagline    String?
+  status     ProjectStatus @default(DRAFT)
+  assetClass AssetClass    @map("asset_class")
+
+  // --- Ubicación ---
+  addressLine String?  @map("address_line")
+  city        String?
+  province    String?
+  country     String   @default("ES") @db.Char(2)
+  latitude    Decimal? @db.Decimal(10, 7)
+  longitude   Decimal? @db.Decimal(10, 7)
+
+  descriptionMd String? @map("description_md") @db.Text
+
+  // --- Cifras de cabecera (las de la ronda vigente se calculan aparte) ---
+  targetReturnPct Decimal?    @map("target_return_pct") @db.Decimal(6, 3)
+  returnType      ReturnType? @map("return_type")
+  termMonths      Int?        @map("term_months")
+
+  /// UMAIA. La portada carga el proyecto destacado; el resto son "relacionados".
+  isFeatured   Boolean   @default(false) @map("is_featured")
+  displayOrder Int       @default(0) @map("display_order")
+  publishedAt  DateTime? @map("published_at") @db.Timestamptz(6)
+
+  /// Enganche opcional con el showroom 3D que ya existe en este repositorio.
+  showroomUrl String? @map("showroom_url")
+
+  spvId String? @map("spv_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  spv          Spv?               @relation(fields: [spvId], references: [id])
+  assets       ProjectAsset[]
+  documents    ProjectDocument[]
+  media        ProjectMedia[]
+  milestones   ProjectMilestone[]
+  updates      ProjectUpdate[]
+  capitalStack CapitalStackItem[]
+  rounds       FundingRound[]
+  investments  Investment[]
+  relatedTo    ProjectRelation[]  @relation("RelationSource")
+  relatedFrom  ProjectRelation[]  @relation("RelationTarget")
+
+  @@index([status, isFeatured])
+  @@index([displayOrder])
+  @@map("project")
+}
+
+/// Vehículo de propósito especial que titula el proyecto.
+model Spv {
+  id                String    @id @default(uuid()) @db.Uuid
+  legalName         String    @map("legal_name")
+  taxId             String    @unique @map("tax_id")
+  registryData      String?   @map("registry_data")
+  registeredAddress String?   @map("registered_address")
+  incorporatedAt    DateTime? @map("incorporated_at") @db.Date
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  projects Project[]
+
+  @@map("spv")
+}
+
+enum ProjectAssetType {
+  RESIDENTIAL_BUILDING
+  COMMERCIAL_PLOT
+  COMMERCIAL_UNIT
+  PARKING
+  LAND_PLOT
+
+  @@map("project_asset_type")
+}
+
+/// Los 4 edificios residenciales y la parcela terciaria de UMAIA son FILAS,
+/// no párrafos de texto. Cuando la parcela se venda al operador, hay dónde
+/// registrarlo.
+model ProjectAsset {
+  id                  String           @id @default(uuid()) @db.Uuid
+  projectId           String           @map("project_id") @db.Uuid
+  assetType           ProjectAssetType @map("asset_type")
+  name                String
+  description         String?
+  unitsCount          Int?             @map("units_count")
+  builtSurfaceM2      Decimal?         @map("built_surface_m2") @db.Decimal(10, 2)
+  plotSurfaceM2       Decimal?         @map("plot_surface_m2") @db.Decimal(10, 2)
+  cadastralReference  String?          @map("cadastral_reference")
+  intendedUse         String?          @map("intended_use")
+  estimatedValueCents BigInt?          @map("estimated_value_cents")
+  displayOrder        Int              @default(0) @map("display_order")
+  createdAt           DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, displayOrder])
+  @@map("project_asset")
+}
+
+enum ProjectDocumentType {
+  MEMORIA
+  KIIS // Ficha de Datos Fundamentales de la Inversión
+  ACCOUNTS
+  APPRAISAL
+  LICENSE
+  CONTRACT_TEMPLATE
+  OTHER
+
+  @@map("project_document_type")
+}
+
+enum DocumentVisibility {
+  PUBLIC
+  AUTHENTICATED
+  INVESTORS_ONLY
+
+  @@map("document_visibility")
+}
+
+/// VERSIONADO, nunca sobrescrito. Corregir una errata es publicar la versión
+/// siguiente. Índice único parcial: un solo documento vigente por tipo.
+model ProjectDocument {
+  id                 String              @id @default(uuid()) @db.Uuid
+  projectId          String              @map("project_id") @db.Uuid
+  documentType       ProjectDocumentType @map("document_type")
+  version            Int
+  title              String
+  storageKey         String              @map("storage_key")
+  contentSha256      String              @map("content_sha256") @db.Char(64)
+  mimeType           String              @map("mime_type")
+  sizeBytes          Int                 @map("size_bytes")
+  visibility         DocumentVisibility  @default(PUBLIC)
+  effectiveFrom      DateTime            @default(now()) @map("effective_from") @db.Timestamptz(6)
+  supersededById     String?             @unique @map("superseded_by_id") @db.Uuid
+  publishedByAdminId String?             @map("published_by_admin_id") @db.Uuid
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  project      Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  supersededBy ProjectDocument? @relation("DocumentSupersession", fields: [supersededById], references: [id])
+  supersedes   ProjectDocument? @relation("DocumentSupersession")
+  publishedBy  AdminUser?       @relation(fields: [publishedByAdminId], references: [id])
+
+  kiisForRounds     FundingRound[] @relation("RoundKiis")
+  contractForRounds FundingRound[] @relation("RoundContractTemplate")
+
+  @@unique([projectId, documentType, version])
+  @@index([projectId, documentType])
+  @@map("project_document")
+}
+
+model ProjectMedia {
+  id           String   @id @default(uuid()) @db.Uuid
+  projectId    String   @map("project_id") @db.Uuid
+  storageKey   String   @map("storage_key")
+  /// Texto alternativo: accesibilidad, no opcional en la práctica.
+  altText      String   @map("alt_text")
+  caption      String?
+  isHero       Boolean  @default(false) @map("is_hero")
+  displayOrder Int      @default(0) @map("display_order")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, displayOrder])
+  @@map("project_media")
+}
+
+enum MilestoneStatus {
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+  DELAYED
+
+  @@map("milestone_status")
+}
+
+model ProjectMilestone {
+  id           String          @id @default(uuid()) @db.Uuid
+  projectId    String          @map("project_id") @db.Uuid
+  title        String
+  description  String?
+  expectedAt   DateTime?       @map("expected_at") @db.Date
+  completedAt  DateTime?       @map("completed_at") @db.Date
+  status       MilestoneStatus @default(PLANNED)
+  displayOrder Int             @default(0) @map("display_order")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, displayOrder])
+  @@map("project_milestone")
+}
+
+model ProjectUpdate {
+  id          String             @id @default(uuid()) @db.Uuid
+  projectId   String             @map("project_id") @db.Uuid
+  title       String
+  bodyMd      String             @map("body_md") @db.Text
+  visibility  DocumentVisibility @default(INVESTORS_ONLY)
+  publishedAt DateTime?          @map("published_at") @db.Timestamptz(6)
+  createdAt   DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, publishedAt])
+  @@map("project_update")
+}
+
+/// Orden de prelación. `seniority` 1 = más senior (cobra primero).
+model CapitalStackItem {
+  id           String   @id @default(uuid()) @db.Uuid
+  projectId    String   @map("project_id") @db.Uuid
+  seniority    Int
+  label        String
+  amountCents  BigInt   @map("amount_cents")
+  providerName String?  @map("provider_name")
+  notes        String?
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, seniority])
+  @@map("capital_stack_item")
+}
+
+model ProjectRelation {
+  id               String @id @default(uuid()) @db.Uuid
+  projectId        String @map("project_id") @db.Uuid
+  relatedProjectId String @map("related_project_id") @db.Uuid
+  displayOrder     Int    @default(0) @map("display_order")
+
+  project        Project @relation("RelationSource", fields: [projectId], references: [id], onDelete: Cascade)
+  relatedProject Project @relation("RelationTarget", fields: [relatedProjectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, relatedProjectId])
+  @@map("project_relation")
+}
+
+enum FundingRoundStatus {
+  DRAFT
+  OPEN
+  CLOSED_SUCCESS
+  CLOSED_FAILED
+  CANCELLED
+
+  @@map("funding_round_status")
+}
+
+/// La ronda va SEPARADA del proyecto: si los importes de captación viven en el
+/// proyecto, una segunda ronda obliga a duplicarlo o a falsear el histórico.
+/// El "% cubierto" es una agregación sobre las inversiones de la ronda abierta.
+model FundingRound {
+  id          String             @id @default(uuid()) @db.Uuid
+  projectId   String             @map("project_id") @db.Uuid
+  roundNumber Int                @map("round_number")
+  status      FundingRoundStatus @default(DRAFT)
+
+  targetAmountCents         BigInt  @map("target_amount_cents")
+  /// Por debajo de este importe la ronda FRACASA y se devuelve todo.
+  minimumAmountCents        BigInt  @map("minimum_amount_cents")
+  minTicketCents            BigInt  @map("min_ticket_cents")
+  maxTicketPerInvestorCents BigInt? @map("max_ticket_per_investor_cents")
+  currency                  String  @default("EUR") @db.Char(3)
+
+  opensAt  DateTime? @map("opens_at") @db.Timestamptz(6)
+  closesAt DateTime? @map("closes_at") @db.Timestamptz(6)
+  closedAt DateTime? @map("closed_at") @db.Timestamptz(6)
+
+  /// La FDFI/KIIS vigente PARA ESTA RONDA. Se presenta antes de poder firmar.
+  kiisDocumentId             String? @map("kiis_document_id") @db.Uuid
+  contractTemplateDocumentId String? @map("contract_template_document_id") @db.Uuid
+
+  platformFeePct Decimal? @map("platform_fee_pct") @db.Decimal(6, 3)
+  successFeePct  Decimal? @map("success_fee_pct") @db.Decimal(6, 3)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  project                  Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  kiisDocument             ProjectDocument? @relation("RoundKiis", fields: [kiisDocumentId], references: [id])
+  contractTemplateDocument ProjectDocument? @relation("RoundContractTemplate", fields: [contractTemplateDocumentId], references: [id])
+
+  returnTiers   ReturnTier[]
+  investments   Investment[]
+  distributions Distribution[]
+
+  @@unique([projectId, roundNumber])
+  @@index([status, closesAt])
+  @@map("funding_round")
+}
+
+/// La cascada de retornos. El simulador del frontend consume ESTO, así que la
+/// cifra que ve el inversor y la que documentáis son el mismo dato.
+model ReturnTier {
+  id                String   @id @default(uuid()) @db.Uuid
+  fundingRoundId    String   @map("funding_round_id") @db.Uuid
+  tierOrder         Int      @map("tier_order")
+  label             String
+  description       String?
+  hurdlePct         Decimal? @map("hurdle_pct") @db.Decimal(6, 3)
+  splitInvestorsPct Decimal  @map("split_investors_pct") @db.Decimal(6, 3)
+  splitSponsorPct   Decimal  @map("split_sponsor_pct") @db.Decimal(6, 3)
+
+  fundingRound FundingRound @relation(fields: [fundingRoundId], references: [id], onDelete: Cascade)
+
+  @@unique([fundingRoundId, tierOrder])
+  @@map("return_tier")
+}
+
+// =============================================================================
+// 4. INVERSIÓN, PAGOS Y LIQUIDACIÓN
+// =============================================================================
+
+enum InvestmentStatus {
+  DRAFT // importe elegido, nada más
+  PENDING_KIIS // pendiente de que el inversor confirme la lectura de la FDFI
+  PENDING_SIGNATURE
+  COOLING_OFF // firmado, en periodo de reflexión (revocable sin motivo)
+  PENDING_PAYMENT
+  FUNDS_RECEIVED // dinero en la cuenta de garantía
+  CONFIRMED // ronda cerrada con el mínimo alcanzado
+  WITHDRAWN // revocada por el inversor en el periodo de reflexión
+  CANCELLED // por la plataforma (impago, incumplimiento)
+  EXPIRED // caducó la reserva
+  REFUNDED // devuelta (ronda fallida o revocación con fondos ya recibidos)
+
+  @@map("investment_status")
+}
+
+model Investment {
+  id String @id @default(uuid()) @db.Uuid
+
+  /// QUIÉN INVIERTE: la parte contractual (persona física o sociedad).
+  investorAccountId      String @map("investor_account_id") @db.Uuid
+  /// QUIÉN LA CURSÓ: el humano. Para sociedades, el apoderado.
+  placedByInvestorUserId String @map("placed_by_investor_user_id") @db.Uuid
+
+  fundingRoundId String @map("funding_round_id") @db.Uuid
+  /// Denormalizado a propósito: un cambio de ronda nunca huérfana el histórico.
+  projectId      String @map("project_id") @db.Uuid
+
+  amountCents BigInt           @map("amount_cents")
+  currency    String           @default("EUR") @db.Char(3)
+  status      InvestmentStatus @default(DRAFT)
+  /// Código legible: se lo damos al inversor y es el concepto de la transferencia.
+  reference   String           @unique
+
+  // --- Sellos de tiempo del flujo ---
+  reservedAt         DateTime? @map("reserved_at") @db.Timestamptz(6)
+  kiisPresentedAt    DateTime? @map("kiis_presented_at") @db.Timestamptz(6)
+  kiisAcknowledgedAt DateTime? @map("kiis_acknowledged_at") @db.Timestamptz(6)
+  signedAt           DateTime? @map("signed_at") @db.Timestamptz(6)
+  /// Hasta aquí el inversor puede revocar sin motivo ni penalización.
+  coolingOffEndsAt   DateTime? @map("cooling_off_ends_at") @db.Timestamptz(6)
+  fundsReceivedAt    DateTime? @map("funds_received_at") @db.Timestamptz(6)
+  confirmedAt        DateTime? @map("confirmed_at") @db.Timestamptz(6)
+  withdrawnAt        DateTime? @map("withdrawn_at") @db.Timestamptz(6)
+  cancelledAt        DateTime? @map("cancelled_at") @db.Timestamptz(6)
+  refundedAt         DateTime? @map("refunded_at") @db.Timestamptz(6)
+  expiresAt          DateTime? @map("expires_at") @db.Timestamptz(6)
+  cancellationReason String?   @map("cancellation_reason")
+
+  // --- Contexto de cumplimiento EN EL MOMENTO de invertir ---
+  suitabilityAssessmentId    String?                 @map("suitability_assessment_id") @db.Uuid
+  /// Nivel de KYC que tenía la cuenta al comprometerse. Congelado a propósito:
+  /// responde a "¿estaba verificado cuando invirtió?" sin depender del estado actual.
+  kycLevelAtCommitment       Int?                    @map("kyc_level_at_commitment") @db.SmallInt
+  classificationAtCommitment InvestorClassification? @map("classification_at_commitment")
+  /// Aviso por superar el umbral de inversión relevante.
+  warningShown               Boolean                 @default(false) @map("warning_shown")
+  warningAcknowledgedAt      DateTime?               @map("warning_acknowledged_at") @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  investorAccount       InvestorAccount        @relation(fields: [investorAccountId], references: [id])
+  placedByInvestorUser  InvestorUser           @relation("InvestmentPlacedBy", fields: [placedByInvestorUserId], references: [id])
+  fundingRound          FundingRound           @relation(fields: [fundingRoundId], references: [id])
+  project               Project                @relation(fields: [projectId], references: [id])
+  suitabilityAssessment SuitabilityAssessment? @relation(fields: [suitabilityAssessmentId], references: [id])
+
+  transitions       InvestmentTransition[]
+  signatureRequests SignatureRequest[]
+  payments          Payment[]
+  refunds           Refund[]
+  allocations       DistributionAllocation[]
+
+  @@index([investorAccountId, status])
+  @@index([fundingRoundId, status])
+  @@index([projectId])
+  @@index([status, expiresAt])
+  @@map("investment")
+}
+
+/// La biografía legible de una inversión. Redundante con audit_log A PROPÓSITO:
+/// el log de auditoría es transversal y voluminoso; esto se le enseña a un
+/// inversor o a un juez sin filtrar nada.
+model InvestmentTransition {
+  id           String            @id @default(uuid()) @db.Uuid
+  investmentId String            @map("investment_id") @db.Uuid
+  fromStatus   InvestmentStatus? @map("from_status")
+  toStatus     InvestmentStatus  @map("to_status")
+  actorType    ActorType         @map("actor_type")
+  actorId      String?           @map("actor_id") @db.Uuid
+  reason       String?
+  occurredAt   DateTime          @default(now()) @map("occurred_at") @db.Timestamptz(6)
+
+  investment Investment @relation(fields: [investmentId], references: [id], onDelete: Cascade)
+
+  @@index([investmentId, occurredAt])
+  @@map("investment_transition")
+}
+
+enum SignatureStatus {
+  CREATED
+  SENT
+  SIGNED
+  DECLINED
+  EXPIRED
+  ERROR
+
+  @@map("signature_status")
+}
+
+model SignatureRequest {
+  id                       String          @id @default(uuid()) @db.Uuid
+  investmentId             String          @map("investment_id") @db.Uuid
+  provider                 String
+  providerEnvelopeId       String?         @map("provider_envelope_id")
+  status                   SignatureStatus @default(CREATED)
+  signedDocumentStorageKey String?         @map("signed_document_storage_key")
+  signedDocumentSha256     String?         @map("signed_document_sha256") @db.Char(64)
+  /// El acta de evidencias del proveedor. Es la pieza que sostiene la firma
+  /// ante un tribunal: sin ella, la firma es un checkbox.
+  evidencePackageKey       String?         @map("evidence_package_key")
+  signerIp                 String?         @map("signer_ip") @db.Inet
+  signerUserAgent          String?         @map("signer_user_agent")
+  sentAt                   DateTime?       @map("sent_at") @db.Timestamptz(6)
+  signedAt                 DateTime?       @map("signed_at") @db.Timestamptz(6)
+  createdAt                DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  investment Investment @relation(fields: [investmentId], references: [id], onDelete: Cascade)
+
+  @@index([investmentId])
+  @@index([provider, providerEnvelopeId])
+  @@map("signature_request")
+}
+
+enum PaymentMethod {
+  CARD
+  SEPA_CREDIT_TRANSFER
+  SEPA_DIRECT_DEBIT
+
+  @@map("payment_method")
+}
+
+enum PaymentStatus {
+  INITIATED
+  PENDING
+  SUCCEEDED
+  FAILED
+  REVERSED
+
+  @@map("payment_status")
+}
+
+model Payment {
+  id                String        @id @default(uuid()) @db.Uuid
+  investmentId      String        @map("investment_id") @db.Uuid
+  method            PaymentMethod
+  provider          String
+  providerReference String?       @map("provider_reference")
+  amountCents       BigInt        @map("amount_cents")
+  currency          String        @default("EUR") @db.Char(3)
+  status            PaymentStatus @default(INITIATED)
+  paidAt            DateTime?     @map("paid_at") @db.Timestamptz(6)
+  failureReason     String?       @map("failure_reason")
+
+  // --- Conciliación manual de transferencias ---
+  reconciledAt        DateTime? @map("reconciled_at") @db.Timestamptz(6)
+  reconciledByAdminId String?   @map("reconciled_by_admin_id") @db.Uuid
+  bankTransactionId   String?   @unique @map("bank_transaction_id") @db.Uuid
+
+  /// Impide el cobro duplicado ante un reintento.
+  idempotencyKey String @unique @map("idempotency_key")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  investment      Investment       @relation(fields: [investmentId], references: [id])
+  reconciledBy    AdminUser?       @relation(fields: [reconciledByAdminId], references: [id])
+  bankTransaction BankTransaction? @relation(fields: [bankTransactionId], references: [id])
+
+  @@index([investmentId])
+  @@index([status])
+  @@index([provider, providerReference])
+  @@map("payment")
+}
+
+/// Líneas de extracto importadas (CSV / Norma 43 / CAMT.053) para conciliar
+/// transferencias. Una línea solo puede casar con UN pago (relación 1:1).
+model BankTransaction {
+  id               String    @id @default(uuid()) @db.Uuid
+  valueDate        DateTime  @map("value_date") @db.Date
+  amountCents      BigInt    @map("amount_cents")
+  currency         String    @default("EUR") @db.Char(3)
+  counterpartyName String?   @map("counterparty_name")
+  counterpartyIban String?   @map("counterparty_iban")
+  concept          String?
+  /// Referencia única del banco: evita importar dos veces el mismo movimiento.
+  bankReference    String    @unique @map("bank_reference")
+  importedAt       DateTime  @default(now()) @map("imported_at") @db.Timestamptz(6)
+  matchedByAdminId String?   @map("matched_by_admin_id") @db.Uuid
+  matchedAt        DateTime? @map("matched_at") @db.Timestamptz(6)
+
+  matchedBy AdminUser? @relation(fields: [matchedByAdminId], references: [id])
+  payment   Payment?
+
+  @@index([valueDate])
+  @@map("bank_transaction")
+}
+
+enum RefundStatus {
+  PENDING
+  SENT
+  COMPLETED
+  FAILED
+
+  @@map("refund_status")
+}
+
+enum RefundReason {
+  INVESTOR_WITHDRAWAL // revocación en periodo de reflexión
+  ROUND_FAILED // no se alcanzó el mínimo
+  OVERPAYMENT
+  COMPLIANCE_REJECTION
+  OTHER
+
+  @@map("refund_reason")
+}
+
+model Refund {
+  id                       String       @id @default(uuid()) @db.Uuid
+  investmentId             String       @map("investment_id") @db.Uuid
+  amountCents              BigInt       @map("amount_cents")
+  currency                 String       @default("EUR") @db.Char(3)
+  reason                   RefundReason
+  status                   RefundStatus @default(PENDING)
+  destinationIbanEncrypted Bytes?       @map("destination_iban_encrypted")
+  encryptionKeyVersion     Int?         @map("encryption_key_version")
+  providerReference        String?      @map("provider_reference")
+  authorizedByAdminId      String?      @map("authorized_by_admin_id") @db.Uuid
+  authorizedAt             DateTime?    @map("authorized_at") @db.Timestamptz(6)
+  completedAt              DateTime?    @map("completed_at") @db.Timestamptz(6)
+  createdAt                DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  investment   Investment @relation(fields: [investmentId], references: [id])
+  authorizedBy AdminUser? @relation(fields: [authorizedByAdminId], references: [id])
+
+  @@index([investmentId])
+  @@index([status])
+  @@map("refund")
+}
+
+enum DistributionType {
+  INTEREST
+  PRINCIPAL
+  PROFIT_SHARE
+
+  @@map("distribution_type")
+}
+
+model Distribution {
+  id              String           @id @default(uuid()) @db.Uuid
+  fundingRoundId  String           @map("funding_round_id") @db.Uuid
+  type            DistributionType
+  description     String?
+  totalGrossCents BigInt           @map("total_gross_cents")
+  currency        String           @default("EUR") @db.Char(3)
+  declaredAt      DateTime         @map("declared_at") @db.Timestamptz(6)
+  paidAt          DateTime?        @map("paid_at") @db.Timestamptz(6)
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  fundingRound FundingRound             @relation(fields: [fundingRoundId], references: [id])
+  allocations  DistributionAllocation[]
+
+  @@index([fundingRoundId])
+  @@map("distribution")
+}
+
+model DistributionAllocation {
+  id               String    @id @default(uuid()) @db.Uuid
+  distributionId   String    @map("distribution_id") @db.Uuid
+  investmentId     String    @map("investment_id") @db.Uuid
+  grossCents       BigInt    @map("gross_cents")
+  /// Retención. Las reglas por país de residencia las dicta el asesor fiscal.
+  withholdingCents BigInt    @default(0) @map("withholding_cents")
+  netCents         BigInt    @map("net_cents")
+  paidAt           DateTime? @map("paid_at") @db.Timestamptz(6)
+
+  distribution Distribution @relation(fields: [distributionId], references: [id], onDelete: Cascade)
+  investment   Investment   @relation(fields: [investmentId], references: [id])
+
+  @@unique([distributionId, investmentId])
+  @@index([investmentId])
+  @@map("distribution_allocation")
+}
+
+// -----------------------------------------------------------------------------
+// Libro mayor de partida doble.
+//
+// Modelado en la fase 1, ESCRITO en la fase 4. Un saldo mutable es inauditable
+// cuando algo descuadra: no sabes qué movimiento lo rompió. Aquí el saldo es una
+// agregación y cada euro tiene origen. El trigger de cuadre está en sql/.
+// -----------------------------------------------------------------------------
+
+enum LedgerAccountType {
+  ESCROW // dinero comprometido de una ronda
+  INVESTOR // saldo atribuible a una cuenta inversora
+  PLATFORM_FEES
+  BANK
+  SUSPENSE // entradas sin conciliar
+
+  @@map("ledger_account_type")
+}
+
+model LedgerAccount {
+  id                String            @id @default(uuid()) @db.Uuid
+  type              LedgerAccountType
+  /// Identificador legible: ESCROW:round:<uuid>, INVESTOR:<uuid>, BANK:<iban>…
+  code              String            @unique
+  currency          String            @default("EUR") @db.Char(3)
+  investorAccountId String?           @map("investor_account_id") @db.Uuid
+  fundingRoundId    String?           @map("funding_round_id") @db.Uuid
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  investorAccount InvestorAccount? @relation(fields: [investorAccountId], references: [id])
+  entries         LedgerEntry[]
+
+  @@index([type])
+  @@map("ledger_account")
+}
+
+model LedgerTransaction {
+  id          String   @id @default(uuid()) @db.Uuid
+  description String
+  /// Entidad que originó el asiento (investment, refund, distribution…).
+  sourceType  String   @map("source_type")
+  sourceId    String?  @map("source_id") @db.Uuid
+  occurredAt  DateTime @default(now()) @map("occurred_at") @db.Timestamptz(6)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  entries LedgerEntry[]
+
+  @@index([sourceType, sourceId])
+  @@map("ledger_transaction")
+}
+
+model LedgerEntry {
+  id            String @id @default(uuid()) @db.Uuid
+  transactionId String @map("transaction_id") @db.Uuid
+  accountId     String @map("account_id") @db.Uuid
+  /// Exactamente uno de los dos es distinto de cero (CHECK en sql/).
+  debitCents    BigInt @default(0) @map("debit_cents")
+  creditCents   BigInt @default(0) @map("credit_cents")
+  currency      String @default("EUR") @db.Char(3)
+
+  transaction LedgerTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  account     LedgerAccount     @relation(fields: [accountId], references: [id])
+
+  @@index([accountId])
+  @@index([transactionId])
+  @@map("ledger_entry")
+}
+
+// =============================================================================
+// 5. TRAZABILIDAD LEGAL, AUDITORÍA Y RGPD
+// =============================================================================
+
+enum LegalDocumentKind {
+  TERMS_OF_USE
+  PRIVACY_POLICY
+  COOKIES_POLICY
+  INVESTMENT_CONTRACT
+  RISK_WARNINGS
+  SUITABILITY_QUESTIONNAIRE
+  OTHER
+
+  @@map("legal_document_kind")
+}
+
+model LegalDocument {
+  id                 String            @id @default(uuid()) @db.Uuid
+  slug               String            @unique
+  kind               LegalDocumentKind
+  name               String
+  requiresAcceptance Boolean           @default(true) @map("requires_acceptance")
+  createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  versions LegalDocumentVersion[]
+
+  @@map("legal_document")
+}
+
+/// Una versión publicada es INMUTABLE: corregir una errata es publicar la
+/// siguiente versión. Trigger de solo-inserción en sql/.
+model LegalDocumentVersion {
+  id                 String    @id @default(uuid()) @db.Uuid
+  legalDocumentId    String    @map("legal_document_id") @db.Uuid
+  versionLabel       String    @map("version_label")
+  locale             String    @default("es-ES") @db.VarChar(10)
+  contentMd          String?   @map("content_md") @db.Text
+  storageKey         String?   @map("storage_key")
+  /// Huella del contenido. Es lo que hace demostrable qué texto se aceptó.
+  contentSha256      String    @map("content_sha256") @db.Char(64)
+  effectiveFrom      DateTime  @map("effective_from") @db.Timestamptz(6)
+  effectiveUntil     DateTime? @map("effective_until") @db.Timestamptz(6)
+  publishedByAdminId String?   @map("published_by_admin_id") @db.Uuid
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  legalDocument LegalDocument             @relation(fields: [legalDocumentId], references: [id], onDelete: Cascade)
+  publishedBy   AdminUser?                @relation(fields: [publishedByAdminId], references: [id])
+  acceptances   LegalDocumentAcceptance[]
+
+  @@unique([legalDocumentId, versionLabel, locale])
+  @@index([effectiveFrom])
+  @@map("legal_document_version")
+}
+
+enum AcceptanceContext {
+  REGISTRATION
+  INVESTMENT
+  KYC
+  PROFILE_UPDATE
+  ACCOUNT_CREATION
+
+  @@map("acceptance_context")
+}
+
+/// Append-only. Qué versión de qué documento aceptó quién, cuándo y desde dónde.
+model LegalDocumentAcceptance {
+  id                        String            @id @default(uuid()) @db.Uuid
+  investorUserId            String            @map("investor_user_id") @db.Uuid
+  legalDocumentVersionId    String            @map("legal_document_version_id") @db.Uuid
+  acceptedAt                DateTime          @default(now()) @map("accepted_at") @db.Timestamptz(6)
+  ipAddress                 String?           @map("ip_address") @db.Inet
+  userAgent                 String?           @map("user_agent")
+  context                   AcceptanceContext
+  /// P. ej. el investment_id que motivó la aceptación.
+  contextId                 String?           @map("context_id") @db.Uuid
+  /// Copiado, no referenciado: si alguien manipulase la fila de la versión,
+  /// este hash lo delata.
+  contentSha256AtAcceptance String            @map("content_sha256_at_acceptance") @db.Char(64)
+
+  investorUser         InvestorUser         @relation(fields: [investorUserId], references: [id])
+  legalDocumentVersion LegalDocumentVersion @relation(fields: [legalDocumentVersionId], references: [id])
+
+  @@index([investorUserId])
+  @@index([legalDocumentVersionId])
+  @@index([context, contextId])
+  @@map("legal_document_acceptance")
+}
+
+enum ActorType {
+  INVESTOR
+  ADMIN
+  SYSTEM // trabajos programados
+  PROVIDER // callbacks de proveedores externos
+
+  @@map("actor_type")
+}
+
+/// LOG INMUTABLE.
+///
+/// La inmutabilidad NO se sostiene en que la aplicación se porte bien:
+///   1. Al rol de la aplicación se le REVOCAN UPDATE y DELETE (ver sql/).
+///   2. Un trigger aborta cualquier mutación aunque alguien escale privilegios.
+///   3. Cada fila encadena `hash = sha256(prev_hash || carga canónica)`, y un
+///      trabajo diario verifica la cadena y sella el último hash fuera de la BD.
+///
+/// `actor_id` no lleva clave ajena a propósito: el actor puede ser un inversor,
+/// un administrador, el sistema o un proveedor. Un log de auditoría que se rompe
+/// porque se borró el usuario referenciado no sirve para nada.
+model AuditLog {
+  id         String    @id @default(uuid()) @db.Uuid
+  /// Orden total, para encadenar el hash sin depender del reloj.
+  seq        BigInt    @unique @default(autoincrement())
+  occurredAt DateTime  @default(now()) @map("occurred_at") @db.Timestamptz(6)
+  actorType  ActorType @map("actor_type")
+  actorId    String?   @map("actor_id") @db.Uuid
+  actorIp    String?   @map("actor_ip") @db.Inet
+  requestId  String?   @map("request_id")
+  /// p. ej. kyc.approved · investment.confirmed · document.downloaded
+  action     String
+  entityType String    @map("entity_type")
+  entityId   String?   @map("entity_id") @db.Uuid
+  /// Con los campos sensibles REDACTADOS. Un log de auditoría no es un sitio
+  /// donde volcar números de documento en claro.
+  before     Json?
+  after      Json?
+  metadata   Json?
+  prevHash   String?   @map("prev_hash") @db.Char(64)
+  hash       String    @db.Char(64)
+
+  @@index([entityType, entityId, occurredAt])
+  @@index([actorType, actorId, occurredAt])
+  @@index([action, occurredAt])
+  @@map("audit_log")
+}
+
+enum SettingValueType {
+  INTEGER
+  DECIMAL
+  BOOLEAN
+  STRING
+  JSON
+
+  @@map("setting_value_type")
+}
+
+/// Parámetros de cumplimiento. Cambiarlos es editar configuración, no desplegar
+/// — que es justo lo que hace falta cuando la asesoría legal afina un umbral.
+model ComplianceSetting {
+  id          String           @id @default(uuid()) @db.Uuid
+  key         String           @unique
+  valueType   SettingValueType @map("value_type")
+  value       String
+  description String
+  /// Ajustes que la interfaz no puede desactivar (p. ej. exigir identidad).
+  isLocked    Boolean          @default(false) @map("is_locked")
+  updatedAt   DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  changes ComplianceSettingChange[]
+
+  @@map("compliance_setting")
+}
+
+/// Responde a "¿qué umbral estaba vigente el día que este inversor invirtió?".
+model ComplianceSettingChange {
+  id                  String   @id @default(uuid()) @db.Uuid
+  complianceSettingId String   @map("compliance_setting_id") @db.Uuid
+  previousValue       String?  @map("previous_value")
+  newValue            String   @map("new_value")
+  reason              String?
+  changedByAdminId    String?  @map("changed_by_admin_id") @db.Uuid
+  changedAt           DateTime @default(now()) @map("changed_at") @db.Timestamptz(6)
+
+  complianceSetting ComplianceSetting @relation(fields: [complianceSettingId], references: [id], onDelete: Cascade)
+  changedBy         AdminUser?        @relation(fields: [changedByAdminId], references: [id])
+
+  @@index([complianceSettingId, changedAt])
+  @@map("compliance_setting_change")
+}
+
+enum DataSubjectRequestType {
+  ACCESS
+  RECTIFICATION
+  ERASURE
+  PORTABILITY
+  OBJECTION
+  RESTRICTION
+
+  @@map("data_subject_request_type")
+}
+
+enum DataSubjectRequestStatus {
+  RECEIVED
+  IN_PROGRESS
+  COMPLETED
+  PARTIALLY_COMPLETED // supresión limitada por retención obligatoria de PBC
+  REJECTED
+
+  @@map("data_subject_request_status")
+}
+
+/// RGPD.
+///
+/// Ojo con la supresión: la documentación de diligencia debida NO puede
+/// borrarse mientras corra su plazo de retención de prevención del blanqueo.
+/// Por eso existe PARTIALLY_COMPLETED y por eso el panel muestra la distinción:
+/// la respuesta al interesado tiene que ser honesta.
+model DataSubjectRequest {
+  id                      String                   @id @default(uuid()) @db.Uuid
+  investorUserId          String                   @map("investor_user_id") @db.Uuid
+  type                    DataSubjectRequestType
+  status                  DataSubjectRequestStatus @default(RECEIVED)
+  requestedAt             DateTime                 @default(now()) @map("requested_at") @db.Timestamptz(6)
+  dueAt                   DateTime                 @map("due_at") @db.Timestamptz(6)
+  handledByAdminId        String?                  @map("handled_by_admin_id") @db.Uuid
+  resolvedAt              DateTime?                @map("resolved_at") @db.Timestamptz(6)
+  resolutionNotes         String?                  @map("resolution_notes")
+  /// Qué NO se pudo suprimir y bajo qué obligación legal.
+  retainedUnderLegalBasis String?                  @map("retained_under_legal_basis")
+  exportStorageKey        String?                  @map("export_storage_key")
+
+  investorUser InvestorUser @relation(fields: [investorUserId], references: [id])
+  handledBy    AdminUser?   @relation(fields: [handledByAdminId], references: [id])
+
+  @@index([status, dueAt])
+  @@map("data_subject_request")
+}
+
+enum CommunicationChannel {
+  EMAIL
+  SMS
+  IN_APP
+
+  @@map("communication_channel")
+}
+
+enum CommunicationStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  BOUNCED
+  FAILED
+
+  @@map("communication_status")
+}
+
+/// Histórico de comunicaciones con el inversor, requisito del panel admin.
+model CommunicationLog {
+  id                String               @id @default(uuid()) @db.Uuid
+  investorUserId    String               @map("investor_user_id") @db.Uuid
+  channel           CommunicationChannel
+  template          String
+  templateVersion   String               @map("template_version")
+  subject           String?
+  recipient         String
+  status            CommunicationStatus  @default(QUEUED)
+  providerMessageId String?              @map("provider_message_id")
+  sentAt            DateTime?            @map("sent_at") @db.Timestamptz(6)
+  createdAt         DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  investorUser InvestorUser @relation(fields: [investorUserId], references: [id])
+
+  @@index([investorUserId, createdAt])
+  @@map("communication_log")
+}
+
+/// Los webhooks NUNCA se procesan en línea: se persisten y los consume el
+/// worker. `event_id` único da idempotencia ante reenvíos del proveedor.
+model WebhookEvent {
+  id                String    @id @default(uuid()) @db.Uuid
+  provider          String
+  eventId           String    @map("event_id")
+  eventType         String?   @map("event_type")
+  signatureVerified Boolean   @default(false) @map("signature_verified")
+  payload           Json
+  receivedAt        DateTime  @default(now()) @map("received_at") @db.Timestamptz(6)
+  processedAt       DateTime? @map("processed_at") @db.Timestamptz(6)
+  processingError   String?   @map("processing_error")
+  attempts          Int       @default(0)
+
+  @@unique([provider, eventId])
+  @@index([processedAt])
+  @@map("webhook_event")
+}

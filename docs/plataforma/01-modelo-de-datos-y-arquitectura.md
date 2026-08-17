@@ -1,7 +1,7 @@
 # UMAIA · Plataforma de financiación participativa — Fase 1
 
-**Propuesta de modelo de datos y arquitectura base**
-Versión 0.1 · para revisión antes de generar código
+**Modelo de datos y arquitectura base**
+Versión 0.2 · decisiones 1, 2 y 4 confirmadas por el promotor (ver §6)
 
 > **Aviso.** Este documento es una propuesta técnica. Los umbrales, plazos y
 > criterios de clasificación de inversores que aparecen aquí se citan con su
@@ -22,6 +22,8 @@ Versión 0.1 · para revisión antes de generar código
 | ORM | **Prisma** para el 95 % + SQL crudo para triggers, vistas de reporting y constraints que Prisma no expresa | Migraciones versionadas y revisables; no renuncio a las garantías del motor |
 | Dinero | `BIGINT` en **céntimos** (`*_cents`) + `currency CHAR(3)` | Nunca coma flotante. Sumas y comparaciones exactas |
 | Admin | Panel **propio** dentro del mismo Next.js, en un segmento de ruta aislado | Los flujos (cola de KYC, conciliación, cierre de ronda) son a medida; un admin genérico se queda corto en el mes 2 |
+| Autenticación | **Dos tablas de credenciales separadas**: `investor_user` y `admin_user`, con sesiones y cookies independientes | Confirmado. Ningún error de programación puede convertir a un inversor en administrador |
+| Inversores | **Persona física y jurídica desde el MVP**, separando *quien accede* de *quien invierte* | Confirmado. Ver §2.1: es el cambio de modelo más importante respecto a la v0.1 |
 | Auditoría | Tabla `audit_log` **append-only forzada por el motor** (revocación de UPDATE/DELETE + trigger) y encadenada por hash | "Inmutable" a nivel de aplicación no es inmutable |
 | Proveedores externos | Todos detrás de un **puerto** (interfaz) con adaptador `mock` explícito y trazado | Enchufar el real es cambiar una variable de entorno, no reescribir el flujo |
 | Multi-proyecto | `Project` + `FundingRound` desde el día uno; UMAIA es un registro destacado, no una página especial | Requisito explícito: no rehacer el modelo al añadir Brassie/Serenea |
@@ -120,67 +122,110 @@ enums como tipos nativos de PostgreSQL.
 
 ### 2.1 Identidad y acceso
 
+Aquí es donde más ha cambiado el modelo respecto a la v0.1, por las dos
+decisiones confirmadas. La clave es una distinción que la v0.1 no hacía y que
+las personas jurídicas vuelven obligatoria:
+
+> **Quien accede no es necesariamente quien invierte.**
+> Una persona física invierte en su propio nombre. Una SL invierte a través de
+> un apoderado. El mismo humano puede invertir personalmente **y** representar
+> a dos sociedades. Si el usuario y el inversor son la misma fila, ese caso
+> —que es el más frecuente entre inversores serios— obliga a crear cuentas
+> falsas con emails inventados.
+
 ```mermaid
 erDiagram
-    USER ||--o| INVESTOR : "perfil"
-    USER ||--o| ADMIN_USER : "perfil"
-    USER ||--o{ MFA_FACTOR : tiene
-    USER ||--o{ SESSION : abre
-    USER ||--o{ LOGIN_ATTEMPT : genera
-    INVESTOR ||--o| LEGAL_ENTITY_DETAILS : "si es persona jurídica"
+    INVESTOR_USER ||--o{ ACCOUNT_MEMBERSHIP : "actúa por"
+    INVESTOR_ACCOUNT ||--|{ ACCOUNT_MEMBERSHIP : "es operada por"
+    INVESTOR_USER ||--o{ INVESTOR_SESSION : abre
+    INVESTOR_USER ||--o{ INVESTOR_MFA_FACTOR : tiene
+    INVESTOR_ACCOUNT ||--o| LEGAL_ENTITY_DETAILS : "si es jurídica"
+    INVESTOR_ACCOUNT ||--o{ BENEFICIAL_OWNER : "titular real"
+    INVESTOR_ACCOUNT ||--o{ INVESTMENT : invierte
+    ADMIN_USER ||--o{ ADMIN_SESSION : abre
+    ADMIN_USER ||--o{ ADMIN_MFA_FACTOR : tiene
 ```
 
-**`user`** — principal de autenticación, único para toda la plataforma.
-`email` (citext, único), `password_hash` (argon2id), `email_verified_at`,
-`status` (`ACTIVE|LOCKED|SUSPENDED|CLOSED`), `locale`, `last_login_at`.
+**`investor_user`** — el humano que inicia sesión. `email` (citext, único),
+`password_hash` (argon2id), `email_verified_at`, `status`
+(`ACTIVE|LOCKED|SUSPENDED|CLOSED`), `locale`, `last_login_at`, y sus datos
+personales de identidad (nombre, apellidos, fecha de nacimiento, nacionalidad,
+tipo y número de documento cifrado, teléfono, domicilio). **Todo humano que
+toque la plataforma se verifica**, sea inversor directo o apoderado de una
+sociedad: el apoderado que firma también pasa KYC.
 
-**`admin_user`** — 1:1 opcional con `user`. `role`
-(`SUPER_ADMIN|COMPLIANCE_OFFICER|KYC_REVIEWER|PROJECT_MANAGER|ACCOUNTING_READONLY`),
-`is_active`, `mfa_enforced_at`. Acceder al panel exige **existir esta fila**: no
-hay bandera booleana en `user` que un bug pueda voltear.
-
-> *Alternativa considerada:* dos tablas de credenciales completamente separadas
-> para inversores y administradores. Reduce el radio de un fallo de escalada de
-> privilegios, a cambio de duplicar todo el sistema de auth. La propuesta actual
-> (un `user`, dos tablas de perfil) es defendible siempre que el guardia de
-> autorización compruebe la existencia del perfil y no un campo. **Marcadlo si
-> preferís la separación dura: es más fácil decidirlo ahora que después.**
-
-**`investor`** — perfil del inversor. `user_id`, `person_type`
-(`NATURAL|LEGAL`), `first_name`, `last_name`, `birth_date`,
-`nationality`, `tax_residence_country`, `national_id_type`
-(`DNI|NIE|PASSPORT|CIF`), **`national_id_encrypted`**, `phone`,
-dirección (calle, ciudad, código postal, país), **`iban_encrypted`**
-(devoluciones y distribuciones), `classification`
+**`investor_account`** — la **parte inversora**, que es quien aparece en el
+contrato. `type` (`NATURAL|LEGAL`), `display_name`, `tax_residence_country`,
+**`iban_encrypted`** (devoluciones y distribuciones), `classification`
 (`NON_SOPHISTICATED|SOPHISTICATED`), `classification_valid_until`,
-`onboarding_status`, `marketing_consent_at`.
+`onboarding_status`, `status`.
+Al registrarse una persona física se crea automáticamente su cuenta `NATURAL`
+con una membresía `OWNER`; el usuario nunca ve este concepto. Al dar de alta una
+sociedad, se crea una cuenta `LEGAL` adicional.
 
-**`legal_entity_details`** — para inversores persona jurídica: razón social,
-CIF, domicilio social, datos registrales, titular real (a efectos de PBC) y
-representante que firma. En el MVP se puede dejar el flujo de alta de personas
-jurídicas para más adelante, pero **el modelo lo contempla desde ya** porque un
-inversor institucional entrando por una SL es el caso más probable de ampliación.
+**`account_membership`** — `investor_user_id`, `investor_account_id`, `role`
+(`OWNER|REPRESENTATIVE|VIEWER`), `powers_document_id` (la escritura de poder),
+`valid_until`, `status` (`PENDING_APPROVAL|ACTIVE|REVOKED`), `approved_by_admin_id`.
+Una representación de una sociedad **no se autoconcede**: la aprueba
+cumplimiento tras revisar el poder, y puede caducar.
 
-**`mfa_factor`** — `type` (`TOTP|WEBAUTHN`), secreto cifrado, `confirmed_at`,
-`last_used_at`. **`recovery_code`** aparte, hasheados y de un solo uso.
+**`legal_entity_details`** — 1:1 con las cuentas `LEGAL`: razón social, CIF,
+forma jurídica, domicilio social, datos registrales, CNAE, fecha de
+constitución.
 
-**`session`**, **`login_attempt`** (para bloqueo y rate limiting),
-**`password_reset_token`**.
+**`beneficial_owner`** — titulares reales de la sociedad, exigencia de PBC:
+nombre, documento cifrado, `ownership_pct`, `control_type`, y su propio estado
+de cribado PEP/sanciones. Una cuenta `LEGAL` no puede aprobarse sin ellos.
+
+**`admin_user`** — **tabla de credenciales completamente separada**, decisión
+confirmada. Email, `password_hash`, `role`
+(`SUPER_ADMIN|COMPLIANCE_OFFICER|KYC_REVIEWER|PROJECT_MANAGER|ACCOUNTING_READONLY`),
+`is_active`, `mfa_enrolled_at`. No hay ninguna ruta de datos por la que una fila
+de `investor_user` se convierta en administrador: son tablas distintas, con
+sesiones distintas (`admin_session` / `investor_session`), cookies de nombre y
+ámbito distintos, y 2FA obligatorio en el lado admin.
+
+> **Coste de esta decisión, para que quede dicho.** Duplica el código de
+> autenticación. Lo contengo poniendo las *primitivas* compartidas en
+> `packages/auth` (hashing argon2id, TOTP, tokens, limitación de intentos) y
+> dejando separado solo lo que debe estarlo: las tablas de credenciales, las
+> tablas de sesión y los guardias. Es la lectura conjunta de tus respuestas 1 y
+> 2 — separación donde aporta seguridad, sin duplicar lo que solo aporta trabajo.
+
+**`investor_mfa_factor`** / **`admin_mfa_factor`** — `type` (`TOTP|WEBAUTHN`),
+secreto cifrado, `confirmed_at`, `last_used_at`; códigos de recuperación
+hasheados y de un solo uso en tabla aparte.
+
+**`auth_attempt`** — registro de intentos para bloqueo y limitación de
+frecuencia, con `realm` (`INVESTOR|ADMIN`). Es un registro de eventos, no un
+almacén de credenciales, así que aquí una sola tabla no debilita la separación.
+
+**`password_reset_token`**, **`email_verification_token`** — hasheados, de un
+solo uso y con caducidad corta, también con `realm`.
 
 ### 2.2 KYC / AML
 
+Con personas jurídicas en el alcance hay **dos sujetos verificables** distintos:
+el humano (KYC clásico) y la sociedad (KYB: verificación societaria + titulares
+reales). Comparten estructura, así que `kyc_profile` apunta a uno u otro.
+
 ```mermaid
 erDiagram
-    INVESTOR ||--|| KYC_PROFILE : tiene
+    INVESTOR_USER ||--o| KYC_PROFILE : "KYC del humano"
+    INVESTOR_ACCOUNT ||--o| KYC_PROFILE : "KYB de la sociedad"
     KYC_PROFILE ||--o{ KYC_CHECK : "ejecuta"
     KYC_PROFILE ||--o{ KYC_DOCUMENT : "aporta"
-    KYC_PROFILE ||--o{ SUITABILITY_ASSESSMENT : "responde"
-    KYC_PROFILE ||--o{ SOPHISTICATION_REQUEST : "solicita"
-    KYC_CHECK ||--o{ SCREENING_MATCH : "arroja"
     KYC_PROFILE ||--o{ KYC_REVIEW : "revisión manual"
+    KYC_CHECK ||--o{ SCREENING_MATCH : "arroja"
+    INVESTOR_ACCOUNT ||--o{ SUITABILITY_ASSESSMENT : "responde"
+    INVESTOR_ACCOUNT ||--o{ SOPHISTICATION_REQUEST : "solicita"
 ```
 
-**`kyc_profile`** — 1:1 con `investor`.
+**`kyc_profile`** — `subject_type` (`INVESTOR_USER|INVESTOR_ACCOUNT`) con dos
+claves ajenas anulables y un `CHECK` que obliga a que exactamente una esté
+informada. Prefiero esto a un identificador polimórfico suelto porque conserva
+la integridad referencial: la base de datos sigue impidiendo apuntar a un sujeto
+que no existe.
 `level_reached` (`0|1|2|3`), `status`
 (`NOT_STARTED|PENDING_DOCUMENTS|IN_REVIEW|APPROVED|REJECTED|EXPIRED|SUSPENDED`),
 `rejection_reason_code` + `rejection_reason_text`, `approved_at`,
@@ -213,7 +258,11 @@ El fichero **nunca** se sirve directamente: solo por URL firmada de vida corta
 tras comprobar la propiedad, y cada descarga escribe en `audit_log`.
 
 **`suitability_assessment`** — el test de idoneidad (conocimientos + simulación
-de capacidad de soportar pérdidas):
+de capacidad de soportar pérdidas). Cuelga de **`investor_account`**, no del
+usuario: quien se clasifica como sofisticado o no sofisticado es la parte que
+invierte, y los criterios para personas jurídicas son distintos de los de
+personas físicas *(Anexo II ECSP — a validar)*. Se registra además qué
+`investor_user` lo cumplimentó.
 `questionnaire_version_id`, `answers` (JSONB), `knowledge_outcome`
 (`PASS|FAIL`), `declared_net_worth_cents`, `declared_annual_income_cents`,
 `loss_bearing_capacity_cents` (resultado de la simulación),
@@ -314,7 +363,8 @@ fecha real, estado), **`project_update`** (novedades para inversores),
 
 ```mermaid
 erDiagram
-    INVESTOR ||--o{ INVESTMENT : compromete
+    INVESTOR_ACCOUNT ||--o{ INVESTMENT : compromete
+    INVESTOR_USER ||--o{ INVESTMENT : "cursa en su nombre"
     FUNDING_ROUND ||--o{ INVESTMENT : agrupa
     INVESTMENT ||--o{ INVESTMENT_TRANSITION : "registra cambios"
     INVESTMENT ||--o| SIGNATURE_REQUEST : firma
@@ -328,10 +378,13 @@ erDiagram
 ```
 
 **`investment`** — el compromiso.
-`investor_id`, `funding_round_id`, `project_id` (denormalizado para consultas y
-para que un cambio de ronda nunca huérfane el histórico), `amount_cents`,
-`currency`, `status`, `reference` (código legible para el inversor y para el
-concepto de la transferencia), y los sellos de tiempo del flujo:
+`investor_account_id` (**quién invierte**, la parte contractual),
+`placed_by_investor_user_id` (**quién la cursó**, el humano — para personas
+jurídicas, el apoderado), `funding_round_id`, `project_id` (denormalizado para
+consultas y para que un cambio de ronda nunca huérfane el histórico),
+`amount_cents`, `currency`, `status`, `reference` (código legible para el
+inversor y para el concepto de la transferencia), y los sellos de tiempo del
+flujo:
 `reserved_at`, `kiis_presented_at`, `kiis_acknowledged_at`, `signed_at`,
 **`cooling_off_ends_at`**, `funds_received_at`, `confirmed_at`,
 `withdrawn_at`, `cancelled_at`, `refunded_at`, `cancellation_reason`.
@@ -599,44 +652,53 @@ Los mismos puertos, con la misma disciplina, para firma electrónica
 
 ---
 
-## 6. Decisiones que necesito que confirmes
+## 6. Estado de las decisiones
 
-1. **Stack.** ¿Adelante con TypeScript/Next.js monorepo, o preferís la
-   separación NestJS + Next.js (o Django) por razones de equipo o de perfil de
-   quien mantendrá esto?
-2. **Separación de credenciales admin.** ¿Un `user` con perfiles (propuesta) o
-   dos sistemas de autenticación completamente separados? Es más barato
-   decidirlo ahora.
-3. **Libro mayor de partida doble.** ¿Lo modelamos desde fase 1 e implementamos
-   en fase 4 (mi recomendación), o preferís empezar con saldos simples?
-4. **Personas jurídicas.** ¿Entra el alta de inversores persona jurídica en el
-   MVP, o solo personas físicas por ahora (con el modelo ya preparado)?
-5. **Parámetros legales.** Los valores por defecto de §1.3 llevan *(a validar)*.
-   Necesito que el asesor legal confirme: días de reflexión, umbral de origen de
-   fondos, umbrales de aviso, criterios de inversor sofisticado y plazos de
-   retención. **No bloquea la fase 1** —son filas de configuración— pero sí
-   bloquea salir a producción.
-6. **Relación con el showroom 3D existente.** ¿Queréis que `project.showroom_url`
-   apunte al showroom actual de Serenea/Apolo como pieza del catálogo, o que
-   ambos productos vivan totalmente separados de momento?
-7. **Idioma y localización.** ¿Solo español en el MVP, o preparamos i18n
-   (afecta a `legal_document_version.locale` y al contenido de proyecto)?
+### Confirmadas
+
+| # | Decisión | Resolución |
+|---|---|---|
+| 1 | Stack | **TypeScript / Next.js en monorepo** — respuesta: "el más fácil de mantener". Un lenguaje, un despliegue, un modelo de datos |
+| 2 | Credenciales | **Separadas**: `investor_user` y `admin_user` son tablas distintas, con sesiones y cookies propias |
+| 4 | Tipo de inversor | **Personas físicas y jurídicas** en el MVP → modelo `investor_user` / `investor_account` / `account_membership` / `beneficial_owner` |
+
+### Resueltas por defecto (decid si no os convence)
+
+| # | Decisión | Qué he hecho | Reversible |
+|---|---|---|---|
+| 3 | Libro mayor | **Modelado ahora, implementado en fase 4.** Las tablas existen y el trigger de cuadre también; el flujo de inversión aún no escribe asientos | Sí, barato |
+| 6 | Showroom 3D | `project.showroom_url` como campo opcional. El showroom actual **no se toca**: la plataforma vive en `platform/`, él sigue sirviéndose desde la raíz | Sí, barato |
+| 7 | Idioma | **Español**, con `locale` presente en documentos legales y contenidos. Sin infraestructura de i18n en el MVP | Añadirlo después cuesta más, pero no exige migración |
+
+### Bloqueantes para producción, no para desarrollo
+
+**Parámetros legales.** Todo lo marcado *(a validar)* en §1.3 necesita
+confirmación de la asesoría: días de reflexión, umbral de origen de fondos,
+umbrales de aviso, criterios de inversor sofisticado —**incluidos los de persona
+jurídica**, que ahora aplican— y plazos de retención. Son filas de
+`compliance_setting`, así que cambiarlos es editar configuración, no desplegar.
+
+**Autorización CNMV como PSFP.** Fuera del alcance de este trabajo. La
+plataforma no debe captar dinero real hasta que exista.
 
 ---
 
-## 7. Si confirmas, esto es lo que entrego en el resto de la fase 1
+## 7. Entrega de la fase 1
 
-- `packages/db`: `schema.prisma` completo con todas las entidades de §2,
-  migración inicial y el SQL de triggers/constraints de §2.6.
-- `packages/core`: entidades de dominio y máquinas de estado de `Investment` y
-  `KycProfile`, con sus tests unitarios (sin base de datos).
-- `packages/providers`: los puertos y los adaptadores `mock`.
-- `apps/web`: esqueleto de Next.js con los tres segmentos de ruta, layouts,
-  middleware de autenticación y páginas vacías. **Sin lógica de negocio.**
-- `apps/worker`: esqueleto con el planificador y los trabajos declarados.
-- `infra/docker-compose.yml`: Postgres + MinIO + Mailpit + Redis, y un `seed`
-  con UMAIA, sus 5 activos y dos proyectos relacionados de ejemplo.
-- `.env.example` documentado y hook de detección de secretos.
-- `README` de la plataforma con cómo levantarlo en local.
+Todo el código vive bajo **`platform/`**, para no interferir con el showroom 3D
+que se sirve desde la raíz del repositorio.
+
+- `platform/packages/db`: `schema.prisma` completo, migración inicial generada y
+  el SQL de triggers/constraints de §2.6.
+- `platform/packages/core`: dominio y máquinas de estado de `Investment` y
+  `KycProfile`, con tests unitarios que corren sin base de datos.
+- `platform/packages/auth`: primitivas compartidas por los dos perímetros.
+- `platform/packages/providers`: puertos y adaptadores `mock`.
+- `platform/apps/web`: esqueleto de Next.js con los tres segmentos de ruta,
+  middleware por perímetro y páginas vacías. **Sin lógica de negocio.**
+- `platform/apps/worker`: esqueleto con los trabajos declarados.
+- `platform/infra/docker-compose.yml`: Postgres + MinIO + Mailpit + Redis.
+- Seed con UMAIA, sus 5 activos, su ronda y dos proyectos relacionados.
+- `.env.example` documentado.
 
 Nada se despliega. Todo queda en la rama `claude/umaia-crowdfunding-platform-zo1bpd`.

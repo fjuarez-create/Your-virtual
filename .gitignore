@@ -2,3 +2,25 @@ node_modules/
 .DS_Store
 publish/
 index.local.html
+
+# --- Plataforma de inversión (platform/) ---
+# Secretos: nunca versionados. Solo se versiona platform/.env.example
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Build
+.next/
+dist/
+build/
+*.tsbuildinfo
+
+# Prisma: cliente generado
+platform/packages/db/generated/
+
+# Volcados y exportaciones que pueden contener datos personales
+*.dump
+*.sql.gz
+exports/

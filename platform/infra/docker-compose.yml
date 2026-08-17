@@ -1,0 +1,81 @@
+# Entorno de desarrollo local. NO apto para producción:
+# las credenciales de este fichero son públicas a propósito.
+name: umaia-platform
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: umaia
+      POSTGRES_PASSWORD: umaia_local_dev
+      POSTGRES_DB: umaia
+      # Comparaciones deterministas: importa para los índices únicos sobre email.
+      POSTGRES_INITDB_ARGS: "--locale-provider=icu --icu-locale=es-ES"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U umaia -d umaia"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Almacenamiento S3-compatible para los documentos (KYC, contratos, memorias).
+  # En producción: S3 real con cifrado gestionado por KMS.
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: umaia_local
+      MINIO_ROOT_PASSWORD: umaia_local_dev
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # Crea el bucket privado al arrancar.
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 umaia_local umaia_local_dev &&
+      mc mb --ignore-existing local/umaia-documents &&
+      mc anonymous set none local/umaia-documents &&
+      echo 'Bucket umaia-documents listo (privado)'
+      "
+
+  # Captura el correo saliente en desarrollo. Nada sale a internet.
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  # Limitación de frecuencia y cola de trabajos.
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres_data:
+  minio_data:
