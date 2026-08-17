@@ -17,7 +17,8 @@
     "dev": "npm run dev --workspace @umaia/web",
     "build": "npm run build --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
-    "typecheck": "tsc --build --force",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "verify:db": "psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f packages/db/sql/verify-invariants.sql",
     "infra:up": "docker compose -f infra/docker-compose.yml up -d",
     "infra:down": "docker compose -f infra/docker-compose.yml down"
   },

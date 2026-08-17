@@ -1,0 +1,129 @@
+/*
+ * Estilos base del esqueleto.
+ *
+ * Mínimos a propósito: el diseño de la web pública entra en la fase 2. Lo que
+ * hay aquí es lo justo para que la estructura de las tres superficies se lea.
+ */
+
+:root {
+  --tinta: #14181d;
+  --tinta-suave: #5b6570;
+  --papel: #ffffff;
+  --papel-hundido: #f4f6f8;
+  --linea: #dde3e9;
+  --acento: #1f5f4f;
+  --aviso-fondo: #fdf6e3;
+  --aviso-linea: #d9c48a;
+  --aviso-tinta: #6b5310;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --tinta: #e8ecf0;
+    --tinta-suave: #9aa5b1;
+    --papel: #12161a;
+    --papel-hundido: #1a1f25;
+    --linea: #2b333b;
+    --acento: #6fbfa6;
+    --aviso-fondo: #2a2318;
+    --aviso-linea: #6b5a2e;
+    --aviso-tinta: #e3cf95;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--papel);
+  color: var(--tinta);
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.6;
+}
+
+main {
+  max-width: 72ch;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 6rem;
+}
+
+h1 {
+  font-size: 1.9rem;
+  line-height: 1.2;
+  text-wrap: balance;
+  margin-bottom: 0.25rem;
+}
+
+h2 {
+  font-size: 1.2rem;
+  margin-top: 2.5rem;
+}
+
+a {
+  color: var(--acento);
+}
+
+.eyebrow {
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tinta-suave);
+  margin: 0;
+}
+
+.pendiente {
+  border: 1px dashed var(--linea);
+  border-radius: 6px;
+  padding: 1rem 1.25rem;
+  background: var(--papel-hundido);
+  color: var(--tinta-suave);
+  font-size: 0.92rem;
+}
+
+.aviso-legal {
+  border: 1px solid var(--aviso-linea);
+  border-left-width: 4px;
+  border-radius: 4px;
+  padding: 1rem 1.25rem;
+  background: var(--aviso-fondo);
+  color: var(--aviso-tinta);
+  font-size: 0.9rem;
+}
+
+nav.superficie {
+  border-bottom: 1px solid var(--linea);
+  padding: 0.9rem 1.5rem;
+  display: flex;
+  gap: 1.25rem;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+
+nav.superficie strong {
+  letter-spacing: 0.14em;
+}
+
+nav.superficie .marca-admin {
+  color: var(--tinta-suave);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+ul.rutas {
+  padding-left: 1.1rem;
+}
+
+ul.rutas li {
+  margin-bottom: 0.35rem;
+}
+
+code {
+  background: var(--papel-hundido);
+  border: 1px solid var(--linea);
+  border-radius: 3px;
+  padding: 0.1em 0.35em;
+  font-size: 0.88em;
+}
