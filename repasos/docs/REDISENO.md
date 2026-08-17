@@ -196,10 +196,10 @@ Entrar a una inspección nueva ofrece tres caminos: **hacer foto,
 elegir de la galería, o recorrido con IA**.
 
 En los dos primeros, la IA **también propone el texto** a partir de la
-foto. Pero eso lo decide **cada usuario en su panel**: quien crea tareas
-elige si quiere que se le redacten solas o escribirlas él. Es la misma
-llamada que la del recorrido con una sola marca y sin transcripción, así
-que no hace falta nada nuevo en el servidor.
+foto. Eso lo decide **cada usuario en su panel**: nace **encendido para
+todos** y quien no lo quiera lo apaga. Es la misma llamada que la del
+recorrido con una sola marca y sin transcripción, así que no hace falta
+nada nuevo en el servidor.
 
 Que sea opcional no es un capricho: en un recorrido, una llamada cubre
 veinte fotos; creando tareas de una en una, cada tarea es una llamada.
@@ -209,5 +209,5 @@ Veinte tareas sueltas cuestan bastante más que un recorrido de veinte.
 
 ## Lo que sigue abierto
 
-- Si la propuesta de texto por IA al crear una tarea desde foto o galería
-  **nace encendida o apagada** para un usuario nuevo.
+- La lista de estancias trae **«baño principal» dos veces**. Se ha dejado
+  una; falta saber si la segunda quería ser otra estancia.
