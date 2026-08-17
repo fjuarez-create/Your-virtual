@@ -179,27 +179,12 @@ export async function marcarLeido(mensajeId) {
 }
 
 /**
- * Cuántos mensajes de una vivienda no ha leído todavía quien tiene la
- * sesión abierta. Es la bolita azul.
- */
-export async function sinLeerDeUnidad(unidadId) {
-  const quien = usuario?.id || 'local';
-  const mensajes = await mensajesDeUnidad(unidadId);
-  let n = 0;
-  for (const m of mensajes) {
-    if (esMio(m)) continue;
-    if (!(await db.get('lecturas', `${m.id}:${quien}`))) n++;
-  }
-  return n;
-}
-
-/**
- * Lo mismo para toda una promoción, de una vez: un Map de unidad a
- * cuántos sin leer.
+ * Cuántos mensajes sin leer tiene cada vivienda: un Map de unidad a
+ * cuántos. Es la bolita azul del listado.
  *
- * Se lee todo de golpe y se cuenta en memoria en lugar de preguntar por
- * cada vivienda. Son cincuenta casas, y cincuenta idas y venidas a
- * IndexedDB se notan al abrir la pantalla.
+ * Se lee todo de golpe y se cuenta en memoria en lugar de preguntar
+ * vivienda por vivienda. Son cincuenta casas, y cincuenta idas y
+ * venidas a IndexedDB se notan al abrir la pantalla.
  */
 export async function sinLeerPorUnidad(promoId) {
   const quien = usuario?.id || 'local';
