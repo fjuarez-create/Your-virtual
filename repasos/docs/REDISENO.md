@@ -112,6 +112,11 @@ Son **dos conjuntos distintos y no se mezclan**:
 - **Fotos de la tarea** — el defecto. Obligatorias al crearla.
 - **Fotos de verificación** — la reparación. **Obligatorias para poder
   dar la tarea por completada**: sin ellas el botón está desactivado.
+  Basta con una para activar el botón.
+
+**Diez y diez**: máximo diez elementos en cada conjunto. El diseño decía
+diez en uno y treinta en el otro; se unifica en diez, que sobra para las
+dos cosas.
 
 ## Recorrido
 
@@ -123,12 +128,6 @@ una llamada, y sin pausa pierde el recorrido entero.
 
 ## Lo que sigue abierto
 
-- **10 o 30 fotos.** La nota de la página de una tarea dice «el máximo
-  número de elementos a cargar es de 10»; la del completador dice «un
-  máximo de 30 fotos por tarea». Se entiende que son los dos conjuntos
-  distintos —10 del defecto, 30 de la reparación—, pero conviene
-  confirmarlo: es raro que haya el triple de fotos del arreglo que del
-  problema.
 - **«El número de viviendas verificadas»** en el banner verde. Todo lo
   que hay alrededor cuenta tareas, no viviendas. Casi seguro es un lapsus
   y son tareas.
