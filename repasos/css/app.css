@@ -588,6 +588,24 @@ button.avatar:active { transform: scale(0.92); }
 .btn.pdf { background: var(--rojo); color: #fff; }
 .btn.pdf:active { filter: brightness(0.94); }
 .tag.rojo { background: var(--rojo-soft); color: var(--rojo); }
+/* Chips con la cara de cada persona que tiene trabajo sin verificar en
+   una casa. Filtran por quién. La cara delante del nombre y no al revés
+   porque en obra se reconoce antes una cara que un nombre de pila, y
+   media plantilla se llama Fran. */
+.chips.caras { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 0; }
+.chips.caras .cara {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 4px 13px 4px 4px; border-radius: 999px;
+  background: var(--surface); font-size: 13px; font-weight: 700;
+  letter-spacing: -0.01em; color: var(--ink);
+  box-shadow: inset 0 0 0 1.5px transparent;
+  transition: box-shadow var(--mov-corto) var(--sal-estandar);
+}
+.chips.caras .cara[aria-pressed='true'] { box-shadow: inset 0 0 0 1.5px var(--ink); }
+
+/* La marca de lo verificado en los listados: el check pegado al texto. */
+.tag.hecha { background: rgba(63, 125, 90, 0.14); color: var(--ok); gap: 5px; }
+.tag.hecha svg { width: 12px; height: 12px; flex: none; }
 
 .alerta {
   display: flex; gap: 13px; align-items: flex-start;
@@ -1221,7 +1239,13 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
   transition: transform var(--mov-corto) var(--sal-estandar);
 }
 .tarea-fila:active { transform: scale(0.985); }
-.tarea-fila.resuelta { background: rgba(63, 125, 90, 0.10); }
+/* Lo verificado se aparta, no se esconde: va al final de la lista, en
+   gris claro y tachado. Sigue estando —es la prueba de que se miró— y
+   se lee como lo que es, algo cerrado, sin competir por la atención con
+   lo que todavía hay que hacer. */
+.tarea-fila.resuelta { background: var(--surface); opacity: .62; }
+.tarea-fila.resuelta .tarea-txt { text-decoration: line-through; text-decoration-thickness: 1px; }
+.tarea-fila.resuelta .tarea-foto { filter: grayscale(1); }
 .tarea-fila.rechazada { background: var(--rojo-soft); }
 .tarea-foto {
   width: 84px; height: 84px; flex: 0 0 84px; border-radius: 15px;

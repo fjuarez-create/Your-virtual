@@ -608,7 +608,13 @@ export function tareaFila(t, { portada, donde, filtros = null } = {}) {
       h('p.tarea-txt', null, t.texto || 'Sin descripción'),
       h('div.tarea-pie', null,
         avatar(store.persona(t.creadoPor, t.creadoPorNombre), { tam: 35 }),
-        h('span.tag', { class: e.tag }, e.nombre),
+        // Lo verificado lleva su check y no su nombre: en un listado de
+        // treinta, una hilera de marcas se cuenta de un vistazo y una
+        // hilera de la palabra «Verificada» hay que leerla.
+        t.estado === 'verificada'
+          ? h('span.tag.hecha', null, icon('check', 12), 'Verificada')
+          : h('span.tag', { class: e.tag }, e.nombre),
+        t.zona ? h('span.tarea-donde', null, t.zona) : null,
         donde ? h('span.tarea-donde', null, donde) : null,
       ),
     ),
