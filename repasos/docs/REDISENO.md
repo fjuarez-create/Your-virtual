@@ -50,7 +50,11 @@ y no vuelve a PENDIENTE. Cuenta como no verificada en todos los
 porcentajes, igual que pendiente.
 
 - Rechazar **obliga a poner el motivo**, y el motivo va en **campo
-  propio**, no en el hilo de comentarios.
+  propio**, no en el hilo de comentarios. Se guarda **uno por cada
+  rechazo**, con su fecha y quién lo firmó: en pantalla manda el último,
+  que es lo que hay que arreglar ahora, y los anteriores quedan debajo.
+  Un campo que se sobrescribe borraría por qué rebotó la primera vez, que
+  es justo lo que se quiere conservar.
 - Las **fotos de verificación del intento rechazado se conservan**. Son
   la prueba de lo que la constructora dijo que estaba arreglado, y en una
   discusión de obra eso vale dinero.
@@ -161,10 +165,5 @@ Veinte tareas sueltas cuestan bastante más que un recorrido de veinte.
 
 ## Lo que sigue abierto
 
-- **Un motivo de rechazo o varios.** Si el campo es uno solo, el segundo
-  rechazo pisa al primero y se pierde por qué rebotó la primera vez —
-  justo lo que se quiso evitar guardando las fotos del intento fallido.
-  Habría que decidir si se guarda el historial de rechazos.
-- Si las tareas creadas **desde foto o desde galería** también pasan por
-  la IA para que redacte el texto, o ahí se escribe a mano y la IA es
-  solo cosa del recorrido.
+- Si la propuesta de texto por IA al crear una tarea desde foto o galería
+  **nace encendida o apagada** para un usuario nuevo.
