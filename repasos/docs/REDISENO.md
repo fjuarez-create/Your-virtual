@@ -124,13 +124,27 @@ Se mantiene tal cual está construido, y **se le añade PAUSAR**: hoy, si
 paras, se acaba. Alguien que graba mientras anda por una villa recibe
 una llamada, y sin pausa pierde el recorrido entero.
 
+Lo demás del diseño coincide con lo construido —tocar en cualquier sitio
+de la pantalla saca un fotograma, menos en el botón del cerebro; la caja
+de descripción tiene el alto justo de lo escrito— salvo tres cosas:
+
+- **Falta ZONA.** El diseño enseña cada ficha como
+  `FOTO + zona + oficio + descripción`, y lo que se publicó esta noche no
+  tiene zona. Es el mismo campo ZONA-ESTANCIA de las tareas a mano.
+- **El título de la lista** es `Nueva lista - [nombre de la vivienda]`,
+  no «RECORRIDO DE 0:48» como está ahora.
+- En la pantalla de validar, **la flecha de volver y el menú de los tres
+  puntos van desactivados**: de ahí se sale creando las tareas o
+  descartándolas, no por la puerta de atrás. El recorrido sigue guardado
+  en el móvil por si se cierra la app, así que no se pierde nada.
+
+Entrar a una inspección nueva ofrece tres caminos: **hacer foto,
+elegir de la galería, o recorrido con IA**.
+
 ---
 
 ## Lo que sigue abierto
 
-- **«El número de viviendas verificadas»** en el banner verde. Todo lo
-  que hay alrededor cuenta tareas, no viviendas. Casi seguro es un lapsus
-  y son tareas.
 - Si al rechazar se **conservan las fotos de verificación** del intento
   anterior. Recomendación: conservarlas, son la prueba de lo que se dijo
   que estaba arreglado.
