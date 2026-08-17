@@ -404,11 +404,13 @@ stateDiagram-v2
     COOLING_OFF --> WITHDRAWN: el inversor revoca (sin motivo ni penalización)
     PENDING_PAYMENT --> FUNDS_RECEIVED: pago conciliado
     FUNDS_RECEIVED --> CONFIRMED: cierre de ronda con mínimo alcanzado
-    FUNDS_RECEIVED --> REFUNDED: ronda fallida o revocación con fondos
+    FUNDS_RECEIVED --> REFUNDED: ronda fallida
     DRAFT --> EXPIRED: caduca la reserva
     PENDING_KIIS --> EXPIRED
     PENDING_SIGNATURE --> EXPIRED
+    PENDING_PAYMENT --> EXPIRED
     PENDING_PAYMENT --> CANCELLED: impago
+    WITHDRAWN --> REFUNDED: devolución completada
     WITHDRAWN --> [*]
     CONFIRMED --> [*]
     REFUNDED --> [*]
@@ -421,9 +423,16 @@ Notas de diseño sobre este flujo:
 1. **La FDFI/KIIS se presenta antes de poder firmar**, y se registra qué
    *versión concreta* del documento se mostró (`kiis_document_id` en la ronda +
    `LegalDocumentAcceptance`). No es un checkbox suelto.
-2. **El dinero puede llegar durante el periodo de reflexión**, pero queda
-   marcado como comprometido en escrow y la revocación sigue siendo posible sin
-   penalización: por eso `WITHDRAWN` y `REFUNDED` son estados distintos.
+2. **El periodo de reflexión ocurre *antes* del pago.** El inversor firma, se
+   abre la ventana de revocación, y solo cuando expira se le pide el dinero.
+   Cambio respecto a la v0.1, que preveía cobrar y retener en la cuenta de
+   garantía: es más protector para el inversor y elimina toda una familia de
+   estados en los que hay dinero de alguien que todavía puede echarse atrás.
+   Aun así `WITHDRAWN` y `REFUNDED` siguen siendo estados distintos, porque una
+   revocación puede coincidir con un pago ya emitido.
+   Si más adelante queréis cobrar durante la reflexión —lo hacen otras
+   plataformas—, las transiciones a abrir están anotadas en
+   `packages/core/src/investment-flow.ts`.
 3. **`investment_transition`** guarda cada cambio de estado (estado origen,
    destino, actor, motivo, timestamp). Es redundante con `audit_log` a
    propósito: el log de auditoría es transversal y voluminoso; esta tabla es la
