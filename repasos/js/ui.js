@@ -192,14 +192,15 @@ export function avatar(usuario, { tam = 44, radio = '50%', onclick, etiqueta } =
  * quién vio qué, una cara inventada acabaría leyéndose como una
  * persona de verdad.
  */
-export function grupoAvatares(gente = [], { tam = 38, max = 3, hueco = 0, vacio = false } = {}) {
+export function grupoAvatares(gente = [], { tam = 38, max = 3, hueco = 0, vacio = false, solape } = {}) {
   const lista = gente.slice(0, max);
   const resto = gente.length - lista.length;
   // De cada bolita tapada asoma una cuarta parte. No se trata de
   // reconocer la cara —para eso está el nombre— sino de ver de un
   // vistazo cuánta gente hay detrás de esto; apretadas ocupan poco y
-  // dejan sitio al texto.
-  const solape = Math.round(tam * 0.75);
+  // dejan sitio al texto. Las tarjetas del rediseño piden otro aire y
+  // pasan su propio solape en píxeles.
+  solape = solape ?? Math.round(tam * 0.75);
 
   const paso = tam - solape;
   const piezas = lista.length + (resto > 0 ? 1 : 0);

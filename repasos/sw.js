@@ -48,6 +48,23 @@ const ARMAZON = [
   'assets/icons/icon-192.png',
   'assets/logo/marca-unik.png',
   'assets/logo/marca-check.png',
+  // Las caras de los gremios (96×96, unos pocos KB cada una): salen
+  // en la hoja de filtros y en las fichas, también sin red.
+  'assets/gremios/aire.webp',
+  'assets/gremios/carp-aluminio.webp',
+  'assets/gremios/barandillas.webp',
+  'assets/gremios/cocinas.webp',
+  'assets/gremios/electricidad.webp',
+  'assets/gremios/fachada.webp',
+  'assets/gremios/fontaneria.webp',
+  'assets/gremios/jardines.webp',
+  'assets/gremios/pavimentos.webp',
+  'assets/gremios/pintura.webp',
+  'assets/gremios/piscinas.webp',
+  'assets/gremios/pladur.webp',
+  'assets/gremios/carp-madera.webp',
+  'assets/gremios/videoporteros.webp',
+  'assets/gremios/rodapies.webp',
 ];
 
 self.addEventListener('install', (e) => {

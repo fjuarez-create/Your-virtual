@@ -177,22 +177,29 @@ export const enObra = (t) => t?.estado === 'pendiente' || t?.estado === 'rechaza
  * mientras las fotos no estén puestas: se ven distintas entre sí y se
  * reconocen. Las definitivas salen del propio Figma.
  */
+/* Los nombres y las empresas salen del Figma de Fran (la hoja de
+   filtros los lista uno a uno). Los identificadores NO se tocan:
+   están escritos en tareas de producción. Por eso «Puertas de paso y
+   entrada» sigue siendo carp-madera por dentro, y Rodapiés, que antes
+   iba con las puertas, nace como gremio nuevo. */
 export const OFICIOS = [
   { id: 'general', nombre: 'General', corto: 'General', empresa: '', imagen: '' },
-  { id: 'aire', nombre: 'Aire acondicionado', corto: 'Aire', empresa: '', imagen: '' },
-  { id: 'carp-aluminio', nombre: 'Aluminio', corto: 'Aluminio', empresa: '', imagen: '' },
-  { id: 'barandillas', nombre: 'Barandillas', corto: 'Barandillas', empresa: '', imagen: '' },
-  { id: 'barandillas-vidrio', nombre: 'Barandillas de vidrio', corto: 'Barandillas vidrio', empresa: '', imagen: '' },
-  { id: 'cocinas', nombre: 'Cocinas', corto: 'Cocinas', empresa: '', imagen: '' },
-  { id: 'electricidad', nombre: 'Electricidad', corto: 'Electricidad', empresa: '', imagen: '' },
-  { id: 'fachada', nombre: 'Fachada', corto: 'Fachada', empresa: '', imagen: '' },
-  { id: 'fontaneria', nombre: 'Fontanería', corto: 'Fontanería', empresa: '', imagen: '' },
-  { id: 'jardines', nombre: 'Jardines', corto: 'Jardines', empresa: '', imagen: '' },
-  { id: 'pavimentos', nombre: 'Pavimentos', corto: 'Pavimentos', empresa: '', imagen: '' },
-  { id: 'pintura', nombre: 'Pintura', corto: 'Pintura', empresa: '', imagen: '' },
-  { id: 'piscinas', nombre: 'Piscinas', corto: 'Piscinas', empresa: '', imagen: '' },
-  { id: 'pladur', nombre: 'Pladur', corto: 'Pladur', empresa: '', imagen: '' },
-  { id: 'carp-madera', nombre: 'Puertas y rodapiés', corto: 'Puertas y rodapiés', empresa: '', imagen: '' },
+  { id: 'aire', nombre: 'Aire y ventilaciones', corto: 'Aire', empresa: 'Insiste', imagen: 'aire.webp' },
+  { id: 'carp-aluminio', nombre: 'Aluminio', corto: 'Aluminio', empresa: 'Aluvidrio', imagen: 'carp-aluminio.webp' },
+  { id: 'barandillas', nombre: 'Barandillas', corto: 'Barandillas', empresa: 'Railing Canarias', imagen: 'barandillas.webp' },
+  { id: 'barandillas-vidrio', nombre: 'Barandillas de vidrio', corto: 'Barandillas vidrio', empresa: 'Railing Canarias', imagen: 'barandillas.webp' },
+  { id: 'cocinas', nombre: 'Cocinas', corto: 'Cocinas', empresa: 'Samony', imagen: 'cocinas.webp' },
+  { id: 'electricidad', nombre: 'Electricidad', corto: 'Electricidad', empresa: 'Octavio Guerra', imagen: 'electricidad.webp' },
+  { id: 'fachada', nombre: 'Fachada', corto: 'Fachada', empresa: 'Cisneros', imagen: 'fachada.webp' },
+  { id: 'fontaneria', nombre: 'Fontanería', corto: 'Fontanería', empresa: 'Cardona Cubas', imagen: 'fontaneria.webp' },
+  { id: 'jardines', nombre: 'Jardinería', corto: 'Jardinería', empresa: '', imagen: 'jardines.webp' },
+  { id: 'pavimentos', nombre: 'Solados y alicatados', corto: 'Solados', empresa: 'Construegraf', imagen: 'pavimentos.webp' },
+  { id: 'pintura', nombre: 'Pintura', corto: 'Pintura', empresa: '', imagen: 'pintura.webp' },
+  { id: 'piscinas', nombre: 'Piscinas', corto: 'Piscinas', empresa: 'Zurita', imagen: 'piscinas.webp' },
+  { id: 'pladur', nombre: 'Pladur', corto: 'Pladur', empresa: 'Felipe', imagen: 'pladur.webp' },
+  { id: 'carp-madera', nombre: 'Puertas de paso y entrada', corto: 'Puertas', empresa: 'Jordán', imagen: 'carp-madera.webp' },
+  { id: 'videoporteros', nombre: 'Videoporteros', corto: 'Videoporteros', empresa: 'Willian', imagen: 'videoporteros.webp' },
+  { id: 'rodapies', nombre: 'Rodapiés', corto: 'Rodapiés', empresa: 'Jordán', imagen: 'rodapies.webp' },
 ];
 
 /** El que llevan las tareas creadas antes de que existiera el campo. */

@@ -1,13 +1,23 @@
-/* Tercera bolita: las viviendas de la promoción, en una columna.
+/* La lista de las 50 villas, calcada del Figma del rediseño 2026.
 
-   Aquí no hay fechas: una vivienda acumula tareas de inspecciones
-   distintas y la fecha de cualquiera de ellas no diría nada. Lo que
-   importa es cuántas tareas tiene y en qué estado están, y eso lo dice
-   el color de la fila antes de leer un número. */
-import { h, toast, grupoAvatares, desdeHace, diasDesde } from '../ui.js';
-import { PROMOCIONES, promocion, unidades } from '../catalog.js';
+   Arriba la misma cabecera que la home (aquí la bola activa es la
+   casa), el titular grande, el conmutador Inacabadas/Finalizadas con
+   la bola de filtros al lado, y una tarjeta blanca con mordisco por
+   vivienda: el cuándo, las caras, el nombre, los dos chips y el
+   anillo de avance asomando por la esquina.
+
+   El porcentaje cuenta SOLO lo verificado. Que el jefe de obra dé algo
+   por arreglado no lo termina: lo termina que un arquitecto o la
+   propiedad lo dé por bueno. Si contara lo demás, diría que la
+   promoción va mejor de lo que va, y esa es la única mentira que esta
+   pantalla no se puede permitir. */
+import { h, icon, toast } from '../ui.js';
+import { PROMOCIONES, promocion, unidades, oficio, estado } from '../catalog.js';
 import * as store from '../store.js';
-import { filtroEstado, filtroOficio, cabeceraTab } from '../piezas.js';
+import {
+  cabDiseno, tarjetaVilla, cuandoVilla, hojaFiltroGremios, caraDeGremio,
+  avisoLocal, barraSync,
+} from '../piezas.js';
 import { ir, conFiltros, filtrosDeRuta, anotarFiltros } from '../app.js';
 
 export async function render({ promoId, desdeTab = false }) {
@@ -22,152 +32,130 @@ export async function render({ promoId, desdeTab = false }) {
   const todas = unidades(promoId);
   const resumen = await store.resumenPorUnidad(promoId);
 
-  // Cuántos mensajes sin leer tiene cada casa. Se calcula aquí y no
-  // dentro de cada fila porque son cincuenta viviendas: preguntarlo
-  // cincuenta veces por separado se nota al abrir la pantalla.
-  const sinLeer = await store.sinLeerPorUnidad(promoId);
+  // Los filtros vienen en la dirección, si es que se venía filtrando
+  // (los banners de la home mandan aquí con el estado ya puesto).
+  let { estado: filtroEstado, oficio: oficioId } = filtrosDeRuta();
+  // Y el conmutador: inacabadas de serie, que es donde está el trabajo.
+  let vista = 'inacabadas';
 
-  // El filtro viene en la dirección, si es que se venía filtrando.
-  let { estado, oficio: oficioId } = filtrosDeRuta();
-  const lista = h('div.stack.villas');
-  const contador = h('p.contador');
+  const epigrafe = h('p.d-epigrafe');
+  const lista = h('div.d-villas');
+  const filtros = h('div.d-filtros', { style: { display: 'none' } });
 
-  const cambio = () => { anotarFiltros({ estado, oficio: oficioId }); pintar(); };
+  const terminada = (r) => (r?.total || 0) > 0 && r.hechas === r.total;
 
   const pintar = () => {
-    const visibles = todas.filter((u) => encaja(resumen.get(u.id), estado, oficioId));
-    lista.replaceChildren(...visibles.map((u) =>
-      fila(u, resumen.get(u.id), promoId, { estado, oficio: oficioId }, sinLeer.get(u.id) || 0)));
+    // Primero el conmutador, luego los filtros de encima.
+    const delConmutador = todas.filter((u) =>
+      vista === 'finalizadas' ? terminada(resumen.get(u.id)) : !terminada(resumen.get(u.id)));
+    const visibles = delConmutador.filter((u) => encaja(resumen.get(u.id), filtroEstado, oficioId));
+
+    lista.replaceChildren(...visibles.map((u) => {
+      const r = resumen.get(u.id) || {};
+      const total = r.total || 0;
+      const hechas = r.hechas || 0;
+      return tarjetaVilla({
+        titulo: u.nombre,
+        cuando: cuandoVilla(r.movimiento),
+        caras: (r.gente || []).map((g) => store.persona(g.id, g.nombre)),
+        hechas,
+        total,
+        pct: total ? Math.round((100 * hechas) / total) : 0,
+        alPinchar: () => ir(conFiltros(`#/p/${promoId}/v/${u.id.split(':')[1]}`,
+          { estado: filtroEstado, oficio: oficioId })),
+      });
+    }));
     if (!visibles.length) {
-      lista.append(h('p.sub.center', { style: { padding: '30px 0' } },
-        'Ninguna vivienda encaja con este filtro.'));
+      lista.append(h('p.d-epigrafe', { style: { color: 'var(--d-gris)', textAlign: 'center', padding: '30px 0' } },
+        'Ninguna vivienda encaja aquí.'));
     }
-    contador.textContent = visibles.length === todas.length
-      ? `${todas.length} viviendas`
-      : `${visibles.length} de ${todas.length} viviendas`;
+
+    const n = visibles.length;
+    epigrafe.textContent = vista === 'finalizadas'
+      ? `${n} ${n === 1 ? 'vivienda lista' : 'viviendas listas'} para entregar`
+      : `${n} ${n === 1 ? 'vivienda' : 'viviendas'} con tareas pendientes`;
+
+    pintarFiltros();
+    conmutador.querySelectorAll('button').forEach((b) =>
+      b.setAttribute('aria-pressed', b.dataset.vista === vista ? 'true' : 'false'));
   };
+
+  /* ─── Las píldoras de los filtros aplicados, con su única X ─── */
+  const pintarFiltros = () => {
+    const piezas = [];
+    if (oficioId && oficioId !== 'todos') {
+      const o = oficio(oficioId);
+      piezas.push(h('span.d-filtro-pildora', null, conCara(o), o.nombre));
+    }
+    if (filtroEstado && filtroEstado !== 'todas') {
+      const e = estado(filtroEstado);
+      piezas.push(h('span.d-filtro-pildora', null, e?.nombre || filtroEstado));
+    }
+    if (piezas.length) {
+      piezas.push(h('button.d-filtro-quitar', {
+        'aria-label': 'Quitar los filtros',
+        onclick: () => { filtroEstado = 'todas'; oficioId = 'todos'; cambio(); },
+      }, icon('x')));
+    }
+    filtros.replaceChildren(...piezas);
+    filtros.style.display = piezas.length ? '' : 'none';
+    aplicados.textContent = piezas.length
+      ? `Has aplicado ${piezas.length - 1} ${piezas.length === 2 ? 'filtro' : 'filtros'}`
+      : '';
+    aplicados.style.display = piezas.length ? '' : 'none';
+  };
+  const conCara = (o) => {
+    const cara = caraDeGremio(o, 36);
+    cara.classList.add('cara');
+    return cara;
+  };
+
+  const cambio = () => { anotarFiltros({ estado: filtroEstado, oficio: oficioId }); pintar(); };
+
+  /* ─── El conmutador y la bola de filtros ─── */
+  const conmutador = h('div.d-selector', null,
+    h('button', { 'data-vista': 'inacabadas', onclick: () => { vista = 'inacabadas'; pintar(); } }, 'Inacabadas'),
+    h('button', { 'data-vista': 'finalizadas', onclick: () => { vista = 'finalizadas'; pintar(); } }, 'Finalizadas'),
+  );
+  const bolaFiltros = h('button.d-bola-filtros', {
+    'aria-label': 'Filtros',
+    onclick: async () => {
+      const elegido = await hojaFiltroGremios(oficioId);
+      if (elegido !== null) { oficioId = elegido; cambio(); }
+    },
+  }, icon('cursores'));
+
+  const aplicados = h('p.d-epigrafe', { style: { display: 'none' } });
+
   pintar();
 
   return {
-    tab: 'viviendas',
+    sinTabs: true,
+    clase: 'pantalla-diseno',
     contenido: [
-      ...cabeceraTab('VIVIENDAS'),
-      filtroEstado((v) => { estado = v; cambio(); }, estado),
-      filtroOficio((v) => { oficioId = v; cambio(); }, oficioId),
-      contador,
+      cabDiseno('viviendas'),
+      h('h1.d-saludo', null, 'Viviendas'),
+      avisoLocal() || barraSync(),
+      h('div.d-fila-selector', null, conmutador, bolaFiltros),
+      aplicados,
+      filtros,
+      epigrafe,
       lista,
     ],
   };
 }
 
-/* Una casa parada más de dos semanas con trabajo abierto ya no es «va
-   despacio»: es que se ha caído de la lista de alguien. */
-const DIAS_PARADA = 14;
-
 /**
- * Una vivienda, en dos renglones:
- *
- *   [caras]  Villa 01  ▬▬▬▬▬▬▬▬▬▬▬▬▬  70%
- *   qué falta                    hace cuánto
- *
- * Todo en columnas fijas —las caras, el nombre y el porcentaje— para
- * que en cincuenta filas seguidas cada cosa caiga siempre en la misma
- * vertical. La barra es lo único elástico: ocupa lo que sobra.
- *
- * El porcentaje cuenta SOLO lo verificado. Que el jefe de obra dé algo
- * por arreglado no lo termina: lo termina que un arquitecto o la
- * propiedad lo dé por bueno. Si contara lo demás, diría que la
- * promoción va mejor de lo que va, y esa es la única mentira que esta
- * pantalla no se puede permitir.
- *
- * La barra lleva tres tramos, y por eso: el negro es lo verificado, el
- * de marca es lo que el jefe de obra dice que está hecho y espera que
- * vayamos a mirar, y el rojo lo que fuimos a mirar y no valía. Se leen
- * de un vistazo, sin leer una palabra, bajando por la lista.
- *
- * Tres aspectos, y se leen antes que el texto:
- *   apagada — no tiene ninguna tarea todavía
- *   viva    — le queda algo abierto o por validar
- *   hecha   — todas sus tareas están validadas
+ * Con filtros, la lista se recorta a las que cumplen; una vivienda sin
+ * tareas no cumple ninguno.
  */
-function fila(u, r, promoId, filtros, sinLeer = 0) {
-  const total = r?.total || 0;
-  const hechas = r?.hechas || 0;
-  const esperando = r?.esperando || 0;
-  const rechazadas = r?.rechazadas || 0;
-  const pct = total ? Math.round((100 * hechas) / total) : 0;
-  const pctEspera = total ? Math.round((100 * esperando) / total) : 0;
-  const pctRechazo = total ? Math.round((100 * rechazadas) / total) : 0;
-  const terminada = total > 0 && hechas === total;
-  const clase = !total ? 'villa apagada' : terminada ? 'villa hecha' : 'villa';
-
-  const gente = (r?.gente || []).map((g) => store.persona(g.id, g.nombre));
-  const dias = r?.movimiento ? diasDesde(r.movimiento) : NaN;
-  const parada = !terminada && total > 0 && dias >= DIAS_PARADA;
-
-  return h('button', {
-    class: clase + (esperando ? ' por-validar' : ''),
-    onclick: () => ir(conFiltros(`#/p/${promoId}/v/${u.id.split(':')[1]}`, filtros)),
-  },
-    h('div.villa-cab', null,
-      // Tres como mucho, y sin «+n»: quien pase de ahí se ve igualmente
-      // en la cara de sus tareas dentro de la vivienda. El hueco se
-      // reserva entero aunque haya una sola, para que el nombre no baile
-      // de fila en fila.
-      grupoAvatares(gente.slice(0, 3), { tam: 34, max: 3, hueco: 3, vacio: true }),
-      h('div.villa-tit', null, u.nombre,
-        // La bolita de mensajes sin leer, pegada al nombre. Sin ella, el
-        // hilo de una vivienda solo se descubre entrando en ella, y en
-        // cincuenta casas eso es no descubrirlo nunca.
-        sinLeer ? h('span.villa-bolita', { 'aria-label': `${sinLeer} sin leer` }) : null),
-      h('div.villa-barra', null,
-        h('i.t-validada', { style: { width: pct + '%' } }),
-        h('i.t-validar', { style: { width: pctEspera + '%' } }),
-        h('i.t-rechazada', { style: { width: pctRechazo + '%' } }),
-      ),
-      h('div.villa-pct', null, pct + '%'),
-    ),
-    h('div.villa-pie', null,
-      h('span', null, textoDe(total, hechas, esperando, rechazadas)),
-      r?.movimiento
-        ? h('span.villa-mov', { class: parada ? 'parada' : '' }, desdeHace(r.movimiento))
-        : null,
-    ),
-  );
-}
-
-/**
- * Qué falta en esa casa. Delante lo que espera respuesta NUESTRA —lo
- * que el jefe de obra ha dado por arreglado y hay que ir a verificar—,
- * porque es lo único de esta pantalla sobre lo que quien la mira puede
- * actuar hoy. Lo que depende de la constructora va detrás, y de eso
- * primero lo rechazado: una tarea que ya rebotó una vez pesa más que
- * una que nadie ha tocado todavía.
- */
-function textoDe(total, hechas, esperando, rechazadas = 0) {
-  if (!total) return 'Sin repasar';
-  if (hechas === total) return 'Todo verificado';
-  const pendientes = total - hechas - esperando - rechazadas;
-  const partes = [];
-  if (esperando) partes.push(`${esperando} por verificar`);
-  if (rechazadas) partes.push(`${rechazadas} ${rechazadas === 1 ? 'rechazada' : 'rechazadas'}`);
-  if (pendientes) partes.push(`${pendientes} ${pendientes === 1 ? 'pendiente' : 'pendientes'}`);
-  return partes.join(' · ');
-}
-
-/**
- * Sin filtros se ven las cincuenta, incluidas las que no tienen nada:
- * la rejilla completa es en sí una información, dice cuánto queda de
- * promoción por pisar. En cuanto se filtra, la lista se recorta a las
- * que cumplen, y una vivienda sin tareas no cumple ninguna de las dos.
- */
-function encaja(r, estado, oficioId) {
+function encaja(r, filtroEstado, oficioId) {
   const vacio = {
     total: 0, hechas: 0, pendientes: 0, esperando: 0, rechazadas: 0,
     oficios: new Set(), oficiosAbiertos: new Set(),
   };
   const c = r || vacio;
-  if (!store.encajaEstado(c, estado)) return false;
-  if (oficioId !== 'todos' && !store.oficiosSegun(c, estado).has(oficioId)) return false;
+  if (!store.encajaEstado(c, filtroEstado)) return false;
+  if (oficioId && oficioId !== 'todos' && !store.oficiosSegun(c, filtroEstado).has(oficioId)) return false;
   return true;
 }

@@ -656,3 +656,128 @@ export function tareaFila(t, { portada, donde, filtros = null } = {}) {
     ),
   );
 }
+
+/* ═══ Piezas del rediseño 2026 ═══ */
+
+/**
+ * La cabecera del rediseño: la cara de quien mira (que lleva a
+ * Ajustes) y las tres bolas de navegación. La bola activa va en negro.
+ */
+export function cabDiseno(activa = 'inicio') {
+  const yo = store.sesion();
+  const bola = (clave, icono, rotulo, adonde) =>
+    h('button.d-bola', {
+      class: activa === clave ? 'activa' : '',
+      'aria-label': rotulo,
+      'aria-current': activa === clave ? 'true' : null,
+      onclick: activa === clave ? null : () => ir(adonde),
+    }, icon(icono));
+  return h('div.d-cab', null,
+    avatar(yo, { tam: 54, onclick: () => ir('#/ajustes') }),
+    h('div.d-cab-menu', null,
+      bola('inicio', 'brujula', 'Inicio', '#/'),
+      bola('viviendas', 'casa', 'Viviendas', '#/viviendas'),
+      bola('listas', 'periodico', 'Actas', '#/listas'),
+    ),
+  );
+}
+
+/** El cuándo de la tarjeta: «Hoy, 9:02 h» · «Ayer, 14:35 h» · «12 agosto, 2026». */
+const MESES_LARGOS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+  'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+export function cuandoVilla(iso) {
+  if (!iso) return 'Sin actividad aún';
+  const d = new Date(iso);
+  const hoy = new Date();
+  const ayer = new Date(hoy); ayer.setDate(hoy.getDate() - 1);
+  if (d.toDateString() === hoy.toDateString()) return `Hoy, ${hora(iso)} h`;
+  if (d.toDateString() === ayer.toDateString()) return `Ayer, ${hora(iso)} h`;
+  return `${d.getDate()} ${MESES_LARGOS[d.getMonth()]}, ${d.getFullYear()}`;
+}
+
+/**
+ * La tarjeta blanca con mordisco del diseño: cabecera con la mano y el
+ * cuándo, las caras arriba a la derecha, el título grande, los dos
+ * chips y el anillo de avance asomando por la esquina. La usan la
+ * lista de viviendas y el módulo de la promoción en la home.
+ */
+export function tarjetaVilla({ titulo, cuando, caras = [], hechas, total, pct, alPinchar }) {
+  const chipPct = pct === 100 && total ? 'macizo' : pct < 30 ? 'rojo' : pct < 70 ? 'ambar' : 'verde';
+  return h('button.d-tarjeta', { onclick: alPinchar },
+    h('span.d-mordida'),
+    h('span.d-mordida-esquina'),
+    h('div.d-tarjeta-cab', null,
+      icon('toque'),
+      h('span', null, cuando),
+      h('span.d-tarjeta-caras', null,
+        grupoAvatares(caras.slice(0, 3), { tam: 36, max: 3, solape: 12 })),
+    ),
+    h('div.d-tarjeta-titulo', null, titulo),
+    h('div.d-tarjeta-pie', null,
+      h('span.d-chip.grande', null, icon('listaChecks'), `${hechas} / ${total}`),
+      h('span.d-chip.grande', { class: chipPct }, icon('fuego'), `${pct}%`),
+    ),
+    h('span.d-tarjeta-anillo', null, anillo(pct, { tam: 55, grosor: 5, etiqueta: false })),
+  );
+}
+
+/**
+ * La hoja de filtros del diseño: modal a pantalla completa con el
+ * buscador, la lista de gremios en píldora y el botón de filtrar
+ * anclado abajo. Devuelve el gremio elegido, 'todos' para quitar el
+ * filtro, o null si se cierra con el aspa.
+ */
+export function hojaFiltroGremios(actual = 'todos') {
+  return new Promise((resolver) => {
+    let elegido = actual !== 'todos' ? actual : null;
+    const cerrar = (valor) => { velo.remove(); resolver(valor); };
+
+    const boton = h('button', { onclick: () => cerrar(elegido || 'todos') });
+    const pintarBoton = () => {
+      boton.textContent = elegido ? 'Filtrar' : 'Seleccionar filtros';
+      boton.classList.toggle('activo', !!elegido);
+      boton.disabled = !elegido && actual === 'todos';
+    };
+
+    const lista = h('div.d-filtro-lista');
+    const pintarLista = (busqueda = '') => {
+      const aguja = busqueda.trim().toLowerCase();
+      // La hoja lista los quince gremios del diseño: «General» es el
+      // cajón interno de la app y las barandillas de vidrio van con
+      // las barandillas, así que aquí no aparecen.
+      const visibles = OFICIOS
+        .filter((o) => o.id !== 'general' && o.id !== 'barandillas-vidrio')
+        .filter((o) => !aguja || o.nombre.toLowerCase().includes(aguja));
+      lista.replaceChildren(...visibles.map((o) => h('button.d-ficha-chat', {
+        'aria-pressed': elegido === o.id ? 'true' : 'false',
+        onclick: () => { elegido = elegido === o.id ? null : o.id; pintarBoton(); pintarLista(campo.value); },
+      },
+        caraDeGremio(o, 48),
+        h('span.grow', null, o.nombre),
+        o.empresa ? h('span.etiqueta', null, o.empresa) : null,
+      )));
+      if (!visibles.length) {
+        lista.append(h('p', { style: { color: 'var(--d-gris)', textAlign: 'center', padding: '30px 0' } },
+          'Ningún gremio se llama así.'));
+      }
+    };
+
+    const campo = h('input', {
+      type: 'search', placeholder: 'Busca un gremio o subcontrata',
+      oninput: () => pintarLista(campo.value),
+    });
+
+    const velo = h('div.d-filtro-modal', null,
+      h('div.d-filtro-modal-cab', null,
+        h('h2', null, 'Oficios y subcontratas'),
+        h('button.d-bola', { 'aria-label': 'Cerrar', onclick: () => cerrar(null) }, icon('x')),
+      ),
+      h('div.d-filtro-buscar', null, icon('search'), campo),
+      lista,
+      h('div.d-filtro-pie', null, boton),
+    );
+    pintarBoton();
+    pintarLista();
+    document.body.append(velo);
+  });
+}

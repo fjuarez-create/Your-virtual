@@ -1584,38 +1584,37 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
   text-align: left; display: block;
 }
 .d-banner + .d-banner { margin-top: 8px; }
-.d-banner-fondo {
-  /* La forma del banner del Figma no es un rectángulo con agujero: la
-     tarjeta se estrecha abajo a la derecha y la bola vive fuera, en el
-     hueco. Se monta con tres piezas ancladas al borde derecho para que
-     estire con cualquier ancho de móvil:
-       · la franja de arriba, a todo lo ancho, que acaba en lengüeta;
-       · la columna de abajo, estrechada 59px;
-       · y el filete cóncavo que las une rodeando la bola, un cuadrado
-         al que un círculo de 33px (27,5 de bola + 5,5 de aire),
-         centrado donde el centro de la bola, le come la esquina.
-     El fondo mide 94 de alto y el botón le asoma 1px por debajo. */
-  position: absolute; inset: 0 0 1px 0;
+/* La forma mordida que comparten los banners de la home y las tarjetas
+   de vivienda: la pieza se estrecha abajo a la derecha y la bola de 55
+   vive fuera, en el hueco. Tres piezas ancladas abajo a la derecha,
+   para que valgan a cualquier altura y ancho:
+     · la franja de arriba, a todo lo ancho, hasta 61px del borde bajo;
+     · la columna de abajo, estrechada 61px;
+     · y el filete cóncavo que las une rodeando la bola, un cuadrado al
+       que un círculo de 35,5px (27,5 de bola + 8 de aire), centrado en
+       el centro de la bola, le come la esquina.
+   El fondo acaba 1px antes que la caja: ese píxel es lo que asoma la
+   bola por debajo. */
+.d-mordida { position: absolute; inset: 0 0 1px 0; }
+.d-mordida::before {
+  content: ''; position: absolute; inset: 0 0 61px 0;
+  background: var(--mordida, #fff);
+  border-radius: 20px 20px 16.5px 0;
 }
-.d-banner-fondo::before {
-  /* La franja de arriba, que acaba en media pastilla. */
-  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 33px;
-  background: var(--banner, var(--d-beige));
-  border-radius: 20px 16.5px 16.5px 0;
-}
-.d-banner-fondo::after {
-  /* La columna de abajo, estrechada 61px. */
+.d-mordida::after {
   content: ''; position: absolute; inset: 0 61px 0 0;
-  background: var(--banner, var(--d-beige));
+  background: var(--mordida, #fff);
   border-radius: 20px 0 20px 20px;
 }
-.d-banner-esquina {
-  /* El filete cóncavo, concéntrico con la bola: 27,5 + 8 de aire. */
-  position: absolute; top: 32px; right: 26.5px; width: 35.5px; height: 35.5px;
-  background: var(--banner, var(--d-beige));
+.d-mordida-esquina {
+  position: absolute; right: 26.5px; bottom: 26.5px; width: 35.5px; height: 35.5px;
+  background: var(--mordida, #fff);
   -webkit-mask: radial-gradient(circle 35.5px at 100% 100%, transparent 99%, #000 101%);
   mask: radial-gradient(circle 35.5px at 100% 100%, transparent 99%, #000 101%);
 }
+.d-banner { --mordida: var(--banner, var(--d-beige)); }
+/* En el banner, bajito, la franja acaba en media pastilla. */
+.d-banner .d-mordida::before { border-radius: 20px 16.5px 16.5px 0; }
 .d-banner-texto { position: relative; display: block; padding: 13px 76px 13px 16px; }
 .d-banner-rotulo { display: block; font-size: 16px; font-weight: 500; }
 .d-banner-cifra { display: block; font-size: 32px; font-weight: 500; line-height: 1.25; }
@@ -1633,17 +1632,28 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 .d-banner.rojo { --banner: var(--d-rojo); color: #f0f0fe; }
 .d-banner.rojo .d-banner-boton { color: #fff; }
 
-/* ─── El módulo de Brassie ── */
-.d-brassie {
-  width: 100%; text-align: left;
-  background: #fff; border-radius: var(--d-radio);
-  padding: 14px 16px 16px; position: relative;
+/* ─── La tarjeta de vivienda (y el módulo de Brassie de la home):
+   blanca, con mordisco y el anillo de avance en la esquina ── */
+.d-tarjeta { position: relative; width: 100%; height: 177px; text-align: left; display: block; }
+.d-tarjeta + .d-tarjeta { margin-top: 13px; }
+.d-tarjeta-cab {
+  position: absolute; top: 16px; left: 16px; right: 16px;
+  display: flex; align-items: center; gap: 8px;
+  color: var(--d-gris); font-size: 16px; min-height: 36px;
 }
-.d-brassie-cab { display: flex; align-items: center; gap: 8px; color: var(--d-gris); font-size: 14px; }
-.d-brassie-cab svg { width: 20px; height: 20px; }
-.d-brassie-caras { margin-left: auto; }
-.d-brassie-cifra { font-size: 24px; font-weight: 500; margin-top: 14px; }
-.d-brassie-pie { display: flex; align-items: center; gap: 8px; margin-top: 16px; padding-right: 64px; }
+.d-tarjeta-cab svg { width: 24px; height: 24px; flex: none; }
+.d-tarjeta-caras { margin-left: auto; }
+.d-tarjeta-titulo {
+  position: absolute; top: 60px; left: 16px; right: 70px;
+  font-size: 24px; line-height: 32px; letter-spacing: -0.005em;
+  color: var(--d-tinta);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.d-tarjeta-pie { position: absolute; top: 116px; left: 16px; display: flex; gap: 8px; }
+.d-tarjeta-anillo {
+  position: absolute; right: -1px; bottom: 0; width: 55px; height: 55px;
+  --anillo-color: var(--d-verde); --anillo-fondo: #d9d9d9;
+}
 .d-chip {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 9px 14px; border-radius: 999px;
@@ -1651,11 +1661,99 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
   background: var(--d-gris-suave); color: var(--d-gris);
 }
 .d-chip svg { width: 17px; height: 17px; }
-.d-chip.rojo { background: var(--d-rojo-suave); color: var(--d-rojo); }
-.d-chip.ambar { background: #f6ead9; color: #683c03; }
+/* Los tintes medidos del diseño: rojo vino sobre rosa, ámbar tostado
+   sobre crema, verde bosque sobre menta. El macizo es el 100%. */
+.d-chip.rojo { background: var(--d-rojo-suave); color: #651d17; }
+.d-chip.ambar { background: #fef4e6; color: #683c03; }
 .d-chip.verde { background: var(--d-verde-suave); color: var(--d-verde); }
-/* El anillo de avance, abajo a la derecha, con su cuenta. */
-.d-brassie-anillo { position: absolute; right: 14px; bottom: 12px; }
+.d-chip.macizo { background: var(--d-verde); color: #fff; }
+/* El chip grande de la tarjeta de vivienda. */
+.d-chip.grande { height: 44px; padding: 10px 12px; gap: 7px; font-size: 16px; }
+.d-chip.grande svg { width: 24px; height: 24px; }
+/* ─── La lista de viviendas: el conmutador, la bola de filtros y las
+   píldoras de filtros aplicados ── */
+.d-fila-selector { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
+.d-selector {
+  display: flex; flex: 1; height: 56px;
+  background: #fff; border-radius: 999px; padding: 4px;
+}
+.d-selector button {
+  flex: 1; border-radius: 999px; font-size: 16px; font-weight: 500;
+  color: var(--d-gris); display: grid; place-items: center;
+}
+.d-selector button[aria-pressed='true'] { background: var(--d-beige); color: var(--d-tinta); }
+.d-bola-filtros {
+  width: 56px; height: 56px; flex: none; border-radius: 999px;
+  background: #fff; color: var(--d-gris); display: grid; place-items: center;
+}
+.d-bola-filtros svg { width: 24px; height: 24px; }
+.d-filtros { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.d-filtro-pildora {
+  display: inline-flex; align-items: center; gap: 8px; height: 48px;
+  background: var(--d-beige); border-radius: 999px;
+  padding: 6px 14px; font-size: 16px; color: var(--d-tinta);
+}
+.d-filtro-pildora .cara { width: 36px; height: 36px; border-radius: 50%; margin-left: -8px; flex: none; object-fit: cover; }
+.d-filtro-quitar {
+  width: 48px; height: 48px; border-radius: 999px; flex: none;
+  background: var(--d-beige-tinta); color: #fff;
+  display: grid; place-items: center;
+}
+.d-filtro-quitar svg { width: 24px; height: 24px; }
+
+/* ─── La hoja de filtros «Oficios y subcontratas»: modal a pantalla
+   completa con buscador, la lista de gremios en píldora y el botón
+   de filtrar anclado abajo ── */
+.d-filtro-modal {
+  position: fixed; inset: 0; z-index: 60; background: var(--d-fondo);
+  display: flex; flex-direction: column;
+  font-family: var(--d-font); font-weight: 500; color: var(--d-tinta);
+  padding: calc(env(safe-area-inset-top) + 8px) var(--pad, 12px) 0;
+}
+.d-filtro-modal-cab { display: flex; align-items: center; min-height: 70px; }
+.d-filtro-modal-cab h2 { font-size: 24px; line-height: 32px; letter-spacing: -0.005em; font-weight: 500; }
+.d-filtro-modal-cab .d-bola { margin-left: auto; }
+.d-filtro-buscar { position: relative; margin: 8px 0; flex: none; }
+.d-filtro-buscar svg {
+  position: absolute; left: 16px; top: 12px; width: 24px; height: 24px;
+  color: var(--d-gris); pointer-events: none;
+}
+.d-filtro-buscar input {
+  width: 100%; height: 48px; border-radius: 999px; background: #fff;
+  border: none; padding: 12px 16px 12px 46px;
+  font: inherit; font-size: 16px; color: var(--d-tinta);
+}
+.d-filtro-buscar input::placeholder { color: var(--d-gris); }
+.d-filtro-buscar input:focus { outline: none; }
+/* Sin el aspa nativa del campo de búsqueda: el diseño no la lleva. */
+.d-filtro-buscar input::-webkit-search-cancel-button { display: none; }
+.d-filtro-lista { flex: 1; overflow-y: auto; padding: 12px 0 96px; }
+/* La ficha-píldora de un gremio (la misma pieza que la lista de chats). */
+.d-ficha-chat {
+  width: 100%; height: 60px; border-radius: 31px; background: #fff;
+  display: flex; align-items: center; gap: 8px; padding: 6px 13px 6px 7px;
+  text-align: left; font-size: 16px; color: var(--d-tinta);
+}
+.d-ficha-chat + .d-ficha-chat { margin-top: 6px; }
+.d-ficha-chat .cara { width: 48px; height: 48px; flex: none; }
+/* En el rediseño las caras de gremio son redondas, no cuadradas. */
+.d-ficha-chat .gremio-cara,
+.d-filtro-pildora .gremio-cara { border-radius: 50%; }
+.d-ficha-chat .grow { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.d-ficha-chat .etiqueta { flex: none; font-size: 14px; color: #bfbfbf; }
+.d-ficha-chat[aria-pressed='true'] { background: var(--d-beige); }
+.d-ficha-chat[aria-pressed='true'] .etiqueta { color: #fff; }
+.d-filtro-pie {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  padding: 12px 24px calc(env(safe-area-inset-bottom) + 16px);
+  background: linear-gradient(transparent, var(--d-fondo) 40%);
+}
+.d-filtro-pie button {
+  width: 100%; height: 48px; border-radius: 999px;
+  background: var(--d-gris-suave); color: #d9d9d9;
+  font-size: 16px; font-weight: 500;
+}
+.d-filtro-pie button.activo { background: var(--d-beige-tinta); color: #fff; }
 
 /* ─── El muro de comentarios y feedback ── */
 .d-muro { display: flex; flex-direction: column; gap: 10px; }

@@ -8,10 +8,10 @@
 
    La misma pantalla para técnicos y para constructora: solo cambia el
    saludo, que al jefe de obra no le baila con los días. */
-import { h, icon, avatar, grupoAvatares, anillo, toast, fechaCorta, hora, fechaRelativa } from '../ui.js';
+import { h, icon, avatar, toast, fechaCorta, hora } from '../ui.js';
 import * as store from '../store.js';
 import { PROMOCIONES, unidad, estado, puedeVerificar } from '../catalog.js';
-import { avisoLocal, barraSync } from '../piezas.js';
+import { avisoLocal, barraSync, cabDiseno, tarjetaVilla, cuandoVilla } from '../piezas.js';
 import { ultimaMirada, anotarMirada } from '../ajustesLocales.js';
 import { ir, conFiltros, refrescar } from '../app.js';
 
@@ -32,8 +32,8 @@ function saludo(usuario) {
 /** El banner con el mordisco: rótulo, cifra y botón redondo. */
 function banner({ clase, rotulo, cifra, adonde, alPinchar }) {
   return h('button.d-banner', { class: clase, onclick: () => { alPinchar?.(); ir(adonde); } },
-    h('span.d-banner-fondo'),
-    h('span.d-banner-esquina'),
+    h('span.d-mordida'),
+    h('span.d-mordida-esquina'),
     h('span.d-banner-texto', null,
       h('span.d-banner-rotulo', null, rotulo),
       h('span.d-banner-cifra', null, String(cifra)),
@@ -42,19 +42,7 @@ function banner({ clase, rotulo, cifra, adonde, alPinchar }) {
   );
 }
 
-/** Cuándo, como lo dice el diseño: «Ayer, 20:00 h». */
-function cuandoCorto(iso) {
-  if (!iso) return '';
-  const d = new Date(iso);
-  const hoy = new Date();
-  const ayer = new Date(hoy); ayer.setDate(hoy.getDate() - 1);
-  const dia = d.toDateString() === hoy.toDateString() ? 'Hoy'
-    : d.toDateString() === ayer.toDateString() ? 'Ayer'
-    : fechaCorta(iso);
-  return `${dia}, ${hora(iso)} h`;
-}
-
-/** Y en el muro: «Andrea, ayer a las 11:40 h». */
+/** En el muro: «Andrea, ayer a las 11:40 h». */
 function cuandoMuro(nombre, iso) {
   const pila = String(nombre || '').trim().split(/\s+/)[0] || 'Alguien';
   if (!iso) return pila;
@@ -123,14 +111,7 @@ export async function render() {
     clase: 'pantalla-diseno',
     contenido: [
       /* La cabecera del diseño: la cara y las tres bolas. */
-      h('div.d-cab', null,
-        avatar(yo, { tam: 54, onclick: () => ir('#/ajustes') }),
-        h('div.d-cab-menu', null,
-          h('button.d-bola.activa', { 'aria-label': 'Inicio', 'aria-current': 'true' }, icon('brujula')),
-          h('button.d-bola', { 'aria-label': 'Viviendas', onclick: () => ir('#/viviendas') }, icon('casa')),
-          h('button.d-bola', { 'aria-label': 'Actas', onclick: () => ir('#/listas') }, icon('periodico')),
-        ),
-      ),
+      cabDiseno('inicio'),
 
       h('h1.d-saludo', null, saludo(yo)),
       avisoLocal() || barraSync(),
@@ -160,24 +141,15 @@ export async function render() {
       }),
 
       h('p.d-epigrafe', null, p.nombre),
-      h('button.d-brassie', { onclick: () => ir('#/viviendas') },
-        h('div.d-brassie-cab', null,
-          icon('toque', 20),
-          h('span', null, cuandoCorto(d.ultimaSinVerificar) || 'Sin tareas abiertas'),
-          h('span.d-brassie-caras', null,
-            grupoAvatares(d.caras.slice(0, 3), { tam: 36, max: 3 })),
-        ),
-        h('div.d-brassie-cifra', null,
-          `${d.sinVerificar} ${d.sinVerificar === 1 ? 'tarea pendiente' : 'tareas pendientes'}`),
-        h('div.d-brassie-pie', null,
-          h('span.d-chip', null, icon('listaChecks'), `${c.hechas} / ${c.total}`),
-          h('span.d-chip', { class: pct < 30 ? 'rojo' : pct < 70 ? 'ambar' : 'verde' },
-            icon('fuego'), `${pct}%`),
-        ),
-        h('span.d-brassie-anillo', {
-          style: { '--anillo-color': '#000', '--anillo-fondo': 'var(--d-anillo-fondo)' },
-        }, anillo(pct, { tam: 44, grosor: 5, etiqueta: false })),
-      ),
+      tarjetaVilla({
+        titulo: `${d.sinVerificar} ${d.sinVerificar === 1 ? 'tarea pendiente' : 'tareas pendientes'}`,
+        cuando: cuandoVilla(d.ultimaSinVerificar),
+        caras: d.caras,
+        hechas: c.hechas,
+        total: c.total,
+        pct,
+        alPinchar: () => ir('#/viviendas'),
+      }),
 
       h('p.d-epigrafe', null, 'Comentarios y feedback'),
       muro,
