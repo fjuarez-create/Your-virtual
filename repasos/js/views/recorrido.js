@@ -21,7 +21,10 @@ import {
 import * as store from '../store.js';
 import * as api from '../api.js';
 import * as grabadora from '../recorrido.js';
-import { cabeceraDentro, cerrarVuelta, hojaOficios, hojaZonas, ctaAccion, ctaCancelar } from '../piezas.js';
+import {
+  cabeceraDentro, cerrarVuelta, hojaOficios, hojaZonas, hojaBienHecho, ctaAccion, ctaCancelar,
+} from '../piezas.js';
+import { alCerrarRecorrido } from '../frases.js';
 import { paraMirar } from '../media.js';
 import { ir, refrescar } from '../app.js';
 
@@ -573,7 +576,12 @@ export async function render({ promoId, unidadId }) {
         });
       }
       await store.marcarRecorridoUsado(rec.id, lista.id);
-      toast(`${vivas.length} ${vivas.length === 1 ? 'tarea creada' : 'tareas creadas'}`);
+      await hojaBienHecho({
+        titulo: `${vivas.length} ${vivas.length === 1 ? 'tarea creada' : 'tareas creadas'}`,
+        frase: alCerrarRecorrido(vivas.length),
+        usuario: store.sesion(),
+        boton: 'Ver la lista',
+      });
       await refrescar();
       ir('#/l/' + lista.id);
     });

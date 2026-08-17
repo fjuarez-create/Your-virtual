@@ -1109,6 +1109,58 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
   font-size: 56px;   /* de partida; el JS lo ajusta al ancho real */
 }
 
+/* Una fila con interruptor en vez de flecha. El nativo del sistema,
+   solo teñido: en un móvil de obra, el interruptor que uno reconoce se
+   toca sin pensar, y uno dibujado a mano nunca se parece del todo. */
+.row.conmutador { cursor: pointer; }
+.row.conmutador input[type='checkbox'] {
+  appearance: none; -webkit-appearance: none;
+  width: 46px; height: 28px; flex: none; border-radius: 999px;
+  background: var(--line); position: relative; cursor: pointer;
+  transition: background var(--mov-corto, .18s) ease;
+}
+.row.conmutador input[type='checkbox']::after {
+  content: ''; position: absolute; top: 3px; left: 3px;
+  width: 22px; height: 22px; border-radius: 50%; background: #fff;
+  box-shadow: 0 1px 3px rgba(17, 17, 18, .28);
+  transition: transform var(--mov-corto, .18s) ease;
+}
+.row.conmutador input[type='checkbox']:checked { background: var(--ink); }
+.row.conmutador input[type='checkbox']:checked::after { transform: translateX(18px); }
+
+/* La frase del día. Va pegada debajo del titular grande y en su mismo
+   sitio, así que se le come el aire que el titular deja por abajo: dos
+   márgenes de 36 px seguidos dejan la portada empezando a media
+   pantalla. */
+.titular {
+  font-size: 17px; font-weight: 700; letter-spacing: -0.02em;
+  margin-top: -22px; margin-bottom: 20px; color: var(--ink);
+}
+
+/* ─── Los banners de la portada ────────────────────────────────
+   Tres avisos que se leen sin entrar: cuánto espera nuestra revisión,
+   cuánto se ha verificado desde la última vez y cuánto ha rebotado.
+
+   Cada uno con su color y el mismo esqueleto —rótulo, cifra grande,
+   flecha— para que la diferencia sea el color y la cifra, no la forma:
+   así se distinguen de reojo, que es como se miran. */
+.banner {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 15px 16px; border-radius: var(--r-lg); text-align: left;
+}
+.banner-rotulo { font-size: 14.5px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.25; }
+.banner-sub { font-size: 12.5px; margin-top: 3px; opacity: .72; line-height: 1.35; }
+.banner-cifra { font-size: 27px; font-weight: 800; letter-spacing: -0.04em; flex: none; }
+.banner .chev { opacity: .5; flex: none; }
+
+/* El beige es el del diseño. Los otros dos salen de los colores que ya
+   usa la app para esos mismos estados —el verde de «va bien» y el rojo
+   de las rechazadas—, para que el color signifique lo mismo aquí que
+   en un chip o en la barra de avance. */
+.banner.beige { background: #DEDDD8; color: var(--ink); }
+.banner.verde { background: rgba(63, 125, 90, 0.14); color: var(--ok); }
+.banner.rojo { background: var(--rojo-soft); color: var(--rojo); }
+
 /* ─── Barra de avance de tres tramos ───────────────────────────
    Sustituye al anillo en la portada: con tres estados, una barra
    dice de un vistazo la proporción entre ellos, cosa que un anillo

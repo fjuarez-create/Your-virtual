@@ -7,7 +7,8 @@ import {
 } from '../catalog.js';
 import * as store from '../store.js';
 import * as media from '../media.js';
-import { cabecera, ctaAccion } from '../piezas.js';
+import { cabecera, ctaAccion, hojaBienHecho } from '../piezas.js';
+import { alCompletar, nombreCorto } from '../frases.js';
 import { ir, refrescar, conFiltros, filtrosDeRuta } from '../app.js';
 
 export async function render({ listaId, tareaId }) {
@@ -274,8 +275,18 @@ async function cambiarEstadoTarea(t, nuevo) {
       const parte = await hojaCompletar(t);
       if (!parte) return;
       await store.cambiarEstado(t.id, nuevo, parte);
-      toast('Completada. Ahora hay que verificarla');
-      return refrescar();
+      const yo = store.sesion();
+      await hojaBienHecho({
+        titulo: `Excelente${nombreCorto(yo) ? ', ' + nombreCorto(yo) : ''}`,
+        frase: alCompletar(),
+        usuario: yo,
+        boton: 'Volver a la vivienda',
+      });
+      // Al terminar se sale de la tarea: el sitio del que se viene es
+      // el detalle de la vivienda, y quedarse mirando la que ya está
+      // hecha no ayuda a hacer la siguiente.
+      ir(conFiltros('#/l/' + listaId, filtrosDeRuta()));
+      return;
     }
 
     await store.cambiarEstado(t.id, nuevo);

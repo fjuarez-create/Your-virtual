@@ -7,7 +7,9 @@ import {
 } from '../catalog.js';
 import * as store from '../store.js';
 import * as media from '../media.js';
+import * as api from '../api.js';
 import { cabeceraDentro, barraSync, filtroEstado, filtroOficio, ctaAccion, ctaCancelar } from '../piezas.js';
+import { usaIA } from '../ajustesLocales.js';
 import { ir, refrescar, conFiltros, filtrosDeRuta, anotarFiltros } from '../app.js';
 import { informe } from '../informe.js';
 import { hojaDePuerta, nombreDeFichero } from '../pdf.js';
@@ -134,6 +136,43 @@ function tarjetaTarea(t, numero, urlPortada, tipos, listaId, filtros = null) {
   );
 }
 
+/**
+ * Le pide a la IA que lea una foto y proponga texto, gremio y estancia.
+ *
+ * Por dentro es la llamada del recorrido con una sola marca y sin nada
+ * dicho: no hay ruta nueva en el servidor ni instrucciones aparte, y
+ * eso significa que lo que se afine para el recorrido vale aquí y al
+ * revés.
+ *
+ * Los errores se tragan a propósito, y es la única vez en toda la app
+ * que se hace. Aquí la IA es una comodidad, no el trabajo: si no hay
+ * clave, ni línea, ni saldo, la respuesta correcta es que la hoja salga
+ * en blanco como salía antes, no un aviso rojo delante de alguien que
+ * está de pie en una obra con el móvil en una mano.
+ */
+async function proponer(imagen) {
+  try {
+    const b64 = await media.paraMirar(imagen.blob);
+    const marca = { id: 'sola', ms: 0 };
+    const r = await api.claudeRedactar(
+      '',
+      [marca],
+      OFICIOS.map((o) => ({ id: o.id, nombre: o.nombre })),
+      [{ id: 'sola', b64 }],
+      ZONAS,
+    );
+    const f = (r?.fichas || [])[0];
+    if (!f) return null;
+    return {
+      texto: String(f.texto || '').trim(),
+      oficio: OFICIOS.some((o) => o.id === f.oficio) ? f.oficio : null,
+      zona: f.zona || '',
+    };
+  } catch {
+    return null;
+  }
+}
+
 const etiquetaNumero = (n) => h('span.n', null, String(n));
 
 function marcasMedios(tipos) {
@@ -187,7 +226,21 @@ export async function nuevaTarea(listaId) {
     return;
   }
 
-  const datos = await hojaTexto(preparadas, ultimoOficio);
+  // Si esta persona lo quiere, se le pide a la IA que proponga texto,
+  // gremio y estancia mirando la primera foto. Es la misma llamada del
+  // recorrido con una sola marca y sin nada dicho, así que no hace
+  // falta nada nuevo en el servidor.
+  //
+  // Se propone, no se impone: llega escrito en la caja y se corrige o
+  // se borra. Y si falla —sin clave, sin línea, sin saldo— no se
+  // interrumpe nada: la hoja sale igual, en blanco, como antes.
+  let propuesta = null;
+  if (usaIA(store.sesion())) {
+    toast('Mirando la foto…');
+    propuesta = await proponer(preparadas[0]);
+  }
+
+  const datos = await hojaTexto(preparadas, propuesta?.oficio || ultimoOficio, propuesta);
   if (!datos) return;
 
   // La siguiente tarea suele ser del mismo gremio: se recuerda el
@@ -222,15 +275,16 @@ let ultimoOficio = null;
  * existiera el campo lo tienen vacío: si aquí fuera obligatorio, la
  * pantalla exigiría algo que media base de datos no cumple.
  */
-function hojaTexto(imagenes, oficioPrevio) {
+function hojaTexto(imagenes, oficioPrevio, propuesta = null) {
   return sheet((cerrar) => {
     let elegido = oficioPrevio || null;
-    let zona = '';
+    let zona = propuesta?.zona && ZONAS.includes(propuesta.zona) ? propuesta.zona : '';
 
     const texto = h('textarea.textarea', {
       placeholder: 'Qué hay que hacer aquí…',
       rows: 3, autocapitalize: 'sentences',
     });
+    if (propuesta?.texto) texto.value = propuesta.texto;
     // Una sola salida. Antes había un segundo botón para encadenar la
     // siguiente tarea, y con dos llamadas a la acción seguidas ninguna
     // era la principal.
@@ -256,7 +310,7 @@ function hojaTexto(imagenes, oficioPrevio) {
     // deshacerlo sin cerrar la hoja y empezar de nuevo.
     const estancias = h('div.chips.filtro', null,
       ...ZONAS.map((z) => h('button.chip.accent', {
-        'aria-pressed': 'false',
+        'aria-pressed': zona === z ? 'true' : 'false',
         onclick: (e) => {
           zona = zona === z ? '' : z;
           [...estancias.children].forEach((c) => c.setAttribute(

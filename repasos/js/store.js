@@ -840,6 +840,31 @@ export async function resumenPromocion(promoId) {
   return { ...contar(tareas), listas: listas.length };
 }
 
+/**
+ * Cuántas tareas se movieron a un estado después de una fecha, para los
+ * contadores que acumulan de la portada.
+ *
+ * Se cuenta, no se lleva un marcador aparte. Un contador guardado se
+ * descuadra —una tarea que se borra, un móvil que sube tarde— y no hay
+ * manera de saber si el número es verdad; esto se recalcula de cero
+ * cada vez que se pinta la pantalla y siempre cuadra con lo que hay.
+ *
+ * `desde` vacío significa «desde siempre», que es lo que corresponde la
+ * primera vez que alguien abre la app.
+ */
+export async function cuantasDesde(estadoBuscado, desde, { promoId = null } = {}) {
+  const listas = (await db.getAll('listas'))
+    .filter((l) => !l.borrada && (!promoId || l.promoId === promoId));
+  const suyas = new Set(listas.map((l) => l.id));
+  return (await db.getAll('tareas')).filter((t) =>
+    !t.borrada
+    && suyas.has(t.listaId)
+    && t.estado === estadoBuscado
+    // `estadoEn` es cuándo se puso el estado. Sin él —tareas de antes de
+    // que se guardara— vale `actualizado`, que se le parece bastante.
+    && (!desde || (t.estadoEn || t.actualizado || '') > desde)).length;
+}
+
 /** Las últimas actas tocadas, para el listado de la portada. */
 export async function listasRecientes(n = 15) {
   return (await actasConDatos()).slice(0, n);

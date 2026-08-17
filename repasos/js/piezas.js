@@ -454,6 +454,26 @@ export function hojaZonas(actual) {
   ]);
 }
 
+/**
+ * El modal de «bien hecho»: la cara de quien lo hizo, su nombre y una
+ * frase. Lo comparten el cierre de un recorrido y el completar una
+ * tarea, que es el mismo momento visto desde dos sitios.
+ *
+ * No devuelve nada ni pregunta nada: se cierra tocando fuera o con el
+ * botón. Un modal de celebración que exige una decisión deja de
+ * celebrar y se convierte en un trámite más.
+ */
+export function hojaBienHecho({ titulo, frase, usuario, boton = 'Seguir' }) {
+  return sheet((cerrar) => [
+    h('div', { style: { display: 'grid', placeItems: 'center', gap: '14px', padding: '8px 0 4px' } },
+      avatar(usuario, { tam: 64 }),
+      h('h2.title.center', null, titulo),
+      h('p.sub.center', { style: { maxWidth: '30ch' } }, frase),
+    ),
+    h('button.btn.ink.full', { style: { marginTop: '18px' }, onclick: () => cerrar(true) }, boton),
+  ]);
+}
+
 /** Flecha «>» del final de las píldoras. */
 export function chevron() {
   const svg = icon('chevron');

@@ -7,6 +7,7 @@ import * as db from '../db.js';
 import { barraSync, chevron, cabeceraTab, cabeceraDentro, hojaFoto, ctaAccion, ctaCancelar } from '../piezas.js';
 import * as ejemplos from '../ejemplos.js';
 import { PROMOCIONES } from '../catalog.js';
+import { usaIA, ponerUsaIA } from '../ajustesLocales.js';
 import { ir, refrescar } from '../app.js';
 
 export async function render() {
@@ -21,6 +22,19 @@ export async function render() {
         if (await hojaFoto(u)) { await store.refrescarSesion(); refrescar(); }
       }));
     filas.push(fila('key', 'Cambiar mi contraseña', null, () => cambiarPassword()));
+  }
+
+  // La IA al crear tareas de una en una. Es una preferencia de cada
+  // uno y no del administrador: la enciende o la apaga quien crea las
+  // tareas, que es quien nota si le ayuda o le estorba.
+  if (api.HAY_SERVIDOR) {
+    filas.push(interruptor(
+      'edit',
+      'Que la IA proponga el texto',
+      'Al crear una tarea desde una foto o la galería',
+      usaIA(u),
+      (valor) => { ponerUsaIA(u, valor); },
+    ));
   }
   if (store.esAdmin() && api.HAY_SERVIDOR && !u.local) {
     filas.push(fila('users', 'Usuarios', 'Alta y baja del equipo', () => ir('#/usuarios')));
@@ -133,6 +147,26 @@ export async function render() {
         'UNIK repasos · versión ' + (window.REPASOS_CONFIG?.build || 'local')),
     ],
   };
+}
+
+/**
+ * Una fila con interruptor. No lleva flecha ni navega: el cambio pasa
+ * aquí mismo, y una flecha prometería una pantalla que no existe.
+ *
+ * El estado se guarda al soltarlo y no hay botón de guardar: es un
+ * sí/no en el propio teléfono, y pedir confirmación para eso sobra.
+ */
+function interruptor(ico, titulo, sub, puesto, alCambiar) {
+  const casilla = h('input', { type: 'checkbox', role: 'switch', checked: puesto || null });
+  casilla.addEventListener('change', () => alCambiar(casilla.checked));
+  return h('label.row.conmutador', null,
+    h('div.row-lead', null, icon(ico, 18)),
+    h('div.grow', null,
+      h('div.row-title', null, titulo),
+      sub && h('div.row-sub', null, sub),
+    ),
+    casilla,
+  );
 }
 
 function fila(ico, titulo, sub, onclick, peligro = false) {
