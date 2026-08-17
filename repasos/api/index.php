@@ -930,6 +930,9 @@ function guardar_tareas(): void
     if (!is_array($entrada)) {
         responder_error(400, 'Formato incorrecto.', 'formato');
     }
+    // Quién es a efectos de permisos, una vez y no por tarea.
+    $decide = (bool) $yo['verifica'] || $yo['rol'] === 'admin';
+
     $guardadas = 0;
     foreach ($entrada as $t) {
         if (!is_array($t) || !es_uuid($t['id'] ?? null) || !es_uuid($t['listaId'] ?? null)) {
@@ -938,34 +941,63 @@ function guardar_tareas(): void
         $estado = in_array($t['estado'] ?? '', ['pendiente', 'resuelta', 'rechazada', 'verificada'], true)
             ? $t['estado'] : 'pendiente';
 
-        // Verificar y rechazar son el mismo permiso —ir a la vivienda y
-        // decir si el arreglo vale— y el navegador no es de fiar: si quien
-        // manda el cambio no puede, la tarea se queda como estaba en el
-        // servidor en lugar de moverse.
-        $decide = in_array($estado, ['verificada', 'rechazada'], true);
-        if ($decide && !(bool) $yo['verifica'] && $yo['rol'] !== 'admin') {
-            $previo = bd()->prepare('SELECT estado FROM tareas WHERE id = ?');
+        $texto = mb_substr((string) ($t['texto'] ?? ''), 0, 4000);
+        $oficio = texto($t, 'oficio', 30, 'general') ?: 'general';
+        $zona = texto($t, 'zona', 40);
+
+        // El navegador no es de fiar, así que los dos permisos se
+        // comprueban aquí también. Quien no verifica:
+        //
+        //   - no puede poner «verificada» ni «rechazada»
+        //   - no puede reescribir la descripción, el gremio ni la
+        //     estancia de una tarea que ya existe
+        //
+        // Lo segundo es lo que hace que un acta sea un acta: si el que
+        // tiene que arreglarla puede además cambiar lo que se le pidió,
+        // deja de haber nada que verificar. En vez de rechazar la
+        // petición entera —que dejaría la app sin sincronizar y sin
+        // saber por qué— se conserva lo que hay guardado y se deja pasar
+        // el resto, que sí es suyo: el estado y las fotos.
+        // Borrar es la forma más definitiva de editar, así que va con el
+        // mismo permiso.
+        $borrada = booleano($t, 'borrada') ? 1 : 0;
+
+        if (!$decide) {
+            // Se relee dentro del bucle y se vacía cada vuelta a
+            // propósito: dejar la fila de la tarea anterior colgando
+            // aquí acabaría escribiendo el texto de una en otra.
+            $previo = bd()->prepare('SELECT estado, texto, oficio, zona, borrada FROM tareas WHERE id = ?');
             $previo->execute([$t['id']]);
-            $guardado = $previo->fetchColumn();
-            // Lo que ya hubiera decidido un verificador no lo deshace
-            // quien no puede; y si no había nada, se queda en completada,
-            // que es lo más lejos que llega el jefe de obra.
-            $estado = in_array($guardado, ['verificada', 'rechazada'], true) ? $guardado : 'resuelta';
+            $fila = $previo->fetch() ?: null;
+
+            if ($fila) {
+                $texto = (string) $fila['texto'];
+                $oficio = (string) ($fila['oficio'] ?? 'general');
+                $zona = (string) ($fila['zona'] ?? '');
+                $borrada = (int) ($fila['borrada'] ?? 0);
+            }
+            if (in_array($estado, ['verificada', 'rechazada'], true)) {
+                // Lo que ya hubiera decidido un verificador no lo deshace
+                // quien no puede; y si no había nada, se queda en
+                // completada, que es lo más lejos que llega el jefe de obra.
+                $guardado = $fila['estado'] ?? '';
+                $estado = in_array($guardado, ['verificada', 'rechazada'], true) ? $guardado : 'resuelta';
+            }
         }
 
         $registro = [
             'id'                => $t['id'],
             'lista_id'          => $t['listaId'],
-            'texto'             => mb_substr((string) ($t['texto'] ?? ''), 0, 4000),
+            'texto'             => $texto,
             'estado'            => $estado,
-            'oficio'            => texto($t, 'oficio', 30, 'general') ?: 'general',
-            'zona'              => texto($t, 'zona', 40),
+            'oficio'            => $oficio,
+            'zona'              => $zona,
             'orden'             => entero($t, 'orden'),
             'portada_id'        => es_uuid($t['portadaId'] ?? null) ? $t['portadaId'] : null,
             'estado_por'        => texto($t, 'estadoPor', 120) ?: null,
             'estado_en'         => isset($t['estadoEn']) ? iso($t['estadoEn']) : null,
             'rechazada'         => booleano($t, 'rechazada') ? 1 : 0,
-            'borrada'           => booleano($t, 'borrada') ? 1 : 0,
+            'borrada'           => $borrada,
             'creado'            => iso($t['creado'] ?? null),
             'actualizado'       => iso($t['actualizado'] ?? null),
             'creado_por'        => es_uuid($t['creadoPor'] ?? null) ? $t['creadoPor'] : null,

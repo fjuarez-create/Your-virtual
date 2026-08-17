@@ -273,6 +273,26 @@ export const ZONAS = [
 /** Las tareas de antes de que existiera el campo no tienen estancia. */
 export const ZONA_VACIA = '';
 
+/* ═══════════════════════════════════════════════════════════════
+   Fotos
+
+   Son dos conjuntos distintos y no se mezclan nunca:
+
+     de la tarea         el defecto. Las saca quien abre el acta.
+     de verificación     la reparación. Las sube quien la completa.
+
+   Que estén separadas es lo que hace que una discusión de obra se
+   pueda resolver mirando la app: aquí está cómo estaba, aquí está
+   cómo quedó, y las dos con su fecha y su firma. Mezcladas en un
+   mismo carrete valdrían la mitad.
+
+   Diez y diez. El diseño decía diez en uno y treinta en el otro; con
+   diez sobra para las dos cosas y no hay que explicar por qué el tope
+   cambia según dónde estés.
+   ═══════════════════════════════════════════════════════════════ */
+export const TOPE_FOTOS_TAREA = 10;
+export const TOPE_FOTOS_VERIFICACION = 10;
+
 /**
  * Empresas y roles que se ofrecen al dar de alta, para no tener que
  * escribirlos a mano cada vez. El campo admite cualquier texto: esto

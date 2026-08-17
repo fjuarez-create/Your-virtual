@@ -242,11 +242,15 @@ export async function cambiarEstado(tareaId, nuevo, nota = {}) {
     rechazada: rechazo,
   });
 
-  if (nota.texto || nota.imagen) {
+  // El comentario se crea también cuando solo hay fotos y ningún texto:
+  // al completar, el mensaje es opcional y las fotos son la prueba, así
+  // que sin él no tendrían de dónde colgar.
+  const fotos = nota.imagenes || (nota.imagen ? [nota.imagen] : []);
+  if (nota.texto || fotos.length) {
     await añadirComentario(tareaId, {
       texto: nota.texto || '',
       tipo: rechazo ? 'rechazo' : 'nota',
-      imagen: nota.imagen,
+      imagenes: fotos,
     });
   }
   return actualizada;
@@ -257,13 +261,38 @@ export function exigeExplicacion(tarea, nuevo) {
   return !!tarea && nuevo === 'rechazada' && tarea.estado !== 'rechazada';
 }
 
+/**
+ * Dar una tarea por completada exige enseñar la reparación.
+ *
+ * Es la regla que sostiene todo lo demás: sin foto, «completada» es la
+ * palabra de alguien contra la de nadie, y quien tiene que verificarla
+ * se planta en la vivienda sin saber qué va a encontrarse. Con una
+ * basta para activar el botón; el tope son diez.
+ *
+ * Solo al entrar en `resuelta`. Verificar y rechazar tienen sus propias
+ * reglas, y volver a pendiente no hace falta demostrarlo.
+ */
+export function exigeFotos(tarea, nuevo) {
+  return !!tarea && nuevo === 'resuelta';
+}
+
 /* ─── Hilo de la tarea ────────────────────────────────────────── */
 export async function comentariosDeTarea(tareaId) {
   const todos = await db.porIndice('comentarios', 'tareaId', tareaId);
   return todos.filter((c) => !c.borrada).sort((a, b) => a.creado.localeCompare(b.creado));
 }
 
-export async function añadirComentario(tareaId, { texto, tipo = 'nota', imagen }) {
+/**
+ * Una entrada en el hilo de la tarea, con las fotos que la acompañen.
+ *
+ * Las fotos van colgadas del comentario y no de la tarea a secas, y eso
+ * es lo que separa los dos carretes: lo que cuelga de la tarea es el
+ * defecto, lo que cuelga de un comentario es lo que pasó después. Y
+ * como cada intento de completar trae su propio comentario, las fotos
+ * de un intento rechazado se quedan con él: son la prueba de lo que la
+ * constructora dijo que estaba arreglado.
+ */
+export async function añadirComentario(tareaId, { texto, tipo = 'nota', imagen, imagenes }) {
   const c = {
     id: nuevoId(),
     tareaId,
@@ -279,13 +308,13 @@ export async function añadirComentario(tareaId, { texto, tipo = 'nota', imagen 
   await db.put('comentarios', c);
   await encolar('comentario', c.id);
 
-  if (imagen) {
+  for (const img of [...(imagenes || []), ...(imagen ? [imagen] : [])]) {
     await añadirMedio(tareaId, {
       tipo: 'imagen',
-      blob: imagen.blob,
-      mime: imagen.mime,
-      ancho: imagen.ancho,
-      alto: imagen.alto,
+      blob: img.blob,
+      mime: img.mime,
+      ancho: img.ancho,
+      alto: img.alto,
       comentarioId: c.id,
     });
   }
@@ -318,6 +347,20 @@ export async function borrarTarea(id) {
 export async function mediosDeTarea(tareaId) {
   const todos = await db.porIndice('medios', 'tareaId', tareaId);
   return todos.filter((m) => !m.borrada && !m.comentarioId)
+    .sort((a, b) => a.creado.localeCompare(b.creado));
+}
+
+/**
+ * Las fotos de verificación: las que cuelgan de algún comentario, en
+ * orden. Son el otro carrete, el de cómo quedó.
+ *
+ * Se devuelven todas y no solo las del último intento a propósito: si
+ * una tarea rebotó dos veces, las fotos de los dos intentos anteriores
+ * siguen ahí, y en una discusión de obra eso vale dinero.
+ */
+export async function fotosDeVerificacion(tareaId) {
+  const todos = await db.porIndice('medios', 'tareaId', tareaId);
+  return todos.filter((m) => !m.borrada && m.comentarioId && m.tipo === 'imagen')
     .sort((a, b) => a.creado.localeCompare(b.creado));
 }
 
