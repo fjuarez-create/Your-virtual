@@ -128,3 +128,34 @@ CREATE TABLE IF NOT EXISTS meta (
   valor VARCHAR(255) NOT NULL,
   PRIMARY KEY (clave)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS mensajes (
+  id                 CHAR(36)     NOT NULL,
+  unidad_id          VARCHAR(60)  NOT NULL,
+  promo_id           VARCHAR(40)  NOT NULL DEFAULT '',
+  texto              TEXT         NOT NULL,
+  borrada            TINYINT(1)   NOT NULL DEFAULT 0,
+  creado             CHAR(24)     NOT NULL,
+  actualizado        CHAR(24)     NOT NULL,
+  creado_por         CHAR(36)     DEFAULT NULL,
+  creado_por_nombre  VARCHAR(120) NOT NULL,
+  creado_por_empresa VARCHAR(120) NOT NULL DEFAULT '',
+  PRIMARY KEY (id),
+  KEY ix_mensajes_unidad (unidad_id),
+  KEY ix_mensajes_actualizado (actualizado)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Quién ha leído qué. Una fila por mensaje y persona, con el id
+-- compuesto por los dos: así dos lecturas que lleguen a la vez no se
+-- pisan —son filas distintas— y volver a subir la misma no duplica
+-- nada, porque tiene la misma clave.
+CREATE TABLE IF NOT EXISTS lecturas (
+  id           VARCHAR(80) NOT NULL,
+  mensaje_id   CHAR(36)    NOT NULL,
+  usuario_id   CHAR(36)    NOT NULL,
+  creado       CHAR(24)    NOT NULL,
+  actualizado  CHAR(24)    NOT NULL,
+  PRIMARY KEY (id),
+  KEY ix_lecturas_mensaje (mensaje_id),
+  KEY ix_lecturas_actualizado (actualizado)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

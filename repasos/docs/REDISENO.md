@@ -101,13 +101,32 @@ quién no**:
 - **Un tic** cuando lo ha leído una persona, **dos** cuando los han leído
   todos.
 
-Esto no es pantalla: es **una tabla nueva** —quién leyó qué y cuándo— que
-además tiene que **sincronizarse entre dispositivos**, porque los dos
-tics de uno dependen de lo que hayan leído los demás.
+Esto no es pantalla: son **dos tablas nuevas** —los mensajes y quién
+leyó qué— que además tienen que **sincronizarse entre dispositivos**,
+porque los dos tics de uno dependen de lo que hayan leído los demás.
 
 Que los tics y las bolitas **lleguen con retraso está aceptado**: las
 lecturas se apuntan en el móvil y viajan cuando hay señal. En Brassie hay
 cobertura el 95% del tiempo, así que el retraso será raro y corto.
+
+**Las lecturas van en tabla aparte, no dentro del mensaje**, y ahí está
+todo el asunto. Si fueran una lista dentro del mensaje, dos personas
+leyéndolo a la vez subirían cada una el mensaje entero con su propia
+lista y la última en llegar borraría la lectura de la otra. Siendo
+filas independientes —una por mensaje y persona, con el id compuesto por
+los dos— dos lecturas simultáneas no se pisan y subir la misma dos veces
+no duplica nada.
+
+El servidor **ignora el usuario que venga escrito** y pone el de la
+sesión: una lectura es un hecho sobre quien la hace, y dejar que el
+navegador diga por quién lee convertiría los dos tics en algo que se
+puede fingir. Tampoco se reescriben: la primera vez que alguien lee algo
+es la que cuenta.
+
+**Borrar un mensaje solo puede hacerlo quien lo escribió.** No es una
+regla de permisos, es de conversación: si un tercero puede hacer
+desaparecer lo que dijiste, el hilo deja de servir para acordarse de
+nada.
 
 ## Ficha de una vivienda
 

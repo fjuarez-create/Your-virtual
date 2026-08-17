@@ -88,6 +88,10 @@ export const subirListas = (listas) => pedir('listas', { metodo: 'POST', json: {
 export const subirTareas = (tareas) => pedir('tareas', { metodo: 'POST', json: { tareas } });
 export const subirComentarios = (comentarios) =>
   pedir('comentarios', { metodo: 'POST', json: { comentarios } });
+export const subirMensajes = (mensajes) =>
+  pedir('mensajes', { metodo: 'POST', json: { mensajes } });
+export const subirLecturas = (lecturas) =>
+  pedir('lecturas', { metodo: 'POST', json: { lecturas } });
 
 /** Sube un medio con su fichero. `alProgreso(0..1)` es opcional. */
 export function subirMedio(medio, blob, alProgreso) {

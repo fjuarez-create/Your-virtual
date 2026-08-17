@@ -117,3 +117,28 @@ CREATE TABLE IF NOT EXISTS meta (
   clave TEXT NOT NULL PRIMARY KEY,
   valor TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS mensajes (
+  id                 TEXT NOT NULL PRIMARY KEY,
+  unidad_id          TEXT NOT NULL,
+  promo_id           TEXT NOT NULL DEFAULT '',
+  texto              TEXT NOT NULL,
+  borrada            INTEGER NOT NULL DEFAULT 0,
+  creado             TEXT NOT NULL,
+  actualizado        TEXT NOT NULL,
+  creado_por         TEXT,
+  creado_por_nombre  TEXT NOT NULL,
+  creado_por_empresa TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS ix_mensajes_unidad ON mensajes (unidad_id);
+CREATE INDEX IF NOT EXISTS ix_mensajes_actualizado ON mensajes (actualizado);
+
+CREATE TABLE IF NOT EXISTS lecturas (
+  id          TEXT NOT NULL PRIMARY KEY,
+  mensaje_id  TEXT NOT NULL,
+  usuario_id  TEXT NOT NULL,
+  creado      TEXT NOT NULL,
+  actualizado TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_lecturas_mensaje ON lecturas (mensaje_id);
+CREATE INDEX IF NOT EXISTS ix_lecturas_actualizado ON lecturas (actualizado);

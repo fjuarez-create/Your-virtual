@@ -135,6 +135,12 @@ function despachar(string $metodo, array $p): void
     if ($r0 === 'comentarios' && $metodo === 'POST') {
         guardar_comentarios();
     }
+    if ($r0 === 'mensajes' && $metodo === 'POST') {
+        guardar_mensajes();
+    }
+    if ($r0 === 'lecturas' && $metodo === 'POST') {
+        guardar_lecturas();
+    }
 
     if ($r0 === 'medios') {
         if ($metodo === 'POST' && !isset($p[1])) {
@@ -1046,6 +1052,109 @@ function guardar_comentarios(): void
     responder(['guardados' => $guardados]);
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   Mensajes de una vivienda, y quién los ha leído
+   ═══════════════════════════════════════════════════════════════ */
+/**
+ * Los mensajes del hilo de una vivienda. Los ve y los escribe cualquiera
+ * con sesión: es la conversación del proyecto, no un acta.
+ *
+ * Borrar solo lo puede hacer quien lo escribió. No es una regla de
+ * permisos, es de conversación: si un tercero puede hacer desaparecer lo
+ * que dijiste, el hilo deja de servir para acordarse de nada.
+ */
+function guardar_mensajes(): void
+{
+    $yo = exigir_sesion();
+    $entrada = cuerpo()['mensajes'] ?? [];
+    if (!is_array($entrada)) {
+        responder_error(400, 'Formato incorrecto.', 'formato');
+    }
+    $guardados = 0;
+    foreach ($entrada as $m) {
+        if (!is_array($m) || !es_uuid($m['id'] ?? null)) {
+            continue;
+        }
+        $unidad = texto($m, 'unidadId', 60);
+        if ($unidad === '') {
+            continue;
+        }
+
+        $borrada = booleano($m, 'borrada') ? 1 : 0;
+        if ($borrada) {
+            // Se relee el autor de la base y no se cree el que llega: el
+            // navegador podría mandar cualquiera.
+            $previo = bd()->prepare('SELECT creado_por, borrada FROM mensajes WHERE id = ?');
+            $previo->execute([$m['id']]);
+            $fila = $previo->fetch();
+            if ($fila && $fila['creado_por'] !== $yo['id'] && $yo['rol'] !== 'admin') {
+                $borrada = (int) ($fila['borrada'] ?? 0);
+            }
+        }
+
+        $registro = [
+            'id'                 => $m['id'],
+            'unidad_id'          => $unidad,
+            'promo_id'           => texto($m, 'promoId', 40),
+            'texto'              => mb_substr((string) ($m['texto'] ?? ''), 0, 4000),
+            'borrada'            => $borrada,
+            'creado'             => iso($m['creado'] ?? null),
+            'actualizado'        => iso($m['actualizado'] ?? null),
+            'creado_por'         => es_uuid($m['creadoPor'] ?? null) ? $m['creadoPor'] : null,
+            'creado_por_nombre'  => texto($m, 'creadoPorNombre', 120, 'Sin identificar'),
+            'creado_por_empresa' => texto($m, 'creadoPorEmpresa', 120),
+        ];
+        if (upsert('mensajes', $registro)) {
+            $guardados++;
+        }
+    }
+    responder(['guardados' => $guardados]);
+}
+
+/**
+ * Las lecturas. Cada una es «esta persona leyó este mensaje», con el id
+ * compuesto por los dos.
+ *
+ * Se ignora el usuario que venga escrito y se pone el de la sesión: una
+ * lectura es un hecho sobre quien la hace, y dejar que el navegador diga
+ * por quién lee convertiría los dos tics en algo que se puede fingir.
+ *
+ * Y no se reescriben: la primera vez que alguien lee algo es la que
+ * cuenta, y una segunda subida de la misma lectura no puede mover la
+ * fecha hacia delante.
+ */
+function guardar_lecturas(): void
+{
+    $yo = exigir_sesion();
+    $entrada = cuerpo()['lecturas'] ?? [];
+    if (!is_array($entrada)) {
+        responder_error(400, 'Formato incorrecto.', 'formato');
+    }
+    $guardadas = 0;
+    $sent = bd()->prepare('SELECT 1 FROM lecturas WHERE id = ?');
+    foreach ($entrada as $l) {
+        if (!is_array($l) || !es_uuid($l['mensajeId'] ?? null)) {
+            continue;
+        }
+        $id = $l['mensajeId'] . ':' . $yo['id'];
+        $sent->execute([$id]);
+        if ($sent->fetchColumn()) {
+            continue;
+        }
+        $cuando = iso($l['creado'] ?? null);
+        if (upsert('lecturas', [
+            'id'          => $id,
+            'mensaje_id'  => $l['mensajeId'],
+            'usuario_id'  => $yo['id'],
+            'creado'      => $cuando,
+            'actualizado' => $cuando,
+        ])) {
+            $guardadas++;
+        }
+    }
+    responder(['guardadas' => $guardadas]);
+}
+
 /**
  * Inserta o actualiza según la marca `actualizado`: si lo que hay en la
  * base es más nuevo que lo que llega, no se toca. Es lo que evita que un
@@ -1293,6 +1402,8 @@ function cambios(): void
     $tareas = traer('tareas', $desde);
     $comentarios = traer('comentarios', $desde);
     $medios = traer('medios', $desde);
+    $mensajes = traer('mensajes', $desde);
+    $lecturas = traer('lecturas', $desde);
 
     // La marca siguiente sale de los propios datos, no del reloj del
     // servidor: así un desfase horario entre hosting y móvil no puede
@@ -1302,7 +1413,7 @@ function cambios(): void
     // delante de tareas que se quedaron fuera del tope de esta tanda, y
     // esas ya no se pedirían nunca.
     $marca = $desde;
-    foreach ([$listas, $tareas, $comentarios, $medios] as $conjunto) {
+    foreach ([$listas, $tareas, $comentarios, $medios, $mensajes, $lecturas] as $conjunto) {
         foreach ($conjunto as $fila) {
             if ($fila['actualizado'] > $marca) {
                 $marca = $fila['actualizado'];
@@ -1311,7 +1422,8 @@ function cambios(): void
     }
 
     $hayMas = count($listas) >= TOPE_CAMBIOS || count($tareas) >= TOPE_CAMBIOS
-        || count($comentarios) >= TOPE_CAMBIOS || count($medios) >= TOPE_CAMBIOS;
+        || count($comentarios) >= TOPE_CAMBIOS || count($medios) >= TOPE_CAMBIOS
+        || count($mensajes) >= TOPE_CAMBIOS || count($lecturas) >= TOPE_CAMBIOS;
 
     responder([
         'personas'    => array_map('persona_salida', $personas),
@@ -1319,6 +1431,8 @@ function cambios(): void
         'tareas'      => array_map('tarea_salida', $tareas),
         'comentarios' => array_map('comentario_salida', $comentarios),
         'medios'      => array_map('medio_salida', $medios),
+        'mensajes'    => array_map('mensaje_salida', $mensajes),
+        'lecturas'    => array_map('lectura_salida', $lecturas),
         'ahora'       => $marca,
         'mas'         => $hayMas,
     ]);
@@ -1379,6 +1493,25 @@ function comentario_salida(array $f): array
         'creado' => $f['creado'], 'actualizado' => $f['actualizado'],
         'creadoPor' => $f['creado_por'], 'creadoPorNombre' => $f['creado_por_nombre'],
         'creadoPorEmpresa' => $f['creado_por_empresa'] ?? '',
+    ];
+}
+
+function mensaje_salida(array $f): array
+{
+    return [
+        'id' => $f['id'], 'unidadId' => $f['unidad_id'], 'promoId' => $f['promo_id'] ?? '',
+        'texto' => $f['texto'], 'borrada' => (int) $f['borrada'] === 1,
+        'creado' => $f['creado'], 'actualizado' => $f['actualizado'],
+        'creadoPor' => $f['creado_por'], 'creadoPorNombre' => $f['creado_por_nombre'],
+        'creadoPorEmpresa' => $f['creado_por_empresa'] ?? '',
+    ];
+}
+
+function lectura_salida(array $f): array
+{
+    return [
+        'id' => $f['id'], 'mensajeId' => $f['mensaje_id'], 'usuarioId' => $f['usuario_id'],
+        'creado' => $f['creado'], 'actualizado' => $f['actualizado'],
     ];
 }
 

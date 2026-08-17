@@ -47,6 +47,9 @@
   /* El rojo es señal, no decoración: solo rechazos y la hoja de puerta. */
   --rojo: #c63a30;
   --rojo-soft: rgba(198, 58, 48, 0.10);
+  /* El azul es el de «esto es para ti»: la bolita de sin leer y los dos
+     tics. No lo usa nada más, para que verlo signifique siempre eso. */
+  --azul: #2f6fd0;
 
   --r-xl: 30px;
   --r-lg: 24px;
@@ -588,6 +591,39 @@ button.avatar:active { transform: scale(0.92); }
 .btn.pdf { background: var(--rojo); color: #fff; }
 .btn.pdf:active { filter: brightness(0.94); }
 .tag.rojo { background: var(--rojo-soft); color: var(--rojo); }
+/* ─── Mensajes de una vivienda ─────────────────────────────────
+   El hilo de la casa, con acuse de lectura. Cada fila enseña dos
+   líneas y se abre para leer el resto: un mensaje largo dentro de la
+   lista empuja los demás fuera de la pantalla. */
+.mensaje {
+  display: flex; align-items: flex-start; gap: 11px;
+  width: 100%; padding: 11px; text-align: left;
+  background: var(--surface); border-radius: var(--r-md);
+  transition: transform var(--mov-corto) var(--sal-estandar);
+}
+.mensaje:active { transform: scale(0.985); }
+/* Sin leer: un filo azul a la izquierda además de la bolita. La bolita
+   sola es de 10 px y se pierde con el móvil al sol. */
+.mensaje.nuevo { box-shadow: inset 3px 0 0 var(--azul); }
+.mensaje-cab { display: flex; align-items: baseline; gap: 8px; }
+.mensaje-quien { font-size: 13px; font-weight: 800; letter-spacing: -0.01em; }
+.mensaje-cuando { font-size: 11.5px; color: var(--muted); }
+.mensaje-txt {
+  font-size: 14px; line-height: 1.35; margin-top: 3px; color: var(--muted-oscuro);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.mensaje-bolita {
+  width: 10px; height: 10px; border-radius: 50%; background: var(--azul);
+  flex: none; margin-top: 4px;
+}
+/* Los dos checks solapados, como en cualquier mensajería: la diferencia
+   entre uno y dos se lee por el número de marcas sin aprender nada. */
+.tics { display: inline-flex; flex: none; margin-top: 3px; color: var(--muted); }
+.tics svg { width: 13px; height: 13px; }
+.tics svg + svg { margin-left: -7px; }
+.tics.todos { color: var(--azul); }
+.tics.sin { opacity: .35; }
+
 /* ─── Gremios ──────────────────────────────────────────────────
    Cada uno con su imagen y la empresa que lo lleva. Con quince
    nombres seguidos y nada más, encontrar el tuyo era leerlos todos;
@@ -1042,6 +1078,7 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
    clara con trabajo abierto, verde cuando está todo verificado. */
 .villas { gap: 7px; }
 .villa {
+  position: relative;
   display: block; width: 100%;
   padding: 13px 15px 14px;
   background: var(--surface); border-radius: var(--r-md);
@@ -1049,6 +1086,14 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
   transition: transform var(--mov-corto) var(--sal-estandar);
 }
 .villa:active { transform: scale(0.985); }
+/* Mensajes sin leer en esa casa. En la esquina y no junto al nombre: la
+   fila va en columnas fijas para que el nombre y el porcentaje caigan en
+   la misma vertical en las cincuenta, y meter una bolita dentro de una
+   de esas columnas las descuadraría todas. */
+.villa-bolita {
+  position: absolute; top: 9px; right: 9px;
+  width: 9px; height: 9px; border-radius: 50%; background: var(--azul);
+}
 
 /* Todo en columnas fijas menos la barra, que se come lo que sobra. Así
    el nombre y el porcentaje caen en la misma vertical en las cincuenta

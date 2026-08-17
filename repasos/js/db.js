@@ -15,7 +15,7 @@
      outbox       cambios pendientes de subir (orden de llegada)
    ═══════════════════════════════════════════════════════════════ */
 const NOMBRE = 'unik-repasos';
-const VERSION = 4;
+const VERSION = 5;
 
 let dbPromise = null;
 
@@ -50,6 +50,20 @@ export function abrir() {
       // trabajo, no el repaso en sí.
       if (!db.objectStoreNames.contains('recorridos')) {
         db.createObjectStore('recorridos', { keyPath: 'id' }).createIndex('unidadId', 'unidadId');
+      }
+      // Versión 5: los mensajes de una vivienda y quién los ha leído.
+      //
+      // Las lecturas van en su propia tabla y no como una lista dentro
+      // del mensaje. Si fueran un campo del mensaje, dos personas
+      // leyéndolo a la vez subirían cada una su copia entera y la última
+      // en llegar borraría la lectura de la otra. Cada lectura es una
+      // fila con su propio identificador —mensaje + persona— así que dos
+      // que lleguen a la vez no se pisan: son filas distintas.
+      if (!db.objectStoreNames.contains('mensajes')) {
+        db.createObjectStore('mensajes', { keyPath: 'id' }).createIndex('unidadId', 'unidadId');
+      }
+      if (!db.objectStoreNames.contains('lecturas')) {
+        db.createObjectStore('lecturas', { keyPath: 'id' }).createIndex('mensajeId', 'mensajeId');
       }
       if (!db.objectStoreNames.contains('outbox')) {
         db.createObjectStore('outbox', { keyPath: 'seq', autoIncrement: true });

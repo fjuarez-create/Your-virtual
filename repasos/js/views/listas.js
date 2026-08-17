@@ -9,6 +9,7 @@ import { promocion, unidad, FASE_UNICA, puedeCrearLista } from '../catalog.js';
 import * as store from '../store.js';
 import { cabeceraDentro, fabMas, tareaFila, tarjetaActa, filtroEstado, filtroOficio } from '../piezas.js';
 import { hojaDePuerta, nombreDeFichero } from '../pdf.js';
+import { bloqueDeMensajes } from '../mensajes.js';
 import { ir, conFiltros, filtrosDeRuta, anotarFiltros } from '../app.js';
 
 export async function render({ promoId, unidadId }) {
@@ -41,6 +42,10 @@ export async function render({ promoId, unidadId }) {
           puedeCrearLista(store.sesion())
             ? h('button.btn.ink', { onclick: nueva }, icon('plus'), 'Nueva lista de repaso')
             : null),
+        // Aunque no haya ni una tarea puede haber algo que contar de la
+        // casa: «la llave está en portería» no espera a que alguien abra
+        // un acta.
+        await bloqueDeMensajes(unidadId, promoId),
         // Un acta recién creada aún no tiene tareas. Si no se enseñara
         // aquí, quedaría invisible desde su propia vivienda.
         pieDeActas(actas),
@@ -111,6 +116,8 @@ export async function render({ promoId, unidadId }) {
   pintarCaras();
   pintar();
 
+  const hilo = await bloqueDeMensajes(unidadId, promoId);
+
   return {
     sinTabs: true,
     // Aquí se viene a leer una lista. La llamada a la acción a todo lo
@@ -142,6 +149,11 @@ export async function render({ promoId, unidadId }) {
         style: { marginTop: '18px' },
         onclick: () => descargarVivienda(p, u, tareas),
       }, icon('documento'), 'PDF con lo que queda aquí'),
+
+      // El hilo de la casa. Debajo del trabajo y encima de las actas: lo
+      // que se habla de una vivienda importa menos que lo que hay que
+      // hacer en ella, y más que el archivo de quién firmó qué.
+      hilo,
       // Las actas, al pie: se consultan cuando hace falta saber quién
       // firmó qué, no cada vez que se entra en la casa.
       pieDeActas(actas, { estado, oficio: oficioId }),

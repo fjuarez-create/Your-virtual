@@ -79,6 +79,163 @@ export async function refrescarSesion() {
   return usuario;
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   Mensajes de una vivienda, y quién los ha leído
+
+   Un hilo por casa, común a todo el proyecto. No es el hilo de una
+   tarea —ese va dentro de la tarea y habla de un remate concreto—:
+   este es para lo que no cabe en ninguna tarea, «mañana no hay agua en
+   la 07» o «el de la piscina viene el jueves».
+
+   Las lecturas van en tabla aparte, y ahí está el nudo de todo esto.
+   Si fueran una lista dentro del mensaje, dos personas leyéndolo a la
+   vez subirían cada una el mensaje entero con su propia lista y la
+   última en llegar borraría la lectura de la otra. Siendo filas, cada
+   una con su id —mensaje + persona—, dos lecturas simultáneas no se
+   pisan: son registros distintos que no se tocan.
+   ═══════════════════════════════════════════════════════════════ */
+/**
+ * ¿Lo escribió quien tiene la sesión abierta?
+ *
+ * Se compara por id, y por nombre solo cuando no hay id. El servidor
+ * guarda `creado_por` únicamente si es un UUID —los identificadores de
+ * andar por casa como `local` no pasan el filtro— así que un registro
+ * que ha ido y vuelto puede llegar sin autor. Sin este respaldo, quien
+ * lo escribió dejaría de reconocer su propio mensaje en cuanto se
+ * sincroniza: se vería los tics de otro y no podría borrarlo.
+ */
+export function esMio(registro) {
+  if (!registro || !usuario) return false;
+  if (registro.creadoPor) return registro.creadoPor === usuario.id;
+  return !!registro.creadoPorNombre && registro.creadoPorNombre === usuario.nombre;
+}
+
+export async function mensajesDeUnidad(unidadId) {
+  const todos = await db.porIndice('mensajes', 'unidadId', unidadId);
+  return todos.filter((m) => !m.borrada).sort((a, b) => a.creado.localeCompare(b.creado));
+}
+
+export async function escribirMensaje(unidadId, promoId, texto) {
+  const limpio = String(texto || '').trim();
+  if (!limpio) return null;
+  const m = {
+    id: nuevoId(),
+    unidadId,
+    promoId: promoId || '',
+    texto: limpio,
+    borrada: false,
+    creado: ahora(),
+    actualizado: ahora(),
+    creadoPor: usuario?.id || 'local',
+    creadoPorNombre: usuario?.nombre || 'Sin identificar',
+    creadoPorEmpresa: usuario?.empresa || '',
+  };
+  await db.put('mensajes', m);
+  await encolar('mensaje', m.id);
+  // Lo que uno escribe lo ha leído: sin esto, el autor se vería una
+  // bolita azul en su propio mensaje.
+  await marcarLeido(m.id);
+  return m;
+}
+
+/**
+ * Solo lo borra quien lo escribió. No es una regla de permisos, es de
+ * conversación: si un tercero puede hacer desaparecer lo que dijiste, el
+ * hilo deja de servir para acordarse de nada. El servidor lo comprueba
+ * otra vez, porque el navegador no es de fiar.
+ */
+export async function borrarMensaje(id) {
+  const m = await db.get('mensajes', id);
+  if (!m) return null;
+  if (!esMio(m) && usuario?.rol !== 'admin') {
+    throw new Error('Solo quien lo escribió puede borrarlo.');
+  }
+  const nuevo = { ...m, borrada: true, actualizado: ahora() };
+  await db.put('mensajes', nuevo);
+  await encolar('mensaje', id);
+  return nuevo;
+}
+
+/** Todas las lecturas de un mensaje, vengan de quien vengan. */
+export async function lecturasDe(mensajeId) {
+  return db.porIndice('lecturas', 'mensajeId', mensajeId);
+}
+
+/**
+ * Deja constancia de que esta persona ha leído este mensaje.
+ *
+ * El id lo forman mensaje y persona, así que marcarlo dos veces escribe
+ * la misma fila: no hay duplicados que limpiar ni contador que pueda
+ * descuadrarse. Y como ya existe, la segunda vez ni siquiera se encola.
+ */
+export async function marcarLeido(mensajeId) {
+  const quien = usuario?.id || 'local';
+  const id = `${mensajeId}:${quien}`;
+  if (await db.get('lecturas', id)) return null;
+  const l = { id, mensajeId, usuarioId: quien, creado: ahora(), actualizado: ahora() };
+  await db.put('lecturas', l);
+  await encolar('lectura', id);
+  return l;
+}
+
+/**
+ * Cuántos mensajes de una vivienda no ha leído todavía quien tiene la
+ * sesión abierta. Es la bolita azul.
+ */
+export async function sinLeerDeUnidad(unidadId) {
+  const quien = usuario?.id || 'local';
+  const mensajes = await mensajesDeUnidad(unidadId);
+  let n = 0;
+  for (const m of mensajes) {
+    if (esMio(m)) continue;
+    if (!(await db.get('lecturas', `${m.id}:${quien}`))) n++;
+  }
+  return n;
+}
+
+/**
+ * Lo mismo para toda una promoción, de una vez: un Map de unidad a
+ * cuántos sin leer.
+ *
+ * Se lee todo de golpe y se cuenta en memoria en lugar de preguntar por
+ * cada vivienda. Son cincuenta casas, y cincuenta idas y venidas a
+ * IndexedDB se notan al abrir la pantalla.
+ */
+export async function sinLeerPorUnidad(promoId) {
+  const quien = usuario?.id || 'local';
+  const mensajes = (await db.getAll('mensajes'))
+    .filter((m) => !m.borrada && (!promoId || m.promoId === promoId));
+  if (!mensajes.length) return new Map();
+
+  const leidos = new Set((await db.getAll('lecturas'))
+    .filter((l) => l.usuarioId === quien)
+    .map((l) => l.mensajeId));
+
+  const salida = new Map();
+  for (const m of mensajes) {
+    if (esMio(m) || leidos.has(m.id)) continue;
+    salida.set(m.unidadId, (salida.get(m.unidadId) || 0) + 1);
+  }
+  return salida;
+}
+
+/**
+ * Los tics de un mensaje: 0 sin leer por nadie, 1 leído por alguien, 2
+ * leído por todos.
+ *
+ * «Todos» son las personas activas del directorio menos quien lo
+ * escribió: nadie espera un tic de sí mismo. Si el directorio todavía no
+ * ha bajado, se responde 1 en cuanto haya una lectura en vez de prometer
+ * dos que no se pueden comprobar.
+ */
+export async function ticsDe(mensaje) {
+  const leidas = (await lecturasDe(mensaje.id)).filter((l) => l.usuarioId !== mensaje.creadoPor);
+  if (!leidas.length) return 0;
+  const equipo = [...personas.values()].filter((p) => p.activo !== false && p.id !== mensaje.creadoPor);
+  if (!equipo.length) return 1;
+  return leidas.length >= equipo.length ? 2 : 1;
+}
+
 /* ─── Estado de sincronización (observable simple) ────────────── */
 const oyentes = new Set();
 export const estadoSync = {
@@ -987,6 +1144,14 @@ async function empujar() {
         } else if (m && !m.blob && !m.borrada) {
           await db.put('medios', { ...m, subido: true });
         }
+      } else if (item.tipo === 'mensaje') {
+        const m = await db.get('mensajes', item.id);
+        if (m) await api.subirMensajes([sinBlobs(m)]);
+      } else if (item.tipo === 'lectura') {
+        const l = await db.get('lecturas', item.id);
+        // El servidor pone el usuario por su cuenta, así que solo hace
+        // falta decirle qué mensaje se leyó y cuándo.
+        if (l) await api.subirLecturas([{ mensajeId: l.mensajeId, creado: l.creado }]);
       } else if (item.tipo === 'medio-borrado') {
         try { await api.borrarMedioRemoto(item.id); }
         catch (e) { if (e.status !== 404) throw e; }
@@ -1064,12 +1229,26 @@ async function fusionarTanda(desde) {
     }
     await db.putVarios('medios', fusionados);
   }
+  if (r.mensajes?.length) {
+    const fusionados = [];
+    for (const remoto of r.mensajes) {
+      const local = await db.get('mensajes', remoto.id);
+      if (!local || remoto.actualizado >= local.actualizado) fusionados.push(normalizarMensaje(remoto));
+    }
+    await db.putVarios('mensajes', fusionados);
+  }
+  // Las lecturas no se fusionan por fecha: no se editan nunca. Una
+  // lectura o está o no está, y la que llega es la misma que la que
+  // pudiera haber, así que se escribe y ya.
+  if (r.lecturas?.length) await db.putVarios('lecturas', r.lecturas);
+
   if (r.ahora) await db.meta.set('ultimoSync', r.ahora);
 
   // La revisión sube al final, con todo ya escrito: si se avisara antes,
   // la pantalla se repintaría con los datos de hace un momento y se
   // quedaría así hasta el siguiente cambio.
-  if (r.listas?.length || r.tareas?.length || r.medios?.length || r.comentarios?.length) {
+  if (r.listas?.length || r.tareas?.length || r.medios?.length || r.comentarios?.length
+      || r.mensajes?.length || r.lecturas?.length) {
     estadoSync.revision++;
   }
   return r;
@@ -1084,6 +1263,7 @@ const normalizarTarea = (t) => ({
   zona: typeof t.zona === 'string' ? t.zona : '',
 });
 const normalizarComentario = (c) => ({ ...c, borrada: bool(c.borrada) });
+const normalizarMensaje = (m) => ({ ...m, borrada: bool(m.borrada) });
 const normalizarMedio = (m) => ({
   ...m, subido: true, borrada: bool(m.borrada),
   tam: Number(m.tam) || 0, ancho: Number(m.ancho) || 0,

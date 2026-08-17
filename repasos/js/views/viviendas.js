@@ -22,6 +22,11 @@ export async function render({ promoId, desdeTab = false }) {
   const todas = unidades(promoId);
   const resumen = await store.resumenPorUnidad(promoId);
 
+  // Cuántos mensajes sin leer tiene cada casa. Se calcula aquí y no
+  // dentro de cada fila porque son cincuenta viviendas: preguntarlo
+  // cincuenta veces por separado se nota al abrir la pantalla.
+  const sinLeer = await store.sinLeerPorUnidad(promoId);
+
   // El filtro viene en la dirección, si es que se venía filtrando.
   let { estado, oficio: oficioId } = filtrosDeRuta();
   const lista = h('div.stack.villas');
@@ -32,7 +37,7 @@ export async function render({ promoId, desdeTab = false }) {
   const pintar = () => {
     const visibles = todas.filter((u) => encaja(resumen.get(u.id), estado, oficioId));
     lista.replaceChildren(...visibles.map((u) =>
-      fila(u, resumen.get(u.id), promoId, { estado, oficio: oficioId })));
+      fila(u, resumen.get(u.id), promoId, { estado, oficio: oficioId }, sinLeer.get(u.id) || 0)));
     if (!visibles.length) {
       lista.append(h('p.sub.center', { style: { padding: '30px 0' } },
         'Ninguna vivienda encaja con este filtro.'));
@@ -85,7 +90,7 @@ const DIAS_PARADA = 14;
  *   viva    — le queda algo abierto o por validar
  *   hecha   — todas sus tareas están validadas
  */
-function fila(u, r, promoId, filtros) {
+function fila(u, r, promoId, filtros, sinLeer = 0) {
   const total = r?.total || 0;
   const hechas = r?.hechas || 0;
   const esperando = r?.esperando || 0;
@@ -110,7 +115,11 @@ function fila(u, r, promoId, filtros) {
       // reserva entero aunque haya una sola, para que el nombre no baile
       // de fila en fila.
       grupoAvatares(gente.slice(0, 3), { tam: 34, max: 3, hueco: 3, vacio: true }),
-      h('div.villa-tit', null, u.nombre),
+      h('div.villa-tit', null, u.nombre,
+        // La bolita de mensajes sin leer, pegada al nombre. Sin ella, el
+        // hilo de una vivienda solo se descubre entrando en ella, y en
+        // cincuenta casas eso es no descubrirlo nunca.
+        sinLeer ? h('span.villa-bolita', { 'aria-label': `${sinLeer} sin leer` }) : null),
       h('div.villa-barra', null,
         h('i.t-validada', { style: { width: pct + '%' } }),
         h('i.t-validar', { style: { width: pctEspera + '%' } }),
