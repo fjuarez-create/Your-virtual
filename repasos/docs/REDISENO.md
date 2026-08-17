@@ -128,6 +128,29 @@ La home del **jefe de obra** es el mismo panel que la de técnicos, con una
 sola diferencia: el título es siempre `A por los repasos pendientes! 💪🏼`,
 sin las frases que cambian por día de la semana.
 
+## Gremios
+
+Cada gremio pasa a tener **imagen** y **empresa**, y **una empresa como
+mucho**. Hoy el catálogo solo tiene identificador y nombre, así que son
+dos campos nuevos en los quince.
+
+Los filtros —por ahora **solo por gremio**— admiten varios a la vez y
+suman: salen las viviendas en las que **alguno** de los gremios elegidos
+tenga trabajo pendiente.
+
+## Al cerrar un recorrido
+
+Modal con la foto y el nombre de quien creó la lista, y una frase que
+**cambia según cuántas tareas salieron**, para no ver siempre la misma:
+
+| Tareas | Frase |
+| --- | --- |
+| 1 | Una y bien cazada. |
+| 2–5 | Todo validado. Ni una se escapó. |
+| 6–10 | Buen repaso. Hay trabajo por delante. |
+| 11–15 | Repaso serio. El jefe de obra te recordará. |
+| más de 15 | *(pendiente: la del diseño trae un número fijo)* |
+
 ## Otras reglas del diseño
 
 - **ZONA-ESTANCIA**: variable nueva por tarea, solo para ubicar y filtrar
@@ -209,5 +232,8 @@ Veinte tareas sueltas cuestan bastante más que un recorrido de veinte.
 
 ## Lo que sigue abierto
 
+- La frase de más de 15 tareas al cerrar un recorrido dice «34 remates»,
+  un número fijo que viene del maquetado. Falta saber si el número debe
+  ser el real de tareas o si la frase va sin número.
 - La lista de estancias trae **«baño principal» dos veces**. Se ha dejado
   una; falta saber si la segunda quería ser otra estancia.
