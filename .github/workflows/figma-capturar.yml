@@ -165,4 +165,7 @@ jobs:
             exit 0
           fi
           git commit -m "Fotografiar el diseño de Figma desde el visor público"
+          # La rama puede haberse movido mientras se fotografiaba; el
+          # robot se incorpora encima de lo nuevo en vez de chocar.
+          git pull --rebase origin "${GITHUB_REF_NAME}"
           git push
