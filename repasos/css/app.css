@@ -1537,6 +1537,7 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
    pantallas que aún no se han rediseñado, sin pisarlas.
    ═══════════════════════════════════════════════════════════════ */
 .pantalla-diseno {
+  --pad: 12px; /* el Figma respira 12 a los lados, no 16 */
   font-family: var(--d-font);
   background: var(--d-fondo);
   color: var(--d-tinta);
@@ -1582,18 +1583,44 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
   position: relative; width: 100%; min-height: 95px;
   text-align: left; display: block;
 }
-.d-banner + .d-banner { margin-top: 10px; }
+.d-banner + .d-banner { margin-top: 8px; }
 .d-banner-fondo {
-  position: absolute; inset: 0; border-radius: 26px;
+  /* La forma del banner del Figma no es un rectángulo con agujero: la
+     tarjeta se estrecha abajo a la derecha y la bola vive fuera, en el
+     hueco. Se monta con tres piezas ancladas al borde derecho para que
+     estire con cualquier ancho de móvil:
+       · la franja de arriba, a todo lo ancho, que acaba en lengüeta;
+       · la columna de abajo, estrechada 59px;
+       · y el filete cóncavo que las une rodeando la bola, un cuadrado
+         al que un círculo de 33px (27,5 de bola + 5,5 de aire),
+         centrado donde el centro de la bola, le come la esquina.
+     El fondo mide 94 de alto y el botón le asoma 1px por debajo. */
+  position: absolute; inset: 0 0 1px 0;
+}
+.d-banner-fondo::before {
+  /* La franja de arriba, que acaba en media pastilla. */
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 33px;
   background: var(--banner, var(--d-beige));
-  -webkit-mask: radial-gradient(circle 31px at calc(100% - 29.5px) 50%, transparent 99%, #000 101%);
-  mask: radial-gradient(circle 31px at calc(100% - 29.5px) 50%, transparent 99%, #000 101%);
+  border-radius: 20px 16.5px 16.5px 0;
+}
+.d-banner-fondo::after {
+  /* La columna de abajo, estrechada 61px. */
+  content: ''; position: absolute; inset: 0 61px 0 0;
+  background: var(--banner, var(--d-beige));
+  border-radius: 20px 0 20px 20px;
+}
+.d-banner-esquina {
+  /* El filete cóncavo, concéntrico con la bola: 27,5 + 8 de aire. */
+  position: absolute; top: 32px; right: 26.5px; width: 35.5px; height: 35.5px;
+  background: var(--banner, var(--d-beige));
+  -webkit-mask: radial-gradient(circle 35.5px at 100% 100%, transparent 99%, #000 101%);
+  mask: radial-gradient(circle 35.5px at 100% 100%, transparent 99%, #000 101%);
 }
 .d-banner-texto { position: relative; display: block; padding: 13px 76px 13px 16px; }
 .d-banner-rotulo { display: block; font-size: 16px; font-weight: 500; }
 .d-banner-cifra { display: block; font-size: 32px; font-weight: 500; line-height: 1.25; }
 .d-banner-boton {
-  position: absolute; right: 2px; top: 50%; transform: translateY(-50%);
+  position: absolute; right: -1px; bottom: 0;
   width: 55px; height: 55px; border-radius: 999px;
   background: var(--banner, var(--d-beige));
   display: grid; place-items: center;

@@ -33,6 +33,7 @@ function saludo(usuario) {
 function banner({ clase, rotulo, cifra, adonde, alPinchar }) {
   return h('button.d-banner', { class: clase, onclick: () => { alPinchar?.(); ir(adonde); } },
     h('span.d-banner-fondo'),
+    h('span.d-banner-esquina'),
     h('span.d-banner-texto', null,
       h('span.d-banner-rotulo', null, rotulo),
       h('span.d-banner-cifra', null, String(cifra)),
