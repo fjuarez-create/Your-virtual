@@ -46,6 +46,8 @@ const ARMAZON = [
   'assets/fonts/inter-tight-latin-600-normal.woff2',
   'assets/icons/favicon.svg',
   'assets/icons/icon-192.png',
+  'assets/logo/marca-unik.png',
+  'assets/logo/marca-check.png',
 ];
 
 self.addEventListener('install', (e) => {
