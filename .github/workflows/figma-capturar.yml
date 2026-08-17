@@ -15,8 +15,15 @@ name: Fotografiar el diseño de Figma
 # (figma-bajar.yml) baja el JSON exacto y las imágenes sueltas; este da
 # la capa visual y aquel, los números finos.
 
+# Los flujos que solo viven en esta rama no se pueden lanzar a mano por
+# la API —GitHub solo registra los de la rama principal—, así que este
+# se dispara al empujar su fichero-señal, que sí funciona en cualquier
+# rama.
 on:
   workflow_dispatch:
+  push:
+    branches: [claude/uniq-repasos-app-2ja8y2]
+    paths: ['diseno-figma/LANZAR-CAPTURAS.txt']
 
 permissions:
   contents: write

@@ -16,8 +16,14 @@ name: Bajar el diseño de Figma
 # Se lanza a mano. Deja todo en diseno-figma/ y lo empuja a la rama;
 # esa carpeta está fuera de repasos/, así que no dispara publicación.
 
+# Se dispara al empujar su fichero-señal (los flujos de una rama de
+# trabajo no se pueden lanzar a mano por la API hasta estar en la rama
+# principal).
 on:
   workflow_dispatch:
+  push:
+    branches: [claude/uniq-repasos-app-2ja8y2]
+    paths: ['diseno-figma/LANZAR-BAJADA.txt']
 
 permissions:
   contents: write
