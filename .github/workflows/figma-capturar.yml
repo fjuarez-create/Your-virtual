@@ -50,54 +50,23 @@ jobs:
         run: |
           mkdir -p diseno-figma/capturas
           cat > fotografiar.mjs <<'GUION'
+          // MODO DETECTIVE: el visor no pintaba el lienzo en ninguna
+          // pantalla y desde la máquina de desarrollo no se puede abrir
+          // Figma para ver qué sale. Se entra por tres puertas distintas
+          // y se fotografía LO QUE HAYA, sin esperar a nada: las fotos
+          // dirán qué está enseñando el visor de verdad.
           import { chromium } from 'playwright';
           import fs from 'fs';
 
-          const ARCHIVO = 'VlGqIJA4ZR7e8vmvELKPsB';
-          // Las pantallas del archivo, con su identificador y su nombre.
-          const PANTALLAS = [
-            ['5:12139', 'splash'],
-            ['2070:15536', 'home-tecnicos'],
-            ['2070:15747', 'home-constructora'],
-            ['2075:10806', 'viviendas-inacabadas'],
-            ['2079:13819', 'viviendas-terminadas'],
-            ['2093:17219', 'filtros-finalizadas'],
-            ['2093:25173', 'filtros-inacabadas'],
-            ['2103:27795', 'filtro-abierto'],
-            ['2105:19080', 'filtro-buscando-pladur'],
-            ['2071:8662', 'detalle-vivienda'],
-            ['2093:25786', 'detalle-vivienda-medio'],
-            ['2093:26070', 'detalle-vivienda-avanzada'],
-            ['2114:31310', 'nueva-inspeccion'],
-            ['2114:31918', 'nueva-foto'],
-            ['2129:33627', 'nueva-galeria'],
-            ['2129:34289', 'recorrido-ia'],
-            ['2129:34579', 'recorrido-popup'],
-            ['2129:34359', 'recorrido-fotogramas'],
-            ['2129:34399', 'recorrido-fotogramas-mas'],
-            ['2129:34627', 'recorrido-finalizar'],
-            ['2129:34669', 'recorrido-validar'],
-            ['2129:35828', 'recorrido-validar-eliminada'],
-            ['2129:36376', 'recorrido-validar-nueva-foto'],
-            ['2129:36158', 'recorrido-validar-2'],
-            ['2129:35588', 'recorrido-validar-ultima'],
-            ['2045:10272', 'tarea-creando-1'],
-            ['2129:33734', 'tarea-creando-2'],
-            ['2114:32994', 'tarea-a-mano'],
-            ['2129:33957', 'tarea-a-mano-2'],
-            ['2114:33358', 'tarea-anadiendo-multimedia'],
-            ['2129:34061', 'tarea-anadiendo-multimedia-2'],
-            ['2114:33501', 'tarea-multimedia'],
-            ['2129:34179', 'tarea-multimedia-2'],
-            ['2125:11553', 'tarea-confirmar-eliminar-foto'],
-            ['2129:33838', 'tarea-confirmar-eliminar-foto-2'],
-            ['2129:36657', 'tarea-viendo'],
-            ['2129:37393', 'tarea-viendo-2'],
-            ['2129:37602', 'tarea-mensaje'],
-            ['2129:37810', 'tarea-completar'],
-            ['2129:36942', 'tarea-editando'],
-            ['2129:38279', 'tarea-editando-fotos'],
-            ['2129:38466', 'tarea-finalizada'],
+          const K = 'VlGqIJA4ZR7e8vmvELKPsB';
+          const PUERTAS = [
+            // La incrustación del prototipo, con los parámetros exactos
+            // del código que compartió Fran.
+            ['proto-embed', `https://embed.figma.com/proto/${K}/UNIK-repasos?node-id=5-12139&viewport=5787%2C1030%2C0.66&scaling=min-zoom&content-scaling=fixed&page-id=2%3A1207&embed-host=share`],
+            // La incrustación del archivo en modo diseño.
+            ['design-embed', `https://embed.figma.com/design/${K}/UNIK-repasos?node-id=5-12139&embed-host=share&hide-ui=1`],
+            // El reproductor normal, sin incrustar.
+            ['proto-normal', `https://www.figma.com/proto/${K}/UNIK-repasos?node-id=5-12139&page-id=2%3A1207&scaling=min-zoom`],
           ];
 
           const nav = await chromium.launch({ args: [
@@ -107,48 +76,33 @@ jobs:
           const ctx = await nav.newContext({
             viewport: { width: 760, height: 1700 },
             deviceScaleFactor: 2,
+            userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
           });
 
-          let bien = 0;
-          const fallos = [];
-
-          /** Una pantalla, con un solo reintento si el visor no pinta. */
-          async function fotografiar([id, nombre], intento = 1) {
+          const informe = [];
+          for (const [nombre, url] of PUERTAS) {
             const p = await ctx.newPage();
+            const consola = [];
+            p.on('console', (m) => { if (consola.length < 12) consola.push(`${m.type()}: ${m.text().slice(0, 140)}`); });
             try {
-              const url = `https://embed.figma.com/design/${ARCHIVO}/UNIK-repasos`
-                + `?node-id=${id.replace(':', '-')}&embed-host=share&hide-ui=1`;
-              await p.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-              await p.waitForSelector('canvas', { timeout: 25000 });
-              await p.waitForTimeout(6000);
-              await p.screenshot({ path: `diseno-figma/capturas/${nombre}--${id.replace(':', '-')}.png` });
-              bien++;
-              console.log(`✓ ${bien} · ${nombre}`);
+              await p.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
+              await p.waitForTimeout(18000);
+              await p.screenshot({ path: `diseno-figma/capturas/DETECTIVE-${nombre}.png` });
+              const titulo = await p.title();
+              const cuerpo = (await p.evaluate(() => document.body?.innerText || '')).slice(0, 600);
+              const lienzos = await p.evaluate(() => document.querySelectorAll('canvas').length);
+              informe.push(`═══ ${nombre}\nURL: ${url}\nTÍTULO: ${titulo}\nLIENZOS: ${lienzos}\nTEXTO:\n${cuerpo}\nCONSOLA:\n${consola.join('\n')}\n`);
+              console.log(`✓ ${nombre} · título «${titulo}» · lienzos ${lienzos}`);
             } catch (e) {
-              if (intento === 1) {
-                console.log(`↻ reintento · ${nombre}`);
-                await p.close();
-                return fotografiar([id, nombre], 2);
-              }
-              fallos.push(nombre);
-              console.log(`✗ ${nombre}: ${String(e).slice(0, 100)}`);
+              informe.push(`═══ ${nombre}\nERROR: ${String(e).slice(0, 300)}\n`);
+              console.log(`✗ ${nombre}: ${String(e).slice(0, 120)}`);
             } finally {
-              try { await p.close(); } catch { /* ya cerrada */ }
+              await p.close();
             }
           }
-
-          // Tres a la vez: el visor tarda unos segundos por pantalla y en
-          // fila india no se llega dentro del tiempo del trabajo.
-          const cola = [...PANTALLAS];
-          await Promise.all(Array.from({ length: 3 }, async () => {
-            while (cola.length) await fotografiar(cola.shift());
-          }));
           await nav.close();
-          console.log(`\n${bien} capturas de ${PANTALLAS.length}` + (fallos.length ? ` · fallaron: ${fallos.join(', ')}` : ''));
-          fs.writeFileSync('diseno-figma/capturas/RESUMEN.txt',
-            `${bien} de ${PANTALLAS.length}\n` + (fallos.length ? `fallaron: ${fallos.join(', ')}\n` : ''));
-          // Si no salió ninguna, que el flujo falle a la vista.
-          if (!bien) process.exit(1);
+          fs.mkdirSync('diseno-figma/capturas', { recursive: true });
+          fs.writeFileSync('diseno-figma/capturas/DETECTIVE.txt', informe.join('\n'));
           GUION
           node fotografiar.mjs
 
