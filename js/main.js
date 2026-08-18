@@ -10,6 +10,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { FLOOR_DEFS, ROOF_Y, floorOf } from 'app/layout.js';
 import { buildBuilding, paintUnits, loadBIM } from 'app/building.js';
 import { fetchUnits, fetchAvailability, pollAvailability, sendLead } from 'app/api.js';
@@ -230,19 +231,51 @@ scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xfff1dc, 2.2);
 sun.position.copy(sunDir).multiplyScalar(180);
 sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);
-sun.shadow.camera.left = -120; sun.shadow.camera.right = 120;
-sun.shadow.camera.top = 120; sun.shadow.camera.bottom = -120;
-sun.shadow.camera.far = 400;
-sun.shadow.bias = -0.0004;
+// El mapa de sombra se ciñe al edificio en vez de cubrir 240 m: con 4096 px
+// sobre 150 m se pasa de 12 cm por texel a menos de 4, que es lo que hace
+// falta para que se resuelva el canto de un antepecho o el retranqueo de una
+// ventana. Fuera de esa caja no hay nada que proyecte sombra que importe.
+sun.shadow.mapSize.set(4096, 4096);
+sun.shadow.camera.left = -75; sun.shadow.camera.right = 75;
+sun.shadow.camera.top = 75; sun.shadow.camera.bottom = -75;
+sun.shadow.camera.far = 340;
+sun.shadow.bias = -0.00018;
+sun.shadow.normalBias = 0.045;
 scene.add(sun);
 const fill = new THREE.DirectionalLight(0xa8c4e8, 0.4);
 fill.position.set(-90, 60, -70);
 scene.add(fill);
 
-// ── Post-procesado: bloom sutil ──
+/* ── Post-procesado ──
+   El búfer intermedio del compositor se crea sin multimuestreo, así que el
+   antialias:true del lienzo no llegaba a aplicarse y todos los cantos salían
+   dentados. Pedirle muestras al destino lo devuelve. */
 const composer = new EffectComposer(renderer);
+composer.renderTarget1.samples = 4;
+composer.renderTarget2.samples = 4;
 composer.addPass(new RenderPass(scene, camera));
+
+/* Oclusión ambiental: oscurece esquinas, retranqueos de ventana, encuentros de
+   forjado y bajos de balcón. Es lo que más separa "bien sombreado" de
+   "renderizado"; sin ella todo flota en una luz plana. */
+/* La oclusión cuesta, así que no se le carga a un móvil de gama media: se
+   activa en pantallas de tablet para arriba. Se puede forzar o desactivar con
+   ?ao=1 / ?ao=0 para comparar. */
+const qsAO = new URLSearchParams(location.search).get('ao');
+const usarAO = qsAO === '1' || (qsAO !== '0' && Math.min(screen.width, screen.height) >= 700);
+
+const gtao = new GTAOPass(scene, camera, innerWidth, innerHeight);
+gtao.enabled = usarAO;
+gtao.output = GTAOPass.OUTPUT.Default;
+gtao.updateGtaoMaterial({
+  radius: 0.55,          // en metros: el tamaño del hueco que ensombrece
+  distanceExponent: 1.6,
+  thickness: 1.2,
+  scale: 1.05,
+  samples: 16,
+});
+gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 4, samples: 8 });
+composer.addPass(gtao);
 const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.14, 0.5, 0.92);
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
@@ -833,6 +866,7 @@ function onResize() {
   camera.updateProjectionMatrix();
   renderer.setSize(w, h);
   composer.setSize(w, h);
+  gtao.setSize(w, h);
 }
 
 /* Al girar el móvil, iOS avisa del cambio con las medidas TODAVÍA en vertical.
