@@ -23,6 +23,7 @@ import * as api from '../api.js';
 import * as grabadora from '../recorrido.js';
 import {
   cabeceraDentro, cerrarVuelta, hojaOficios, hojaZonas, hojaBienHecho, ctaAccion, ctaCancelar,
+  menuFlotante, filaMenu,
 } from '../piezas.js';
 import { alCerrarRecorrido } from '../frases.js';
 import { paraMirar } from '../media.js';
@@ -76,6 +77,9 @@ export async function render({ promoId, unidadId }) {
 
   const lienzo = h('div.recorrido');
   let mando = null;
+  // El visor vive colgado del body: dentro del lienzo, el «fixed» se
+  // queda atrapado por los ancestros y sale con alto cero.
+  let visorActual = null;
 
   // La cabecera se guarda en vez de montarse dentro del `return`: al
   // pasar a validar hay que apagarle la flecha de volver, y para eso
@@ -111,74 +115,56 @@ export async function render({ promoId, unidadId }) {
     ir('#/l/' + l.id);
   };
 
-  /* ─── 1. Preparado ─── */
+  /* ─── 1. Nada más entrar se abre el visor, con el pop up del
+     diseño encima: comenzar o cancelar, con la cámara ya viva. ─── */
   const pintarPreparado = () => {
-    lienzo.replaceChildren(
-      pendiente ? h('div.rec-pendiente', null,
-        h('p.eyebrow', null, 'Recorrido a medias'),
-        h('p.sub', { style: { marginTop: '4px' } },
-          `${grabadora.reloj(pendiente.duracion)} y ${pendiente.marcas.length} `
-          + `${pendiente.marcas.length === 1 ? 'marca' : 'marcas'} del ${fechaCorta(pendiente.creado)}, `
-          + 'grabado pero sin convertir en tareas.'),
-        h('div.rec-pendiente-pies', null,
-          h('button.btn.ink', { onclick: () => pintarRepaso(pendiente) }, 'Repasarlo'),
-          h('button.btn.ghost', {
-            onclick: async () => {
-              await store.borrarRecorrido(pendiente.id);
-              pendiente = null;
-              pintarPreparado();
-              toast('Recorrido descartado');
-            },
-          }, 'Descartarlo'),
-        ),
-      ) : null,
-      h('div.rec-intro', null,
-        h('div.rec-ico', null, icon('camera', 30)),
-        h('h2.title', null, 'Recorre la vivienda'),
-        h('p.sub', null,
-          'La cámara se ve pero no se graba: solo se guarda lo que dices. '
-          + 'Ve andando y comentando, y cada vez que veas algo, toca la pantalla: '
-          + 'se queda la foto de ese instante.'),
-        h('p.hint', { style: { marginTop: '10px' } },
-          `Di la estancia y el gremio en voz alta —«en el baño de arriba, la junta del alicatado»— y las tareas saldrán solas. Máximo ${grabadora.TOPE_SEGUNDOS / 60} minutos.`),
-      ),
-      ctaAccion('EMPEZAR EL RECORRIDO', { icono: 'camera', onclick: arrancar }),
-      h('button.btn.ghost.full', { onclick: actaSuelta }, 'Abrir el acta sin recorrido'),
-    );
-  };
-
-  /* ─── 2. Grabando ─── */
-  const arrancar = async () => {
     if (!grabadora.sePuede()) {
-      toast('Este navegador no puede grabar. Abre el acta y añade las tareas a mano.', 'err');
+      lienzo.replaceChildren(
+        h('div.rec-intro', null,
+          h('div.rec-ico', null, icon('camera', 30)),
+          h('h2.title', null, 'Este navegador no puede grabar'),
+          h('p.sub', null, 'Abre el acta y añade las tareas a mano.'),
+        ),
+        h('button.d-boton-negro', { style: { marginTop: '14px' }, onclick: actaSuelta }, 'Abrir el acta sin recorrido'),
+      );
       return;
     }
-    const crono = h('span.rec-crono.mono-num', null, '0:00');
-    const cuenta = h('span.rec-cuenta', null, '0');
-    const tira = h('div.rec-tira');
-    const visor = h('div.rec-visor');
-    const destello = h('div.rec-destello');
-    const barra = h('div.rec-barra', null,
-      h('div.rec-estado', null, h('span.rec-punto'), crono),
-      h('div.grow', null, tira),
-      h('div.rec-marcas', null, icon('camera', 15), cuenta),
-    );
-    const pista = h('p.hint.center', { style: { marginTop: '2px' } },
-      'Toca la imagen cuando veas algo');
+    arrancar();
+  };
+
+  /** Soltar cámara y micrófono sin guardar nada, y recoger el visor. */
+  const soltarCamara = async () => {
+    document.removeEventListener('visibilitychange', alTapar);
+    visorActual?.remove();
+    visorActual = null;
+    const m = mando;
+    mando = null;
+    if (m) await m.parar();
+  };
+
+  /* ─── 2. El visor del diseño: la cámara a pantalla completa, la
+     tira de fotogramas arriba y el botón del cerebro abajo. Toda la
+     imagen es el botón de marcar: en obra, con guantes, no se acierta
+     a un botón pequeño mientras andas. ─── */
+  const arrancar = async () => {
+    // Nunca dos visores: si un repintado a destiempo vuelve a entrar
+    // aquí con la cámara ya abierta, no se abre otra.
+    if (document.querySelector('.d-visor')) return;
+    const crono = h('span.mono-num', null, '0:00');
+    const pildora = h('div.d-visor-crono', null, h('span.punto'), crono);
+    const tira = h('div.d-visor-tira');
+    const destello = h('div.d-visor-destello');
+    const pista = h('p.d-visor-pista', null, 'Toca la pantalla cuando veas algo');
+    const visor = h('div.d-visor');
 
     try {
       mando = await grabadora.empezar({
-        alAvisar: ({ segundos, marcas, pausado }) => {
+        alAvisar: ({ segundos, pausado }) => {
           crono.textContent = grabadora.reloj(segundos);
-          cuenta.textContent = String(marcas);
           visor.classList.toggle('pausado', !!pausado);
-          barra.classList.toggle('pausado', !!pausado);
-          // La pista de abajo dice lo contrario según el momento, y en
-          // pausa la buena es la de reanudar: pedir que marque algo
-          // cuando marcar no hace nada es la peor de las dos.
           pista.textContent = pausado
-            ? 'En pausa. Toca la imagen para seguir grabando'
-            : 'Toca la imagen cuando veas algo';
+            ? 'En pausa. Toca la pantalla para seguir'
+            : 'Toca la pantalla cuando veas algo';
         },
         alTope: () => toast('Diez minutos: se corta aquí'),
       });
@@ -186,14 +172,17 @@ export async function render({ promoId, unidadId }) {
       toast(e?.name === 'NotAllowedError'
         ? 'Hay que dar permiso de cámara y micrófono'
         : 'No se ha podido abrir la cámara', 'err');
+      ir(volver);
       return;
     }
 
-    mando.video.className = 'rec-video';
-    visor.append(mando.video, destello);
+    mando.video.className = 'd-visor-video';
+    const cerebro = h('button.d-visor-cerebro', {
+      'aria-label': 'Finalizar o pausar el recorrido',
+      onclick: (ev) => { ev.stopPropagation(); menuGrabando(); },
+    }, icon('cerebro'));
+    visor.append(mando.video, destello, tira, pista, pildora, cerebro);
 
-    // Toda la imagen es el botón de marcar: en obra, con guantes, no se
-    // acierta a un botón pequeño mientras andas.
     visor.addEventListener('click', async () => {
       if (mando?.pausado) { reanudar(); return; }
       const marca = await mando.marcar();
@@ -202,31 +191,32 @@ export async function render({ promoId, unidadId }) {
       void destello.offsetWidth;
       destello.classList.add('on');
       if (navigator.vibrate) navigator.vibrate(18);
-      const mini = h('div.rec-mini', {
+      // La más nueva entra por la derecha y queda siempre a la vista.
+      tira.append(h('div.d-mini', {
         style: { backgroundImage: `url("${URL.createObjectURL(marca.blob)}")` },
-      });
-      tira.prepend(mini);
-      tira.scrollLeft = 0;
+      }));
+      tira.scrollLeft = tira.scrollWidth;
     });
 
-    lienzo.replaceChildren(
-      visor,
-      barra,
-      h('div.rec-botones', null,
-        h('button.rec-parar', { onclick: () => menuGrabando() }, h('span.rec-cuadro')),
-      ),
-      pista,
-    );
-    // Mientras se graba, el titular sobra: se sujeta el móvil en alto y
-    // lo único que importa es ver bien lo que enfoca la cámara.
-    lienzo.classList.add('grabando');
-    lienzo.closest('.screen')?.classList.add('grabando');
-
-    // Si el móvil se bloquea o alguien llama, Safari corta el micrófono
-    // sin avisar y lo que sigue grabándose es silencio. Antes que seguir
-    // fingiendo que se graba, se cierra el recorrido con lo que haya: al
-    // volver a la pantalla está el repaso esperando.
+    lienzo.replaceChildren();
+    document.body.append(visor);
+    visorActual = visor;
     document.addEventListener('visibilitychange', alTapar);
+
+    // El pop up inicial, con la grabación en pausa hasta que se decida:
+    // el rato del menú ni cuenta ni se graba.
+    mando.pausar();
+    menuFlotante((cerrar) => [
+      filaMenu('zapatilla', 'Comenzar recorrido', () => { cerrar(); reanudar(); }),
+      pendiente ? filaMenu('listaChecks', 'Repasar el recorrido a medias', async () => {
+        cerrar();
+        await soltarCamara();
+        lienzo.classList.remove('grabando');
+        lienzo.closest('.screen')?.classList.remove('grabando');
+        pintarRepaso(pendiente);
+      }) : null,
+      filaMenu('stop', 'Cancelar', () => { cerrar(); ir(volver); }),
+    ].filter(Boolean), { conX: false });
   };
 
   /**
@@ -236,39 +226,18 @@ export async function render({ promoId, unidadId }) {
    * «Seguir grabando» en vez de solo cerrar: el recorrido no se ha
    * interrumpido, así que decirlo evita el susto de creer que sí.
    */
-  const menuGrabando = async () => {
+  /**
+   * El menú del cerebro: finalizar o pausar, con el aspa para seguir
+   * grabando. Se graba mientras el menú está abierto (salvo en pausa).
+   */
+  const menuGrabando = () => {
     if (!mando) return;
     const enPausa = mando.pausado;
-    const accion = await sheet((cerrar) => [
-      h('h2.title', null, enPausa ? 'Recorrido en pausa' : 'Recorrido en marcha'),
-      h('p.sub', null, enPausa
-        ? 'La grabación está parada. El rato en pausa no cuenta ni se graba.'
-        : 'Sigues grabando mientras esto está abierto.'),
-      h('div.stack', { style: { marginTop: '14px' } },
-        h('button.row', { onclick: () => cerrar('fin') },
-          h('div.row-lead', null, icon('check', 18)),
-          h('div.grow', null,
-            h('div.row-title', null, 'Finalizar el recorrido'),
-            h('div.row-sub', null, 'Pasa a escribir las tareas'),
-          ),
-        ),
-        h('button.row', { onclick: () => cerrar(enPausa ? 'sigue' : 'pausa') },
-          h('div.row-lead', null, icon(enPausa ? 'play' : 'stop', 18)),
-          h('div.grow', null,
-            h('div.row-title', null, enPausa ? 'Reanudar' : 'Pausar'),
-            h('div.row-sub', null, enPausa
-              ? 'Vuelve a grabar donde lo dejaste'
-              : 'Para atender una llamada sin perder el paseo'),
-          ),
-        ),
-      ),
-      h('button.btn.ghost.full', { onclick: () => cerrar(null) },
-        enPausa ? 'Dejarlo en pausa' : 'Seguir grabando'),
+    menuFlotante((cerrar) => [
+      filaMenu('zapatilla', 'Finalizar recorrido', () => { cerrar(); terminar(); }),
+      filaMenu(enPausa ? 'play' : 'pausa', enPausa ? 'Reanudar' : 'Pausar',
+        () => { cerrar(); (enPausa ? reanudar : pausar)(); }),
     ]);
-
-    if (accion === 'fin') return terminar();
-    if (accion === 'pausa') return pausar();
-    if (accion === 'sigue') return reanudar();
   };
 
   const pausar = () => {
@@ -311,6 +280,8 @@ export async function render({ promoId, unidadId }) {
 
   const terminar = async () => {
     document.removeEventListener('visibilitychange', alTapar);
+    visorActual?.remove();
+    visorActual = null;
     const capturado = await mando.parar();
     mando = null;
     lienzo.classList.remove('grabando');
@@ -719,6 +690,8 @@ export async function render({ promoId, unidadId }) {
     // de un recorrido casi nunca es «bórralo»; es el teléfono sonando.
     alSalir: () => {
       document.removeEventListener('visibilitychange', alTapar);
+      visorActual?.remove();
+      visorActual = null;
       const m = mando;
       mando = null;
       if (!m) return;

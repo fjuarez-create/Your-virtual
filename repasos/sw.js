@@ -17,7 +17,7 @@ const ARMAZON = [
   'index.html',
   'manifest.webmanifest',
   'css/app.css?v=' + VERSION,
-  'js/app.js?v=' + VERSION,
+  'js/app.js',
   'js/ui.js',
   'js/iconos.js',
   'js/db.js',

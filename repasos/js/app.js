@@ -286,7 +286,10 @@ function vigilarDatosNuevos() {
     // El recorrido se queda fuera del repintado pase lo que pase:
     // repintar mientras se graba tira por tierra el paseo entero, y en
     // la pantalla de repaso se llevaría por delante los textos escritos.
-    const ocupado = document.querySelector('.sheet, .viewer.on, .informe, .pantalla-recorrido')
+    // La ruta además del DOM: mientras el recorrido se está montando,
+    // la pantalla vieja sigue puesta y el selector solo no lo ve.
+    const ocupado = document.querySelector('.sheet, .viewer.on, .informe, .pantalla-recorrido, .d-visor, .d-hoja-acciones, .d-velo')
+      || location.hash.includes('/recorrido')
       || ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName);
     if (ocupado) return;
     vista = e.revision;

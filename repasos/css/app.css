@@ -2108,3 +2108,44 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 }
 /* El deshabilitado de crear es más suave que el de completar. */
 .d-pie-placa .d-boton-negro:disabled { background: var(--d-gris-suave); color: #d9d9d9; }
+
+/* ─── El visor del recorrido con IA ─────────────────────────────
+   Calcado del Figma: la cámara a pantalla completa, la tira de
+   fotogramas arriba, el botón del cerebro con su halo abajo, y una
+   píldora discreta con el crono para saber que se graba. */
+.d-visor { position: fixed; inset: 0; z-index: 55; background: #000; overflow: hidden; }
+.d-visor-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.d-visor-tira {
+  position: absolute; top: calc(env(safe-area-inset-top) + 14px);
+  left: 0; right: 0; display: flex; gap: 11px; padding: 0 12px;
+  overflow-x: auto; scrollbar-width: none;
+}
+.d-visor-tira::-webkit-scrollbar { display: none; }
+.d-visor-tira .d-mini { box-shadow: 0 2px 10px rgba(0, 0, 0, .35); }
+.d-visor-cerebro {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  bottom: calc(env(safe-area-inset-bottom) + 62px);
+  width: 66px; height: 66px; border-radius: 999px; background: #fff;
+  color: #000; display: grid; place-items: center;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, .31), 0 12px 34px rgba(0, 0, 0, .35);
+}
+.d-visor-cerebro svg { width: 24px; height: 24px; }
+.d-visor-crono {
+  position: absolute; left: 16px;
+  bottom: calc(env(safe-area-inset-bottom) + 82px);
+  display: inline-flex; align-items: center; gap: 6px;
+  background: rgba(0, 0, 0, .45); color: #fff;
+  border-radius: 999px; padding: 6px 12px; font-size: 13px;
+}
+.d-visor-crono .punto { width: 8px; height: 8px; border-radius: 50%; background: #ff453a; animation: d-latido 1.2s infinite; }
+.d-visor.pausado .d-visor-crono .punto { animation: none; background: #ffd60a; }
+@keyframes d-latido { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+.d-visor-pista {
+  position: absolute; left: 16px; right: 16px;
+  bottom: calc(env(safe-area-inset-bottom) + 148px);
+  text-align: center; color: rgba(255, 255, 255, .88); font-size: 13px;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, .6);
+}
+.d-visor-destello { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+.d-visor-destello.on { animation: d-destello .28s ease; }
+@keyframes d-destello { 0% { opacity: .85; } 100% { opacity: 0; } }
