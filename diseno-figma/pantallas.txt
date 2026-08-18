@@ -21,10 +21,12 @@
 2070:15747	HOME personal de constructora
 2075:10806	Viviendas Inacabadas v1
 2079:13819	Viviendas terminadas v1
+4115:21264	FILTRANDO POR GREMIO U OFICIO
+4115:21822	FILTRANDO POR GREMIO U OFICIO - SELECCIONADO ALGUNO
 2093:17219	Filtros aplicados con switch FINALIZADAS
 2093:25173	Filtros aplicados con switch INACABADAS
-2103:27795	FILTRO ABIERTO, SIN APLICAR NINGUNO
-2105:19080	Filtro abierto buscando filtro y seleccionado Pladur
+2103:27795	xx
+2105:19080	xxx
 2045:10272	Tarea - creando desde cero 01
 2129:33734	Tarea - creando desde cero 2
 2114:32994	Tarea - RELLENANDO A MANO
@@ -46,3 +48,4 @@
 4106:19985	Filled - Password Hidden
 4106:20000	Error  State
 4106:20017	Filled - Password Show
+4115:20676	ELIGIENDO FECHA
