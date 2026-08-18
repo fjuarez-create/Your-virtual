@@ -2076,3 +2076,35 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
   display: grid; place-items: center;
 }
 .d-hoja-acciones-x svg { width: 20px; height: 20px; }
+
+/* ─── El formulario de nueva tarea ──────────────────────────────
+   Calcado del Figma: campos de rótulo con asterisco y pastilla,
+   descripción en tarjeta, carrusel de multimedia y el pie con placa
+   blanca que arropa el botón de guardar. */
+.d-campo { margin-top: 8px; }
+.d-campo-rotulo {
+  display: block; font-size: 18px; line-height: 24px;
+  letter-spacing: -0.005em; color: var(--d-tinta); margin: 0 0 4px;
+}
+.d-campo-rotulo .req { color: #f14437; font-size: 16px; margin-left: 2px; }
+.d-area {
+  width: 100%; min-height: 185px; border: none; resize: vertical;
+  border-radius: var(--d-radio); background: #fff; padding: 12px 16px;
+  font: 500 16px/24px var(--d-font); color: var(--d-tinta);
+}
+.d-area::placeholder { color: #d9d9d9; }
+.d-area:focus { outline: none; }
+.d-carrusel { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; margin-top: 12px; }
+.d-carrusel::-webkit-scrollbar { display: none; }
+.d-carrusel .celda {
+  position: relative; flex: 0 0 92%; height: 246px;
+  border-radius: 8px; overflow: hidden;
+  background: #e9e7e4 center / cover no-repeat;
+}
+.d-pie-placa {
+  position: sticky; bottom: 0; z-index: 5;
+  margin: 20px -10px 0; padding: 12px;
+  background: #fff; border-radius: 16px 16px 0 0;
+}
+/* El deshabilitado de crear es más suave que el de completar. */
+.d-pie-placa .d-boton-negro:disabled { background: var(--d-gris-suave); color: #d9d9d9; }

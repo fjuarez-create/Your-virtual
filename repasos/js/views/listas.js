@@ -16,7 +16,7 @@ import { promocion, unidad, oficio, estado as estadoDe, puedeCrearLista } from '
 import * as store from '../store.js';
 import {
   tarjetaActa, hojaZonas, hojaFiltroGremios, caraDeGremio,
-  avisoLocal, barraSync,
+  avisoLocal, barraSync, menuFlotante, filaMenu, filaMenuFichero, bandeja,
 } from '../piezas.js';
 import { hojaDePuerta, nombreDeFichero } from '../pdf.js';
 import { abrirMensaje } from '../mensajes.js';
@@ -177,7 +177,19 @@ export async function render({ promoId, unidadId }) {
       ...actas.map((a) => tarjetaActa(a, { dentroDeVivienda: true, filtros: { estado, oficio: oficioId } }))) : null,
   ]);
 
-  const nueva = () => ir(`#/p/${promoId}/v/${String(unidadId).split(':')[1]}/recorrido`);
+  /* ─── Nueva inspección: el menú de tres opciones del diseño ───
+     Foto o galería llevan al formulario de nueva tarea con lo
+     capturado en la bandeja; el recorrido con IA abre el visor. */
+  const nn = String(unidadId).split(':')[1];
+  const conFotos = (ficheros) => {
+    bandeja.fotos = [...ficheros];
+    ir(`#/p/${promoId}/v/${nn}/nueva`);
+  };
+  const nueva = () => menuFlotante((cerrar) => [
+    filaMenuFichero(cerrar, { capture: 'environment' }, 'camera', 'Hacer foto', conFotos),
+    filaMenuFichero(cerrar, {}, 'image', 'Seleccionar de galería', conFotos),
+    filaMenu('destello', 'Recorrido IA', () => { cerrar(); ir(`#/p/${promoId}/v/${nn}/recorrido`); }),
+  ]);
 
   pintar();
 

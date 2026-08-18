@@ -18,7 +18,7 @@
 declare(strict_types=1);
 
 /** Se sube al añadir campos o tablas. */
-const ESQUEMA_VERSION = 7;
+const ESQUEMA_VERSION = 8;
 
 /**
  * Campos que tienen que existir, por tabla, con el tipo que usa MySQL.
@@ -41,6 +41,9 @@ const ESQUEMA_CAMPOS = [
         // tareas de antes: nadie las va a reetiquetar a mano, y una
         // estancia inventada engaña más que un hueco.
         'zona'      => "VARCHAR(40) NOT NULL DEFAULT ''",
+        // Para cuándo tiene que estar arreglado. Vacío = sin fecha:
+        // el campo es opcional en el diseño y en la obra.
+        'fecha_limite' => 'VARCHAR(32) DEFAULT NULL',
     ],
     'listas' => [
         // Vacío = se muestra el nombre de la vivienda. Solo se guarda

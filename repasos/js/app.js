@@ -17,6 +17,7 @@ const RUTAS = [
   { patron: /^\/promociones$/,                vista: () => import('./views/promociones.js'),  params: () => ({}) },
   { patron: /^\/p\/([^/]+)$/,                 vista: () => import('./views/viviendas.js'),    params: (m) => ({ promoId: m[1] }) },
   { patron: /^\/p\/([^/]+)\/v\/([^/]+)$/,     vista: () => import('./views/listas.js'),       params: (m) => ({ promoId: m[1], unidadId: `${m[1]}:${m[2]}` }) },
+  { patron: /^\/p\/([^/]+)\/v\/([^/]+)\/nueva$/, vista: () => import('./views/nuevaTarea.js'), params: (m) => ({ promoId: m[1], unidadId: `${m[1]}:${m[2]}` }) },
   { patron: /^\/p\/([^/]+)\/v\/([^/]+)\/recorrido$/, vista: () => import('./views/recorrido.js'), params: (m) => ({ promoId: m[1], unidadId: `${m[1]}:${m[2]}` }) },
   { patron: /^\/l\/([^/]+)$/,                 vista: () => import('./views/tareas.js'),       params: (m) => ({ listaId: m[1] }) },
   { patron: /^\/l\/([^/]+)\/t\/([^/]+)$/,     vista: () => import('./views/tarea.js'),        params: (m) => ({ listaId: m[1], tareaId: m[2] }) },

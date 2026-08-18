@@ -315,7 +315,7 @@ export async function tarea(id) {
   return t && !t.borrada ? t : null;
 }
 
-export async function crearTarea({ listaId, texto, oficio = OFICIO_POR_DEFECTO, zona = '', autor = null }) {
+export async function crearTarea({ listaId, texto, oficio = OFICIO_POR_DEFECTO, zona = '', fechaLimite = null, autor = null }) {
   const hermanas = await tareasDeLista(listaId);
   const quien = autor || usuario;
   const t = {
@@ -324,6 +324,7 @@ export async function crearTarea({ listaId, texto, oficio = OFICIO_POR_DEFECTO, 
     texto: texto || '',
     oficio: oficio || OFICIO_POR_DEFECTO,
     zona: zona || '',
+    fechaLimite: fechaLimite || null,
     estado: 'pendiente',
     orden: hermanas.length ? Math.max(...hermanas.map((x) => x.orden || 0)) + 1 : 1,
     portadaId: null,
@@ -1326,6 +1327,7 @@ const normalizarLista = (l) => ({ ...l, cerrada: bool(l.cerrada), borrada: bool(
 const normalizarTarea = (t) => ({
   ...t, orden: Number(t.orden) || 0, borrada: bool(t.borrada), rechazada: bool(t.rechazada),
   zona: typeof t.zona === 'string' ? t.zona : '',
+  fechaLimite: t.fechaLimite || null,
 });
 const normalizarComentario = (c) => ({ ...c, borrada: bool(c.borrada) });
 const normalizarMensaje = (m) => ({ ...m, borrada: bool(m.borrada) });

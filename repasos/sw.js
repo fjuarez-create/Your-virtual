@@ -37,6 +37,7 @@ const ARMAZON = [
   'js/views/recorrido.js',
   'js/views/tareas.js',
   'js/views/tarea.js',
+  'js/views/nuevaTarea.js',
   'js/views/historial.js',
   'js/views/ajustes.js',
   'js/views/usuarios.js',

@@ -950,6 +950,7 @@ function guardar_tareas(): void
         $texto = mb_substr((string) ($t['texto'] ?? ''), 0, 4000);
         $oficio = texto($t, 'oficio', 30, 'general') ?: 'general';
         $zona = texto($t, 'zona', 40);
+        $fechaLimite = isset($t['fechaLimite']) && $t['fechaLimite'] ? iso($t['fechaLimite']) : null;
 
         // El navegador no es de fiar, así que los dos permisos se
         // comprueban aquí también. Quien no verifica:
@@ -972,7 +973,7 @@ function guardar_tareas(): void
             // Se relee dentro del bucle y se vacía cada vuelta a
             // propósito: dejar la fila de la tarea anterior colgando
             // aquí acabaría escribiendo el texto de una en otra.
-            $previo = bd()->prepare('SELECT estado, texto, oficio, zona, borrada FROM tareas WHERE id = ?');
+            $previo = bd()->prepare('SELECT estado, texto, oficio, zona, fecha_limite, borrada FROM tareas WHERE id = ?');
             $previo->execute([$t['id']]);
             $fila = $previo->fetch() ?: null;
 
@@ -980,6 +981,7 @@ function guardar_tareas(): void
                 $texto = (string) $fila['texto'];
                 $oficio = (string) ($fila['oficio'] ?? 'general');
                 $zona = (string) ($fila['zona'] ?? '');
+                $fechaLimite = $fila['fecha_limite'] ?? null;
                 $borrada = (int) ($fila['borrada'] ?? 0);
             }
             if (in_array($estado, ['verificada', 'rechazada'], true)) {
@@ -998,6 +1000,7 @@ function guardar_tareas(): void
             'estado'            => $estado,
             'oficio'            => $oficio,
             'zona'              => $zona,
+            'fecha_limite'      => $fechaLimite,
             'orden'             => entero($t, 'orden'),
             'portada_id'        => es_uuid($t['portadaId'] ?? null) ? $t['portadaId'] : null,
             'estado_por'        => texto($t, 'estadoPor', 120) ?: null,
@@ -1476,6 +1479,7 @@ function tarea_salida(array $f): array
         'id' => $f['id'], 'listaId' => $f['lista_id'], 'texto' => $f['texto'],
         'estado' => $f['estado'], 'oficio' => (string) ($f['oficio'] ?? 'general'),
         'zona' => (string) ($f['zona'] ?? ''),
+        'fechaLimite' => $f['fecha_limite'] ?? null,
         'orden' => (int) $f['orden'], 'portadaId' => $f['portada_id'],
         'estadoPor' => $f['estado_por'], 'estadoEn' => $f['estado_en'],
         'rechazada' => (int) ($f['rechazada'] ?? 0) === 1,

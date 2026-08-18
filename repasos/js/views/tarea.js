@@ -203,7 +203,7 @@ export async function render({ listaId, tareaId }) {
       ),
 
       h('div.d-pastilla.ancha', { style: { marginTop: '8px' } },
-        h('span', null, fechaLarga(t.creado)), icon('calendario')),
+        h('span', null, fechaLarga(t.fechaLimite || t.creado)), icon('calendario')),
 
       h(edita ? 'button.d-caja' : 'div.d-caja', {
         style: { marginTop: '8px' },

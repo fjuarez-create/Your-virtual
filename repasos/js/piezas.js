@@ -519,25 +519,52 @@ export function hojaBienHecho({ titulo, frase, usuario, boton = 'Seguir' }) {
 }
 
 /**
- * La hoja de «Hacer foto / Seleccionar de la galería» del Figma: velo
- * con desenfoque, menú claro de dos filas y la bola de cerrar debajo.
- * Llama a `onElegir(ficheros)` con lo elegido, venga de donde venga.
+ * El menú flotante del Figma: velo con desenfoque, caja clara de filas
+ * centradas y —salvo que se pida sin ella— la bola de cerrar debajo.
+ * `construir(cerrar)` devuelve las filas; para una fila normal está
+ * `filaMenu`, y para las de elegir fichero, `filaMenuFichero`.
  */
-export function hojaFotoAcciones(onElegir) {
+export function menuFlotante(construir, { conX = true } = {}) {
   const cerrar = () => velo.remove();
-  const fila = (extra, icono, rotulo) => media.botonFichero({
+  const velo = h('div.d-hoja-acciones', { onclick: (e) => { if (e.target === velo) cerrar(); } },
+    h('div.d-hoja-acciones-menu', null, ...construir(cerrar)),
+    conX ? h('button.d-hoja-acciones-x', { 'aria-label': 'Cerrar', onclick: cerrar }, icon('x')) : null,
+  );
+  document.body.append(velo);
+  return cerrar;
+}
+
+/** Una fila del menú flotante: icono topo, rótulo y su acción. */
+export function filaMenu(icono, rotulo, accion) {
+  return h('button.d-hoja-fila', { onclick: accion }, icon(icono), rotulo);
+}
+
+/** Una fila que abre el selector de ficheros del sistema. */
+export function filaMenuFichero(cerrar, extra, icono, rotulo, onElegir) {
+  return media.botonFichero({
     clase: 'd-hoja-fila', accept: 'image/*', multiple: true, ...extra,
     onElegir: (ficheros) => { cerrar(); onElegir(ficheros); },
   }, icon(icono), rotulo);
-  const velo = h('div.d-hoja-acciones', { onclick: (e) => { if (e.target === velo) cerrar(); } },
-    h('div.d-hoja-acciones-menu', null,
-      fila({ capture: 'environment' }, 'camera', 'Hacer foto'),
-      fila({}, 'image', 'Seleccionar de la galería'),
-    ),
-    h('button.d-hoja-acciones-x', { 'aria-label': 'Cerrar', onclick: cerrar }, icon('x')),
-  );
-  document.body.append(velo);
 }
+
+/**
+ * La hoja de «Hacer foto / Seleccionar de la galería» del Figma.
+ * Llama a `onElegir(ficheros)` con lo elegido, venga de donde venga.
+ */
+export function hojaFotoAcciones(onElegir) {
+  menuFlotante((cerrar) => [
+    filaMenuFichero(cerrar, { capture: 'environment' }, 'camera', 'Hacer foto', onElegir),
+    filaMenuFichero(cerrar, {}, 'image', 'Seleccionar de la galería', onElegir),
+  ]);
+}
+
+/**
+ * La bandeja: fotos elegidas en una pantalla que viajan a la
+ * siguiente. Las direcciones no llevan ficheros, así que el menú de
+ * nueva inspección deja aquí lo capturado y el formulario de nueva
+ * tarea lo recoge (y la vacía).
+ */
+export const bandeja = { fotos: [] };
 
 /** Flecha «>» del final de las píldoras. */
 export function chevron() {
