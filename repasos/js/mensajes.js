@@ -43,7 +43,7 @@ export async function bloqueDeMensajes(unidadId, promoId) {
       const leidas = await store.lecturasDe(m.id);
       const yaLo = mio || leidas.some((l) => l.usuarioId === quien);
       const tics = mio ? await store.ticsDe(m) : -1;
-      filas.push(fila(m, { nuevo: !yaLo, tics, alAbrir: () => abrir(m, pintar) }));
+      filas.push(fila(m, { nuevo: !yaLo, tics, alAbrir: () => abrirMensaje(m, pintar) }));
     }
 
     caja.replaceChildren(
@@ -109,7 +109,7 @@ function marcaDeTics(tics) {
  * tiene delante ve lo que va a pasar y puede salirse si no quería, en
  * vez de descubrir que ha firmado algo al cerrar.
  */
-async function abrir(m, repintar) {
+export async function abrirMensaje(m, repintar) {
   const mio = store.esMio(m);
   let reloj = null;
   let marcado = false;
