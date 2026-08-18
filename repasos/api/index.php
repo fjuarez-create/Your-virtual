@@ -233,7 +233,7 @@ function claude_poner_clave(): void
     if (strpos($clave, 'sk-ant-') !== 0 || strlen($clave) < 40) {
         responder_error(400, 'Eso no parece una clave de Anthropic (empiezan por sk-ant-).', 'clave-rara');
     }
-    if (strlen($clave) > 500 || preg_match('/\s/', $clave)) {
+    if (strlen($clave) > 500 || preg_match('/\\s/', $clave)) {
         responder_error(400, 'La clave tiene espacios o es demasiado larga; cópiala otra vez.', 'clave-rara');
     }
 
@@ -280,7 +280,7 @@ function oido_poner_clave(): void
     if (strpos($clave, 'sk-') !== 0 || strlen($clave) < 40) {
         responder_error(400, 'Eso no parece una clave de OpenAI (empiezan por sk-).', 'clave-rara');
     }
-    if (strlen($clave) > 500 || preg_match('/\s/', $clave)) {
+    if (strlen($clave) > 500 || preg_match('/\\s/', $clave)) {
         responder_error(400, 'La clave tiene espacios o es demasiado larga; cópiala otra vez.', 'clave-rara');
     }
 
@@ -968,15 +968,18 @@ function guardar_tareas(): void
         // Borrar es la forma más definitiva de editar, así que va con el
         // mismo permiso.
         $borrada = booleano($t, 'borrada') ? 1 : 0;
+        $estadoPor = texto($t, 'estadoPor', 120) ?: null;
+        $estadoEn = isset($t['estadoEn']) ? iso($t['estadoEn'], '') : '';
+        $rechazada = booleano($t, 'rechazada') ? 1 : 0;
+
+        // Se relee dentro del bucle y se vacía cada vuelta a
+        // propósito: dejar la fila de la tarea anterior colgando
+        // aquí acabaría escribiendo el texto de una en otra.
+        $previo = bd()->prepare('SELECT estado, estado_por, estado_en, rechazada, texto, oficio, zona, fecha_limite, borrada FROM tareas WHERE id = ?');
+        $previo->execute([$t['id']]);
+        $fila = $previo->fetch() ?: null;
 
         if (!$decide) {
-            // Se relee dentro del bucle y se vacía cada vuelta a
-            // propósito: dejar la fila de la tarea anterior colgando
-            // aquí acabaría escribiendo el texto de una en otra.
-            $previo = bd()->prepare('SELECT estado, texto, oficio, zona, fecha_limite, borrada FROM tareas WHERE id = ?');
-            $previo->execute([$t['id']]);
-            $fila = $previo->fetch() ?: null;
-
             if ($fila) {
                 $texto = (string) $fila['texto'];
                 $oficio = (string) ($fila['oficio'] ?? 'general');
@@ -990,7 +993,25 @@ function guardar_tareas(): void
                 // completada, que es lo más lejos que llega el jefe de obra.
                 $guardado = $fila['estado'] ?? '';
                 $estado = in_array($guardado, ['verificada', 'rechazada'], true) ? $guardado : 'resuelta';
+                $rechazada = $estado === 'rechazada' ? 1 : 0;
             }
+        }
+
+        // El estado lleva su propio reloj: `estado_en` es el sello de
+        // cuándo se puso, y entre lo que llega y lo guardado gana el
+        // sello más reciente, con el empate para lo guardado. Sin esto,
+        // la copia atrasada de un móvil —que empuja una foto nueva con
+        // el estado viejo dentro de la misma fila— deshacía una
+        // verificación: `upsert` compara `actualizado`, y la foto es más
+        // nueva aunque su estado sea de ayer. Las filas de antes de que
+        // existiera el sello no entran (sello guardado vacío) y se
+        // comportan como siempre.
+        $selloGuardado = (string) ($fila['estado_en'] ?? '');
+        if ($fila && $selloGuardado !== '' && ($estadoEn === '' || $estadoEn <= $selloGuardado)) {
+            $estado = (string) $fila['estado'];
+            $estadoPor = $fila['estado_por'] ?? null;
+            $estadoEn = $selloGuardado;
+            $rechazada = (int) ($fila['rechazada'] ?? 0);
         }
 
         $registro = [
@@ -1003,9 +1024,9 @@ function guardar_tareas(): void
             'fecha_limite'      => $fechaLimite,
             'orden'             => entero($t, 'orden'),
             'portada_id'        => es_uuid($t['portadaId'] ?? null) ? $t['portadaId'] : null,
-            'estado_por'        => texto($t, 'estadoPor', 120) ?: null,
-            'estado_en'         => isset($t['estadoEn']) ? iso($t['estadoEn']) : null,
-            'rechazada'         => booleano($t, 'rechazada') ? 1 : 0,
+            'estado_por'        => $estadoPor,
+            'estado_en'         => $estadoEn !== '' ? $estadoEn : null,
+            'rechazada'         => $rechazada,
             'borrada'           => $borrada,
             'creado'            => iso($t['creado'] ?? null),
             'actualizado'       => iso($t['actualizado'] ?? null),
@@ -1337,7 +1358,7 @@ function servir_medio(string $id): void
     $inicio = 0;
     $fin = $tam - 1;
     $rango = $_SERVER['HTTP_RANGE'] ?? '';
-    if ($rango !== '' && preg_match('/bytes=(\d*)-(\d*)/', $rango, $m2)) {
+    if ($rango !== '' && preg_match('/bytes=(\\d*)-(\\d*)/', $rango, $m2)) {
         // Los vídeos y los audios se piden por trozos; sin esto, iOS ni
         // siquiera empieza a reproducir.
         if ($m2[1] !== '') {

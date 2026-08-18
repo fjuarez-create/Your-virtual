@@ -1108,7 +1108,7 @@ export async function cargarPersonas() {
 }
 
 const clavePersona = (n) => String(n || '')
-  .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .normalize('NFD').replace(/[\\u0300-\\u036f]/g, '')
   .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 
 /**
@@ -1271,7 +1271,22 @@ async function fusionarTanda(desde) {
     const fusionadas = [];
     for (const remota of r.tareas) {
       const local = await db.get('tareas', remota.id);
-      if (!local || remota.actualizado >= local.actualizado) fusionadas.push(normalizarTarea(remota));
+      if (!local || remota.actualizado >= local.actualizado) {
+        fusionadas.push(normalizarTarea(remota));
+      } else {
+        // La fila local es más nueva (cambios aún sin subir), pero el
+        // ESTADO tiene su propio reloj: si el sello remoto es más
+        // reciente —otro decidió después—, se adopta su estado sin
+        // perder lo local. Es la misma regla que aplica el servidor.
+        const n = normalizarTarea(remota);
+        if ((n.estadoEn || '') > (local.estadoEn || '')) {
+          fusionadas.push({
+            ...local,
+            estado: n.estado, estadoPor: n.estadoPor,
+            estadoEn: n.estadoEn, rechazada: n.rechazada,
+          });
+        }
+      }
     }
     await db.putVarios('tareas', fusionadas);
   }
