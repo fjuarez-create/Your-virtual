@@ -1,0 +1,83 @@
+ENTORNO SERENEA · MODELO 3D DEL LEVANTAMIENTO TOPOGRÁFICO
+Reconstruido a partir de "Levantamiento Topográfico 2026-02-11.dwg"
+UNIK · Edificio Apolo
+
+
+QUÉ HAY EN EL ZIP
+
+  entorno_topo.dxf   AutoCAD R2018.  Lo abren Revit y SketchUp Pro.
+  entorno_topo.dae   Collada.        Lo abre cualquier SketchUp, también el gratuito.
+
+Los dos tienen exactamente la misma geometría: 24.197 caras trianguladas,
+repartidas en once familias.
+
+
+CÓMO ABRIRLO
+
+  Revit
+    Insertar → Importar CAD (o Vincular CAD)
+    Unidades: metros · Posicionamiento: Automático - Origen a origen
+    Entra como malla, no como sólidos editables: es topografía, no elementos
+    de proyecto.
+
+  SketchUp Pro
+    Archivo → Importar → AutoCAD (*.dxf), Unidades: metros
+
+  SketchUp gratuito / web
+    Archivo → Importar → Collada (*.dae)
+    El DAE trae cada familia con su color de material ya asignado.
+
+
+CAPAS / MATERIALES
+
+  TERRENO       11.124 caras   superficie natural, de las curvas de nivel
+  ACERA          6.260         aceras
+  ASFALTO        2.969         calzada
+  BORDILLO       1.642         bordillos (14 cm de resalte)
+  MARCA_VIAL       426         marcas viales
+  ARQUETA          598         tapas de registro
+  MURO             432         muros de cerramiento
+  COPA             420         copas de arbolado
+  TRONCO           154         troncos
+  PODOTACTIL       115         pavimento podotáctil
+  EDIFICACION       57         edificaciones colindantes (volumen genérico, 7 m)
+
+En el DXF son capas, cada una con su color. En el DAE son materiales.
+Apagando TERRENO queda solo lo urbanizado.
+
+
+COORDENADAS
+
+  Unidades       metros
+  X              este
+  Y              norte
+  Z              cota ortométrica real (68,6 a 88,9 m)
+  Origen         centro de la parcela
+
+El origen NO está en 0,0 UTM a propósito: dejarlo en coordenadas absolutas
+pondría el modelo a más de 4.600 km del origen del dibujo, y SketchUp pierde
+precisión mucho antes de esa distancia.
+
+Para llevarlo a coordenadas reales, desplazar el modelo a:
+
+  ETRS89 / UTM huso 28N (EPSG:25828)
+  E = 461.101,415
+  N = 3.095.792,408
+  Z = 0            (las cotas ya son las reales)
+
+que equivale a 27,986703 N · 15,395572 W (EPSG:4326).
+
+
+DOS ADVERTENCIAS HONESTAS
+
+1. Esto es una reconstrucción, no el 3D del topógrafo. El levantamiento trae
+   las capas en 2D y las curvas de nivel acotadas; aquí se han triangulado las
+   curvas para sacar la superficie y sobre ella se han drapeado aceras,
+   calzada y bordillos. La planimetría es la del topógrafo; los espesores
+   (14 cm de bordillo, 13 cm de acera) son los de norma, no medidos.
+
+2. Las edificaciones colindantes son un volumen genérico de 7 m: el
+   levantamiento da su huella en planta, no su altura.
+
+Si hace falta en IFC para vincularlo en Revit como modelo coordinado, se puede
+generar.

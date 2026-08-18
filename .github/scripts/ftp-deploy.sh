@@ -89,13 +89,13 @@ if [ "$WHAT" = check ]; then
   run_lftp "$OPTS" "cd \"$DIR\"; cls -1" 2>/dev/null | sed 's/^/  /'
 
   fallos=0
-  for d in planos fichas ubicaciones; do
+  for d in planos fichas ubicaciones descargas; do
     local_n=$(find "publish/assets/$d" -type f | wc -l)
     remote_n=$(remote_count "assets/$d")
     printf 'assets/%-12s local %3s   servidor %3s\n' "$d" "$local_n" "$remote_n"
     [ "$remote_n" -ge "$local_n" ] || fallos=$((fallos + 1))
   done
-  for f in index.html js/main.js css/style.css assets/apolo_levels.glb; do
+  for f in index.html js/main.js css/style.css assets/apolo_levels.glb assets/entorno_topo.glb; do
     if [ "$(remote_count "$f")" -ge 1 ]; then
       echo "ok  $f"
     else

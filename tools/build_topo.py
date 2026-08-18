@@ -1,6 +1,11 @@
 """Levantamiento topográfico (DWG) → modelo 3D del entorno (GLB).
 
-    python3 tools/build_topo.py /tmp/topo.dxf assets/entorno_topo.glb
+    python3 tools/build_topo.py /tmp/topo.dxf assets/entorno_topo.glb [base_cad]
+
+Con el tercer argumento escribe además base_cad.dxf y base_cad.dae, que es lo
+que abren Revit y SketchUp. Esos dos van en ejes de CAD —X este, Y norte, Z la
+cota real— con el origen en el centro de la parcela, no en los ejes girados de
+la escena del showroom.
 
 El DWG viene en UTM 28N (ETRS89) con cotas reales. Aquí se convierte en una
 malla por familia de material —terreno, asfalto, aceras, bordillos, pavimento
@@ -175,7 +180,89 @@ class Malla:
             self.tri(P[0], P[2], P[3])
 
 
-def main(dxf_path, salida):
+# ── Salida para CAD ─────────────────────────────────────────────────────────
+#   Revit y SketchUp no leen glTF. Lo que sí abren los dos es DXF; SketchUp
+#   además lee Collada, que conserva los materiales con su color y no obliga a
+#   tener la versión Pro. Van en ejes de CAD (X este, Y norte, Z cota real) con
+#   el origen en el centro de la parcela: dejarlos en coordenadas UTM absolutas
+#   pondría el modelo a 4.600 km del origen, y SketchUp pierde precisión mucho
+#   antes de eso.
+
+def a_cad(p, ox, oy):
+    return (p[0] - ox, p[2] - oy, p[1])
+
+
+def escribir_dxf(mallas, ox, oy, salida):
+    doc = ezdxf.new('R2018', setup=False)
+    doc.header['$INSUNITS'] = 6   # metros, para que ambos lo importen a escala
+    msp = doc.modelspace()
+    for nombre, m in mallas.items():
+        if not m.i:
+            continue
+        color, _ = MATERIALES.get(nombre, (0xaaaaaa, 0.9))
+        capa = doc.layers.add(nombre.upper())
+        capa.rgb = ((color >> 16) & 255, (color >> 8) & 255, color & 255)
+        atr = {'layer': nombre.upper()}
+        for k in range(0, len(m.i), 3):
+            a, b, c = (a_cad(m.v[m.i[k + j]], ox, oy) for j in range(3))
+            msp.add_3dface([a, b, c, c], dxfattribs=atr)
+    doc.saveas(salida)
+    print(f'{salida}')
+
+
+def escribir_dae(mallas, ox, oy, salida):
+    efectos, materiales, geometrias, nodos = [], [], [], []
+    for nombre, m in mallas.items():
+        if not m.i:
+            continue
+        color, rug = MATERIALES.get(nombre, (0xaaaaaa, 0.9))
+        r, g, b = ((color >> 16) & 255) / 255, ((color >> 8) & 255) / 255, (color & 255) / 255
+        efectos.append(
+            f'<effect id="{nombre}-fx"><profile_COMMON><technique sid="common"><lambert>'
+            f'<diffuse><color>{r:.4f} {g:.4f} {b:.4f} 1</color></diffuse>'
+            f'</lambert></technique></profile_COMMON></effect>')
+        materiales.append(
+            f'<material id="{nombre}-mat" name="{nombre}">'
+            f'<instance_effect url="#{nombre}-fx"/></material>')
+
+        pos = ' '.join(f'{c:.4f}' for p in m.v for c in a_cad(p, ox, oy))
+        idx = ' '.join(str(i) for i in m.i)
+        geometrias.append(
+            f'<geometry id="{nombre}-geo" name="{nombre}"><mesh>'
+            f'<source id="{nombre}-pos"><float_array id="{nombre}-pos-a" '
+            f'count="{len(m.v) * 3}">{pos}</float_array><technique_common>'
+            f'<accessor source="#{nombre}-pos-a" count="{len(m.v)}" stride="3">'
+            f'<param name="X" type="float"/><param name="Y" type="float"/>'
+            f'<param name="Z" type="float"/></accessor></technique_common></source>'
+            f'<vertices id="{nombre}-vtx"><input semantic="POSITION" '
+            f'source="#{nombre}-pos"/></vertices>'
+            f'<triangles count="{len(m.i) // 3}" material="{nombre}-sym">'
+            f'<input semantic="VERTEX" source="#{nombre}-vtx" offset="0"/>'
+            f'<p>{idx}</p></triangles></mesh></geometry>')
+        nodos.append(
+            f'<node id="{nombre}" name="{nombre}" type="NODE">'
+            f'<instance_geometry url="#{nombre}-geo"><bind_material><technique_common>'
+            f'<instance_material symbol="{nombre}-sym" target="#{nombre}-mat"/>'
+            f'</technique_common></bind_material></instance_geometry></node>')
+
+    nl = '\n'
+    xml = (
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        '<COLLADA xmlns="http://www.collada.org/2005/11/COLLADASchema" version="1.4.1">'
+        '<asset><contributor><authoring_tool>UNIK · levantamiento topográfico'
+        '</authoring_tool></contributor><unit meter="1" name="meter"/>'
+        '<up_axis>Z_UP</up_axis></asset>'
+        f'<library_effects>{nl.join(efectos)}</library_effects>'
+        f'<library_materials>{nl.join(materiales)}</library_materials>'
+        f'<library_geometries>{nl.join(geometrias)}</library_geometries>'
+        f'<library_visual_scenes><visual_scene id="escena" name="escena">'
+        f'{nl.join(nodos)}</visual_scene></library_visual_scenes>'
+        '<scene><instance_visual_scene url="#escena"/></scene></COLLADA>\n')
+    open(salida, 'w', encoding='utf-8').write(xml)
+    print(f'{salida}')
+
+
+def main(dxf_path, salida, base_cad=None):
     doc = ezdxf.readfile(dxf_path)
     msp = doc.modelspace()
 
@@ -402,6 +489,12 @@ def main(dxf_path, salida):
     gltf.save_binary(salida)
     print(f'\n{salida} · {len(blob)/1e6:.1f} MB')
 
+    if base_cad:
+        print(f'\nPara CAD · origen UTM 28N (ETRS89) E={ox:.3f} N={oy:.3f}, '
+              f'Z = cota ortométrica real')
+        escribir_dxf(mallas, ox, oy, base_cad + '.dxf')
+        escribir_dae(mallas, ox, oy, base_cad + '.dae')
+
 
 if __name__ == '__main__':
-    main(sys.argv[1], sys.argv[2])
+    main(*sys.argv[1:4])
