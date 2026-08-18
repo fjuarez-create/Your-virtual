@@ -8,6 +8,7 @@
 import { h, icon, toast } from './ui.js';
 import * as store from './store.js';
 import * as api from './api.js';
+import { borrarBase } from './db.js';
 
 /* ─── Rutas ───────────────────────────────────────────────────── */
 const RUTAS = [
@@ -329,7 +330,32 @@ arrancar().catch((e) => {
     h('h1.display', null, 'No arranca'),
     h('p.sub', null, e?.message || 'Error desconocido al iniciar la aplicación.'),
     h('button.btn.ink', { onclick: () => location.reload() }, 'Reintentar'),
+    h('p.sub', { style: { marginTop: '24px' } },
+      'Si reintentar no lo arregla, esto vacía la copia local de este ' +
+      'dispositivo y descarga la app de nuevo. Lo ya sincronizado se ' +
+      'recupera del servidor al entrar.'),
+    h('button.btn', { onclick: rescateLocal }, 'Vaciar la copia local y entrar de nuevo'),
   ));
 });
+
+/* El rescate de emergencia: tira la base local, las cachés y el service
+   worker, y recarga. Es el botón de «apagar y encender» para cuando el
+   almacenamiento del navegador queda en un estado que ni el arranque
+   tolerante sabe curar. */
+async function rescateLocal() {
+  const seguro = confirm(
+    'Se borra la copia local de este dispositivo (lo pendiente de subir se pierde). '
+    + 'Lo ya sincronizado se recupera del servidor. ¿Seguir?');
+  if (!seguro) return;
+  try {
+    const registros = await (navigator.serviceWorker?.getRegistrations?.() ?? []);
+    await Promise.all([...registros].map((r) => r.unregister().catch(() => {})));
+    const nombres = await (window.caches?.keys?.() ?? []);
+    await Promise.all([...nombres].map((n) => caches.delete(n).catch(() => {})));
+    await borrarBase();
+  } finally {
+    location.reload();
+  }
+}
 
 export { toast };
