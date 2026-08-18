@@ -123,6 +123,10 @@ export async function render() {
 
       h('p', { style: { margin: '24px 0 8px', textAlign: 'center', fontSize: '13px', color: 'var(--d-gris)' } },
         'UNIK repasos · versión ' + (window.REPASOS_CONFIG?.build || 'local')),
+      // El chivato de la letra: dice en el propio móvil si la
+      // tipografía del rediseño ha cargado o el navegador la ha
+      // sustituido. Para diagnosticar sin ordenador de por medio.
+      chivatoDeLetra(),
     ],
   };
 }
@@ -442,4 +446,27 @@ async function quitarEjemplos() {
   const n = await ejemplos.borrar();
   toast(n ? `${n} ${n === 1 ? 'acta retirada' : 'actas retiradas'}` : 'No había ninguna');
   refrescar();
+}
+
+/**
+ * El chivato de la letra. `document.fonts.check` dice si la familia
+ * está cargada de verdad; se pregunta también al cabo de un momento,
+ * porque con `font-display: swap` puede estar aún de camino cuando se
+ * pinta esta pantalla.
+ */
+function chivatoDeLetra() {
+  const linea = h('p', {
+    style: { margin: '0 0 8px', textAlign: 'center', fontSize: '13px', color: 'var(--d-gris)' },
+  });
+  const mirar = () => {
+    const cargada = document.fonts?.check?.('500 16px "Inter Tight"');
+    linea.textContent = cargada
+      ? 'Letra del rediseño: cargada'
+      : 'Letra del rediseño: SIN CARGAR (el móvil está usando la de reserva)';
+    if (!cargada) linea.style.color = 'var(--d-rojo)';
+  };
+  mirar();
+  document.fonts?.ready?.then(mirar);
+  setTimeout(mirar, 2500);
+  return linea;
 }
