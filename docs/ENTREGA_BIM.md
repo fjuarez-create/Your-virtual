@@ -18,6 +18,36 @@ enteros sin cortar.
 
 Todo lo que sigue existe para que el visor no tenga que deducir nada.
 
+## Formato de entrega
+
+Por orden de preferencia:
+
+**1. glTF 2.0 binario (`.glb`), un archivo por planta.** Es el formato nativo
+del visor: se carga tal cual, sin conversión. Hoy el FBX tiene que pasar por un
+conversor, y es en ese paso donde se pierden las coordenadas de mapeado y los
+materiales se degradan a Phong antiguo. Con GLB llegan intactos la geometría,
+las UVs, los materiales PBR y los nombres. Revit no lo exporta de fábrica, pero
+hay complementos que lo hacen, y saliendo por 3ds Max o Speckle es directo.
+
+**2. IFC 4, como acompañante del anterior.** No por la geometría, sino por los
+datos: niveles (`IfcBuildingStorey`), categorías (`IfcWall`, `IfcSlab`,
+`IfcColumn`, `IfcStair`) y conjuntos de propiedades vienen estructurados de
+serie. Es lo que evita tener que deducirlo del nombre de cada objeto.
+
+Los dos formatos no compiten, se complementan: el GLB lleva bien lo que se ve,
+el IFC lo que se sabe. Exportados del mismo modelo y con las mismas coordenadas
+compartidas, se cruzan sin problema. **Esa es la entrega ideal:** GLB + IFC 4 +
+los sólidos de corte del punto 1.
+
+**Si solo puede ser un formato, que sea GLB.** En ese caso los datos viajan en
+los nombres de los objetos, según los puntos 2, 3 y 4.
+
+**FBX binario** sigue siendo válido —es lo que se ha usado hasta ahora y
+funciona—, pero es el peor de los tres: un intermediario con pérdidas.
+
+**No sirven:** el `.rvt` en crudo, ni OBJ, DAE o SKP, que pierden la jerarquía y
+los nombres por objeto.
+
 ## 1. Planos de corte explícitos
 
 Es lo que resuelve el problema de raíz. Por cada planta y cada tramo:
@@ -39,7 +69,8 @@ sirven, porque no se exportan a FBX. Tiene que ser geometría real.
 
 ## 2. Un archivo por planta
 
-Lo preferible es un FBX por planta: `APOLO_P01.fbx`, `APOLO_P02.fbx`, etc.
+Lo preferible es un archivo por planta: `APOLO_P01.glb`, `APOLO_P02.glb`, etc.
+(o `.fbx`, según el formato elegido arriba).
 
 Si tiene que ir todo en un único archivo, entonces cada objeto debe llevar el
 prefijo de su planta en el nombre: `P01_MURO_...`.
@@ -105,22 +136,9 @@ Si resulta más cómodo no depurarlo, que venga todo agrupado bajo un nombre
   exporten como **sólidos macizos**, o al menos con las cámaras cerradas. Si
   llegan como capas separadas, el corte deja ver el hueco interior y el muro no
   lee como un todo.
-- FBX binario, con las mallas ya trianguladas.
+- Mallas ya trianguladas.
 
-## 7. Si además pueden entregar IFC 4
-
-Un IFC 4 lleva de serie lo que el FBX obliga a codificar a mano en el nombre:
-niveles (`IfcBuildingStorey`), categorías (`IfcWall`, `IfcSlab`, `IfcColumn`,
-`IfcStair`) y conjuntos de propiedades. Con IFC, los puntos 2, 3 y 4 de este
-documento dejan de hacer falta: la información ya viene estructurada.
-
-El coste está de nuestro lado (cambiar el conversor de entrada), y a cambio
-desaparece la clase entera de problemas.
-
-La entrega ideal sería: **IFC 4 + los sólidos de corte del punto 1.** Con eso
-sobra todo lo demás.
-
-## 8. Coordenadas de mapeado (UV) y materiales nombrados
+## 7. Coordenadas de mapeado (UV) y materiales nombrados
 
 Dos cosas que hay que pedir expresamente porque no salen solas:
 
@@ -149,4 +167,4 @@ Si solo pueden atender a tres cosas:
 2. Un archivo por planta (punto 2).
 3. El sólido por vivienda con el código `SE-AP-XXX` (punto 4).
 
-Y, en cualquier caso, que la exportación lleve coordenadas UV (punto 8).
+Y, en cualquier caso, que la exportación lleve coordenadas UV (punto 7).
