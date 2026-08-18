@@ -41,3 +41,7 @@ jobs:
           curl -sL "$BASE/css/app.css" | grep -o "font-family: 'Inter Tight';" | wc -l
           echo "── versión sellada del sw publicado:"
           curl -sL "$BASE/sw.js" | grep -o "const VERSION = '[^']*'" | head -1
+          echo "── piezas nuevas dentro del js publicado (hojaFecha y hojaOficios):"
+          curl -sL "$BASE/js/piezas.js" | grep -c -e "hojaFecha" -e "hojaOficios"
+          echo "── estilos nuevos dentro del css publicado (calendario y marcables):"
+          curl -sL "$BASE/css/app.css" | grep -c -e "d-calendario" -e "d-marcable"
