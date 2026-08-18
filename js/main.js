@@ -207,7 +207,12 @@ nightSky.visible = false;
 }
 scene.add(nightSky);
 
-const camera = new THREE.PerspectiveCamera(46, innerWidth / innerHeight, 0.5, 4200);
+/* El plano cercano a 0,5 m contra un lejano de 4.200 daba una relación de
+   8.400:1, y en esa escala el buffer de profundidad pierde tanta precisión que
+   la oclusión ambiental —que reconstruye posiciones a partir de él— no llegaba
+   a resolver nada. La cámara nunca se acerca a menos de 18 m (minDistance), así
+   que subirlo a 2 m no recorta nada y multiplica por cuatro la precisión. */
+const camera = new THREE.PerspectiveCamera(46, innerWidth / innerHeight, 2, 4200);
 camera.position.set(540, 480, 820);
 
 const controls = new OrbitControls(camera, canvas);
@@ -267,14 +272,23 @@ const usarAO = qsAO === '1' || (qsAO !== '0' && Math.min(screen.width, screen.he
 const gtao = new GTAOPass(scene, camera, innerWidth, innerHeight);
 gtao.enabled = usarAO;
 gtao.output = GTAOPass.OUTPUT.Default;
+/* El radio va en metros y marca hasta dónde busca oclusión. Con 0,55 m solo
+   veía las juntas; a escala de edificio lo que ensombrece son los retranqueos
+   de ventana, los vuelos de balcón y los patios, que son de metros. */
+/* Ajustado midiendo, no a ojo: con radio 0,55 la diferencia con el AO apagado
+   era de 1,5 sobre 255 —invisible—, y con 2,4 aparecían halos oscuros rodeando
+   cada ventana, que leen como contorno sucio y no como sombra. Este es el
+   punto intermedio. */
+gtao.blendIntensity = 1.2;
 gtao.updateGtaoMaterial({
-  radius: 0.55,          // en metros: el tamaño del hueco que ensombrece
-  distanceExponent: 1.6,
-  thickness: 1.2,
-  scale: 1.05,
-  samples: 16,
+  radius: 2.0,
+  distanceExponent: 1.5,
+  thickness: 1.8,
+  scale: 1.55,
+  samples: 24,
 });
-gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 4, samples: 8 });
+// filtrado más ancho: funde el ruido del muestreo sin comerse el contacto
+gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3.5, radius: 8, samples: 16 });
 composer.addPass(gtao);
 const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.14, 0.5, 0.92);
 composer.addPass(bloom);
