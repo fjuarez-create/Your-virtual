@@ -45,3 +45,5 @@ jobs:
           curl -sL "$BASE/js/piezas.js" | grep -c -e "hojaFecha" -e "hojaOficios"
           echo "── estilos nuevos dentro del css publicado (calendario y marcables):"
           curl -sL "$BASE/css/app.css" | grep -c -e "d-calendario" -e "d-marcable"
+          echo "── arranque tolerante de la base dentro del js publicado:"
+          curl -sL "$BASE/js/db.js" | grep -c -e "abrirCon" -e "borrarBase"
