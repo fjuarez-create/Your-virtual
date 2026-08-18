@@ -17,6 +17,7 @@ import { fetchUnits, fetchAvailability, pollAvailability, sendLead } from 'app/a
 import * as UI from 'app/ui.js';
 import { ACTIVE_DEV, ACTIVE_BUILDING } from 'app/promotions.js';
 import { createEnvironment, SITE } from 'app/environment.js';
+import { topoPedido, cargarTopo, aislarTopo } from 'app/topo.js';
 
 const $ = (s) => document.querySelector(s);
 
@@ -924,6 +925,23 @@ onResize();
 app.enter = () => {
   $('#hero').classList.add('gone');
   startIntro();
+
+  /* Revisión del levantamiento topográfico: ?topo=1 carga el entorno
+     reconstruido del DWG del topógrafo y aparta el edificio y el contexto
+     inventado. Es una vista de trabajo, no algo que un cliente deba
+     encontrarse: sin el parámetro no existe. */
+  if (topoPedido() && !app.topoActivo) {
+    app.topoActivo = true;
+    cargarTopo(scene).then(({ porMaterial }) => {
+      console.log('levantamiento cargado:', porMaterial.join(' · '));
+    }).catch((e) => console.warn('no se pudo cargar el levantamiento', e));
+    // el BIM llega más tarde por su cuenta, así que se insiste hasta apartarlo
+    const reloj = setInterval(() => {
+      aislarTopo(scene, bim?.group, [...B.floorGroups.values(), B.roofGroup]);
+      if (bim) clearInterval(reloj);
+    }, 400);
+    setTimeout(() => clearInterval(reloj), 30000);
+  }
 };
 
 /* Vuelta a la portada (selector de promociones) desde la flecha ← */
