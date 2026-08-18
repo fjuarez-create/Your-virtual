@@ -295,13 +295,13 @@ export function loadBIM(scene, url = 'assets/apolo_levels.glb') {
         // cuando su planta está aislada.
         const mkMats = () => ({
           struct: Object.assign(grain(new THREE.MeshStandardMaterial({
-            color: 0xdedbd4, roughness: 0.88, metalness: 0, transparent: true,
+            color: 0xc9c5bd, roughness: 0.9, metalness: 0, transparent: true,
             envMapIntensity: 1.0,
           }), 26, 0.16), { userData: { baseOpacity: 1 } }),
           // Monocapa blanco: blanco cálido, nada de blanco puro, con el grano
           // fino del mortero proyectado desde el shader.
           wall: Object.assign(grain(new THREE.MeshStandardMaterial({
-            color: 0xf1efe9, roughness: 0.8, metalness: 0, transparent: true,
+            color: 0xdcd8d0, roughness: 0.82, metalness: 0, transparent: true,
             envMapIntensity: 1.15,
           }), 62, 0.2), { userData: { baseOpacity: 1 } }),
           // Vidrio de verdad: reflejo con Fresnel del entorno HDRI y una capa
@@ -317,16 +317,25 @@ export function loadBIM(scene, url = 'assets/apolo_levels.glb') {
             color: 0x0e1013, roughness: 0.95, metalness: 0, transparent: true, opacity: 0,
           }), { userData: { baseOpacity: 1 } }),
           slab: Object.assign(grain(new THREE.MeshStandardMaterial({
-            color: 0xdedbd4, roughness: 0.88, metalness: 0, transparent: true,
+            color: 0xc9c5bd, roughness: 0.9, metalness: 0, transparent: true,
             envMapIntensity: 1.0,
           }), 26, 0.16), { userData: { baseOpacity: 1 } }),
         });
+        // se guarda la intensidad de entorno de origen para poder bajarla al
+        // aislar una planta (ver el techo de animateFloors)
+        const recordarEnv = (mats) => {
+          for (const m of Object.values(mats)) {
+            m.userData.baseEnv = m.envMapIntensity ?? 1;
+            m.userData.baseColor = m.color.clone();
+          }
+          return mats;
+        };
         const levels = new Map(); // bucket → { holders: [], mats: [] }
         const meshes = [];
         gltf.scene.traverse((o) => { if (o.isMesh) meshes.push(o); });
         for (const o of meshes) {
           const [bucket, cat] = o.name.split('__');
-          if (!levels.has(bucket)) levels.set(bucket, { holders: [], mats: [], byCat: mkMats(bucket) });
+          if (!levels.has(bucket)) levels.set(bucket, { holders: [], mats: [], byCat: recordarEnv(mkMats(bucket)) });
           const L = levels.get(bucket);
           const mat = L.byCat[cat] || L.byCat.struct;
           o.material = mat;

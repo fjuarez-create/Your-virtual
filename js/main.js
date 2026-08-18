@@ -55,8 +55,12 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 0.78;
+/* AgX en vez de ACES: ACES empasta la parte alta de la curva, y con un
+   edificio blanco monocapa eso significa que toda la fachada iluminada acaba
+   en la misma nota. Medido: el rango tonal de la fachada cabía en 14 niveles
+   de 255, cuando en una foto real recorre más de cien. */
+renderer.toneMapping = THREE.AgXToneMapping;
+renderer.toneMappingExposure = 1.0;
 
 const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(0xd6dde3, 750, 2100);
@@ -83,7 +87,7 @@ sky.material.uniforms.sunPosition.value.copy(sunDir);
   scene.environment = pmrem.fromScene(envScene, 0.04).texture;
   scene.add(sky); // devolver el cielo a la escena principal
   pmrem.dispose();
-  scene.environmentIntensity = 0.45;
+  scene.environmentIntensity = 0.3;
 }
 
 // ── Capa de nubes (billboards suaves, cúmulos algodonosos) ──
@@ -231,9 +235,12 @@ controls.target.set(0, 40, 0);
 controls.enabled = false; // se habilita al terminar la intro
 
 // Luces
-const hemi = new THREE.HemisphereLight(0xe3edf8, 0x8b9080, 0.55);
+/* El relleno ambiental estaba tan alto que llenaba todas las sombras y dejaba
+   la fachada sin modelado. Bajarlo y subir el sol devuelve el contraste: es el
+   sol quien tiene que dibujar el volumen, no la luz de relleno. */
+const hemi = new THREE.HemisphereLight(0xe3edf8, 0x8b9080, 0.28);
 scene.add(hemi);
-const sun = new THREE.DirectionalLight(0xfff1dc, 2.2);
+const sun = new THREE.DirectionalLight(0xfff1dc, 3.0);
 sun.position.copy(sunDir).multiplyScalar(180);
 sun.castShadow = true;
 // El mapa de sombra se ciñe al edificio en vez de cubrir 240 m: con 4096 px
@@ -247,7 +254,7 @@ sun.shadow.camera.far = 340;
 sun.shadow.bias = -0.00018;
 sun.shadow.normalBias = 0.045;
 scene.add(sun);
-const fill = new THREE.DirectionalLight(0xa8c4e8, 0.4);
+const fill = new THREE.DirectionalLight(0xa8c4e8, 0.15);
 fill.position.set(-90, 60, -70);
 scene.add(fill);
 
@@ -476,6 +483,22 @@ function animateFloors(dt) {
       const cutTarget = app.floor !== 'all' && animKey === app.floor ? 1 : 0;
       lvl.cutVal = (lvl.cutVal ?? 0) + (cutTarget - (lvl.cutVal ?? 0)) * k;
       if (lvl.byCat?.cap) lvl.byCat.cap.opacity = f * lvl.cutVal;
+
+      /* Techo: una planta seccionada tiene que leerse como interior, no como
+         patio. Un mapa de sombras no basta, porque solo detiene el sol directo
+         y la luz que baña estos interiores es la del cielo, que ninguna sombra
+         afecta. Lo que hace un techo real es tapar el cielo, así que es la
+         iluminación de entorno la que hay que retirar. Sigue la misma rampa
+         que las tapas de corte, de modo que entra con la misma animación. */
+      for (const mat of lvl.mats) {
+        mat.envMapIntensity = (mat.userData.baseEnv ?? 1) * (1 - 0.75 * lvl.cutVal);
+        // El grueso de la luz que baña estos interiores viene de la luz
+        // hemisférica del cielo, que es una luz de escena y no se puede
+        // recortar por material. Se compensa oscureciendo el propio material:
+        // medido, retirar solo la iluminación de entorno no movía un píxel.
+        const bc = mat.userData.baseColor;
+        if (bc) mat.color.copy(bc).multiplyScalar(1 - 0.4 * lvl.cutVal);
+      }
     }
 
     // Techo fantasma: al aislar una planta, la losa del nivel superior
@@ -622,7 +645,7 @@ app.setBuilding = (id) => {
    procedural (estrellas + luna): los HDRI nocturnos a pie de suelo traen
    focos y vegetación que no encajan en el entorno urbano.
    El shader Sky actúa de respaldo mientras carga o si falla. */
-const HDRI_DAY = { url: 'assets/sky_day.hdr', envInt: 0.45 };
+const HDRI_DAY = { url: 'assets/sky_day.hdr', envInt: 0.3 };
 function loadDayHDRI() {
   if (HDRI_DAY.ready) return Promise.resolve(HDRI_DAY);
   if (!HDRI_DAY.loading) {
@@ -679,19 +702,19 @@ app.setNight = (on) => {
     scene.environmentIntensity = 0.4;
   } else {
     applyDaySky();
-    if (!HDRI_DAY.ready) { sky.visible = true; scene.background = null; rebuildEnvironment(); scene.environmentIntensity = 0.45; }
+    if (!HDRI_DAY.ready) { sky.visible = true; scene.background = null; rebuildEnvironment(); scene.environmentIntensity = 0.3; }
   }
   // de noche, la "luz solar" pasa a ser luz de luna fría y tenue
-  sun.intensity = on ? 0.35 : 2.2;
+  sun.intensity = on ? 0.35 : 3.0;
   sun.color.setHex(on ? 0xbfd1ff : 0xfff1dc);
   sun.position.copy(sunDir).multiplyScalar(180);
   if (on) sun.position.set(60, 150, -45); // misma dirección que la luna
   hemi.color.setHex(on ? 0x223252 : 0xe3edf8);
   hemi.groundColor.setHex(on ? 0x0c1016 : 0x8b9080);
-  hemi.intensity = on ? 0.42 : 0.55;
+  hemi.intensity = on ? 0.42 : 0.28;
   fill.color.setHex(on ? 0x8fa8d8 : 0xa8c4e8);
-  fill.intensity = on ? 0.5 : 0.4;
-  renderer.toneMappingExposure = on ? 0.8 : 0.78;
+  fill.intensity = on ? 0.5 : 0.15;
+  renderer.toneMappingExposure = on ? 1.05 : 1.0;
   scene.fog.color.setHex(on ? 0x0b111c : 0xd6dde3);
   bloom.strength = on ? 0.5 : 0.14;
   bloom.threshold = on ? 0.72 : 0.92;
