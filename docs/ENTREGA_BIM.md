@@ -120,6 +120,27 @@ desaparece la clase entera de problemas.
 La entrega ideal sería: **IFC 4 + los sólidos de corte del punto 1.** Con eso
 sobra todo lo demás.
 
+## 8. Coordenadas de mapeado (UV) y materiales nombrados
+
+Dos cosas que hay que pedir expresamente porque no salen solas:
+
+**Exportar con coordenadas UV.** El modelo provisional llegó sin ellas, y sin
+UVs no se pueden aplicar texturas por el camino normal: el grano del monocapa
+hay que fingirlo calculándolo en el shader a partir de la posición en el
+mundo. Funciona, pero es un apaño.
+
+**Asignar y nombrar los materiales en Revit.** No hace falta que pongan la
+textura buena —esas viajan mal a FBX, referencian archivos locales y se
+pierde el mapeado—, pero sí que cada elemento llegue con el nombre de su
+material: `Monocapa blanco`, `Vidrio bajo emisivo`, `Carpintería lacada`… Con
+eso el material se asigna por nombre en vez de deducirlo de cómo se llame la
+familia, que es lo que se hace ahora y se rompe en cuanto alguien renombra
+algo.
+
+Las texturas finales las montamos nosotros a partir de fotos de muestra: el
+tiempo real necesita piezas pequeñas, repetibles y comprimidas, con sus mapas
+de rugosidad y relieve, que no es lo que produce un render offline.
+
 ## Lo mínimo imprescindible
 
 Si solo pueden atender a tres cosas:
@@ -127,3 +148,5 @@ Si solo pueden atender a tres cosas:
 1. Los sólidos de corte por planta y tramo (punto 1).
 2. Un archivo por planta (punto 2).
 3. El sólido por vivienda con el código `SE-AP-XXX` (punto 4).
+
+Y, en cualquier caso, que la exportación lleve coordenadas UV (punto 8).
