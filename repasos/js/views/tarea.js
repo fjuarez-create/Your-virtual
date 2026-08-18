@@ -7,7 +7,7 @@ import {
 } from '../catalog.js';
 import * as store from '../store.js';
 import * as media from '../media.js';
-import { cabecera, ctaAccion, hojaBienHecho } from '../piezas.js';
+import { ctaAccion, hojaBienHecho, hojaFotoAcciones, caraDeGremio } from '../piezas.js';
 import { alCompletar, nombreCorto } from '../frases.js';
 import { ir, refrescar, conFiltros, filtrosDeRuta } from '../app.js';
 
@@ -17,6 +17,9 @@ export async function render({ listaId, tareaId }) {
 
   const lista = await store.lista(listaId);
   const u = lista ? unidad(lista.unidadId) : null;
+  const rutaVilla = lista && u
+    ? conFiltros(`#/p/${lista.promoId}/v/${String(lista.unidadId).split(':')[1]}`, filtrosDeRuta())
+    : '#/viviendas';
   const medios = await store.mediosDeTarea(tareaId);
   const visuales = medios.filter((m) => m.tipo !== 'audio');
   const audios = medios.filter((m) => m.tipo === 'audio');
@@ -28,177 +31,215 @@ export async function render({ listaId, tareaId }) {
   const mediosPorComentario = new Map();
   for (const c of comentarios) mediosPorComentario.set(c.id, await store.mediosDeComentario(c.id));
 
-  /* ─── Medio principal ─── */
-  const hero = h('div.hero-media');
-  let actual = visuales.find((m) => m.id === t.portadaId) || visuales[0] || null;
-
-  const pintarHero = () => {
-    hero.replaceChildren();
-    hero.className = 'hero-media' + (actual ? '' : ' empty');
-    if (!actual) {
-      hero.append(h('div.center', null, icon('image', 30), h('p.sub', { style: { marginTop: '10px' } }, 'Sin imagen')));
-      return;
-    }
-    const url = store.urlDeMedio(actual);
-    if (!url) {
-      hero.append(h('div.center', null, icon('cloudOff', 30),
-        h('p.sub', { style: { marginTop: '10px', color: 'rgba(255,255,255,.6)' } }, 'Descargando…')));
-      return;
-    }
-    if (actual.tipo === 'video') {
-      hero.append(h('video', { src: url, controls: true, playsinline: true, preload: 'metadata' }));
-    } else {
-      const img = h('img', { src: url, alt: t.texto || 'Foto del repaso', loading: 'eager' });
-      hero.append(img);
-      hero.onclick = () => openViewer(h('img', { src: url, alt: '' }));
-    }
-    if (marcarRail) marcarRail();
-  };
-
-  /* ─── Carrete ─── */
-  let marcarRail = null;
-  const rail = h('div.rail');
-  const pintarRail = () => {
-    rail.replaceChildren();
-    for (const m of visuales) {
-      const url = store.urlDeMedio(m);
-      const celda = h('div.m', {
-        role: 'button', tabindex: '0',
-        'aria-current': actual && m.id === actual.id ? 'true' : 'false',
-        style: url && m.tipo === 'imagen' ? { backgroundImage: `url("${url}")` } : null,
-        onclick: () => { actual = m; pintarHero(); },
-      }, m.tipo === 'video' ? h('span.k', null, icon('play')) : null);
-      if (m.tipo === 'video' && !url) celda.append(h('span.k', null, icon('cloudOff')));
-      rail.append(celda);
-    }
-    // El «+» del carrete va directo a la foto: cuando una tarea no tiene
-    // nada, este botón es lo único que hay en pantalla, y lo que se va a
-    // añadir es una foto el 95% de las veces. Vídeo y voz siguen abajo,
-    // en «Añadir material».
-    rail.append(media.botonFichero({
-      clase: 'add', etiqueta: 'Añadir una foto',
-      accept: 'image/*', multiple: true,
-      onElegir: (ficheros) => guardarFotos(t, ficheros),
-    }, icon('plus')));
-    marcarRail = () => {
-      [...rail.querySelectorAll('.m')].forEach((c, i) =>
-        c.setAttribute('aria-current', actual && visuales[i]?.id === actual.id ? 'true' : 'false'));
-    };
-  };
-  pintarRail();
-  pintarHero();
-
-  /* ─── Estado ─── */
   const yo = store.sesion();
   const permitidos = estadosPermitidos(yo);
   // Un verificador puede editar una tarea aunque ya esté verificada: el
   // permiso manda sobre el estado.
   const edita = puedeVerificar(yo);
+  const e = estado(t.estado);
 
-  // Mismo alto y mismo redondeo que los filtros del resto de pantallas.
-  // Aquí el marcado se rellena en negro y no en el color de marca: no
-  // es un filtro, es el estado en el que está la tarea.
-  const chipsEstado = h('div.chips.filtro', null,
+  /* ─── La foto grande y sus miniaturas ─── */
+  let actual = visuales.find((m) => m.id === t.portadaId) || visuales[0] || null;
+  const hero = h('div.d-foto');
+  const pintarHero = () => {
+    hero.replaceChildren();
+    if (!actual) {
+      hero.append(h('div', { style: { display: 'grid', placeItems: 'center', height: '100%', color: 'var(--d-gris)' } },
+        h('div', { style: { textAlign: 'center' } }, icon('image', 30), h('p', { style: { marginTop: '8px', fontSize: '14px' } }, 'Sin imagen'))));
+      return;
+    }
+    const url = store.urlDeMedio(actual);
+    if (!url) {
+      hero.append(h('div', { style: { display: 'grid', placeItems: 'center', height: '100%', color: 'var(--d-gris)' } }, icon('cloudOff', 30)));
+      return;
+    }
+    if (actual.tipo === 'video') {
+      hero.append(h('video', { src: url, controls: true, playsinline: true, preload: 'metadata' }));
+    } else {
+      hero.append(h('img', { src: url, alt: t.texto || 'Foto del repaso', loading: 'eager' }));
+      hero.onclick = () => openViewer(h('img', { src: url, alt: '' }));
+    }
+  };
+  pintarHero();
+
+  const minis = h('div.d-minis', { style: { marginTop: '12px' } });
+  const pintarMinis = () => {
+    minis.replaceChildren(...visuales.map((m) => {
+      const url = store.urlDeMedio(m);
+      return h('div.d-mini', {
+        role: 'button', tabindex: '0',
+        'aria-current': actual && m.id === actual.id ? 'true' : 'false',
+        style: url && m.tipo === 'imagen' ? { backgroundImage: `url("${url}")` } : null,
+        onclick: () => { actual = m; pintarHero(); pintarMinis(); },
+      }, m.tipo === 'video' ? h('span.k', null, icon('play')) : null);
+    }));
+    // El «+» del carrete: añadir otra foto del defecto por la hoja del
+    // diseño (hacer foto o galería).
+    minis.append(h('button.d-mini', {
+      'aria-label': 'Añadir una foto',
+      style: { display: 'grid', placeItems: 'center', color: 'var(--d-gris)', background: '#fff' },
+      onclick: () => hojaFotoAcciones((ficheros) => guardarFotos(t, ficheros)),
+    }, icon('plus')));
+  };
+  pintarMinis();
+
+  /* ─── Completar la tarea, como lo dibuja el diseño ─── */
+  const puedeCompletar = permitidos.some((op) => op.id === 'resuelta')
+    && (t.estado === 'pendiente' || t.estado === 'rechazada');
+
+  const fotosNuevas = [];
+  const minisParte = h('div.d-minis', { style: { display: 'none' } });
+  const darBtn = h('button.d-boton-negro', { disabled: true }, 'Dar por completada');
+  const pintarParte = () => {
+    minisParte.replaceChildren(...fotosNuevas.map((img, i) => {
+      const url = URL.createObjectURL(img.blob);
+      return h('div.d-mini', {
+        style: { backgroundImage: `url("${url}")` },
+        role: 'button', 'aria-label': 'Ver la foto',
+        onclick: (ev) => { if (ev.target.closest('.d-foto-papelera')) return; openViewer(h('img', { src: url, alt: '' })); },
+      }, h('button.d-foto-papelera', {
+        'aria-label': 'Quitar esta foto',
+        onclick: async () => {
+          if (!await confirmSheet({
+            title: '¿Quitar esta foto?',
+            text: 'Se quita de este parte. Todavía no se ha subido nada.',
+            ok: 'Quitarla', danger: true,
+          })) return;
+          fotosNuevas.splice(i, 1);
+          pintarParte();
+        },
+      }, icon('trash')));
+    }));
+    minisParte.style.display = fotosNuevas.length ? 'flex' : 'none';
+    darBtn.disabled = !fotosNuevas.length;
+  };
+  const meterFotos = async (ficheros) => {
+    const hueco = TOPE_FOTOS_VERIFICACION - fotosNuevas.length;
+    if (hueco <= 0) { toast('Diez fotos es el tope', 'err'); return; }
+    toast('Preparando…');
+    let fallos = 0;
+    for (const fich of [...ficheros].slice(0, hueco)) {
+      try { fotosNuevas.push(await media.prepararImagen(fich)); } catch { fallos++; }
+    }
+    if (fallos) toast(`${fallos} ${fallos === 1 ? 'foto no se pudo leer' : 'fotos no se pudieron leer'}`, 'err');
+    pintarParte();
+  };
+
+  // La caja de mensaje: el avión manda una nota al hilo; el texto que
+  // quede escrito al dar por completada viaja además con el parte.
+  const cajaMensaje = h('input', { type: 'text', placeholder: 'Escribe un mensaje...', autocapitalize: 'sentences' });
+  const mandarNota = h('button.d-escribir-mandar', {
+    'aria-label': 'Enviar', disabled: true,
+    onclick: async () => {
+      const texto = cajaMensaje.value.trim();
+      if (!texto) return;
+      await store.añadirComentario(t.id, { texto, tipo: 'nota' });
+      cajaMensaje.value = '';
+      toast('Añadido al hilo');
+      refrescar();
+    },
+  }, icon('avionPapel'));
+  cajaMensaje.addEventListener('input', () => { mandarNota.disabled = !cajaMensaje.value.trim(); });
+  cajaMensaje.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') mandarNota.click(); });
+
+  darBtn.addEventListener('click', async () => {
+    if (!fotosNuevas.length) return;
+    try {
+      await store.cambiarEstado(t.id, 'resuelta', { texto: cajaMensaje.value.trim(), imagenes: fotosNuevas });
+      await hojaBienHecho({
+        titulo: `Excelente${nombreCorto(yo) ? ', ' + nombreCorto(yo) : ''}`,
+        frase: alCompletar(),
+        usuario: yo,
+        boton: u ? `Volver a ${u.nombre}` : 'Volver a la vivienda',
+      });
+      ir(rutaVilla);
+    } catch (err) { toast(err.message, 'err'); }
+  });
+
+  const seccionCompletar = puedeCompletar ? [
+    h('p.d-epigrafe', null, edita ? 'Completar tarea' : 'Comentar o completar'),
+    h('div.d-escribir.d-chat', { style: { marginTop: '0' } },
+      cajaMensaje, mandarNota),
+    h('button.d-fantasma', {
+      onclick: () => hojaFotoAcciones(meterFotos),
+    }, icon('plus'), 'Añadir fotos de verificación'),
+    minisParte,
+    darBtn,
+  ] : [];
+
+  /* ─── El estado, para quien verifica ─── */
+  const chipsEstado = edita ? h('div.chips.filtro', null,
     permitidos.map((op) => h('button.chip', {
       'aria-pressed': t.estado === op.id ? 'true' : 'false',
-      onclick: () => cambiarEstadoTarea(t, op.id),
+      onclick: () => cambiarEstadoTarea(t, op.id, listaId),
     }, op.nombre)),
-  );
+  ) : null;
 
-  // Los estados que este usuario no puede poner salen igual, apagados.
-  // Esconderlos dejaría al jefe de obra sin ver dónde acaba su trabajo y
-  // dónde empieza el nuestro; verlos y no poder pulsarlos lo explica solo.
-  for (const op of ESTADOS.filter((x) => !permitidos.some((p) => p.id === x.id))) {
-    chipsEstado.append(h('span.chip', {
-      'aria-pressed': t.estado === op.id ? 'true' : 'false',
-      style: { opacity: '.45', pointerEvents: 'none' },
-      title: 'Solo la dirección facultativa y UNIK verifican y rechazan',
-    }, op.nombre));
-  }
-
-  const e = estado(t.estado);
+  /* ─── El chip del gremio y la pastilla de la estancia ─── */
+  const o = oficio(t.oficio);
+  const caraGremio = caraDeGremio(o, 36);
+  const abrirEdicion = edita ? () => editarEstancia(t) : null;
 
   return {
     sinTabs: true,
+    clase: 'pantalla-diseno',
     contenido: [
-      cabecera(
-        `Tarea ${indice + 1} de ${hermanas.length}`,
-        u ? `${u.nombre} · ${fechaCorta(lista.creado)}` : '',
-        {
-          volverA: conFiltros('#/l/' + listaId, filtrosDeRuta()),
-          acciones: [h('button.icon-btn', {
-            'aria-label': 'Opciones', onclick: () => menuTarea(t, listaId),
-          }, icon('gear'))],
-        },
+      h('div.d-cab-dentro', null,
+        h('button.d-bola', { 'aria-label': 'Volver', onclick: () => ir(rutaVilla) }, icon('arrowLeft')),
+        h('div.d-titulo', null, u ? u.nombre : `Tarea ${indice + 1}`),
+        h('button.d-bola', { 'aria-label': 'Más opciones', onclick: () => menuTarea(t, listaId) }, icon('puntos')),
       ),
 
       rebotada(t) ? avisoRechazo(comentarios) : null,
 
       hero,
-      rail,
+      minis,
 
-      h('div', { style: { marginTop: '18px' } },
-        h('div.topbar', null,
-          h('div.grow', null, h('p.eyebrow', null, 'Descripción')),
-          // Editar es cosa de quien verifica. El jefe de obra completa
-          // y adjunta fotos, pero no reescribe lo que se le pidió: eso
-          // convertiría el acta en algo que cambia según quien la lee.
-          edita ? h('button.tag', { onclick: () => editarTexto(t) }, 'Editar') : null,
-        ),
-        h('p', {
-          style: { fontSize: '16px', lineHeight: '1.5', letterSpacing: '-0.005em', marginTop: '6px', whiteSpace: 'pre-wrap' },
-        }, t.texto || 'Sin descripción.'),
+      h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center', marginTop: '12px' } },
+        h(abrirEdicion ? 'button.d-chip-gremio' : 'span.d-chip-gremio', { onclick: abrirEdicion },
+          caraGremio, o.nombre),
+        h(abrirEdicion ? 'button.d-pastilla' : 'span.d-pastilla', { onclick: abrirEdicion },
+          t.zona || 'Sin estancia'),
       ),
 
-      // Gremio y estancia juntos: son las dos cosas que sitúan la tarea
-      // —quién la arregla y dónde está— y se leen de un golpe.
-      h('div', { style: { marginTop: '18px' } },
-        h('div.topbar', null,
-          h('div.grow', null, h('p.eyebrow', null, 'Gremio y estancia')),
-          edita ? h('button.tag', { onclick: () => editarEstancia(t) }, 'Cambiar') : null,
-        ),
-        h('div.chips', { style: { marginTop: '8px' } },
-          h('span.tag', null, oficio(t.oficio).nombre),
-          t.zona
-            ? h('span.tag', null, t.zona)
-            : h('span.tag', { style: { opacity: '.55' } }, 'Sin estancia'),
-        ),
-      ),
+      h('div.d-pastilla.ancha', { style: { marginTop: '8px' } },
+        h('span', null, fechaLarga(t.creado)), icon('calendario')),
 
-      h('div', { style: { marginTop: '20px' } },
-        h('p.eyebrow', { style: { marginBottom: '10px' } }, 'Estado'),
-        chipsEstado,
-        t.estado !== 'pendiente' && t.estadoPor
-          ? h('p.hint', null, `${e.nombre} por ${t.estadoPor} el ${fechaCorta(t.estadoEn)} a las ${hora(t.estadoEn)}`)
-          : null,
-      ),
+      h(edita ? 'button.d-caja' : 'div.d-caja', {
+        style: { marginTop: '8px' },
+        onclick: edita ? () => editarTexto(t) : null,
+      }, t.texto || 'Sin descripción.'),
 
-      // El otro carrete. Va justo debajo del estado y encima del hilo:
-      // quien abre una tarea completada viene a ver cómo ha quedado,
-      // no a leer. Se ve en horizontal, con zoom al tocar.
-      arregladas.length ? h('div', { style: { marginTop: '22px' } },
-        h('p.eyebrow', { style: { marginBottom: '10px' } },
-          `Cómo ha quedado · ${arregladas.length}`),
-        h('div.rail', null, arregladas.map((m) => {
-          const url = store.urlDeMedio(m);
-          return h('div.m', {
-            style: { backgroundImage: url ? `url("${url}")` : '' },
-            role: 'button', 'aria-label': 'Ver la foto del arreglo',
-            onclick: () => (url ? openViewer(h('img', { src: url, alt: '' })) : null),
-          });
-        })),
-      ) : null,
+      t.estado !== 'pendiente' && t.estadoPor
+        ? h('p', { style: { fontSize: '14px', color: 'var(--d-gris)', margin: '10px 2px 0' } },
+            `${e.nombre} por ${t.estadoPor} el ${fechaCorta(t.estadoEn)} a las ${hora(t.estadoEn)}`)
+        : null,
+
+      ...seccionCompletar,
+
+      chipsEstado ? h('p.d-epigrafe', null, 'Estado') : null,
+      chipsEstado,
+
+      arregladas.length ? h('p.d-epigrafe', null, `Cómo ha quedado · ${arregladas.length}`) : null,
+      arregladas.length ? h('div.d-minis', null, arregladas.map((m) => {
+        const url = store.urlDeMedio(m);
+        return h('div.d-mini', {
+          style: { backgroundImage: url ? `url("${url}")` : '' },
+          role: 'button', 'aria-label': 'Ver la foto del arreglo',
+          onclick: () => (url ? openViewer(h('img', { src: url, alt: '' })) : null),
+        });
+      })) : null,
 
       hiloDeTarea(t, comentarios, mediosPorComentario),
 
       audios.length ? h('div', { style: { marginTop: '20px' } },
-        h('p.eyebrow', { style: { marginBottom: '10px' } }, 'Notas de voz'),
+        h('p.d-epigrafe', null, 'Notas de voz'),
         h('div.stack', null, audios.map((m) => filaAudio(m, t))),
       ) : null,
 
-      h('div', { style: { marginTop: '22px' } },
-        h('p.eyebrow', { style: { marginBottom: '10px' } }, 'Añadir material'),
-        h('div.btn-row', null,
+      h('div', { style: { marginTop: '20px' } },
+        h('p.d-epigrafe', null, 'Añadir material'),
+        h('div.btn-row', { style: { marginTop: '10px' } },
           media.botonFichero({
             clase: 'btn', accept: 'image/*', multiple: true,
             onElegir: (ficheros) => guardarFotos(t, ficheros),
@@ -208,12 +249,21 @@ export async function render({ listaId, tareaId }) {
         ),
       ),
 
-      h('p.hint', { style: { marginTop: '22px' } },
-        `Creada por ${t.creadoPor === 'local' ? t.creadoPorNombre : t.creadoPorNombre} el ${fechaCorta(t.creado)} a las ${hora(t.creado)}.`),
+      h('p', { style: { fontSize: '14px', color: 'var(--d-gris)', marginTop: '20px' } },
+        `Creada por ${t.creadoPorNombre} el ${fechaCorta(t.creado)} a las ${hora(t.creado)}.`),
 
       navegacionHermanas(hermanas, indice, listaId),
     ],
   };
+}
+
+/** La fecha del diseño: «19 noviembre, 2026». */
+const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+  'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+function fechaLarga(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return `${d.getDate()} ${MESES[d.getMonth()]}, ${d.getFullYear()}`;
 }
 
 /* ─── Piezas ──────────────────────────────────────────────────── */
@@ -259,7 +309,7 @@ function navegacionHermanas(hermanas, indice, listaId) {
  * cosa. Eso queda en el hilo y el constructor lo ve nada más abrir la
  * tarea. Los motivos no se pisan: si rebota tres veces, quedan los tres.
  */
-async function cambiarEstadoTarea(t, nuevo) {
+async function cambiarEstadoTarea(t, nuevo, listaId) {
   if (t.estado === nuevo) return;
 
   try {

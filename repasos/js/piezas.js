@@ -500,14 +500,43 @@ export function hojaZonas(actual) {
  * celebrar y se convierte en un trámite más.
  */
 export function hojaBienHecho({ titulo, frase, usuario, boton = 'Seguir' }) {
-  return sheet((cerrar) => [
-    h('div', { style: { display: 'grid', placeItems: 'center', gap: '14px', padding: '8px 0 4px' } },
-      avatar(usuario, { tam: 64 }),
-      h('h2.title.center', null, titulo),
-      h('p.sub.center', { style: { maxWidth: '30ch' } }, frase),
+  // El modal de enhorabuena del Figma: velo con desenfoque, tarjeta
+  // clara con su aspa, la cara en grande, el titular, la frase y el
+  // botón topo.
+  return new Promise((resolver) => {
+    const cerrar = () => { velo.remove(); resolver(true); };
+    const velo = h('div.d-velo', { onclick: (e) => { if (e.target === velo) cerrar(); } },
+      h('div.d-modal', null,
+        h('button.d-modal-x', { 'aria-label': 'Cerrar', onclick: cerrar }, icon('x')),
+        avatar(usuario, { tam: 100 }),
+        h('h2.d-modal-titulo', null, titulo),
+        h('p.d-modal-sub', null, frase),
+        h('button.d-modal-boton', { onclick: cerrar }, boton),
+      ),
+    );
+    document.body.append(velo);
+  });
+}
+
+/**
+ * La hoja de «Hacer foto / Seleccionar de la galería» del Figma: velo
+ * con desenfoque, menú claro de dos filas y la bola de cerrar debajo.
+ * Llama a `onElegir(ficheros)` con lo elegido, venga de donde venga.
+ */
+export function hojaFotoAcciones(onElegir) {
+  const cerrar = () => velo.remove();
+  const fila = (extra, icono, rotulo) => media.botonFichero({
+    clase: 'd-hoja-fila', accept: 'image/*', multiple: true, ...extra,
+    onElegir: (ficheros) => { cerrar(); onElegir(ficheros); },
+  }, icon(icono), rotulo);
+  const velo = h('div.d-hoja-acciones', { onclick: (e) => { if (e.target === velo) cerrar(); } },
+    h('div.d-hoja-acciones-menu', null,
+      fila({ capture: 'environment' }, 'camera', 'Hacer foto'),
+      fila({}, 'image', 'Seleccionar de la galería'),
     ),
-    h('button.btn.ink.full', { style: { marginTop: '18px' }, onclick: () => cerrar(true) }, boton),
-  ]);
+    h('button.d-hoja-acciones-x', { 'aria-label': 'Cerrar', onclick: cerrar }, icon('x')),
+  );
+  document.body.append(velo);
 }
 
 /** Flecha «>» del final de las píldoras. */
