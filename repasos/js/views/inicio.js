@@ -1,10 +1,16 @@
 /* La home del rediseño 2026, calcada del Figma de Fran.
 
    De arriba a abajo: la cara de quien mira (que lleva a Ajustes), las
-   tres bolas de navegación, el saludo del día, el banner beige con lo
-   completado por verificar, los dos que acumulan —verde verificadas,
-   rojo rechazadas—, el módulo de Brassie con su anillo, y el muro de
-   comentarios y feedback coloreado por estado, con su caja de escribir.
+   tres bolas de navegación, el saludo del día, los tres banners de
+   estado, el módulo de Brassie con su anillo, y el muro de comentarios
+   y feedback coloreado por estado, con su caja de escribir.
+
+   Los tres banners cuentan LO QUE HAY AHORA MISMO, no lo que ha pasado
+   desde que uno miró: beige, las completadas que esperan visto bueno;
+   verde, todas las verificadas de la obra —que va subiendo sola salvo
+   que a alguna se le cambie el estado—; rojo, las que están rechazadas
+   en este momento y que se vacía según se van rehaciendo. Las tres
+   salen de la misma cuenta, así que ninguna puede contradecir a otra.
 
    La misma pantalla para técnicos y para constructora: solo cambia el
    saludo, que al jefe de obra no le baila con los días. */
@@ -12,7 +18,6 @@ import { h, icon, avatar, toast, fechaCorta, hora } from '../ui.js';
 import * as store from '../store.js';
 import { PROMOCIONES, unidad, estado, puedeVerificar } from '../catalog.js';
 import { avisoLocal, barraSync, cabDiseno, tarjetaVilla, cuandoVilla } from '../piezas.js';
-import { ultimaMirada, anotarMirada } from '../ajustesLocales.js';
 import { ir, conFiltros, refrescar } from '../app.js';
 
 /**
@@ -65,9 +70,6 @@ export async function render() {
   const yo = store.sesion();
   const d = await store.datosHome(p.id);
   const c = d.conteo;
-
-  const nuevasVerificadas = await store.cuantasDesde('verificada', ultimaMirada(yo, 'verificadas'), { promoId: p.id });
-  const nuevasRechazadas = await store.cuantasDesde('rechazada', ultimaMirada(yo, 'rechazadas'), { promoId: p.id });
 
   const pct = c.total ? Math.round((100 * c.hechas) / c.total) : 0;
 
@@ -128,16 +130,14 @@ export async function render() {
       banner({
         clase: 'verde',
         rotulo: 'Tareas verificadas',
-        cifra: nuevasVerificadas,
+        cifra: c.hechas,
         adonde: conFiltros('#/viviendas', { estado: 'verificada' }),
-        alPinchar: () => anotarMirada(yo, 'verificadas'),
       }),
       banner({
         clase: 'rojo',
         rotulo: 'Tareas rechazadas',
-        cifra: nuevasRechazadas,
+        cifra: c.rechazadas,
         adonde: conFiltros('#/viviendas', { estado: 'rechazada' }),
-        alPinchar: () => anotarMirada(yo, 'rechazadas'),
       }),
 
       h('p.d-epigrafe', null, p.nombre),

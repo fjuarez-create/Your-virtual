@@ -651,11 +651,13 @@ export async function resumenPorUnidad(promoId) {
  * estado. Lo usan las tres pantallas que listan contenedores, para que
  * el mismo chip signifique lo mismo en todas.
  *
- * «Pendientes», «Completadas» y «Rechazadas» preguntan si hay AL MENOS
- * UNA así, porque lo que se busca con ellas es dónde ir. «Verificadas»
- * exige que lo estén TODAS: una vivienda con una sola tarea verificada
- * y nueve pendientes no está verificada, y si apareciera en ese filtro
- * no serviría de nada.
+ * Los cuatro preguntan lo mismo: si hay AL MENOS UNA así, porque lo que
+ * se busca con ellos es dónde ir. «Verificadas» exigía antes que lo
+ * estuvieran TODAS, y eso lo hacía mentir contra el banner verde de la
+ * portada: la portada cuenta tareas verificadas y al pinchar podía no
+ * salir ninguna vivienda porque a cada una le faltaba algo. Las
+ * viviendas rematadas del todo siguen a un toque, en el conmutador
+ * «Finalizadas», que es justo para lo que está.
  *
  * Pendiente descuenta las rechazadas aunque el resumen las lleve
  * sumadas: son dos chips distintos y tienen que enseñar cosas
@@ -664,7 +666,7 @@ export async function resumenPorUnidad(promoId) {
  */
 export function encajaEstado(c, estado) {
   if (!estado || estado === 'todas') return true;
-  if (estado === 'verificada') return c.total > 0 && c.hechas === c.total;
+  if (estado === 'verificada') return (c.hechas || 0) > 0;
   if (estado === 'resuelta') return c.esperando > 0;
   if (estado === 'rechazada') return (c.rechazadas || 0) > 0;
   return c.pendientes - (c.rechazadas || 0) > 0;
@@ -981,31 +983,6 @@ export async function resumenPromocion(promoId) {
   const suyas = new Set(listas.map((l) => l.id));
   const tareas = (await db.getAll('tareas')).filter((t) => !t.borrada && suyas.has(t.listaId));
   return { ...contar(tareas), listas: listas.length };
-}
-
-/**
- * Cuántas tareas se movieron a un estado después de una fecha, para los
- * contadores que acumulan de la portada.
- *
- * Se cuenta, no se lleva un marcador aparte. Un contador guardado se
- * descuadra —una tarea que se borra, un móvil que sube tarde— y no hay
- * manera de saber si el número es verdad; esto se recalcula de cero
- * cada vez que se pinta la pantalla y siempre cuadra con lo que hay.
- *
- * `desde` vacío significa «desde siempre», que es lo que corresponde la
- * primera vez que alguien abre la app.
- */
-export async function cuantasDesde(estadoBuscado, desde, { promoId = null } = {}) {
-  const listas = (await db.getAll('listas'))
-    .filter((l) => !l.borrada && (!promoId || l.promoId === promoId));
-  const suyas = new Set(listas.map((l) => l.id));
-  return (await db.getAll('tareas')).filter((t) =>
-    !t.borrada
-    && suyas.has(t.listaId)
-    && t.estado === estadoBuscado
-    // `estadoEn` es cuándo se puso el estado. Sin él —tareas de antes de
-    // que se guardara— vale `actualizado`, que se le parece bastante.
-    && (!desde || (t.estadoEn || t.actualizado || '') > desde)).length;
 }
 
 /**

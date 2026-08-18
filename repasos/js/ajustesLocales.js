@@ -2,23 +2,13 @@
    ajustesLocales.js — las preferencias que no hacen falta en el
    servidor, guardadas en el teléfono y separadas por usuario.
 
-   Dos cosas viven aquí:
+   De momento vive aquí una sola cosa: si cada uno quiere que la IA le
+   proponga el texto al crear una tarea de una en una.
 
-     · si cada uno quiere que la IA le proponga el texto al crear una
-       tarea de una en una
-     · cuándo miró por última vez cada uno de los dos contadores de la
-       portada, para poder decir «tres nuevas desde que lo viste»
-
-   Van en el teléfono y no en la base por una razón práctica: son
-   ajustes de un móvil, no datos de la obra. Meterlos en la
+   Va en el teléfono y no en la base por una razón práctica: es un
+   ajuste de un móvil, no un dato de la obra. Meterlo en la
    sincronización obligaría a una tabla, su subida y su bajada, para
-   guardar un sí/no y dos fechas.
-
-   Tiene un coste y conviene decirlo: quien entre desde dos aparatos
-   verá contadores distintos en cada uno, porque cada uno recuerda su
-   propia última mirada. Para un contador de «qué hay nuevo» eso es
-   ruido menor; el día que estorbe, se sube a una tabla y se sincroniza
-   igual que lo demás.
+   guardar un sí o un no.
 
    Se guarda con la clave del usuario delante para que dos personas
    que comparten un teléfono —pasa en obra— no se pisen los ajustes.
@@ -62,20 +52,4 @@ export function usaIA(usuario) {
 
 export function ponerUsaIA(usuario, valor) {
   escribir(usuario?.id, 'ia-al-crear', !!valor);
-}
-
-/* ─── Última mirada a los contadores de la portada ────────────────
-   Los dos banners de la portada acumulan hasta que se pinchan. Lo que
-   se guarda es cuándo se pinchó por última vez; el número sale de
-   contar lo que se movió después. Así no hay un contador que llevar al
-   día ni que arreglar cuando se descuadre: se calcula.
-
-   Sin fecha guardada cuentan desde siempre, que es lo correcto la
-   primera vez que alguien abre la app. */
-export function ultimaMirada(usuario, banner) {
-  return leer(usuario?.id, `visto:${banner}`, '') || '';
-}
-
-export function anotarMirada(usuario, banner, cuando) {
-  escribir(usuario?.id, `visto:${banner}`, cuando || new Date().toISOString());
 }
