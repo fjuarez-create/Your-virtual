@@ -15,7 +15,7 @@ import { h, icon, sheet, toast, avatar, fechaCorta, hora } from '../ui.js';
 import { promocion, unidad, oficio, estado as estadoDe, puedeCrearLista } from '../catalog.js';
 import * as store from '../store.js';
 import {
-  tarjetaActa, hojaZonas, hojaFiltroGremios, caraDeGremio,
+  tarjetaActa, hojaZonas, hojaOficios, caraDeGremio,
   avisoLocal, barraSync, menuFlotante, filaMenu, filaMenuFichero, bandeja,
 } from '../piezas.js';
 import { hojaDePuerta, nombreDeFichero } from '../pdf.js';
@@ -73,8 +73,8 @@ export async function render({ promoId, unidadId }) {
   const filtros = h('div.d-filtros', { style: { display: 'none' } });
   const pintarFiltros = () => {
     const piezas = [];
-    if (oficioId && oficioId !== 'todos') {
-      const o = oficio(oficioId);
+    for (const id of oficiosElegidos(oficioId)) {
+      const o = oficio(id);
       const cara = caraDeGremio(o, 36);
       cara.classList.add('cara');
       piezas.push(h('span.d-filtro-pildora', null, cara, o.nombre));
@@ -105,8 +105,10 @@ export async function render({ promoId, unidadId }) {
   const bolaFiltros = h('button.d-bola-filtros', {
     'aria-label': 'Filtros',
     onclick: async () => {
-      const elegido = await hojaFiltroGremios(oficioId);
-      if (elegido !== null) { oficioId = elegido; cambio(); }
+      const elegidos = await hojaOficios(oficiosElegidos(oficioId), { multiple: true, conTodos: true });
+      if (elegidos === null) return;
+      oficioId = elegidos.length ? elegidos.join(',') : 'todos';
+      cambio();
     },
   }, icon('cursores'));
 
@@ -251,9 +253,15 @@ function cuandoMensaje(iso) {
 
 function encaja(t, estado, oficioId, estancia) {
   if (estado && estado !== 'todas' && t.estado !== estado) return false;
-  if (oficioId && oficioId !== 'todos' && t.oficio !== oficioId) return false;
+  const elegidos = oficiosElegidos(oficioId);
+  if (elegidos.length && !elegidos.includes(t.oficio)) return false;
   if (estancia && t.zona !== estancia) return false;
   return true;
+}
+
+/** El filtro de oficio viaja en la dirección como lista: «pladur,cocinas». */
+function oficiosElegidos(oficioId) {
+  return oficioId && oficioId !== 'todos' ? String(oficioId).split(',').filter(Boolean) : [];
 }
 
 async function descargarVivienda(p, u, tareas) {

@@ -409,40 +409,153 @@ export function filtroOficio(alCambiar, inicial = 'todos') {
 }
 
 /**
- * Hoja de oficios. `conTodos` añade la opción de no filtrar; al crear
- * una tarea no aparece, porque ahí elegir uno es obligatorio.
+ * La hoja de oficios del diseño «FILTRANDO POR GREMIO U OFICIO»:
+ * tarjeta sobre velo desenfocado, una fila por gremio con su cara
+ * redonda y su círculo de marcar, y el botón «Seleccionar» que pasa
+ * de gris a topo.
+ *
+ * Con `multiple` marca varios y devuelve un array (vacío = quitar el
+ * filtro, si `conTodos`); sin él, devuelve el id elegido. El aspa
+ * devuelve null: nada cambia.
  */
-export function hojaOficios(actual, { conTodos = false } = {}) {
-  return sheet((cerrar) => [
-    h('h2.title', null, 'Gremio'),
-    // Una fila por gremio, con su imagen y la empresa que lo lleva. Antes
-    // eran chips a secas, y con quince nombres seguidos y sin nada más,
-    // encontrar el tuyo era leerlos todos. La foto y la empresa dan dos
-    // asideros más: se reconoce «los de la piscina» sin leer la palabra.
-    h('div.stack.gremios', { style: { marginTop: '12px' } },
-      ...OFICIOS.map((o) => h('button.row.gremio', {
-        'aria-pressed': actual === o.id ? 'true' : 'false',
-        onclick: () => cerrar(o.id),
-      },
-        caraDeGremio(o),
-        h('div.grow', null,
-          h('div.row-title', null, o.nombre),
-          // Sin empresa asignada no se escribe nada: un «sin empresa» en
-          // gris debajo de cada gremio sería quince veces la misma
-          // disculpa por algo que no hace falta para trabajar.
-          o.empresa ? h('div.row-sub', null, o.empresa) : null,
+export function hojaOficios(actual = null, { conTodos = false, multiple = false, titulo = 'Filtrar por oficio' } = {}) {
+  return new Promise((resolver) => {
+    const inicial = Array.isArray(actual) ? actual : (actual && actual !== 'todos' ? [actual] : []);
+    const marcados = new Set(inicial);
+    const cerrar = (v) => { velo.remove(); resolver(v); };
+
+    const boton = h('button', {
+      onclick: () => cerrar(multiple ? [...marcados] : ([...marcados][0] || (conTodos ? 'todos' : null))),
+    }, 'Seleccionar');
+    const pintarBoton = () => {
+      // Sin nada marcado solo se puede confirmar si eso significa algo:
+      // quitar el filtro. Eligiendo para un formulario, no.
+      boton.disabled = !marcados.size && !(conTodos && inicial.length);
+    };
+
+    const lista = h('div.d-carta-lista', null, ...OFICIOS.map((o) => {
+      const circulo = h('span.d-marcable-circulo');
+      const fila = h('button.d-marcable', {
+        onclick: () => {
+          if (multiple) {
+            if (marcados.has(o.id)) marcados.delete(o.id); else marcados.add(o.id);
+          } else {
+            const estaba = marcados.has(o.id);
+            marcados.clear();
+            if (!estaba) marcados.add(o.id);
+          }
+          pintar();
+        },
+      }, caraDeGremio(o, 36), h('span.grow', null, o.nombre), circulo);
+      fila.dataset.oficio = o.id;
+      return fila;
+    }));
+    const pintar = () => {
+      for (const fila of lista.children) {
+        const puesto = marcados.has(fila.dataset.oficio);
+        const c = fila.querySelector('.d-marcable-circulo');
+        c.classList.toggle('marcado', puesto);
+        c.replaceChildren(puesto ? icon('check') : '');
+      }
+      pintarBoton();
+    };
+
+    const velo = h('div.d-velo.abajo', { onclick: (e) => { if (e.target === velo) cerrar(null); } },
+      h('div.d-carta', null,
+        h('div.d-carta-cab', null,
+          h('span', null, titulo),
+          h('button.x', { 'aria-label': 'Cerrar', onclick: () => cerrar(null) }, icon('x')),
         ),
-        actual === o.id ? icon('check', 18) : null,
-      )),
-    ),
-    // «Todos los oficios» no está en la lista: es el texto de reposo del
-    // selector, no un oficio. Pero si hay uno puesto hace falta una
-    // salida, y esta solo aparece entonces.
-    conTodos && actual !== 'todos'
-      ? h('button.btn.ghost.full', { onclick: () => cerrar('todos') }, 'Quitar el filtro')
-      : null,
-    ctaCancelar(() => cerrar(null)),
-  ]);
+        lista,
+        h('div.d-carta-pie', null, boton),
+      ),
+    );
+    pintar();
+    document.body.append(velo);
+  });
+}
+
+/**
+ * El calendario del diseño «ELIGIENDO FECHA»: tarjeta sobre velo con
+ * el mes navegable, la rejilla de días y el botón «Seleccionar (19
+ * nov, 2026)». Devuelve la fecha en ISO, '' si se quita la puesta, o
+ * null si se cierra sin tocar nada.
+ */
+const MESES_CORTOS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+const MESES_TITULO = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+export function hojaFecha(actualIso = null) {
+  return new Promise((resolver) => {
+    const hoy = new Date();
+    let elegido = actualIso ? new Date(actualIso) : null;
+    let vista = new Date((elegido || hoy).getFullYear(), (elegido || hoy).getMonth(), 1);
+    const cerrar = (v) => { velo.remove(); resolver(v); };
+
+    const titulo = h('span.grow', { style: { textAlign: 'center' } });
+    const rejilla = h('div.d-calendario');
+    const boton = h('button', {
+      onclick: () => {
+        if (!elegido && !actualIso) return;
+        cerrar(elegido ? new Date(elegido.getFullYear(), elegido.getMonth(), elegido.getDate(), 12).toISOString() : '');
+      },
+    });
+
+    const mismaFecha = (a, b) => a && b && a.toDateString() === b.toDateString();
+    const pintar = () => {
+      titulo.textContent = `${MESES_TITULO[vista.getMonth()]} ${vista.getFullYear()}`;
+      const celdas = ['Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sá', 'Do']
+        .map((d) => h('span.dia.cabecera', null, d));
+      // La rejilla arranca el lunes de la semana del día 1.
+      const desfase = (vista.getDay() + 6) % 7;
+      const cursor = new Date(vista);
+      cursor.setDate(1 - desfase);
+      for (let i = 0; i < 42; i++) {
+        const d = new Date(cursor);
+        const deOtroMes = d.getMonth() !== vista.getMonth();
+        celdas.push(h('button.dia', {
+          class: [
+            deOtroMes ? 'fuera' : '',
+            mismaFecha(d, elegido) ? 'elegido' : '',
+            mismaFecha(d, hoy) && !mismaFecha(d, elegido) ? 'hoy' : '',
+          ].filter(Boolean).join(' '),
+          onclick: () => {
+            elegido = mismaFecha(d, elegido) ? null : d;
+            if (deOtroMes) vista = new Date(d.getFullYear(), d.getMonth(), 1);
+            pintar();
+          },
+        }, String(d.getDate())));
+        cursor.setDate(cursor.getDate() + 1);
+        // Seis semanas de rejilla, pero si la sexta ya es toda del mes
+        // siguiente, sobra.
+        if (i >= 34 && (i + 1) % 7 === 0 && cursor.getMonth() !== vista.getMonth()) break;
+      }
+      rejilla.replaceChildren(...celdas);
+      boton.textContent = elegido
+        ? `Seleccionar (${elegido.getDate()} ${MESES_CORTOS[elegido.getMonth()]}, ${elegido.getFullYear()})`
+        : (actualIso ? 'Quitar la fecha' : 'Seleccionar');
+      boton.disabled = !elegido && !actualIso;
+    };
+
+    const velo = h('div.d-velo.abajo', { onclick: (e) => { if (e.target === velo) cerrar(null); } },
+      h('div.d-carta', null,
+        h('div.d-carta-cab.calendario', null,
+          h('button.paso', {
+            'aria-label': 'Mes anterior',
+            onclick: () => { vista = new Date(vista.getFullYear(), vista.getMonth() - 1, 1); pintar(); },
+          }, icon('caretIzquierda')),
+          titulo,
+          h('button.paso', {
+            'aria-label': 'Mes siguiente',
+            onclick: () => { vista = new Date(vista.getFullYear(), vista.getMonth() + 1, 1); pintar(); },
+          }, icon('chevron')),
+        ),
+        rejilla,
+        h('div.d-carta-pie', null, boton),
+      ),
+    );
+    pintar();
+    document.body.append(velo);
+  });
 }
 
 /**
@@ -777,63 +890,3 @@ export function tarjetaVilla({ titulo, cuando, caras = [], hechas, total, pct, a
   );
 }
 
-/**
- * La hoja de filtros del diseño: modal a pantalla completa con el
- * buscador, la lista de gremios en píldora y el botón de filtrar
- * anclado abajo. Devuelve el gremio elegido, 'todos' para quitar el
- * filtro, o null si se cierra con el aspa.
- */
-export function hojaFiltroGremios(actual = 'todos') {
-  return new Promise((resolver) => {
-    let elegido = actual !== 'todos' ? actual : null;
-    const cerrar = (valor) => { velo.remove(); resolver(valor); };
-
-    const boton = h('button', { onclick: () => cerrar(elegido || 'todos') });
-    const pintarBoton = () => {
-      boton.textContent = elegido ? 'Filtrar' : 'Seleccionar filtros';
-      boton.classList.toggle('activo', !!elegido);
-      boton.disabled = !elegido && actual === 'todos';
-    };
-
-    const lista = h('div.d-filtro-lista');
-    const pintarLista = (busqueda = '') => {
-      const aguja = busqueda.trim().toLowerCase();
-      // La hoja lista los quince gremios del diseño: «General» es el
-      // cajón interno de la app y las barandillas de vidrio van con
-      // las barandillas, así que aquí no aparecen.
-      const visibles = OFICIOS
-        .filter((o) => o.id !== 'general' && o.id !== 'barandillas-vidrio')
-        .filter((o) => !aguja || o.nombre.toLowerCase().includes(aguja));
-      lista.replaceChildren(...visibles.map((o) => h('button.d-ficha-chat', {
-        'aria-pressed': elegido === o.id ? 'true' : 'false',
-        onclick: () => { elegido = elegido === o.id ? null : o.id; pintarBoton(); pintarLista(campo.value); },
-      },
-        caraDeGremio(o, 48),
-        h('span.grow', null, o.nombre),
-        o.empresa ? h('span.etiqueta', null, o.empresa) : null,
-      )));
-      if (!visibles.length) {
-        lista.append(h('p', { style: { color: 'var(--d-gris)', textAlign: 'center', padding: '30px 0' } },
-          'Ningún gremio se llama así.'));
-      }
-    };
-
-    const campo = h('input', {
-      type: 'search', placeholder: 'Busca un gremio o subcontrata',
-      oninput: () => pintarLista(campo.value),
-    });
-
-    const velo = h('div.d-filtro-modal', null,
-      h('div.d-filtro-modal-cab', null,
-        h('h2', null, 'Oficios y subcontratas'),
-        h('button.d-bola', { 'aria-label': 'Cerrar', onclick: () => cerrar(null) }, icon('x')),
-      ),
-      h('div.d-filtro-buscar', null, icon('search'), campo),
-      lista,
-      h('div.d-filtro-pie', null, boton),
-    );
-    pintarBoton();
-    pintarLista();
-    document.body.append(velo);
-  });
-}

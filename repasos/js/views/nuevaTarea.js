@@ -15,7 +15,7 @@ import { promocion, unidad, unidades, oficio as oficioDe } from '../catalog.js';
 import * as store from '../store.js';
 import * as media from '../media.js';
 import {
-  hojaZonas, hojaOficios, hojaFotoAcciones, menuFlotante, filaMenu,
+  hojaZonas, hojaOficios, hojaFecha, hojaFotoAcciones, menuFlotante, filaMenu,
   bandeja, caraDeGremio,
 } from '../piezas.js';
 import { ir } from '../app.js';
@@ -115,21 +115,17 @@ export async function render({ promoId, unidadId }) {
     if (z !== null) { zona = z; refrescarSelectos(); }
   });
   const selGremio = selecto('', 'Seleccionar oficio', 'caretAbajo', async () => {
-    const g = await hojaOficios(gremio || 'general');
+    const g = await hojaOficios(gremio, { titulo: 'Oficio o subcontrata' });
     if (g) { gremio = g; refrescarSelectos(); }
   });
 
-  // La fecha con el calendario del sistema: un campo de fecha invisible
-  // debajo de la pastilla, que es quien lo abre.
-  const fechaOculta = h('input', {
-    type: 'date', style: { position: 'absolute', opacity: '0', pointerEvents: 'none', width: '1px', height: '1px' },
-  });
-  fechaOculta.addEventListener('change', () => {
-    fechaLimite = fechaOculta.value ? new Date(fechaOculta.value + 'T12:00:00').toISOString() : null;
+  // La fecha con el calendario del propio diseño: el del sistema,
+  // escondido, en el iPhone no se abría.
+  const selFecha = selecto('', 'Indicar fecha en el calendario', 'calendario', async () => {
+    const f2 = await hojaFecha(fechaLimite);
+    if (f2 === null) return;
+    fechaLimite = f2 || null;
     refrescarSelectos();
-  });
-  const selFecha = selecto('', 'Indicar fecha en el calendario', 'calendario', () => {
-    try { fechaOculta.showPicker(); } catch { fechaOculta.click(); }
   });
 
   const refrescarSelectos = () => {
@@ -193,7 +189,7 @@ export async function render({ promoId, unidadId }) {
       campo('Vivienda', true, selVilla),
       campo('Zona o estancia', true, selZona),
       campo('Oficio o subcontrata', true, selGremio),
-      campo('Fecha límite', false, h('div', { style: { position: 'relative' } }, selFecha, fechaOculta)),
+      campo('Fecha límite', false, selFecha),
       campo('Descripción', true, area),
 
       h('p.d-epigrafe', null, 'Imágenes o video adicionales'),

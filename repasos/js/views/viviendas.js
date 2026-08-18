@@ -15,7 +15,7 @@ import { h, icon, toast } from '../ui.js';
 import { PROMOCIONES, promocion, unidades, oficio, estado } from '../catalog.js';
 import * as store from '../store.js';
 import {
-  cabDiseno, tarjetaVilla, cuandoVilla, hojaFiltroGremios, caraDeGremio,
+  cabDiseno, tarjetaVilla, cuandoVilla, hojaOficios, caraDeGremio,
   avisoLocal, barraSync,
 } from '../piezas.js';
 import { ir, conFiltros, filtrosDeRuta, anotarFiltros } from '../app.js';
@@ -83,8 +83,8 @@ export async function render({ promoId, desdeTab = false }) {
   /* ─── Las píldoras de los filtros aplicados, con su única X ─── */
   const pintarFiltros = () => {
     const piezas = [];
-    if (oficioId && oficioId !== 'todos') {
-      const o = oficio(oficioId);
+    for (const id of oficiosElegidos(oficioId)) {
+      const o = oficio(id);
       piezas.push(h('span.d-filtro-pildora', null, conCara(o), o.nombre));
     }
     if (filtroEstado && filtroEstado !== 'todas') {
@@ -120,8 +120,10 @@ export async function render({ promoId, desdeTab = false }) {
   const bolaFiltros = h('button.d-bola-filtros', {
     'aria-label': 'Filtros',
     onclick: async () => {
-      const elegido = await hojaFiltroGremios(oficioId);
-      if (elegido !== null) { oficioId = elegido; cambio(); }
+      const elegidos = await hojaOficios(oficiosElegidos(oficioId), { multiple: true, conTodos: true });
+      if (elegidos === null) return;
+      oficioId = elegidos.length ? elegidos.join(',') : 'todos';
+      cambio();
     },
   }, icon('cursores'));
 
@@ -156,6 +158,12 @@ function encaja(r, filtroEstado, oficioId) {
   };
   const c = r || vacio;
   if (!store.encajaEstado(c, filtroEstado)) return false;
-  if (oficioId && oficioId !== 'todos' && !store.oficiosSegun(c, filtroEstado).has(oficioId)) return false;
+  const elegidos = oficiosElegidos(oficioId);
+  if (elegidos.length && !elegidos.some((id) => store.oficiosSegun(c, filtroEstado).has(id))) return false;
   return true;
+}
+
+/** El filtro de oficio viaja en la dirección como lista: «pladur,cocinas». */
+function oficiosElegidos(oficioId) {
+  return oficioId && oficioId !== 'todos' ? String(oficioId).split(',').filter(Boolean) : [];
 }

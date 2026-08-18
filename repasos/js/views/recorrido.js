@@ -433,7 +433,7 @@ export async function render({ promoId, unidadId }) {
       pintarZona();
 
       const selGremio = h('button.d-desplegable', { style: { width: '100%' }, onclick: async () => {
-        const elegido = await hojaOficios(f.oficio || ultimo);
+        const elegido = await hojaOficios(f.oficio || ultimo, { titulo: 'Oficio o subcontrata' });
         if (elegido) poner(elegido);
       } }, h('span', null, ''), icon('caretAbajo'));
       const poner = (elegido, propio = true) => {
