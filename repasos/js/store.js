@@ -1107,8 +1107,12 @@ export async function cargarPersonas() {
   return personas;
 }
 
+// Los acentos descompuestos por NFD son los combinantes U+0300 a U+036F;
+// el rango se construye con fromCharCode para que la linea no lleve
+// barras invertidas: los escapes se doblaban al viajar por la API.
+const DIACRITICOS = new RegExp('[' + String.fromCharCode(0x300) + '-' + String.fromCharCode(0x36f) + ']', 'g');
 const clavePersona = (n) => String(n || '')
-  .normalize('NFD').replace(/[\\u0300-\\u036f]/g, '')
+  .normalize('NFD').replace(DIACRITICOS, '')
   .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 
 /**
