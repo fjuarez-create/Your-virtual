@@ -1,0 +1,43 @@
+name: Comprobar la web publicada
+
+# Pide desde fuera los ficheros clave de repasos.unikdi.com y cuenta
+# qué contesta el servidor: estado, tipo y primeros bytes. Existe
+# porque la máquina donde se desarrolla no puede llegar a la web por
+# red, y las de GitHub sí: cuando algo «no carga en el móvil», este
+# robot dice si el fichero está, con qué tipo viaja y si es el bueno.
+
+# Se dispara al empujar su fichero-señal (los flujos de una rama de
+# trabajo no se pueden lanzar a mano por la API).
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/uniq-repasos-app-2ja8y2]
+    paths: ['diseno-figma/LANZAR-COMPROBACION.txt']
+
+jobs:
+  comprobar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Pedir los ficheros clave y contar qué llega
+        run: |
+          BASE="https://repasos.unikdi.com"
+          for u in \
+            "index.html" \
+            "css/app.css" \
+            "assets/fonts/inter-tight-latin-400-normal.woff2" \
+            "assets/fonts/inter-tight-latin-500-normal.woff2" \
+            "assets/fonts/inter-tight-latin-600-normal.woff2" \
+            "assets/fonts/opensans-var.woff2" \
+            "assets/logo/marca-unik.png" \
+            "assets/gremios/pladur.webp" \
+            "sw.js"; do
+            echo "── $u"
+            curl -sL -o /tmp/f -w "   estado %{http_code} · tipo %{content_type} · %{size_download} bytes\n" "$BASE/$u"
+            echo -n "   primeros bytes: "
+            head -c 8 /tmp/f | od -c | head -1
+          done
+          echo "── @font-face dentro del css publicado:"
+          curl -sL "$BASE/css/app.css" | grep -o "font-family: 'Inter Tight';" | wc -l
+          echo "── versión sellada del sw publicado:"
+          curl -sL "$BASE/sw.js" | grep -o "const VERSION = '[^']*'" | head -1
