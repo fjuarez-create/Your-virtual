@@ -17,7 +17,7 @@ import { fetchUnits, fetchAvailability, pollAvailability, sendLead } from 'app/a
 import * as UI from 'app/ui.js';
 import { ACTIVE_DEV, ACTIVE_BUILDING } from 'app/promotions.js';
 import { createEnvironment, SITE } from 'app/environment.js';
-import { topoPedido, cargarTopo, aislarTopo } from 'app/topo.js';
+import { topoPedido, topoCompleto, cargarTopo, aislarTopo } from 'app/topo.js';
 
 const $ = (s) => document.querySelector(s);
 
@@ -68,6 +68,7 @@ scene.fog = new THREE.Fog(0xd6dde3, 750, 2100);
 
 // ── Cielo físico (hora dorada) ──
 const sky = new Sky();
+sky.name = 'cielo';
 sky.scale.setScalar(4000);
 scene.add(sky);
 const sunDir = new THREE.Vector3().setFromSphericalCoords(
@@ -93,6 +94,7 @@ sky.material.uniforms.sunPosition.value.copy(sunDir);
 
 // ── Capa de nubes (billboards suaves, cúmulos algodonosos) ──
 const clouds = new THREE.Group();
+clouds.name = 'nubes';
 {
   const cv = document.createElement('canvas');
   cv.width = cv.height = 256;
@@ -135,6 +137,7 @@ scene.add(clouds);
 
 // ── Cielo nocturno: estrellas y luna (visibles solo de noche) ──
 const nightSky = new THREE.Group();
+nightSky.name = 'cielo_noche';
 nightSky.visible = false;
 {
   let nseed = 991;
@@ -454,6 +457,11 @@ function updateFloorTargets() {
 const BIM_KEY = { baja: 'baja', p1: 'p1', p2: 'p2', atico: 'atico', cubierta: 'roof' };
 
 function animateFloors(dt) {
+  /* En la revisión del levantamiento no hay edificio que animar, y esta
+     función reescribe la visibilidad de plantas, jardines y niveles BIM en
+     cada fotograma: si siguiera corriendo, volvería a encender todo lo que
+     aislarTopo acaba de apartar. */
+  if (app.soloTopo) return;
   const k = Math.min(1, dt * 4.5);
   let fading = false;
   for (const [key, g] of allGroups()) {
@@ -793,7 +801,9 @@ canvas.addEventListener('pointerup', (e) => {
 });
 
 function pickAt(cx, cy) {
-  if (!B) return null;
+  // en la revisión del levantamiento el edificio está apartado: no hay
+  // viviendas que señalar aunque sus mallas sigan en la escena
+  if (!B || app.soloTopo) return null;
   const p = new THREE.Vector2((cx / innerWidth) * 2 - 1, -(cy / innerHeight) * 2 + 1);
   raycaster.setFromCamera(p, camera);
   const hits = raycaster.intersectObjects(B.pickables, false);
@@ -808,7 +818,7 @@ function pickAt(cx, cy) {
 }
 
 function updateHover() {
-  if (!B) return;
+  if (!B || app.soloTopo) return;
   if (!mouseActive) {
     // sin ratón (táctil o fuera del lienzo): nunca hover ni tooltip
     if (app.hover) { app.hover = null; repaint(); }
@@ -932,15 +942,15 @@ app.enter = () => {
      encontrarse: sin el parámetro no existe. */
   if (topoPedido() && !app.topoActivo) {
     app.topoActivo = true;
-    cargarTopo(scene).then(({ porMaterial }) => {
+    app.soloTopo = true;
+    cargarTopo(scene, { todo: topoCompleto() }).then(({ porMaterial, fuera }) => {
       console.log('levantamiento cargado:', porMaterial.join(' · '));
+      if (fuera.length) console.log('fuera de esta vista:', fuera.join(', '));
     }).catch((e) => console.warn('no se pudo cargar el levantamiento', e));
-    // el BIM llega más tarde por su cuenta, así que se insiste hasta apartarlo
-    const reloj = setInterval(() => {
-      aislarTopo(scene, bim?.group, [...B.floorGroups.values(), B.roofGroup]);
-      if (bim) clearInterval(reloj);
-    }, 400);
-    setTimeout(() => clearInterval(reloj), 30000);
+    /* El BIM llega más tarde por su cuenta y los botones de planta vuelven a
+       encender lo que apartamos, así que en esta vista se insiste mientras
+       dure. Son cuatro objetos: no cuesta nada. */
+    setInterval(() => aislarTopo(scene), 400);
   }
 };
 
