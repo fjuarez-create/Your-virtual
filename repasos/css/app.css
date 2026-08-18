@@ -2149,3 +2149,16 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 .d-visor-destello { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
 .d-visor-destello.on { animation: d-destello .28s ease; }
 @keyframes d-destello { 0% { opacity: .85; } 100% { opacity: 0; } }
+
+/* ─── Validar las tareas del recorrido ── */
+.d-propuestas .d-propuesta + .d-propuesta { margin-top: 37px; }
+.d-propuesta-botones { display: flex; gap: 14px; margin-top: 16px; }
+.d-propuesta-botones > * { flex: 1; }
+.d-propuesta .d-foto .tag { display: inline-flex; align-items: center; gap: 4px; border: none; }
+/* El repaso del recorrido, con la ropa del rediseño. */
+.pantalla-diseno .rec-resumen,
+.pantalla-diseno .rec-dictado {
+  background: #fff; border-radius: var(--d-radio);
+  border: none; box-shadow: none; padding: 14px 16px;
+}
+.pantalla-diseno .rec-dictado .grow { flex: none; }

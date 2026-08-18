@@ -23,10 +23,10 @@ import * as api from '../api.js';
 import * as grabadora from '../recorrido.js';
 import {
   cabeceraDentro, cerrarVuelta, hojaOficios, hojaZonas, hojaBienHecho, ctaAccion, ctaCancelar,
-  menuFlotante, filaMenu,
+  menuFlotante, filaMenu, filaMenuFichero,
 } from '../piezas.js';
-import { alCerrarRecorrido } from '../frases.js';
-import { paraMirar } from '../media.js';
+import { alCerrarRecorrido, nombreCorto } from '../frases.js';
+import { paraMirar, prepararImagen } from '../media.js';
 import { ir, refrescar } from '../app.js';
 
 /**
@@ -81,10 +81,18 @@ export async function render({ promoId, unidadId }) {
   // queda atrapado por los ancestros y sale con alto cero.
   let visorActual = null;
 
-  // La cabecera se guarda en vez de montarse dentro del `return`: al
-  // pasar a validar hay que apagarle la flecha de volver, y para eso
-  // hace falta poder alcanzarla desde aquí.
-  const cabecera = cabeceraDentro(u.nombre.toUpperCase(), { volverA: volver, sub: 'Recorrido' });
+  // La cabecera se guarda para poder tocarla desde el repaso: allí la
+  // flecha de volver deja de navegar (irse dejaría el recorrido a
+  // medias sin decirlo) y el título pasa a «Nueva lista - Villa N».
+  const bolaVolver = h('button.d-bola', { 'aria-label': 'Volver', onclick: () => ir(volver) }, icon('arrowLeft'));
+  const tituloCab = h('div.d-titulo', null, u.nombre);
+  const cabecera = h('div.d-cab-dentro', null,
+    bolaVolver,
+    tituloCab,
+    h('button.d-bola', { 'aria-label': 'Más opciones', onclick: () => menuFlotante((cerrar) => [
+      filaMenu('x', 'Salir del recorrido', () => { cerrar(); ir(volver); }),
+    ]) }, icon('puntos')),
+  );
 
   // Los gremios que más salen aquí, para tenerlos a un toque al repasar.
   const sugeridos = await store.oficiosMasUsados(unidadId, 4);
@@ -313,23 +321,11 @@ export async function render({ promoId, unidadId }) {
     const audio = h('audio', { controls: true, preload: 'metadata', style: { width: '100%' } });
     audio.src = URL.createObjectURL(rec.audio);
 
-    const listado = h('div.stack', { style: { gap: '10px' } });
-    const guardar = ctaAccion('CREAR LAS TAREAS', { icono: 'check' });
-    const pista = h('p.hint');
+    const listado = h('div.d-propuestas');
 
+    /** Enciende o apaga el «Guardar» de cada tarjeta según lo relleno. */
     const validar = () => {
-      const vivas = fichas.filter((f) => !f.fuera);
-      const listas = vivas.filter((f) => f.texto.trim() && f.oficio);
-      guardar.disabled = !listas.length || listas.length !== vivas.length;
-      guardar.querySelector('.grow').textContent = listas.length === vivas.length && vivas.length
-        ? `CREAR ${vivas.length} ${vivas.length === 1 ? 'TAREA' : 'TAREAS'}`
-        : 'CREAR LAS TAREAS';
-      const faltan = vivas.length - listas.length;
-      pista.textContent = !vivas.length
-        ? 'No queda ninguna marca. Descarta el recorrido o vuelve a grabar.'
-        : !faltan
-          ? ''
-          : `Falta escribir ${faltan} ${faltan === 1 ? 'marca' : 'marcas'} de ${vivas.length}.`;
+      for (const f of fichas) f.pintarBoton?.();
     };
 
     /**
@@ -370,7 +366,7 @@ export async function render({ promoId, unidadId }) {
     };
 
     const pintarFichas = () => {
-      const vivas = fichas.filter((f) => !f.fuera);
+      const vivas = fichas.filter((f) => !f.fuera && !f.guardada);
       listado.replaceChildren(...vivas.map((f) => ficha(f)));
       // El alto solo se puede medir con la caja ya puesta en la página.
       for (const f of vivas) if (f.texto) f.crecer?.();
@@ -378,65 +374,49 @@ export async function render({ promoId, unidadId }) {
     };
 
     const ficha = (f) => {
-      const url = URL.createObjectURL(f.marca.blob);
-      const texto = h('textarea.textarea', {
-        rows: 2, placeholder: 'Qué hay que hacer aquí…', autocapitalize: 'sentences',
-      });
-      texto.value = f.texto;
-      // Crece con lo que se escribe en vez de dejar una barra de scroll
-      // de tres líneas dentro de una caja de tres líneas.
-      const crecer = () => {
-        texto.style.height = 'auto';
-        texto.style.height = texto.scrollHeight + 'px';
-      };
-      texto.addEventListener('input', () => { f.texto = texto.value; crecer(); validar(); });
-      f.crecer = crecer;
+      const url = f.sinFoto ? null : URL.createObjectURL(f.marca.blob);
 
-      // Los gremios de siempre, a un toque. Con quince marcas, abrir
-      // quince veces el desplegable es lo que hace que esto dé pereza;
-      // los cinco que de verdad se usan en esta obra caben aquí.
-      const gremios = h('div.chips.filtro.envuelve.rec-gremios');
-      const poner = (elegido, propio = true) => {
-        f.oficio = elegido;
-        if (propio) { f.tocado = true; ultimo = elegido; contagiar(f, elegido); }
-        pintarGremio();
-        validar();
+      /* La foto grande con su papelera. La papelera pregunta con el
+         menú del diseño, y al eliminar ofrece hacer otra, traerla de
+         la galería o dejar la tarea sin foto. */
+      const foto = h('div.d-foto', {
+        style: url ? {} : { display: 'grid', placeItems: 'center', color: 'var(--d-gris)' },
+        onclick: (ev) => { if (ev.target.closest('.d-foto-papelera') || !url) return; openViewer(h('img', { src: url, alt: '' })); },
+      },
+        url ? h('img', { src: url, alt: 'Foto de la marca' }) : icon('image', 30),
+        h('span.tag', {
+          style: { position: 'absolute', left: '10px', top: '10px', background: 'rgba(0,0,0,.45)', color: '#fff' },
+          onclick: (ev) => { ev.stopPropagation(); audio.currentTime = Math.max(0, f.marca.ms / 1000 - 8); audio.play(); },
+        }, icon('play', 12), grabadora.reloj(f.marca.ms / 1000)),
+        url ? h('button.d-foto-papelera', {
+          'aria-label': 'Borrar esta foto',
+          onclick: () => menuFlotante((cerrar) => [
+            filaMenu('trash', 'Eliminar imagen', () => { cerrar(); reponer(); }),
+            filaMenu('corazon', 'Conservar', cerrar),
+          ]),
+        }, icon('trash')) : null,
+      );
+      const reponer = () => menuFlotante((cerrar) => [
+        filaMenuFichero(cerrar, { capture: 'environment', multiple: false }, 'camera', 'Hacer foto', cambiarFoto),
+        filaMenuFichero(cerrar, { multiple: false }, 'image', 'Seleccionar de la galería', cambiarFoto),
+        filaMenu('corazon', 'Conservar', () => { cerrar(); f.sinFoto = true; pintarFichas(); }),
+      ], { conX: false });
+      const cambiarFoto = async (ficheros) => {
+        try {
+          const img = await prepararImagen(ficheros[0]);
+          f.marca.blob = img.blob; f.marca.ancho = img.ancho; f.marca.alto = img.alto;
+          f.sinFoto = false;
+          pintarFichas();
+        } catch { toast('No se pudo leer la foto', 'err'); }
       };
-      const pintarGremio = () => {
-        // El elegido va delante aunque no esté entre los habituales:
-        // si se ha buscado en la lista larga, tiene que verse puesto.
-        const lista = sugeridos.includes(f.oficio) ? sugeridos : [f.oficio, ...sugeridos];
-        gremios.replaceChildren(
-          ...lista.map((id) => h('button.chip.accent', {
-            'aria-pressed': f.oficio === id ? 'true' : 'false',
-            onclick: () => poner(id),
-          }, oficio(id).corto)),
-          h('button.chip.quitar', {
-            onclick: async () => {
-              const elegido = await hojaOficios(f.oficio || ultimo);
-              if (elegido) poner(elegido);
-            },
-          }, 'Otro…'),
-        );
-      };
-      f.pintarGremio = pintarGremio;
-      pintarGremio();
 
-      // Un solo botón y no los diecinueve: con quince marcas delante,
-      // diecinueve estancias por ficha son casi trescientos botones en
-      // la pantalla y no se encuentra nada. El que hay dice dónde está
-      // puesta, y abre la lista completa al tocarlo.
-      //
-      // Con la misma pinta que el minuto que tiene al lado, no con la de
-      // los chips de gremio: las dos cosas de la cabecera son etiquetas
-      // pequeñas, y el gremio se elige abajo entre varios.
-      const zonaChip = h('button.tag');
-      const pintarZona = () => {
-        zonaChip.className = f.zona ? 'tag accent' : 'tag';
-        zonaChip.style.opacity = f.zona ? '' : '.6';
-        zonaChip.textContent = f.zona || 'Estancia…';
-      };
-      zonaChip.addEventListener('click', async () => {
+      /* Los campos del diseño: estancia y oficio en pastilla, y la
+         descripción en su caja. El contagio de siempre sigue vivo. */
+      const campo = (rotulo, pastilla) => h('div.d-campo', null,
+        h('label.d-campo-rotulo', null, rotulo, h('span.req', null, '*')),
+        pastilla,
+      );
+      const selZona = h('button.d-desplegable', { style: { width: '100%' }, onclick: async () => {
         const elegida = await hojaZonas(f.zona);
         if (elegida === null) return;
         f.zona = elegida;
@@ -444,35 +424,65 @@ export async function render({ promoId, unidadId }) {
         ultimaZona = elegida;
         pintarZona();
         contagiarZona(f, elegida);
-      });
+      } }, h('span', null, ''), icon('caretAbajo'));
+      const pintarZona = () => {
+        selZona.querySelector('span').textContent = f.zona || 'Seleccionar estancia';
+        selZona.classList.toggle('puesto', !!f.zona);
+      };
       f.pintarZona = pintarZona;
       pintarZona();
 
-      return h('div.rec-ficha', { class: f.confianza === 'baja' ? 'dudosa' : '' },
-        h('div.rec-ficha-cab', null,
-          h('div.rec-foto', {
-            style: { backgroundImage: `url("${url}")` },
-            role: 'button', 'aria-label': 'Ver la foto',
-            onclick: () => openViewer(h('img', { src: url, alt: '' })),
-          }),
-          // El minuto y la estancia en la misma línea, encima del texto:
-          // es lo que dice el diseño —foto, estancia, gremio,
-          // descripción— y es el orden en que se lee una ficha, de lo
-          // que la sitúa a lo que la explica.
-          h('div.grow', { style: { display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' } },
-            h('button.tag', {
-              onclick: () => { audio.currentTime = Math.max(0, f.marca.ms / 1000 - 8); audio.play(); },
-            }, icon('play', 12), grabadora.reloj(f.marca.ms / 1000)),
-            zonaChip,
-          ),
-          h('button.icon-btn', {
-            'aria-label': 'Descartar esta marca',
-            style: { width: '38px', height: '38px', flex: '0 0 38px' },
-            onclick: () => { f.fuera = true; pintarFichas(); },
-          }, icon('trash', 16)),
+      const selGremio = h('button.d-desplegable', { style: { width: '100%' }, onclick: async () => {
+        const elegido = await hojaOficios(f.oficio || ultimo);
+        if (elegido) poner(elegido);
+      } }, h('span', null, ''), icon('caretAbajo'));
+      const poner = (elegido, propio = true) => {
+        f.oficio = elegido;
+        if (propio) { f.tocado = true; ultimo = elegido; contagiar(f, elegido); }
+        pintarGremio();
+        validar();
+      };
+      const pintarGremio = () => {
+        selGremio.querySelector('span').textContent = f.oficio ? oficio(f.oficio).nombre : 'Seleccionar oficio';
+        selGremio.classList.toggle('puesto', !!f.oficio);
+      };
+      f.pintarGremio = pintarGremio;
+      pintarGremio();
+
+      const texto = h('textarea.d-area', {
+        rows: 2, placeholder: 'Qué hay que hacer aquí…', autocapitalize: 'sentences',
+        style: { minHeight: '73px' },
+      });
+      texto.value = f.texto;
+      const crecer = () => {
+        texto.style.height = 'auto';
+        texto.style.height = Math.max(73, texto.scrollHeight) + 'px';
+      };
+      texto.addEventListener('input', () => { f.texto = texto.value; crecer(); validar(); });
+      f.crecer = crecer;
+
+      /* La pareja del diseño: eliminar en fantasma, guardar en negro
+         con el cerebro de la IA. */
+      const guardarBtn = h('button.d-boton-negro', {
+        onclick: () => { f.guardada = true; pintarFichas(); comprobarCierre(); },
+      }, icon('cerebro'), 'Guardar');
+      f.pintarBoton = () => { guardarBtn.disabled = !(f.texto.trim() && f.oficio); };
+      f.pintarBoton();
+
+      return h('div.d-propuesta', { class: f.confianza === 'baja' ? 'dudosa' : '' },
+        foto,
+        campo('Zona o estancia', selZona),
+        campo('Oficio o subcontrata', selGremio),
+        h('div.d-campo', null,
+          h('label.d-campo-rotulo', null, 'Descripción', h('span.req', null, '*')),
+          texto,
         ),
-        texto,
-        gremios,
+        h('div.d-propuesta-botones', null,
+          h('button.d-fantasma', {
+            onclick: () => { f.fuera = true; pintarFichas(); comprobarCierre(); },
+          }, icon('trash'), 'Eliminar'),
+          guardarBtn,
+        ),
       );
     };
 
@@ -494,8 +504,9 @@ export async function render({ promoId, unidadId }) {
     const dictado = () => {
       if (!api.HAY_SERVIDOR) return null;
 
-      const campo = h('textarea.textarea', {
+      const campo = h('textarea.d-area', {
         rows: 3, autocapitalize: 'sentences',
+        style: { minHeight: '96px' },
         placeholder: 'Se rellena solo con lo que dijiste. Si escribes aquí, manda lo tuyo…',
       });
       // La transcripción de un recorrido de cuatro minutos no cabe en
@@ -511,7 +522,8 @@ export async function render({ promoId, unidadId }) {
         requestAnimationFrame(crecerCampo);
       }
       const aviso = h('p.hint');
-      const boton = ctaAccion('REDACTAR LAS TAREAS', { icono: 'check', claro: true });
+      const boton = h('button.d-boton-negro', { style: { marginTop: '10px' } },
+        icon('cerebro'), h('span.grow', null, 'Redactar las tareas'));
       const rotulo = boton.querySelector('.grow');
 
       boton.addEventListener('click', async () => {
@@ -608,7 +620,7 @@ export async function render({ promoId, unidadId }) {
       });
 
       return h('div.rec-dictado', null,
-        h('p.eyebrow', null, 'Que las escriba solas'),
+        h('p.d-epigrafe', { style: { margin: '0 0 4px' } }, 'Que las escriba solas'),
         h('p.sub', { style: { marginTop: '4px' } },
           'Se escucha lo que dijiste, se miran las fotos y sale una tarea de cada '
           + 'una con su gremio. Un solo toque. Si prefieres escribirlo tú, hazlo '
@@ -619,56 +631,63 @@ export async function render({ promoId, unidadId }) {
       );
     };
 
-    guardar.addEventListener('click', async () => {
-      const vivas = fichas.filter((f) => !f.fuera && f.texto.trim() && f.oficio);
-      if (!vivas.length) return;
-      guardar.disabled = true;
+    /**
+     * El cierre del diseño: cuando la última tarjeta queda guardada o
+     * eliminada, se crean de una vez las guardadas —una lista nueva
+     * con todas dentro— y sale el modal de enhorabuena. Guardar
+     * tarjeta a tarjeta y crear al final no es contradictorio: si te
+     * vas a medias, el recorrido sigue en el móvil, entero.
+     */
+    const comprobarCierre = async () => {
+      if (fichas.some((f) => !f.fuera && !f.guardada)) return;
+      const buenas = fichas.filter((f) => f.guardada);
+      if (!buenas.length) {
+        await store.borrarRecorrido(rec.id);
+        toast('Recorrido descartado');
+        ir(volver);
+        return;
+      }
       toast('Creando las tareas…');
       const lista = await store.crearLista({ unidadId, promoId, fase: FASE_UNICA });
-      for (const f of vivas) {
+      for (const f of buenas) {
         const t = await store.crearTarea({
           listaId: lista.id, texto: f.texto.trim(), oficio: f.oficio, zona: f.zona,
         });
-        await store.añadirMedio(t.id, {
-          tipo: 'imagen', blob: f.marca.blob, mime: 'image/jpeg',
-          ancho: f.marca.ancho, alto: f.marca.alto,
-        });
+        if (!f.sinFoto) {
+          await store.añadirMedio(t.id, {
+            tipo: 'imagen', blob: f.marca.blob, mime: 'image/jpeg',
+            ancho: f.marca.ancho, alto: f.marca.alto,
+          });
+        }
       }
       await store.marcarRecorridoUsado(rec.id, lista.id);
+      const yo = store.sesion();
       await hojaBienHecho({
-        titulo: `${vivas.length} ${vivas.length === 1 ? 'tarea creada' : 'tareas creadas'}`,
-        frase: alCerrarRecorrido(vivas.length),
-        usuario: store.sesion(),
-        boton: 'Ver la lista',
+        titulo: `Excelente${nombreCorto(yo) ? ', ' + nombreCorto(yo) : ''}`,
+        frase: 'Validación completa. Que empiecen los remates.',
+        usuario: yo,
+        boton: `Volver a ${u.nombre}`,
       });
       await refrescar();
-      ir('#/l/' + lista.id);
-    });
+      ir(volver);
+    };
 
     pintarFichas();
 
-    // De aquí se sale creando las tareas o descartándolas. La flecha de
-    // volver se apaga a propósito: irse por ahí deja el recorrido a
-    // medias sin decirlo, y lo que se ve en la pantalla —quince fichas
-    // ya escritas— parece guardado y no lo está. El recorrido sigue en
+    // La flecha de volver deja de navegar a propósito: irse por ahí
+    // dejaría el recorrido a medias sin decirlo. El recorrido sigue en
     // el móvil, así que cerrar la app por accidente no pierde nada.
-    cerrarVuelta(cabecera, 'Crea las tareas o descarta el recorrido');
+    tituloCab.textContent = `Nueva lista - ${u.nombre}`;
+    bolaVolver.onclick = () => toast('Guarda o elimina cada tarea para terminar. Lo grabado no se pierde.');
 
     lienzo.replaceChildren(
       h('div.rec-resumen', null,
-        h('p.eyebrow', null, `Nueva lista · ${u.nombre}`),
-        h('p.sub', { style: { marginTop: '4px' } },
-          `${grabadora.reloj(rec.duracion)} y ${rec.marcas.length} ${rec.marcas.length === 1 ? 'marca' : 'marcas'}. Escribe qué hay que hacer en cada una; el gremio va propuesto y se cambia de un toque. Lo que no valga, lo tiras.`),
-        h('div', { style: { marginTop: '12px' } }, audio),
+        h('p.d-epigrafe', { style: { margin: '0 0 8px' } },
+          `${grabadora.reloj(rec.duracion)} y ${rec.marcas.length} ${rec.marcas.length === 1 ? 'marca' : 'marcas'}`),
+        audio,
       ),
       dictado(),
       listado,
-      pista,
-      guardar,
-      ctaCancelar(async () => {
-        await store.borrarRecorrido(rec.id);
-        ir(volver);
-      }),
     );
   };
 
@@ -676,9 +695,9 @@ export async function render({ promoId, unidadId }) {
 
   return {
     sinTabs: true,
-    clase: 'pantalla-recorrido',
+    clase: 'pantalla-diseno pantalla-recorrido',
     contenido: [
-      ...cabecera,
+      cabecera,
       lienzo,
     ],
     // Al salir de la pantalla hay que soltar cámara y micrófono sí o sí:
