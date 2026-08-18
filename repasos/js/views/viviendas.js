@@ -154,7 +154,7 @@ export async function render({ promoId, desdeTab = false }) {
 function encaja(r, filtroEstado, oficioId) {
   const vacio = {
     total: 0, hechas: 0, pendientes: 0, esperando: 0, rechazadas: 0,
-    oficios: new Set(), oficiosAbiertos: new Set(),
+    oficios: new Set(), oficiosAbiertos: new Set(), oficiosVerificados: new Set(),
   };
   const c = r || vacio;
   if (!store.encajaEstado(c, filtroEstado)) return false;

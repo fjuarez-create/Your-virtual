@@ -71,9 +71,20 @@ export async function render() {
   };
 }
 
-/** Los dos filtros se cruzan, con el criterio común del almacén. */
+/**
+ * Los dos filtros se cruzan, con el criterio común del almacén salvo en
+ * «Verificadas», que aquí es más estricto: un acta verificada es la que
+ * lo está ENTERA. Una vivienda es un sitio donde uno busca dónde ir, y
+ * le vale con que haya algo verificado; un acta es un documento, y o
+ * está cerrada o no lo está. Además este chip es la única forma que hay
+ * en esta pantalla de encontrar las actas ya firmadas del todo: las
+ * viviendas tienen para eso el conmutador «Finalizadas», y las actas no
+ * tienen conmutador ninguno.
+ */
 function encaja({ conteo }, estado, oficioId) {
-  if (!store.encajaEstado(conteo, estado)) return false;
+  if (estado === 'verificada') {
+    if (!store.actaTerminada(conteo)) return false;
+  } else if (!store.encajaEstado(conteo, estado)) return false;
   if (oficioId !== 'todos' && !store.oficiosSegun(conteo, estado).has(oficioId)) return false;
   return true;
 }

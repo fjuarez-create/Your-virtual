@@ -594,7 +594,8 @@ export async function resumenPorUnidad(promoId) {
     if (!salida.has(unidadId)) {
       salida.set(unidadId, {
         listas: 0, total: 0, hechas: 0, pendientes: 0, esperando: 0, rechazadas: 0,
-        oficios: new Set(), oficiosAbiertos: new Set(), ultima: null,
+        oficios: new Set(), oficiosAbiertos: new Set(), oficiosVerificados: new Set(),
+        ultima: null,
         // `movimiento` es la última vez que se tocó algo aquí, no la
         // última acta abierta: una casa con un acta de hace un mes y
         // una tarea resuelta ayer se está moviendo.
@@ -625,7 +626,7 @@ export async function resumenPorUnidad(promoId) {
     v.oficios.add(oficioDe(t));
     apuntar(v, t.creadoPor, t.creadoPorNombre);
     mover(v, t.actualizado || t.creado);
-    if (hecha(t)) { v.hechas++; continue; }
+    if (hecha(t)) { v.hechas++; v.oficiosVerificados.add(oficioDe(t)); continue; }
     v.oficiosAbiertos.add(oficioDe(t));
     if (esperandoVisto(t)) v.esperando++;
     else v.pendientes++;
@@ -659,6 +660,11 @@ export async function resumenPorUnidad(promoId) {
  * viviendas rematadas del todo siguen a un toque, en el conmutador
  * «Finalizadas», que es justo para lo que está.
  *
+ * La pantalla de actas hace una excepción con «Verificadas» y exige que
+ * el acta lo esté entera —está explicada allí—: un acta es un documento
+ * que se cierra, no un sitio al que ir, y allí no hay conmutador que
+ * saque las cerradas.
+ *
  * Pendiente descuenta las rechazadas aunque el resumen las lleve
  * sumadas: son dos chips distintos y tienen que enseñar cosas
  * distintas, o pedir «pendientes» sacaría casas donde lo único que hay
@@ -673,13 +679,19 @@ export function encajaEstado(c, estado) {
 }
 
 /**
- * Los oficios contra los que cruzar el filtro. Buscando lo pendiente,
- * lo completado o lo rechazado solo cuentan los oficios que siguen
- * vivos; en los demás casos, todo lo que haya pasado por ahí. Si no, al
- * pedir «pintura pendiente» saldrían viviendas donde la pintura ya está
- * verificada y lo que queda abierto es de fontanería.
+ * Los oficios contra los que cruzar el filtro, que cambian con lo que se
+ * esté buscando:
+ *
+ *   pendiente/completada/rechazada  los oficios que siguen vivos, o al
+ *     pedir «pintura pendiente» saldrían viviendas donde la pintura ya
+ *     está verificada y lo abierto es de fontanería
+ *   verificada  los oficios que tienen algo dado por bueno, o al pedir
+ *     «pintura verificada» saldrían casas donde lo verificado es la
+ *     fontanería y la pintura está sin tocar
+ *   sin estado  todo lo que haya pasado por ahí
  */
 export function oficiosSegun(c, estado) {
+  if (estado === 'verificada') return c.oficiosVerificados || c.oficios;
   const vivos = estado === 'pendiente' || estado === 'resuelta' || estado === 'rechazada';
   return vivos ? c.oficiosAbiertos : c.oficios;
 }
@@ -792,11 +804,13 @@ function contar(tareas) {
     // subconjunto, para poder sacarlas en su propio tramo.
     pendientes: tareas.filter(enObra).length,
     rechazadas: tareas.filter(rebotada).length,
-    // Dos conjuntos, porque los filtros preguntan cosas distintas:
+    // Tres conjuntos, porque los filtros preguntan cosas distintas:
     // «pintura» a secas es «aquí hubo pintura»; «pendientes + pintura»
-    // es «aquí queda pintura por cerrar».
+    // es «aquí queda pintura por cerrar»; «verificadas + pintura» es
+    // «aquí hay pintura ya dada por buena».
     oficios: new Set(tareas.map(oficioDe)),
     oficiosAbiertos: new Set(tareas.filter((t) => !hecha(t)).map(oficioDe)),
+    oficiosVerificados: new Set(tareas.filter(hecha).map(oficioDe)),
   };
 }
 
