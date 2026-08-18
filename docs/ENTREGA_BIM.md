@@ -99,6 +99,8 @@ Prefijos pedidos:
 | `VID_`  | vidrio y carpintería              |
 | `BAR_`  | barandillas y petos               |
 | `CUB_`  | cubierta y casetones              |
+| `MOB_`  | mobiliario y sanitarios           |
+| `JAR_`  | jardinería proyectada             |
 
 ## 4. Identidad de cada vivienda
 
@@ -115,14 +117,35 @@ Con eso, el visor asocia geometría ↔ ficha ↔ disponibilidad por nombre en v
 de por proximidad geométrica, y coloca la etiqueta de estado (verde disponible
 / naranja reservada) en el centro correcto de la vivienda.
 
-## 5. Lo que no debe venir
+## 5. Mobiliario, sanitarios y lo que sí sobra
 
-- Mobiliario, sanitarios, electrodomésticos y vegetación de relleno.
+**El mobiliario y los sanitarios del proyecto SÍ interesan.** Un dormitorio con
+su cama dentro demuestra que cabe; vacío es un rectángulo abstracto. Lo mismo
+con los baños. Es de lo que más ayuda a vender.
+
+Pero tienen que venir **en su propio grupo**, con el prefijo `MOB_`, por dos
+motivos de peso:
+
+- **El corte de sección los rebanaría.** El plano horizontal pasa a 1,10-1,50 m,
+  justo por encima de las camas y por la mitad de inodoros y armarios. Yendo en
+  su grupo se excluyen del corte y se dibujan enteros.
+- **El tamaño.** Una familia de sanitario puede traer veinte mil triángulos ella
+  sola; multiplicada por 166 viviendas, no la carga una tablet. Separada, se
+  puede cargar solo al abrir una vivienda.
+
+Por eso conviene además que el mobiliario venga en una **representación
+sencilla**: la silueta y las proporciones correctas importan; los tiradores de
+los armarios y los pliegues de las toallas, no.
+
+Lo que sí sobra:
+
 - Vistas, cotas, textos y anotaciones.
 - Instalaciones (MEP), salvo que se pidan expresamente.
+- Vegetación genérica de relleno. La jardinería proyectada de patios y zonas
+  comunes sí interesa, y también con su prefijo.
 
-Si resulta más cómodo no depurarlo, que venga todo agrupado bajo un nombre
-`DESCARTE_` y se filtra en el pipeline.
+Si resulta más cómodo no depurar lo que sobra, que venga todo agrupado bajo un
+nombre `DESCARTE_` y se filtra en el pipeline.
 
 ## 6. Geometría y coordenadas
 
