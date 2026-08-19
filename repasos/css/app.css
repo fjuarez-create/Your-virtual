@@ -2345,9 +2345,15 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
   background: #e9e9e9; aspect-ratio: 351 / 352; cursor: pointer;
 }
 /* Con dos, cada una ocupa menos alto: las dos tienen que caber de un
-   vistazo, que es de lo que va enseñar el antes y el después. */
-.d-fotos-tarea .d-foto-tarea:nth-child(2),
-.d-fotos-tarea .d-foto-tarea:first-child:not(:only-child) { aspect-ratio: 351 / 246; }
+   vistazo, que es de lo que va enseñar el antes y el después.
+
+   Se mira si hay otra foto detrás, no si hay otro hermano cualquiera:
+   la foto de relleno lleva debajo su letrero, y con «no eres hijo
+   único» esa se quedaba también a media altura estando sola. Si algún
+   navegador viejo no entiende el `:has`, lo que sale es la foto entera,
+   que es justo lo que toca cuando hay una. */
+.d-fotos-tarea .d-foto-tarea:has(~ .d-foto-tarea),
+.d-fotos-tarea .d-foto-tarea:nth-child(2) { aspect-ratio: 351 / 246; }
 .d-foto-tarea img, .d-foto-tarea video { width: 100%; height: 100%; object-fit: cover; display: block; }
 /* La de relleno: la del oficio, apagada y con su letrero, para que no
    se lea como si fuera el remate. */
