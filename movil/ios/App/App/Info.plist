@@ -59,15 +59,17 @@
 	</array>
 
 	<!-- Solo vertical: la app se usa con una mano andando por la
-	     vivienda, y el diseño entero está hecho a lo alto. -->
+	     vivienda, y el diseño entero está hecho a lo alto.
+
+	     Aquí no hay lista aparte para el iPad. Apple exige que una app
+	     que se declara para iPad admita las cuatro orientaciones, para
+	     poder ponerla en media pantalla junto a otra; eso es lo
+	     contrario de lo que queremos. Por eso la app es solo de iPhone
+	     (TARGETED_DEVICE_FAMILY = 1 en el proyecto). En un iPad se
+	     puede instalar igual, se ve como en un iPhone. -->
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-	</array>
-	<key>UISupportedInterfaceOrientations~ipad</key>
-	<array>
-		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>

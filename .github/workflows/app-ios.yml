@@ -98,10 +98,37 @@ jobs:
   compilar:
     needs: mirar-secretos
     if: needs.mirar-secretos.outputs.seguir == 'si'
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 45
 
     steps:
+      # Apple rechaza en la subida cualquier app compilada con un juego
+      # de herramientas viejo: exige el de iOS 26, que viene dentro de
+      # Xcode 26. La máquina trae varios Xcode instalados y arranca con
+      # uno antiguo, así que aquí se elige el más nuevo. Va lo primero,
+      # antes de nada: si esta máquina no lo tuviera, se sabe en medio
+      # minuto y no después de compilar entera la app.
+      - name: Elegir el Xcode más nuevo de la máquina
+        run: |
+          set -euo pipefail
+          echo "Xcode instalados en esta máquina:"
+          ELEGIDO=""
+          MAYOR=0
+          for X in /Applications/Xcode*.app; do
+            [ -d "$X" ] || continue
+            V="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$X/Contents/Info.plist" 2>/dev/null || echo 0)"
+            echo "  - $X → $V"
+            N="${V%%.*}"
+            case "$N" in ''|*[!0-9]*) N=0 ;; esac
+            if [ "$N" -gt "$MAYOR" ]; then MAYOR="$N"; ELEGIDO="$X"; fi
+          done
+          if [ "$MAYOR" -lt 26 ]; then
+            echo "::error::Esta máquina no tiene Xcode 26, y Apple no admite compilaciones con nada anterior. Hay que cambiar la imagen del runner por una más nueva."
+            exit 1
+          fi
+          sudo xcode-select -s "$ELEGIDO/Contents/Developer"
+          xcodebuild -version
+
       - name: Traer el repositorio
         uses: actions/checkout@v4
 

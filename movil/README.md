@@ -36,8 +36,15 @@ vez cada muchos meses.
 | Nombre | UNIK Works |
 | Identificador | `com.unikdi.repasos` |
 | Versión | 1.0 |
-| Mínimo | iPhone con iOS 13 o superior |
+| Mínimo | iPhone con iOS 15.6 o superior |
+| Dispositivos | Solo iPhone (en un iPad se instala igual, se ve como en un iPhone) |
 | Qué abre | `https://repasos.unikdi.com` |
+
+Lo de **solo iPhone** no es un capricho: Apple obliga a que toda app que
+se declare para iPad se pueda poner de lado y en media pantalla junto a
+otra. El diseño está hecho a lo alto y de lado no se sostiene, así que
+la app se declara de iPhone y en el iPad funciona igual, a pantalla de
+iPhone. De paso, la ficha de la tienda solo pide capturas de iPhone.
 
 El identificador **tiene que ser exactamente el mismo** que el que crees
 en Apple. Si prefieres otro, dilo antes de crear nada y lo cambio en un
