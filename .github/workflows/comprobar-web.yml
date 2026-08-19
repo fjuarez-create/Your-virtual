@@ -25,6 +25,7 @@ jobs:
           for u in \
             "index.html" \
             "css/app.css" \
+            "assets/fonts/neue-haas-display-light.woff2" \
             "assets/fonts/inter-tight-latin-400-normal.woff2" \
             "assets/fonts/inter-tight-latin-500-normal.woff2" \
             "assets/fonts/inter-tight-latin-600-normal.woff2" \
@@ -37,8 +38,8 @@ jobs:
             echo -n "   primeros bytes: "
             head -c 8 /tmp/f | od -c | head -1
           done
-          echo "── @font-face dentro del css publicado:"
-          curl -sL "$BASE/css/app.css" | grep -o "font-family: 'Inter Tight';" | wc -l
+          echo "── la letra de la casa dentro del css publicado:"
+          curl -sL "$BASE/css/app.css" | grep -c "Neue Haas Grotesk Display Pro"
           echo "── versión sellada del sw publicado:"
           curl -sL "$BASE/sw.js" | grep -o "const VERSION = '[^']*'" | head -1
           echo "── piezas nuevas dentro del js publicado (hojaFecha y hojaOficios):"
