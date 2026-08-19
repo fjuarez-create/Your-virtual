@@ -416,7 +416,7 @@ export function exigeExplicacion(tarea, nuevo) {
  * reglas, y volver a pendiente no hace falta demostrarlo.
  */
 export function exigeFotos(tarea, nuevo) {
-  return !!tarea && nuevo === 'resuelta';
+  return !!tarea && (nuevo === 'resuelta' || nuevo === 'verificada');
 }
 
 /* ─── Hilo de la tarea ────────────────────────────────────────── */

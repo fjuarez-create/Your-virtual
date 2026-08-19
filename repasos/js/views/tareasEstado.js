@@ -188,7 +188,12 @@ export async function render({ promoId, estadoId = 'resuelta' }) {
         // pasar: rellena el hueco sin hacerse pasar por el remate.
         oficioObj: o,
         foto: x.foto,
-        alPinchar: () => ir(`#/l/${x.tarea.listaId}/t/${x.tarea.id}`),
+        alPinchar: () => {
+          // De dónde venía, para volver aquí al verificar y seguir
+          // bajando por la lista sin dar atrás cada vez.
+          try { sessionStorage.setItem('lista-tareas-desde', `#/tareas/${estadoId}`); } catch { /* modo privado */ }
+          ir(`#/l/${x.tarea.listaId}/t/${x.tarea.id}`);
+        },
       });
     }));
   };

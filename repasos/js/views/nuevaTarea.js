@@ -74,10 +74,15 @@ export async function render({ promoId, unidadId }) {
     ]),
   }, icon('trash'));
 
+  // Dos fotos y ni una más, como pidió Fran: una tarea es un remate
+  // concreto, y a la cuarta foto quien la lee ya no sabe cuál mirar.
+  const TOPE = 2;
   const meter = async (ficheros) => {
+    const hueco = TOPE - fotos.length;
+    if (hueco <= 0) { toast('Dos fotos es el tope de una tarea', 'err'); return; }
     toast('Preparando…');
     let fallos = 0;
-    for (const f of [...ficheros]) {
+    for (const f of [...ficheros].slice(0, hueco)) {
       try { fotos.push(await media.prepararImagen(f)); } catch { fallos++; }
     }
     if (fallos) toast(`${fallos} ${fallos === 1 ? 'foto no se pudo leer' : 'fotos no se pudieron leer'}`, 'err');
@@ -106,7 +111,7 @@ export async function render({ promoId, unidadId }) {
 
   const selVilla = selecto(u.nombre, '', 'caretAbajo', async () => {
     const otras = unidades(promoId);
-    menuFlotante((cerrar) => otras.slice(0, 50).map((x) => filaMenu('casa', x.nombre, () => {
+    menuFlotante((cerrar) => otras.slice(0, 50).map((x) => filaMenu(null, x.nombre, () => {
       cerrar(); villa = x; refrescarSelectos();
     })), { conX: true });
   });
@@ -139,6 +144,9 @@ export async function render({ promoId, unidadId }) {
     repasar();
   };
 
+  const botonMas = h('button.d-fantasma', { onclick: () => hojaFotoAcciones(meter) },
+    icon('plus'), 'Añadir otra foto');
+
   const area = h('textarea.d-area', { placeholder: 'Mensaje...', autocapitalize: 'sentences' });
   area.addEventListener('input', () => repasar());
 
@@ -148,7 +156,10 @@ export async function render({ promoId, unidadId }) {
   // estaba delante del remate: la foto es lo único que no se puede
   // reconstruir después.
   const guardarBtn = h('button.d-boton-negro', { disabled: true }, 'Guardar tarea');
-  const repasar = () => { guardarBtn.disabled = !(zona && gremio && area.value.trim() && fotos.length); };
+  const repasar = () => {
+    guardarBtn.disabled = !(zona && gremio && area.value.trim() && fotos.length);
+    botonMas.disabled = fotos.length >= TOPE;
+  };
 
   guardarBtn.addEventListener('click', async () => {
     if (guardarBtn.disabled) return;
@@ -196,9 +207,8 @@ export async function render({ promoId, unidadId }) {
       campo('Fecha límite', false, selFecha),
       campo('Descripción', true, area),
 
-      h('p.d-epigrafe', null, 'Imágenes o video adicionales'),
-      h('button.d-fantasma', { onclick: () => hojaFotoAcciones(meter) },
-        icon('plus'), 'Añadir multimedia'),
+      h('p.d-epigrafe', null, 'Segunda foto (opcional)'),
+      botonMas,
 
       h('div.d-pie-placa', null, guardarBtn),
     ],

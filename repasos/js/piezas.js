@@ -647,8 +647,16 @@ export function menuFlotante(construir, { conX = true } = {}) {
   return cerrar;
 }
 
-/** Una fila del menú flotante: icono topo, rótulo y su acción. */
+/**
+ * Una fila del menú flotante: icono topo, rótulo y su acción.
+ *
+ * Sin icono (`filaMenu(null, ...)`) la fila se alinea a la izquierda.
+ * Es para las listas donde todas las filas serían el mismo dibujo —las
+ * cincuenta viviendas, por ejemplo—: repetir la misma casita cincuenta
+ * veces no distingue nada y roba el sitio por el que se lee.
+ */
 export function filaMenu(icono, rotulo, accion) {
+  if (!icono) return h('button.d-hoja-fila.suelta', { onclick: accion }, rotulo);
   return h('button.d-hoja-fila', { onclick: accion }, icon(icono), rotulo);
 }
 
@@ -664,11 +672,24 @@ export function filaMenuFichero(cerrar, extra, icono, rotulo, onElegir) {
  * La hoja de «Hacer foto / Seleccionar de la galería» del Figma.
  * Llama a `onElegir(ficheros)` con lo elegido, venga de donde venga.
  */
-export function hojaFotoAcciones(onElegir) {
+/**
+ * De dónde sale una foto. De serie, SOLO de la cámara.
+ *
+ * La foto de una tarea no es una ilustración: es la prueba de que
+ * alguien estuvo delante del remate. Con el carrete abierto, marcar
+ * treinta tareas desde la oficina un viernes por la tarde es cuestión
+ * de minutos, y entonces el porcentaje de la obra deja de significar
+ * nada. Quien de verdad necesite adjuntar algo de antes —un plano, el
+ * detalle de otro día— lo pone en el hilo de la tarea, que para eso
+ * está y ahí sí se abre la galería.
+ */
+export function hojaFotoAcciones(onElegir, { conGaleria = false } = {}) {
   menuFlotante((cerrar) => [
     filaMenuFichero(cerrar, { capture: 'environment' }, 'camera', 'Hacer foto', onElegir),
-    filaMenuFichero(cerrar, {}, 'image', 'Seleccionar de la galería', onElegir),
-  ]);
+    conGaleria
+      ? filaMenuFichero(cerrar, {}, 'image', 'Seleccionar de la galería', onElegir)
+      : null,
+  ].filter(Boolean));
 }
 
 /**
@@ -967,8 +988,8 @@ export function hojaFiltroTareas({ vivienda = '', oficios = [], viviendas = [], 
     const rotuloVivienda = () => viviendas.find((v) => v.id === elegida)?.nombre || 'Todas las viviendas';
     const selector = h('button.d-carta-selector', {
       onclick: () => menuFlotante((cerrar) => [
-        filaMenu('casa', 'Todas las viviendas', () => { cerrar(); elegida = ''; refrescar(); }),
-        ...viviendas.map((v) => filaMenu('casa', v.nombre, () => { cerrar(); elegida = v.id; refrescar(); })),
+        filaMenu(null, 'Todas las viviendas', () => { cerrar(); elegida = ''; refrescar(); }),
+        ...viviendas.map((v) => filaMenu(null, v.nombre, () => { cerrar(); elegida = v.id; refrescar(); })),
       ], { conX: true }),
     }, h('span', null, rotuloVivienda()), icon('caretAbajo'));
 

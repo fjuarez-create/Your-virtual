@@ -2057,7 +2057,7 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 .d-velo {
   position: fixed; inset: 0; z-index: 70; background: rgba(0, 0, 0, .2);
   -webkit-backdrop-filter: blur(7px); backdrop-filter: blur(7px);
-  display: grid; place-items: center; padding: 15px;
+  display: grid; place-items: center; padding: 16px;
 }
 .d-modal {
   width: min(344px, 100%); background: var(--d-fondo); border-radius: 12px;
@@ -2080,13 +2080,16 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
   align-items: center; gap: 22px;
   padding: 16px 16px calc(env(safe-area-inset-bottom) + 24px);
 }
-.d-hoja-acciones-menu { width: min(344px, 100%); background: #fcfcfc; border-radius: 12px; overflow: hidden; }
+.d-hoja-acciones-menu { width: min(100%, 480px); background: #fcfcfc; border-radius: 12px; overflow: hidden; }
 .d-hoja-fila {
   width: 100%; height: 55px; background: none;
   display: flex; align-items: center; justify-content: center; gap: 10px;
   font: 500 16px var(--d-font); color: var(--d-tinta); cursor: pointer;
 }
 .d-hoja-fila + .d-hoja-fila { border-top: 1px solid #ececec; }
+/* Sin icono, el rótulo manda y se alinea a la izquierda: en la lista de
+   viviendas todas llevarían la misma casita y no distingue nada. */
+.d-hoja-fila.suelta { justify-content: flex-start; padding: 0 16px; }
 .d-hoja-fila svg { width: 24px; height: 24px; color: var(--d-beige-tinta); }
 .d-hoja-acciones-x {
   width: 66px; height: 66px; border-radius: 999px; background: #fcfcfc;
@@ -2186,7 +2189,11 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
    «Seleccionar» que pasa de gris a topo ── */
 .d-velo.abajo { place-items: end center; padding-bottom: calc(env(safe-area-inset-bottom) + 20px); }
 .d-carta {
-  width: min(344px, 100%); max-height: calc(100dvh - 110px);
+  /* Dieciséis de cada lado, sea cual sea el móvil: los pone el velo con
+     su relleno, así que aquí basta con ocuparlo entero. Estaba clavado
+     a 344 —el ancho del Figma, que dibuja sobre una pantalla de 375— y
+     en un iPhone grande eso dejaba más de cuarenta de aire por lado. */
+  width: min(100%, 480px); max-height: calc(100dvh - 110px);
   background: var(--d-fondo); border-radius: 12px;
   display: flex; flex-direction: column; overflow: hidden;
   font-family: var(--d-font); font-weight: 500; color: var(--d-tinta);
@@ -2325,3 +2332,43 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
   background: var(--d-beige-tinta); color: #fff;
   font: 500 16px/24px var(--d-font);
 }
+
+/* ═══ La ficha de una tarea ═══════════════════════════════════════
+   Una foto sola manda a lo ancho; dos, una debajo de otra. Nada de
+   repetir la misma imagen en una tira de miniaturas debajo de sí
+   misma, que era lo que hacía antes.
+   ═══════════════════════════════════════════════════════════════ */
+.d-creada { font-size: 16px; color: var(--d-gris); margin: 4px 0 12px; }
+.d-fotos-tarea { display: flex; flex-direction: column; gap: 12px; }
+.d-foto-tarea {
+  position: relative; width: 100%; border-radius: 5px; overflow: hidden;
+  background: #e9e9e9; aspect-ratio: 351 / 352; cursor: pointer;
+}
+/* Con dos, cada una ocupa menos alto: las dos tienen que caber de un
+   vistazo, que es de lo que va enseñar el antes y el después. */
+.d-fotos-tarea .d-foto-tarea:nth-child(2),
+.d-fotos-tarea .d-foto-tarea:first-child:not(:only-child) { aspect-ratio: 351 / 246; }
+.d-foto-tarea img, .d-foto-tarea video { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* La de relleno: la del oficio, apagada y con su letrero, para que no
+   se lea como si fuera el remate. */
+.d-foto-tarea.generica {
+  background: #e9e9e9 center/cover no-repeat; cursor: default;
+  display: grid; place-items: center; color: var(--d-gris); filter: grayscale(.35);
+}
+.d-foto-aviso { font-size: 13px; color: var(--d-gris); margin: -4px 2px 0; }
+/* La descripción, con el alto que le da el diseño: la caja no encoge
+   hasta el texto, para que la pantalla no baile según lo larga que sea
+   la frase de cada tarea. */
+.pantalla-diseno .d-caja { min-height: 112px; border-radius: 16px; }
+.d-foto-tarea .d-foto-papelera { position: absolute; right: 12px; bottom: 12px; }
+
+.d-chips-tarea { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 4px; }
+/* La fecha límite, en oscuro y solo para mirarla. */
+.d-chip.tarea.fecha { background: #454545; color: #fff; gap: 8px; }
+.d-chip.tarea.fecha svg { width: 20px; height: 20px; }
+
+/* Los dos botones de la dirección facultativa: verde da por bueno,
+   rojo devuelve a la obra. */
+.d-boton-negro.verde { background: var(--d-verde); }
+.d-boton-negro.verde:disabled { background: #d9d9d9; }
+.d-boton-negro.rojo { background: var(--d-rojo); margin-top: 10px; }
