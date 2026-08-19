@@ -190,8 +190,15 @@ export async function render({ promoId, estadoId = 'resuelta' }) {
         foto: x.foto,
         alPinchar: () => {
           // De dónde venía, para volver aquí al verificar y seguir
-          // bajando por la lista sin dar atrás cada vez.
-          try { sessionStorage.setItem('lista-tareas-desde', `#/tareas/${estadoId}`); } catch { /* modo privado */ }
+          // bajando por la lista sin dar atrás cada vez. Se apunta con
+          // la tarea a la que pertenece: si no, el rastro se queda
+          // pegado y la siguiente tarea que se abra desde la ficha de
+          // una vivienda acabaría soltando a quien la verifica en esta
+          // lista, que no es de donde venía.
+          try {
+            sessionStorage.setItem('lista-tareas-desde',
+              JSON.stringify({ tareaId: x.tarea.id, ruta: `#/tareas/${estadoId}` }));
+          } catch { /* modo privado */ }
           ir(`#/l/${x.tarea.listaId}/t/${x.tarea.id}`);
         },
       });

@@ -216,8 +216,15 @@ export async function render({ listaId, tareaId }) {
    * vivienda.
    */
   const volverALaLista = () => {
-    const desde = sessionStorage.getItem('lista-tareas-desde');
-    ir(desde && desde.startsWith('#/tareas/') ? desde : rutaVilla);
+    let desde = null;
+    try {
+      const rastro = JSON.parse(sessionStorage.getItem('lista-tareas-desde') || 'null');
+      // Solo vale si lo dejó esta misma tarea al abrirse: un rastro de
+      // otra es un rastro viejo, y llevaría a una lista de la que quien
+      // está aquí no viene.
+      if (rastro?.tareaId === t.id && String(rastro.ruta).startsWith('#/tareas/')) desde = rastro.ruta;
+    } catch { /* si no se puede leer, a la vivienda */ }
+    ir(desde || rutaVilla);
   };
 
   const bloqueAccion = [];

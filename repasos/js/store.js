@@ -399,25 +399,12 @@ export async function cambiarEstado(tareaId, nuevo, nota = {}) {
   return actualizada;
 }
 
-/** Rechazar siempre exige explicación; lo demás, no. */
-export function exigeExplicacion(tarea, nuevo) {
-  return !!tarea && nuevo === 'rechazada' && tarea.estado !== 'rechazada';
-}
-
-/**
- * Dar una tarea por completada exige enseñar la reparación.
- *
- * Es la regla que sostiene todo lo demás: sin foto, «completada» es la
- * palabra de alguien contra la de nadie, y quien tiene que verificarla
- * se planta en la vivienda sin saber qué va a encontrarse. Con una
- * basta para activar el botón; el tope son diez.
- *
- * Solo al entrar en `resuelta`. Verificar y rechazar tienen sus propias
- * reglas, y volver a pendiente no hace falta demostrarlo.
- */
-export function exigeFotos(tarea, nuevo) {
-  return !!tarea && (nuevo === 'resuelta' || nuevo === 'verificada');
-}
+/* Las dos reglas que sostienen todo esto —completar y verificar exigen
+   foto, rechazar exige explicación— ya no viven aquí: las aplica la
+   ficha de la tarea, que es la única pantalla desde la que se cambia un
+   estado, y las aplica encendiendo o apagando el botón. Tenerlas
+   además en un par de funciones que no llamaba nadie solo servía para
+   que un día alguien tocara la copia equivocada. */
 
 /* ─── Hilo de la tarea ────────────────────────────────────────── */
 export async function comentariosDeTarea(tareaId) {
