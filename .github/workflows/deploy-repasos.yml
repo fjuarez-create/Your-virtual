@@ -152,15 +152,24 @@ jobs:
             echo "lftp ya está en la imagen: $(lftp --version | head -1)"
             exit 0
           fi
+          # Primero, instalar SIN actualizar la lista de paquetes: la
+          # imagen del runner ya la trae y lo que se cuelga es el
+          # «update», no el «install». Esto salvó el despliegue del día
+          # que los espejos estuvieron caídos cuatro minutos y medio.
+          if timeout 120 sudo apt-get install -y -qq lftp; then
+            echo "lftp instalado con la lista que ya traía la imagen."
+            exit 0
+          fi
+          echo "No estaba en la lista de la imagen; toca actualizarla." >&2
           for intento in 1 2 3; do
             echo "Instalando lftp (intento $intento de 3)…"
-            if timeout 90 sudo apt-get update -qq \
-               && timeout 90 sudo apt-get install -y -qq lftp; then
+            if timeout 120 sudo apt-get update -qq \
+               && timeout 120 sudo apt-get install -y -qq lftp; then
               echo "lftp instalado."
               exit 0
             fi
             echo "Ha fallado o se ha colgado; se reintenta." >&2
-            sleep $((intento * 5))
+            sleep $((intento * 10))
           done
           echo "No se ha podido instalar lftp tras tres intentos." >&2
           exit 1
