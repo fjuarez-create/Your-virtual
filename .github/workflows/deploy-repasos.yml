@@ -102,6 +102,37 @@ jobs:
           # config.php lo crea el instalador y vive solo en el servidor.
           rm -f publish/api/config.php publish/api/config.example.php
 
+          # La cuenta temporal para la revisión de Apple. La contraseña
+          # nunca pasa por el repositorio —es público— ni por ninguna
+          # conversación: va de los secretos de GitHub a este fichero y
+          # de ahí al servidor, por el mismo camino que el FTP.
+          #
+          # Es un .php porque el servidor los ejecuta y jamás los sirve
+          # como texto; un .json colgando de api/ se podría pedir desde
+          # el navegador y leer la contraseña.
+          #
+          # Si los secretos no están, el fichero no se escribe y el paso
+          # de limpieza lo retira del servidor: la cuenta se desactiva
+          # sola en el siguiente arranque.
+          if [ -n "${REVISION_EMAIL:-}" ] && [ -n "${REVISION_PASSWORD:-}" ]; then
+            php -r '
+              $f = "publish/api/revision-cuenta.php";
+              $d = [
+                "email"    => getenv("REVISION_EMAIL"),
+                "password" => getenv("REVISION_PASSWORD"),
+                "nombre"   => getenv("REVISION_NOMBRE") ?: "Revisión de Apple",
+                "empresa"  => getenv("REVISION_EMPRESA") ?: "DO — Arquitecto",
+              ];
+              file_put_contents($f,
+                "<?php\n// Generado por el despliegue. NO está en el repositorio.\nreturn "
+                . var_export($d, true) . ";\n");
+            '
+            php -l publish/api/revision-cuenta.php > /dev/null
+            echo "Cuenta de revisión: se publica (${REVISION_EMAIL})."
+          else
+            echo "Cuenta de revisión: sin secretos, no se publica."
+          fi
+
           # actualizar.php ya no hace falta arriba: el esquema se pone al
           # día solo. Ni él ni el instalador piden contraseña, así que
           # dejarlos publicados sería dejar dos puertas abiertas.
@@ -118,6 +149,10 @@ jobs:
           find publish -type f | wc -l
         env:
           PRIMERA: ${{ inputs.primera_instalacion }}
+          REVISION_EMAIL: ${{ secrets.REVISION_EMAIL }}
+          REVISION_PASSWORD: ${{ secrets.REVISION_PASSWORD }}
+          REVISION_NOMBRE: ${{ secrets.REVISION_NOMBRE }}
+          REVISION_EMPRESA: ${{ secrets.REVISION_EMPRESA }}
 
       - name: Comprobar que no viaja ningún secreto
         env:
@@ -132,8 +167,29 @@ jobs:
               exit 1
             fi
           done
-          if grep -rIl --exclude-dir=assets -E "password'\s*=>\s*'[^']+'" publish/api 2>/dev/null | grep -q .; then
+          # revision-cuenta.php queda fuera de este barrido a propósito y
+          # es la ÚNICA excepción: ese fichero existe justo para llevar
+          # una contraseña al servidor, viene de los secretos de GitHub y
+          # nunca está en el repositorio. Se comprueba aparte, abajo.
+          if grep -rIl --exclude-dir=assets --exclude=revision-cuenta.php \
+               -E "password'\s*=>\s*'[^']+'" publish/api 2>/dev/null | grep -q .; then
             echo "Hay credenciales en los ficheros a publicar." >&2
+            exit 1
+          fi
+
+          # Y que la excepción sea de verdad lo que dice ser: un PHP que
+          # devuelve un array y no imprime nada. Si algún día alguien lo
+          # convirtiera en un .json o le metiera un echo, la contraseña
+          # se podría leer desde el navegador.
+          if [ -f publish/api/revision-cuenta.php ]; then
+            head -1 publish/api/revision-cuenta.php | grep -q '^<?php' \
+              || { echo "revision-cuenta.php no empieza por <?php: se serviría como texto." >&2; exit 1; }
+            [ -z "$(php -r 'include "publish/api/revision-cuenta.php";')" ] \
+              || { echo "revision-cuenta.php imprime algo: filtraría la contraseña." >&2; exit 1; }
+            echo "La cuenta de revisión viaja como PHP mudo, correcto."
+          fi
+          if ls publish/api/*.json > /dev/null 2>&1; then
+            echo "Hay ficheros .json colgando de api/: se servirían como texto." >&2
             exit 1
           fi
           echo "Sin credenciales ni páginas de instalación en la carpeta de publicación."

@@ -200,7 +200,18 @@ case "$QUE" in
       exit 1
     fi
 
-    for f in actualizar.php install.php; do
+    # revision-cuenta.php entra en la lista solo cuando el despliegue NO
+    # lo ha generado, o sea cuando se han quitado los secretos. Eso es lo
+    # que cierra la cuenta de la revisión de Apple: se borra el fichero
+    # del servidor y, al siguiente arranque, la cuenta se desactiva sola.
+    A_RETIRAR="actualizar.php install.php"
+    if [ -f publish/api/revision-cuenta.php ]; then
+      echo "la cuenta de revisión sigue publicada (hay secretos)"
+    else
+      A_RETIRAR="$A_RETIRAR revision-cuenta.php"
+    fi
+
+    for f in $A_RETIRAR; do
       if ! printf '%s\n' "$EN_API" | grep -qx "$f"; then
         echo "no estaba  api/$f"
         continue
@@ -211,8 +222,14 @@ case "$QUE" in
       if [ -z "$QUEDA" ] || printf '%s\n' "$QUEDA" | grep -qx "$f"; then
         echo "" >&2
         echo "NO he podido quitar api/$f del servidor." >&2
-        echo "Esa página crea usuarios y enseña sus contraseñas sin pedir nada," >&2
-        echo "y está publicada. Bórrala a mano por FTP antes de seguir." >&2
+        if [ "$f" = revision-cuenta.php ]; then
+          echo "Ese fichero lleva la contraseña de la cuenta de revisión de Apple," >&2
+          echo "y mientras siga ahí la cuenta se queda abierta." >&2
+        else
+          echo "Esa página crea usuarios y enseña sus contraseñas sin pedir nada," >&2
+          echo "y está publicada." >&2
+        fi
+        echo "Bórralo a mano por FTP antes de seguir." >&2
         exit 1
       fi
       echo "retirado   api/$f"

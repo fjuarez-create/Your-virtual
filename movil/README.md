@@ -90,6 +90,33 @@ Esa clave hace falta la semana que viene, cuando enchufemos las
 notificaciones de verdad. Va del bloc de notas a los secretos de
 GitHub, sin pasar por ninguna conversación.
 
+### 1 ter. La cuenta para el revisor de Apple
+
+Apple exige una cuenta con la que su revisor pueda entrar y ver la
+aplicación por dentro. Se crea sola, sin tocar nada: en
+**Settings → Secrets and variables → Actions** del repositorio, añade
+
+| Secreto | Valor |
+|---|---|
+| `REVISION_EMAIL` | el correo de la cuenta |
+| `REVISION_PASSWORD` | su contraseña |
+
+y al siguiente despliegue la cuenta existe y entra. Le pone permiso de
+dirección facultativa, para que el revisor vea también los botones de
+verificar y de rechazar, que son la mitad de la aplicación.
+
+Esos dos datos son los que van luego en App Store Connect, en
+**Información de revisión de la app → Inicio de sesión obligatorio**.
+
+**Cuando Apple valide la app, borra los dos secretos.** Al siguiente
+despliegue el fichero desaparece del servidor y la cuenta se desactiva
+sola. No hay que acordarse de nada más.
+
+La contraseña no está en el repositorio ni en ninguna conversación: va
+de tus secretos al servidor por el mismo camino que las credenciales
+del FTP. El repositorio es público, y una contraseña escrita ahí queda
+publicada para siempre aunque se borre después.
+
 ### 2. Rellenar la ficha de la tienda
 
 En `movil/tienda/` tienes los textos ya escritos para copiar y pegar:

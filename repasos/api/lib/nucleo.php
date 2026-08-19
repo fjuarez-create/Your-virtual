@@ -67,6 +67,12 @@ function bd(): PDO
         // ninguna página después de publicar.
         require_once __DIR__ . '/esquema.php';
         esquema_al_dia($pdo);
+
+        // Y la cuenta temporal de la revisión de Apple, si el despliegue
+        // dejó su fichero. Cuando ya está como toca no toca la base de
+        // datos: compara una huella y se va.
+        require_once __DIR__ . '/revision.php';
+        revision_al_dia($pdo);
     }
     return $pdo;
 }
