@@ -396,10 +396,14 @@ export async function render({ promoId, unidadId }) {
           ]),
         }, icon('trash')) : null,
       );
+      // Al quitar la foto hay que poner otra: una tarea sin foto no sale
+      // de aquí. Si esta marca no vale, se elimina la propuesta entera,
+      // que para eso está su botón; lo que no se puede es mandar a la
+      // obra un remate que nadie va a saber reconocer.
       const reponer = () => menuFlotante((cerrar) => [
         filaMenuFichero(cerrar, { capture: 'environment', multiple: false }, 'camera', 'Hacer foto', cambiarFoto),
         filaMenuFichero(cerrar, { multiple: false }, 'image', 'Seleccionar de la galería', cambiarFoto),
-        filaMenu('corazon', 'Conservar', () => { cerrar(); f.sinFoto = true; pintarFichas(); }),
+        filaMenu('corazon', 'Conservar la que había', cerrar),
       ], { conX: false });
       const cambiarFoto = async (ficheros) => {
         try {

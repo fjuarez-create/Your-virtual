@@ -42,7 +42,7 @@ export async function render({ promoId, unidadId }) {
         onclick: () => hojaFotoAcciones(meter),
       }, h('div', { style: { textAlign: 'center' } },
         icon('camera', 30),
-        h('p', { style: { marginTop: '8px', fontSize: '14px' } }, 'Añade una foto del remate'))));
+        h('p', { style: { marginTop: '8px', fontSize: '14px' } }, 'Añade una foto del remate (obligatoria)'))));
       return;
     }
     const [primera, ...resto] = fotos;
@@ -143,8 +143,12 @@ export async function render({ promoId, unidadId }) {
   area.addEventListener('input', () => repasar());
 
   /* ─── Guardar ─── */
+  // La foto es obligatoria, como los otros cuatro campos. Una tarea sin
+  // foto obliga a quien la lee a fiarse de una frase, y quien la escribe
+  // estaba delante del remate: la foto es lo único que no se puede
+  // reconstruir después.
   const guardarBtn = h('button.d-boton-negro', { disabled: true }, 'Guardar tarea');
-  const repasar = () => { guardarBtn.disabled = !(zona && gremio && area.value.trim()); };
+  const repasar = () => { guardarBtn.disabled = !(zona && gremio && area.value.trim() && fotos.length); };
 
   guardarBtn.addEventListener('click', async () => {
     if (guardarBtn.disabled) return;

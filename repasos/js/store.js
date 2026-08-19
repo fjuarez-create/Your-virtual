@@ -976,6 +976,45 @@ export async function tareasDeUnidad(unidadId) {
  * que pertenecen: en un listado mezclado, «rodapié sin sellar» no dice
  * nada si no se sabe de qué villa es.
  */
+/**
+ * Todas las tareas de una promocion, con lo que necesita el listado de
+ * la obra: de que vivienda son, quien las dejo en su estado actual,
+ * cuando fue eso y su foto.
+ *
+ * Se leen los medios de una vez y se cruzan en memoria. Preguntar la
+ * foto tarea por tarea son cientos de idas a la base, y esta pantalla
+ * se abre desde la portada: tiene que estar puesta antes de que el
+ * dedo llegue a la pantalla.
+ */
+export async function tareasDeLaObra(promoId) {
+  const listas = (await db.getAll('listas'))
+    .filter((l) => !l.borrada && (!promoId || l.promoId === promoId));
+  const donde = new Map(listas.map((l) => [l.id, l.unidadId]));
+  const tareas = (await db.getAll('tareas')).filter((t) => !t.borrada && donde.has(t.listaId));
+
+  // La portada de cada tarea: la marcada como tal, o su primera imagen.
+  const medios = (await db.getAll('medios')).filter((m) => !m.borrada && m.tipo === 'imagen');
+  const porTarea = new Map();
+  const porId = new Map();
+  for (const m of medios) {
+    porId.set(m.id, m);
+    if (!porTarea.has(m.tareaId)) porTarea.set(m.tareaId, m);
+  }
+
+  return tareas.map((t) => {
+    const elegida = (t.portadaId && porId.get(t.portadaId)) || porTarea.get(t.id);
+    return {
+      tarea: t,
+      unidadId: donde.get(t.listaId),
+      // Cuando paso a estar como esta: es lo que ordena la lista y lo
+      // que dice cuanto lleva esperando el visto bueno.
+      cuando: t.estadoEn || t.actualizado || t.creado,
+      quien: t.estadoPor || t.creadoPorNombre || '',
+      foto: elegida ? urlDeMedio(elegida) : '',
+    };
+  });
+}
+
 export async function tareasRecientes(n = 12, { promoId = null } = {}) {
   const listas = (await db.getAll('listas'))
     .filter((l) => !l.borrada && (!promoId || l.promoId === promoId));

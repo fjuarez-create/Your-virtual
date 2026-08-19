@@ -890,3 +890,134 @@ export function tarjetaVilla({ titulo, cuando, caras = [], hechas, total, pct, a
   );
 }
 
+
+/**
+ * La fecha de una tarea en el listado, con el formato del diseño:
+ * hoy y ayer con la hora, este año día y mes abreviado con la hora, y
+ * los años anteriores día, mes y año. La hora de una tarea de hace dos
+ * anos no le importa a nadie; la de esta manana, si.
+ */
+export function cuandoTarea(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const hoy = new Date();
+  const ayer = new Date(hoy); ayer.setDate(hoy.getDate() - 1);
+  if (d.toDateString() === hoy.toDateString()) return `Hoy, ${hora(iso)}`;
+  if (d.toDateString() === ayer.toDateString()) return `Ayer, ${hora(iso)}`;
+  if (d.getFullYear() === hoy.getFullYear()) return `${d.getDate()} ${MESES_CORTOS[d.getMonth()]}, ${hora(iso)}`;
+  return `${d.getDate()} ${MESES_CORTOS[d.getMonth()]}, ${d.getFullYear()}`;
+}
+
+/**
+ * La tarjeta de una tarea en los listados de la obra: misma caja
+ * blanca con mordisco que la de vivienda, pero con la fecha y la cara
+ * de quien la dejo asi arriba, el texto grande, los chips de vivienda y
+ * oficio, y la foto del remate asomando por la esquina.
+ *
+ * La foto no es decoracion: es lo que mira el arquitecto para decidir
+ * sin entrar. Por eso ocupa el mismo sitio que el anillo de avance en
+ * la otra tarjeta, que es donde el ojo ya sabe que hay algo.
+ */
+export function tarjetaTarea({ cuando, quien, titulo, villa, oficioObj, foto, alPinchar }) {
+  const bola = h('span.d-tarjeta-foto');
+  if (foto) {
+    bola.style.backgroundImage = `url("${foto}")`;
+  } else if (oficioObj) {
+    // Sin foto propia, la cara del oficio: su imagen si la tiene y, si
+    // no, su inicial en color. Un circulo gris vacio en la esquina se
+    // lee como que la app no ha cargado bien.
+    bola.append(caraDeGremio(oficioObj, 55));
+  }
+  return h('button.d-tarjeta.d-tarea-fila', { onclick: alPinchar },
+    h('span.d-mordida'),
+    h('span.d-mordida-esquina'),
+    h('div.d-tarjeta-cab', null,
+      h('span', null, cuando),
+      quien ? h('span.d-tarjeta-caras', null, avatar(quien, { tam: 36 })) : null,
+    ),
+    h('div.d-tarjeta-titulo', null, titulo),
+    h('div.d-tarjeta-pie', null,
+      h('span.d-chip.tarea', null, villa),
+      oficioObj ? h('span.d-chip.tarea', null, oficioObj.nombre) : null,
+    ),
+    bola,
+  );
+}
+
+/**
+ * La hoja «Filtrar tareas»: arriba la vivienda —una sola— y debajo los
+ * oficios, que se marcan varios.
+ *
+ * Solo se ofrece lo que existe. Si no queda nada de pladur, pladur no
+ * sale: un filtro que lleva a una lista vacia es una promesa rota, y en
+ * obra se traduce en «esto no funciona».
+ *
+ * @param {object} p
+ * @param {string} p.vivienda      unidadId elegida, o '' para todas
+ * @param {string[]} p.oficios     ids de oficio marcados
+ * @param {Array} p.viviendas      [{id, nombre}] con tareas en este estado
+ * @param {Array} p.oficiosLibres  [{id, nombre}] con tareas en este estado
+ * @returns {Promise<{vivienda: string, oficios: string[]}|null>} null si se cierra
+ */
+export function hojaFiltroTareas({ vivienda = '', oficios = [], viviendas = [], oficiosLibres = [] }) {
+  return new Promise((resolve) => {
+    let elegida = vivienda;
+    const marcados = new Set(oficios);
+
+    const rotuloVivienda = () => viviendas.find((v) => v.id === elegida)?.nombre || 'Todas las viviendas';
+    const selector = h('button.d-carta-selector', {
+      onclick: () => menuFlotante((cerrar) => [
+        filaMenu('casa', 'Todas las viviendas', () => { cerrar(); elegida = ''; refrescar(); }),
+        ...viviendas.map((v) => filaMenu('casa', v.nombre, () => { cerrar(); elegida = v.id; refrescar(); })),
+      ], { conX: true }),
+    }, h('span', null, rotuloVivienda()), icon('caretAbajo'));
+
+    const boton = h('button', { onclick: () => { cerrar(); resolve({ vivienda: elegida, oficios: [...marcados] }); } }, 'Aplicar filtros');
+
+    const refrescar = () => {
+      selector.querySelector('span').textContent = rotuloVivienda();
+      // Se puede aplicar cuando hay algo que aplicar, y tambien cuando
+      // se quita todo teniendo filtros puestos: quitarlos es aplicar.
+      const hayAlgo = !!elegida || marcados.size > 0;
+      const habia = !!vivienda || oficios.length > 0;
+      boton.disabled = !hayAlgo && !habia;
+      lista.querySelectorAll('.d-marcable-circulo').forEach((c) => {
+        c.classList.toggle('marcado', marcados.has(c.dataset.oficio));
+        c.replaceChildren(marcados.has(c.dataset.oficio) ? icon('check', 18) : '');
+      });
+    };
+
+    const fila = (o) => {
+      const circulo = h('span.d-marcable-circulo', { 'data-oficio': o.id });
+      return h('button.d-marcable', {
+        onclick: () => {
+          if (marcados.has(o.id)) marcados.delete(o.id);
+          else marcados.add(o.id);
+          refrescar();
+        },
+      }, caraDeGremio(o, 36), h('span.d-marcable-rotulo', null, o.nombre), circulo);
+    };
+
+    const lista = h('div.d-carta-lista', null,
+      h('div.d-marcable.cabecera', null, h('span.d-marcable-rotulo', null, 'Oficios')),
+      ...oficiosLibres.map(fila),
+    );
+
+    const carta = h('div.d-carta.tareas', null,
+      h('div.d-carta-cab', null,
+        h('span', null, 'Filtrar tareas'),
+        h('button.x', { 'aria-label': 'Cerrar', onclick: () => { cerrar(); resolve(null); } }, icon('x')),
+      ),
+      h('div.d-carta-selector-caja', null, selector),
+      lista,
+      h('div.d-carta-pie', null, boton),
+    );
+
+    const velo = h('div.d-velo.abajo', {
+      onclick: (ev) => { if (ev.target === velo) { cerrar(); resolve(null); } },
+    }, carta);
+    const cerrar = () => velo.remove();
+    document.body.append(velo);
+    refrescar();
+  });
+}

@@ -2218,3 +2218,92 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 .d-calendario .dia.fuera { color: #d9d9d9; }
 .d-calendario .dia.hoy { color: var(--d-beige-tinta); }
 .d-calendario .dia.elegido { background: var(--d-beige-tinta); color: #fff; }
+
+/* ═══ La lista de tareas de la obra ═══════════════════════════════
+   Las cuatro pastillas de la portada llegan aqui: la misma pantalla
+   con un estado u otro. La tarjeta es la de vivienda —mismo mordisco,
+   misma altura— cambiando el anillo de avance por la foto del remate.
+   ═══════════════════════════════════════════════════════════════ */
+.d-fila-filtro { display: flex; align-items: center; gap: 8px; margin: 12px 0; }
+.d-selector-estado {
+  flex: 1; height: 48px; padding: 0 16px; border-radius: 9999px;
+  background: #fff; border: 0; cursor: pointer;
+  display: flex; align-items: center; justify-content: space-between;
+  font: 500 16px/24px var(--d-font); color: var(--d-tinta); text-align: left;
+}
+.d-selector-estado svg { width: 24px; height: 24px; color: var(--d-gris); flex: none; }
+.d-bola-embudo {
+  width: 56px; height: 56px; flex: none; border-radius: 999px;
+  background: #fff; border: 0; cursor: pointer; display: grid; place-items: center;
+  color: var(--d-gris);
+}
+.d-bola-embudo svg { width: 24px; height: 24px; }
+
+/* La foto del remate, en la esquina que muerde la tarjeta. */
+.d-tarjeta-foto {
+  position: absolute; right: -1px; bottom: 0; width: 55px; height: 55px;
+  border-radius: 999px; overflow: hidden;
+  background: #e9e9e9 center/cover no-repeat;
+}
+.d-tarjeta-foto .gremio-cara { border-radius: 999px; width: 55px; height: 55px; font-size: 20px; }
+.d-tarea-fila .d-tarjeta-cab { color: var(--d-gris); }
+.d-chip.tarea {
+  padding: 10px 12px; font-size: 16px; line-height: 24px;
+  background: #f0f0f0; color: var(--d-tinta); gap: 0;
+}
+
+/* Los filtros aplicados: pastillas beige y la X en topo. */
+.d-filtros-tareas { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.d-filtros-tareas .pastilla {
+  height: 48px; padding: 0 15px; border-radius: 999px;
+  background: var(--d-beige); color: var(--d-tinta);
+  display: inline-flex; align-items: center;
+  font: 500 16px/19.2px var(--d-font); letter-spacing: -0.01em;
+}
+.d-filtros-tareas .quitar {
+  width: 48px; height: 48px; border: 0; border-radius: 999px; cursor: pointer;
+  background: var(--d-beige-tinta); color: #fff; display: grid; place-items: center;
+}
+.d-filtros-tareas .quitar svg { width: 24px; height: 24px; }
+.d-cuantos-filtros {
+  font: 500 18px/24px var(--d-font); letter-spacing: -0.005em;
+  color: var(--d-tinta); margin-bottom: 11px;
+}
+
+/* La hoja de filtrar tareas: la carta de siempre con el selector de
+   vivienda arriba y el circulo en topo, como pide el diseno. */
+.d-carta-selector-caja { padding: 8px 12px; }
+.d-carta-selector {
+  width: 100%; height: 48px; padding: 0 16px; border-radius: 9999px;
+  background: #fff; border: 0; cursor: pointer;
+  display: flex; align-items: center; justify-content: space-between;
+  font: 500 16px/24px var(--d-font); color: var(--d-tinta); text-align: left;
+}
+.d-carta-selector svg { width: 24px; height: 24px; color: var(--d-gris); flex: none; }
+.d-carta.tareas .d-marcable-circulo { border-color: var(--d-beige-tinta); }
+.d-marcable.cabecera { height: 52px; cursor: default; }
+.d-marcable-rotulo { flex: 1; text-align: left; }
+
+/* La lista vacia: la ilustracion del diseno, en gris como en el Figma
+   (saturacion -1), el porque en dos lineas y la salida al pie. */
+.d-vacio { text-align: center; padding: 40px 12px 0; }
+.d-vacio img { width: 145px; height: 145px; filter: grayscale(1); }
+.d-vacio h2 {
+  margin: 24px 0 12px; font: 500 24px/32px var(--d-font);
+  letter-spacing: -0.005em; color: var(--d-tinta);
+}
+.d-vacio p {
+  margin: 0 auto; max-width: 262px;
+  font: 500 14px/20px var(--d-font); color: var(--d-gris);
+}
+/* El botón de la pantalla vacía va pegado abajo, como en el diseño:
+   la salida de una pantalla sin nada no se busca en medio del hueco. */
+.d-vacio-pie {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 3;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+}
+.d-boton-topo {
+  width: 100%; height: 48px; border: 0; border-radius: 999px; cursor: pointer;
+  background: var(--d-beige-tinta); color: #fff;
+  font: 500 16px/24px var(--d-font);
+}

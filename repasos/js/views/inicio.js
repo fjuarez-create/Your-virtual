@@ -123,7 +123,7 @@ export async function render() {
         clase: 'beige',
         rotulo: 'Tareas completadas por verificar',
         cifra: c.esperando,
-        adonde: conFiltros('#/viviendas', { estado: 'resuelta' }),
+        adonde: '#/tareas/resuelta',
       }),
 
       h('p.d-epigrafe', null, 'Tareas revisadas por la DF'),
@@ -131,13 +131,13 @@ export async function render() {
         clase: 'verde',
         rotulo: 'Tareas verificadas',
         cifra: c.hechas,
-        adonde: conFiltros('#/viviendas', { estado: 'verificada' }),
+        adonde: '#/tareas/verificada',
       }),
       banner({
         clase: 'rojo',
         rotulo: 'Tareas rechazadas',
         cifra: c.rechazadas,
-        adonde: conFiltros('#/viviendas', { estado: 'rechazada' }),
+        adonde: '#/tareas/rechazada',
       }),
 
       h('p.d-epigrafe', null, p.nombre),
@@ -148,7 +148,7 @@ export async function render() {
         hechas: c.hechas,
         total: c.total,
         pct,
-        alPinchar: () => ir('#/viviendas'),
+        alPinchar: () => ir('#/tareas/pendiente'),
       }),
 
       h('p.d-epigrafe', null, 'Comentarios y feedback'),

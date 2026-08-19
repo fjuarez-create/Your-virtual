@@ -38,6 +38,7 @@ const ARMAZON = [
   'js/views/tareas.js',
   'js/views/tarea.js',
   'js/views/nuevaTarea.js',
+  'js/views/tareasEstado.js',
   'js/views/historial.js',
   'js/views/ajustes.js',
   'js/views/usuarios.js',
@@ -49,6 +50,7 @@ const ARMAZON = [
   'assets/icons/icon-192.png',
   'assets/logo/marca-unik.png',
   'assets/logo/marca-check.png',
+  'assets/vacio/carpetas.webp',
   // Las caras de los gremios (96×96, unos pocos KB cada una): salen
   // en la hoja de filtros y en las fichas, también sin red.
   'assets/gremios/aire.webp',
