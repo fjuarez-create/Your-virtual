@@ -24,8 +24,10 @@ vez cada muchos meses.
 - Vertical y solo vertical, que es como está hecho el diseño.
 - Una pantalla propia para cuando no se llega al servidor, que dice que
   lo apuntado sigue guardado en el móvil.
-- Dos formas de compilar y subir: Xcode Cloud (más fácil) y un robot de
-  GitHub (más independiente).
+- Un robot de GitHub que compila, **se firma él solo** y sube a
+  TestFlight. Sin Mac y sin exportar ningún certificado: lo único que
+  hace falta es una clave de App Store Connect, que se saca de la web de
+  Apple en tres clics.
 
 ## Datos de la app
 
@@ -126,30 +128,65 @@ Te faltarán las **capturas de pantalla**. Apple pide como mínimo las de
 iPhone de 6,7 pulgadas. Dime cuando llegues aquí y te las genero del
 tamaño exacto.
 
-### 3. Elegir cómo se compila
+### 3. Dar de alta la API de App Store Connect y su clave
 
-**Opción A — Xcode Cloud. Es la que te recomiendo.**
+Aquí está la parte que hace que no necesites ni Mac ni certificados.
 
-Es el sistema de Apple, va incluido en tu cuenta de desarrollador y **no
-hay que exportar ni un certificado**: Apple firma la app él solo.
+**a) Pedir el permiso.** En App Store Connect →
+**Usuarios y acceso** → pestaña **Integraciones** → **API de App Store
+Connect**. Si sale un botón **Solicitar acceso**, dale. Es un permiso
+para tu organización y solo se pide una vez; suele concederse en el
+momento.
 
-En App Store Connect → tu app → pestaña **Xcode Cloud** → **Empezar**.
-Conecta el repositorio de GitHub, y cuando pregunte:
+**b) Crear la clave.** En esa misma pantalla, botón **+**:
 
-- Proyecto o espacio de trabajo: `movil/ios/App/App.xcworkspace`
-- Esquema: `App`
-- Acción: **Archive**, y marca **Enviar a TestFlight**
+- Nombre: `Robot de compilación`
+- Acceso: **App Manager** (necesita poder crear certificados y subir
+  compilaciones; con «Developer» no llega)
 
-El guion que prepara todo antes de compilar ya está puesto en el
-repositorio; Xcode Cloud lo encuentra solo.
+Al crearla te deja descargar un fichero **`.p8`**. **Solo se puede
+descargar una vez.** Guárdalo.
 
-**Opción B — el robot de GitHub.**
+**c) Apuntar los tres datos.** En la misma pantalla verás:
 
-Si prefieres no depender de Apple para compilar, está el robot
-`app-ios.yml`, que hace lo mismo desde GitHub. Necesita siete secretos
-(están explicados en la cabecera del propio fichero) y para prepararlos
-hay que exportar certificados desde un Mac. Es más trabajo la primera
-vez. Si te decides por esta, dímelo y te lo explico paso a paso.
+- El **Key ID** de la clave que acabas de crear (10 caracteres).
+- El **Issuer ID**, arriba, común a todas las claves.
+- Y en [developer.apple.com](https://developer.apple.com/account), arriba
+  a la derecha, el **Team ID** (otros 10 caracteres).
+
+**d) Ponerlo en los secretos.** En GitHub, en el repositorio →
+**Settings → Secrets and variables → Actions** → *New repository
+secret*, cuatro veces:
+
+| Secreto | Qué se pega |
+|---|---|
+| `APPSTORE_CLAVE_ID` | el Key ID |
+| `APPSTORE_EMISOR_ID` | el Issuer ID |
+| `APPSTORE_CLAVE_P8` | el contenido del `.p8` **entero** |
+| `IOS_EQUIPO` | el Team ID |
+
+Para el `.p8`: ábrelo con el Bloc de notas, selecciona todo y pega. Tiene
+que empezar por `-----BEGIN PRIVATE KEY-----`. No hay que convertirlo a
+nada.
+
+**e) Lanzar la compilación.** Dime que están puestos y la lanzo yo. O la
+lanzas tú: en GitHub, pestaña **Actions** → **Publicar la app de
+iPhone** → **Run workflow**.
+
+Tarda entre 15 y 25 minutos y la deja en TestFlight.
+
+**Lo que hace el robot por dentro**, para que sepas qué está pasando: se
+crea él mismo el certificado de distribución y el perfil, compila,
+firma, sube, y en la siguiente compilación retira el certificado de la
+anterior. Apple solo deja tener dos o tres vivos a la vez, por eso
+barre antes de sembrar. Retirar un certificado no afecta a las apps ya
+publicadas: Apple las vuelve a firmar con el suyo al distribuirlas.
+
+**Y Xcode Cloud, por qué no.** Es el sistema de Apple y sería más
+cómodo, pero el primer workflow **solo se puede crear desde Xcode, en
+un Mac**. Desde la web de App Store Connect no hay botón para empezar:
+esa pestaña solo sirve para editar workflows que ya existen. Si algún
+día tienes un Mac a mano, es una alternativa perfectamente válida.
 
 ### 4. Enviar a revisión
 

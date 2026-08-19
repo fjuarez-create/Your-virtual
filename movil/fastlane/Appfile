@@ -1,0 +1,3 @@
+# Los datos fijos de la app. Lo variable —la clave de App Store
+# Connect— llega por los secretos de GitHub, nunca desde aquí.
+app_identifier("com.unikdi.repasos")
