@@ -9,7 +9,7 @@
 2129:34627	NUEVA - RECORRIDO CON IA - FINALIZAR
 2093:25786	Detalle vivienda a medio avanzar
 2093:26070	Detalle vivienda avanzada
-2129:36657	TAREA VIENDO
+2129:36657	tarea con SOLO UNA FOTO
 2129:37602	TAREA VIENDO y escribiendo mensaje
 2129:37810	TAREA VIENDO - CUALQUIER USUARIO PUEDE COMPLETARLA
 2129:37079	Assignee
@@ -34,6 +34,7 @@
 2129:33957	Tarea - RELLENANDO A MANO
 2114:33501	Tarea - multimedia añadido
 2129:34179	Tarea - multimedia añadido
+4135:23836	tarea con mas de una foto
 2129:34669	NUEVA - RECORRIDO CON IA - VALIDAR TAREAS
 2129:35828	NUEVA - RECORRIDO CON IA - VALIDAR TAREAS elim 1
 2129:36376	NUEVA - RECORRIDO CON IA - VALIDAR TAREAS nueva foto
@@ -44,6 +45,7 @@
 2125:11553	Tarea - creando desde cero 01 - Confirmar eliminación foto
 2129:33838	Tarea - creando desde cero 01 - Confirmar eliminación foto
 2129:38466	TAREA FINALIZADA
+4135:23949	nota
 4106:19968	Badges
 4106:19970	Default
 4106:19985	Filled - Password Hidden
@@ -52,5 +54,6 @@
 4131:23154	LISTA de Tareas completadas por verificar
 4131:23172	LISTA de Tareas VACIA
 4131:23192	LISTA de Tareas filtro aplicado
+4135:23953	LISTA de Tareas filtro aplicado
 4131:23218	LISTA de Tareas: filtrando
 4131:23278	LISTA de Tareas: filtros seleccionados
