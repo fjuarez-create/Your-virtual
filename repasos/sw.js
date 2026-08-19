@@ -42,7 +42,7 @@ const ARMAZON = [
   'js/views/historial.js',
   'js/views/ajustes.js',
   'js/views/usuarios.js',
-  'assets/fonts/neue-haas-display-light.woff2',
+  'assets/fonts/neue-haas-display-roman.woff2',
   'assets/fonts/opensans-var.woff2',
   'assets/fonts/inter-tight-latin-400-normal.woff2',
   'assets/fonts/inter-tight-latin-500-normal.woff2',

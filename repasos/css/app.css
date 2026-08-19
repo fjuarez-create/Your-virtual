@@ -15,19 +15,22 @@
 }
 
 /* La letra de la casa, ya con licencia: la Neue Haas Grotesk Display
-   Pro que Fran compró, corte 45 Light, la que quiere en toda la app.
+   Pro que Fran compró, corte 55 Roman, la que quiere en toda la app.
+
+   Se probó primero con la 45 Light y en el móvil se veía más fina que
+   su propio Figma —que está hecho con esta 55—, así que volvimos a la
+   que manda el diseño.
 
    Se declara para TODOS los pesos —de 100 a 900— aunque el fichero sea
    uno solo. Así, cuando el diseño pide un 500, el navegador usa esta y
    no se inventa un engordado de la letra, que es lo que hace cuando no
    encuentra el peso pedido y deja los textos sucios.
 
-   Al lado queda la Roman (la 55, con la que está hecho el Figma): si al
-   verlo en obra la Light resulta demasiado fina a pleno sol, es cambiar
-   una línea. Inter Tight se queda detrás como red de seguridad. */
+   Al lado queda guardada la Light, por si alguna vez hiciera falta.
+   Inter Tight se queda detrás como red de seguridad. */
 @font-face {
   font-family: 'Neue Haas Grotesk Display Pro';
-  src: url('../assets/fonts/neue-haas-display-light.woff2') format('woff2');
+  src: url('../assets/fonts/neue-haas-display-roman.woff2') format('woff2');
   font-weight: 100 900;
   font-style: normal;
   font-display: swap;
