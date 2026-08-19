@@ -77,6 +77,12 @@ cuenta facilitada por la promotora.
 Primera versión.
 ```
 
+## Correo de contacto
+
+```
+info@unikdi.com
+```
+
 ## URL de soporte
 
 ```

@@ -1,7 +1,13 @@
 /* La pantalla de entrada del rediseño 2026, calcada del Figma: la
-   marca UNIK CHECK en dos imágenes a un cuarto de pantalla, los campos
+   marca UNIK WORKS en dos imágenes a un cuarto de pantalla, los campos
    en pastilla blanca con el ojo para ver la contraseña, el error en
    rojo, el botón negro y el pie abajo del todo.
+
+   El «WORKS» está dibujado con la Neue Haas Roman 55, la tipografía de
+   la aplicación. El «UNIK» de encima es el original y su letra tiene el
+   trazo algo más grueso, así que se leen ligeramente distintos; el día
+   que llegue el «WORKS» exportado del Figma solo hay que reemplazar la
+   imagen y aquí no se toca nada.
 
    Con backend pide correo y contraseña; sin él (modo local, útil para
    probar antes de publicar) basta con el nombre de quien va a firmar
@@ -19,7 +25,7 @@ export async function render() {
       h('div.d-entrar', null,
         h('div.d-entrar-marca', null,
           h('img', { src: 'assets/logo/marca-unik.png', alt: 'UNIK' }),
-          h('img', { src: 'assets/logo/marca-check.png', alt: 'CHECK' }),
+          h('img', { src: 'assets/logo/marca-works.png', alt: 'WORKS' }),
         ),
         api.HAY_SERVIDOR ? formularioServidor() : formularioLocal(),
         h('p.d-entrar-pie', null, '2026 Unik Desarrollos Inmobiliarios, S.L.'),
