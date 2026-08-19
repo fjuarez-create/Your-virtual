@@ -19,7 +19,7 @@
 2129:36942	TAREA EDITANDO
 4122:22655	TAREA EDITANDO - AÑADIR FECHA
 2129:38279	TAREA EDITANDO - añado fotos
-5:12139	Splash Screen
+5:12139	Splash Screen OK
 2070:15536	HOME técnicos y propiedad
 2070:15747	HOME personal de constructora
 2075:10806	Viviendas Inacabadas v1
