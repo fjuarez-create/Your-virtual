@@ -153,13 +153,32 @@ case "$QUE" in
     ;;
 
   subir)
+    # Las páginas sueltas de la raíz —la de privacidad hoy, las que
+    # vengan mañana— se suben todas, sin lista escrita a mano. La de
+    # privacidad se quedó en tierra el día que se escribió porque aquí
+    # solo estaban nombrados el manifiesto y el .htaccess, y una página
+    # que Apple exige leer no puede depender de que alguien se acuerde.
+    #
+    # index.html no va aquí: sube el último, en «arranque», junto al
+    # service worker, para que ningún navegador se encuentre el índice
+    # nuevo antes que el código nuevo.
+    PAGINAS=""
+    for f in publish/*.html; do
+      [ -e "$f" ] || continue
+      n=$(basename "$f")
+      [ "$n" = index.html ] && continue
+      PAGINAS="$PAGINAS
+      put \"publish/$n\" -o \"$n\";"
+      echo "página suelta: $n"
+    done
+
     lanzar "$OPC" "cd \"$DIR\";
       mirror -R --transfer-all --delete --no-perms -v publish/css css;
       mirror -R --transfer-all --delete --no-perms -v publish/js js;
       mirror -R --transfer-all --delete --no-perms -v publish/assets assets;
       mirror -R --transfer-all --no-perms -v publish/api api;
       put publish/manifest.webmanifest -o manifest.webmanifest;
-      put publish/.htaccess -o .htaccess;"
+      put publish/.htaccess -o .htaccess;$PAGINAS"
     ;;
 
   limpiar)
@@ -212,7 +231,11 @@ case "$QUE" in
     lanzar "$OPC" "cd \"$DIR\"; cls -1" 2>/dev/null | sed 's/^/  /'
 
     fallos=0
-    for f in index.html sw.js manifest.webmanifest css/app.css js/app.js js/store.js \
+    # privacidad.html entra en la lista a propósito: es la página que
+    # Apple tiene que poder leer para dejar la app en la tienda. Si un
+    # día deja de subir, que se entere el despliegue y no el revisor.
+    for f in index.html sw.js manifest.webmanifest privacidad.html \
+             css/app.css js/app.js js/store.js \
              api/index.php api/lib/nucleo.php assets/fonts/opensans-var.woff2; do
       if [ "$(contar_remoto "$f")" -ge 1 ]; then
         echo "ok     $f"
