@@ -99,11 +99,21 @@ Esa clave hace falta la semana que viene, cuando enchufemos las
 notificaciones de verdad. Va del bloc de notas a los secretos de
 GitHub, sin pasar por ninguna conversación.
 
-### 1 ter. La cuenta para el revisor de Apple
+### 1 ter. La cuenta para el revisor de Apple — HECHA A MANO
 
-Apple exige una cuenta con la que su revisor pueda entrar y ver la
-aplicación por dentro. Se crea sola, sin tocar nada: en
-**Settings → Secrets and variables → Actions** del repositorio, añade
+**Esto ya está resuelto: Fran creó la cuenta del revisor él mismo desde
+la propia aplicación.** No hace falta poner ningún secreto ni lanzar
+ningún despliegue por este motivo.
+
+Lo que sigue queda escrito por si algún día conviene que la cuenta se
+cree y se retire sola —por ejemplo, para no dejarla viva entre revisión
+y revisión—. Mientras no existan los dos secretos, el mecanismo no hace
+absolutamente nada: ni crea, ni toca, ni desactiva ninguna cuenta.
+
+<details>
+<summary>Cómo sería si se quisiera automática</summary>
+
+En **Settings → Secrets and variables → Actions** del repositorio, añade
 
 | Secreto | Valor |
 |---|---|
@@ -126,14 +136,17 @@ de tus secretos al servidor por el mismo camino que las credenciales
 del FTP. El repositorio es público, y una contraseña escrita ahí queda
 publicada para siempre aunque se borre después.
 
+</details>
+
 ### 2. Rellenar la ficha de la tienda
 
 En `movil/tienda/` tienes los textos ya escritos para copiar y pegar:
 descripción, novedades, palabras clave y la política de privacidad.
 
-Te faltarán las **capturas de pantalla**. Apple pide como mínimo las de
-iPhone de 6,7 pulgadas. Dime cuando llegues aquí y te las genero del
-tamaño exacto.
+Las **capturas de pantalla** están en `movil/tienda/capturas/`, ya con
+la medida exacta (1290 × 2796). Al ser la app solo de iPhone, no se
+piden capturas de iPad. Si prefieres las tuyas hechas con la obra de
+verdad, mándamelas y te las dejo del tamaño que exige Apple.
 
 ### 3. Dar de alta la API de App Store Connect y su clave
 
