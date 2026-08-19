@@ -79,7 +79,10 @@ jobs:
         run: |
           set -eu
           rm -rf publish && mkdir publish
-          cp index.html sw.js manifest.webmanifest .htaccess publish/
+          # Todas las páginas sueltas de la raíz, no solo el index: la de
+          # privacidad se quedó sin subir el día que se escribió porque
+          # aquí había una lista a mano y nadie se acordó de añadirla.
+          cp *.html sw.js manifest.webmanifest .htaccess publish/
           cp -r css js assets publish/
 
           mkdir -p publish/api

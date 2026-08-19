@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  Los permisos especiales que la app le pide a iOS.
+
+	  De momento solo uno: poder recibir notificaciones. Va en
+	  «production» porque esta app solo se compila para la tienda y
+	  para TestFlight, que es lo mismo. Si algún día alguien la
+	  depura enchufando el iPhone al Mac, ahí hay que poner
+	  «development» mientras dure la prueba.
+	-->
+	<key>aps-environment</key>
+	<string>production</string>
+</dict>
+</plist>

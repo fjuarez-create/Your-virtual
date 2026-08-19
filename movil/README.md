@@ -62,6 +62,34 @@ En [appstoreconnect.apple.com](https://appstoreconnect.apple.com) →
   → **Identifiers** → **+** → **App IDs** → **App**, con ese mismo texto.
 - SKU: `unik-repasos` (es un código interno tuyo, da igual cuál).
 
+Al registrar el App ID, en la lista larga de **Capabilities** hay que
+marcar **una sola**: **Push Notifications**. Todas las demás se quedan
+sin marcar: son para cosas que esta app no hace (Apple Pay, iCloud,
+HealthKit, CarPlay…). La cámara y el micrófono no están en esa lista
+porque no son capacidades: van dentro de la app y ya están puestos.
+
+Si al marcar Push Notifications sale un botón **Configure**, no hay que
+tocarlo: eso es el sistema antiguo de certificados. El nuevo es la
+clave del paso siguiente.
+
+### 1 bis. Crear la clave de notificaciones
+
+En [developer.apple.com](https://developer.apple.com/account/resources/authkeys)
+→ **Keys** → **+**:
+
+- Key Name: `Notificaciones UNIK repasos`
+- Marca **Apple Push Notifications service (APNs)**
+- **Continue** → **Register**
+
+Sale un fichero `.p8` para descargar. **Solo se puede descargar una
+vez**: guárdalo en tu bloc de notas junto al **Key ID** (10 caracteres)
+que aparece en la misma pantalla. Si se pierde, no se recupera: hay que
+revocar la clave y crear otra.
+
+Esa clave hace falta la semana que viene, cuando enchufemos las
+notificaciones de verdad. Va del bloc de notas a los secretos de
+GitHub, sin pasar por ninguna conversación.
+
 ### 2. Rellenar la ficha de la tienda
 
 En `movil/tienda/` tienes los textos ya escritos para copiar y pegar:
@@ -121,14 +149,14 @@ rechazo frecuente y conviene saberlo antes de enviar.
 - Está pensada para el móvil de arriba abajo, no es una web de
   ordenador encogida.
 
-**Lo que la haría segura del todo:** las notificaciones. Una app que
-avisa al jefe de obra de que tiene tres tareas rechazadas ya no se
-parece en nada a una página web. Necesita trabajo en el servidor y no
-está en esta primera versión.
+**Y las notificaciones**, que son las que rematan el argumento. Una app
+que avisa al jefe de obra de que tiene tres tareas rechazadas ya no se
+parece en nada a una página web.
 
-Si Apple rechaza la primera, lo normal es que pidan justo eso. Se
-responde por el mismo panel, se añaden las notificaciones y se vuelve a
-enviar.
+El envoltorio ya viene preparado para ellas: el permiso está declarado
+en `App.entitlements` y el plugin instalado. Lo que falta es el trabajo
+del servidor —guardar el aparato de cada persona y mandar el aviso— y
+la parte de la web que pide permiso. Eso llega en la siguiente tanda.
 
 ---
 
