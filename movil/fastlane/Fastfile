@@ -26,6 +26,12 @@ default_platform(:ios)
 
 RUTA_PROYECTO = "ios/App"
 IDENTIFICADOR = "com.unikdi.repasos"
+# El Team ID vive en el Appfile porque no es un secreto. Se puede pisar
+# con IOS_EQUIPO si algún día hiciera falta otro.
+# El `to_s.empty?` importa: si el secreto no existe, GitHub pasa la
+# variable vacía en vez de no pasarla, y un `fetch` con valor por
+# defecto se quedaría con la cadena vacía.
+EQUIPO = ENV["IOS_EQUIPO"].to_s.empty? ? "M8KKGDT273" : ENV["IOS_EQUIPO"]
 
 platform :ios do
   desc "Compila y sube a TestFlight. No envía a revisión."
@@ -125,9 +131,9 @@ platform :ios do
       export_options: {
         provisioningProfiles: { IDENTIFICADOR => perfil },
         signingStyle: "manual",
-        teamID: ENV.fetch("IOS_EQUIPO")
+        teamID: EQUIPO
       },
-      xcargs: "DEVELOPMENT_TEAM=#{ENV.fetch('IOS_EQUIPO')} " \
+      xcargs: "DEVELOPMENT_TEAM=#{EQUIPO} " \
               "PROVISIONING_PROFILE_SPECIFIER='#{perfil}' " \
               "CODE_SIGN_STYLE=Manual",
       silent: false,

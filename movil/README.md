@@ -147,23 +147,25 @@ momento.
 Al crearla te deja descargar un fichero **`.p8`**. **Solo se puede
 descargar una vez.** Guárdalo.
 
-**c) Apuntar los tres datos.** En la misma pantalla verás:
+**c) Apuntar dos datos.** En la misma pantalla verás:
 
 - El **Key ID** de la clave que acabas de crear (10 caracteres).
 - El **Issuer ID**, arriba, común a todas las claves.
-- Y en [developer.apple.com](https://developer.apple.com/account), arriba
-  a la derecha, el **Team ID** (otros 10 caracteres).
+
+El Team ID no hace falta apuntarlo: ya está puesto en
+`movil/fastlane/Appfile`. No es un secreto —viaja dentro de cada app
+publicada en la App Store y sale a la vista en la web de Apple, al lado
+del nombre de la empresa—, así que guardarlo aparte solo añadía un paso.
 
 **d) Ponerlo en los secretos.** En GitHub, en el repositorio →
 **Settings → Secrets and variables → Actions** → *New repository
-secret*, cuatro veces:
+secret*, tres veces:
 
 | Secreto | Qué se pega |
 |---|---|
 | `APPSTORE_CLAVE_ID` | el Key ID |
 | `APPSTORE_EMISOR_ID` | el Issuer ID |
 | `APPSTORE_CLAVE_P8` | el contenido del `.p8` **entero** |
-| `IOS_EQUIPO` | el Team ID |
 
 Para el `.p8`: ábrelo con el Bloc de notas, selecciona todo y pega. Tiene
 que empezar por `-----BEGIN PRIVATE KEY-----`. No hay que convertirlo a

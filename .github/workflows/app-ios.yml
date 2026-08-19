@@ -20,10 +20,10 @@ name: Publicar la app de iPhone
 # movil/fastlane/Fastfile.
 #
 # Secretos necesarios (Settings → Secrets and variables → Actions).
-# Los cuatro salen de la web de Apple y se copian y pegan tal cual:
+# Los tres salen de la clave de App Store Connect y se copian y pegan
+# tal cual. El Team ID no está aquí porque no es un secreto: vive en
+# movil/fastlane/Appfile.
 #
-#   IOS_EQUIPO           el Team ID (10 caracteres), arriba a la derecha
-#                        en developer.apple.com
 #   APPSTORE_CLAVE_ID    el Key ID de la clave de App Store Connect
 #   APPSTORE_EMISOR_ID   el Issuer ID, en la misma página
 #   APPSTORE_CLAVE_P8    el contenido del fichero .p8, pegado entero,
@@ -57,13 +57,11 @@ jobs:
     steps:
       - id: repaso
         env:
-          EQUIPO: ${{ secrets.IOS_EQUIPO }}
           CLAVE_ID: ${{ secrets.APPSTORE_CLAVE_ID }}
           EMISOR: ${{ secrets.APPSTORE_EMISOR_ID }}
           CLAVE_P8: ${{ secrets.APPSTORE_CLAVE_P8 }}
         run: |
           FALTAN=""
-          [ -z "$EQUIPO" ]   && FALTAN="$FALTAN IOS_EQUIPO"
           [ -z "$CLAVE_ID" ] && FALTAN="$FALTAN APPSTORE_CLAVE_ID"
           [ -z "$EMISOR" ]   && FALTAN="$FALTAN APPSTORE_EMISOR_ID"
           [ -z "$CLAVE_P8" ] && FALTAN="$FALTAN APPSTORE_CLAVE_P8"
@@ -76,7 +74,7 @@ jobs:
               echo ""
               for s in $FALTAN; do echo "- \`$s\`"; done
               echo ""
-              echo "Los cuatro salen de la web de Apple y se copian y pegan tal cual."
+              echo "Los tres salen de la clave de App Store Connect que creaste en la web de Apple."
               echo "Está explicado paso a paso en \`movil/README.md\`."
             } >> "$GITHUB_STEP_SUMMARY"
           else
@@ -149,7 +147,6 @@ jobs:
       - name: Firmar, compilar y subir a TestFlight
         working-directory: movil
         env:
-          IOS_EQUIPO: ${{ secrets.IOS_EQUIPO }}
           APPSTORE_CLAVE_ID: ${{ secrets.APPSTORE_CLAVE_ID }}
           APPSTORE_EMISOR_ID: ${{ secrets.APPSTORE_EMISOR_ID }}
           APPSTORE_CLAVE_P8: ${{ secrets.APPSTORE_CLAVE_P8 }}
