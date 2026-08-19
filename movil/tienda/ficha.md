@@ -135,12 +135,24 @@ debería salir en cada subida.
 
 ## Las capturas de pantalla
 
-Apple pide como mínimo el juego de iPhone de 6,7 pulgadas
-(1290 × 2796 px). Las genero yo con datos de ejemplo cuando llegues a
-este paso. Las que enseñaría, por este orden:
+**Ya están hechas**, en `movil/tienda/capturas/`. Son cinco, de
+1290 × 2796 px, que es la medida que pide Apple para el iPhone grande y
+la única que hace falta: la app es solo de iPhone, así que no pide
+capturas de iPad.
 
-1. Viviendas, con los anillos de avance.
-2. Una vivienda por dentro, con sus repasos.
-3. Una tarea con su foto y el botón de completarla.
-4. La lista de tareas por estado.
-5. El informe en PDF.
+Se suben en App Store Connect → la versión 1.0 → **Capturas de
+pantalla**, arrastrando las cinco de golpe. Van en este orden:
+
+| Fichero | Qué se ve |
+|---|---|
+| `1-inicio.jpg` | El día de un vistazo: por verificar, verificadas y rechazadas |
+| `2-viviendas.jpg` | Las viviendas de la promoción con su anillo de avance |
+| `3-vivienda.jpg` | Una vivienda por dentro, con sus repasos |
+| `4-tarea.jpg` | Un repaso con su foto, su vivienda y su oficio |
+| `5-pendientes.jpg` | Las tareas pendientes de toda la promoción |
+
+Están hechas con los datos de ejemplo del banco de pruebas, no con los
+de Brassie: en la tienda no aparece nada real de la obra.
+
+Si algún día cambia el diseño y hay que rehacerlas, se vuelven a
+generar solas; dilo y te las dejo actualizadas.
