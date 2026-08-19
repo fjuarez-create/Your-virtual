@@ -16,6 +16,7 @@ import { h, icon, toast } from '../ui.js';
 import * as store from '../store.js';
 import * as api from '../api.js';
 import { ir } from '../app.js';
+import { abrirPagina } from '../piezas.js';
 
 export async function render() {
   return {
@@ -28,7 +29,15 @@ export async function render() {
           h('img', { src: 'assets/logo/marca-works.png', alt: 'WORKS' }),
         ),
         api.HAY_SERVIDOR ? formularioServidor() : formularioLocal(),
-        h('p.d-entrar-pie', null, '2026 Unik Desarrollos Inmobiliarios, S.L.'),
+        // La privacidad tiene que poder leerse sin haber entrado: es lo
+        // que mira el revisor de Apple, y quien no tenga cuenta también
+        // tiene derecho a saber qué se guarda aquí.
+        h('p.d-entrar-pie', null,
+          h('button.d-entrar-enlace', { type: 'button', onclick: () => abrirPagina('privacidad.html') }, 'Privacidad'),
+          ' · ',
+          h('button.d-entrar-enlace', { type: 'button', onclick: () => abrirPagina('soporte.html') }, 'Soporte'),
+          h('span.d-entrar-firma', null, '2026 Unik Desarrollos Inmobiliarios, S.L.'),
+        ),
       ),
     ],
   };

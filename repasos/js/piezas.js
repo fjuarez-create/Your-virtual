@@ -700,6 +700,25 @@ export function hojaFotoAcciones(onElegir, { conGaleria = false } = {}) {
  */
 export const bandeja = { fotos: [] };
 
+/**
+ * Abre una de las páginas sueltas del servidor —privacidad, soporte—
+ * sin echar a nadie de la aplicación.
+ *
+ * Apple obliga (norma 5.1.1) a que la política de privacidad se pueda
+ * leer DENTRO de la app, no solo en la ficha de la tienda; sin eso
+ * rechazan la publicación. Dentro del envoltorio de iPhone se abre en
+ * la ventanita del sistema, que se cierra y devuelve donde estabas; en
+ * el navegador, en una pestaña aparte. Lo que no puede pasar es que la
+ * página sustituya a la aplicación, porque en el móvil no hay flecha
+ * de volver y quien entre se queda encerrado ahí.
+ */
+export function abrirPagina(ruta) {
+  const url = new URL(ruta, location.href).href;
+  const navegador = window.Capacitor?.Plugins?.Browser;
+  if (navegador?.open) { navegador.open({ url }); return; }
+  window.open(url, '_blank', 'noopener');
+}
+
 /** Flecha «>» del final de las píldoras. */
 export function chevron() {
   const svg = icon('chevron');

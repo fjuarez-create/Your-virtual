@@ -4,7 +4,7 @@ import { h, icon, sheet, toast, confirmSheet, avatar, pesoLegible } from '../ui.
 import * as store from '../store.js';
 import * as api from '../api.js';
 import * as db from '../db.js';
-import { barraSync, chevron, cabeceraTab, cabeceraDentro, hojaFoto, ctaAccion, ctaCancelar } from '../piezas.js';
+import { barraSync, chevron, cabeceraTab, cabeceraDentro, hojaFoto, ctaAccion, ctaCancelar, abrirPagina } from '../piezas.js';
 import * as ejemplos from '../ejemplos.js';
 import { PROMOCIONES } from '../catalog.js';
 import { usaIA, ponerUsaIA } from '../ajustesLocales.js';
@@ -116,6 +116,17 @@ export async function render() {
           oido?.puesta ? `Puesta · termina en ${oido.final}` : 'Sin poner · lo que digas no se transcribe',
           () => hojaClaveOido(oido)),
       ) : null,
+
+      // Estas dos filas no son adorno: Apple exige que la política de
+      // privacidad se pueda leer desde dentro de la aplicación, y la
+      // página de soporte es la que enseña a quién escribir.
+      h('div.d-grupo', null,
+        h('p.d-grupo-titulo', null, 'Legal'),
+        item('periodico', 'Privacidad', 'Qué se guarda, quién lo ve y cuánto tiempo',
+          () => abrirPagina('privacidad.html')),
+        item('hilo', 'Soporte', 'Cómo pedir ayuda o dar de alta a alguien',
+          () => abrirPagina('soporte.html')),
+      ),
 
       h('div.d-grupo', null,
         item('logout', 'Cerrar sesión', null, () => cerrarSesion(), { rojo: true, derecha: h('span') }),
