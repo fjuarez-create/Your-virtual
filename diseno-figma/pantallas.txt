@@ -49,3 +49,8 @@
 4106:19985	Filled - Password Hidden
 4106:20000	Error  State
 4106:20017	Filled - Password Show
+4131:23154	LISTA de Tareas completadas por verificar
+4131:23172	LISTA de Tareas VACIA
+4131:23192	LISTA de Tareas filtro aplicado
+4131:23218	LISTA de Tareas: filtrando
+4131:23278	LISTA de Tareas: filtros seleccionados
