@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>es</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>es</string>
+	</array>
+	<key>CFBundleDisplayName</key>
+	<string>UNIK repasos</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+
+	<!-- La app solo puede navegar a su propio dominio. Es lo que hace
+	     falta para que el service worker funcione dentro de la app
+	     (sin esto, iOS lo desactiva y se pierde el arranque sin
+	     cobertura), y de paso cierra la puerta a que un enlace saque
+	     a nadie de la aplicación sin querer. -->
+	<key>WKAppBoundDomains</key>
+	<array>
+		<string>repasos.unikdi.com</string>
+	</array>
+
+	<!-- Los permisos del móvil. iOS enseña estas frases tal cual, así
+	     que están escritas para que las lea Fran, no un programador:
+	     dicen para qué se pide cada cosa y no cuentan de más. -->
+	<key>NSCameraUsageDescription</key>
+	<string>Para hacer las fotos de los repasos y de las tareas terminadas. Las fotos se quedan en la aplicación y solo las ve el equipo de la obra.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Para grabar notas de voz y los recorridos de las viviendas, y poder dejar dicho lo que no da tiempo a escribir en obra.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Para adjuntar en el hilo de una tarea una foto que ya tengas en el carrete: un plano, un detalle de otro día o un correo.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Para guardar en el carrete las fotos y los informes que descargues de la aplicación.</string>
+
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
+	<key>UIMainStoryboardFile</key>
+	<string>Main</string>
+	<key>UIRequiredDeviceCapabilities</key>
+	<array>
+		<string>arm64</string>
+	</array>
+
+	<!-- Solo vertical: la app se usa con una mano andando por la
+	     vivienda, y el diseño entero está hecho a lo alto. -->
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+	</array>
+	<key>UIViewControllerBasedStatusBarAppearance</key>
+	<true/>
+
+	<!-- La app no lleva cifrado propio: solo habla por HTTPS, que es
+	     de lo que Apple exime. Declarándolo aquí, cada subida se
+	     ahorra el cuestionario de exportación. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+</dict>
+</plist>

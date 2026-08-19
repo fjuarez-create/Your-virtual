@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>UNIK repasos</title>
+  <style>
+    /* Esta pantalla vive dentro de la app, no en la web: es lo único
+       que se ve cuando el móvil no llega al servidor. Por eso no
+       depende de nada de fuera —ni fuente, ni imagen, ni hoja de
+       estilos—: si dependiera, tampoco cargaría. */
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh;
+      display: grid; place-items: center;
+      padding: 32px 28px calc(32px + env(safe-area-inset-bottom));
+      background: #f5f5f5; color: #000;
+      font: 500 16px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      text-align: center;
+    }
+    .caja { max-width: 340px; }
+    .bola {
+      width: 72px; height: 72px; margin: 0 auto 24px;
+      border-radius: 999px; background: #d6cabc;
+      display: grid; place-items: center;
+    }
+    h1 { font-size: 24px; line-height: 32px; margin: 0 0 10px; font-weight: 500; }
+    p { color: #8c8c8c; margin: 0 0 26px; }
+    button {
+      width: 100%; height: 48px; border: 0; border-radius: 999px;
+      background: #000; color: #fff; font: 500 16px/1 inherit;
+      -webkit-appearance: none;
+    }
+    button:active { opacity: .85; }
+  </style>
+</head>
+<body>
+  <div class="caja">
+    <div class="bola" aria-hidden="true">
+      <svg width="32" height="32" viewBox="0 0 256 256" fill="#736b5c">
+        <path d="M53.9,34.6A8,8,0,1,0,42.1,45.4L61.3,66.5C25,88.8,7.9,120.9,7.1,122.4a8,8,0,0,0,0,7.2c.3.6,8.2,15.7,25.5,30.9C54.1,179.4,81,190,112,190a127.4,127.4,0,0,0,37.3-5.4l22.8,25.1a8,8,0,1,0,11.8-10.8ZM128,158a30,30,0,0,1-30-30,29.6,29.6,0,0,1,2.9-12.8l39.9,43.9A29.7,29.7,0,0,1,128,158Z"/>
+      </svg>
+    </div>
+    <h1>No se llega al servidor</h1>
+    <p>Puede ser la cobertura de la obra o que la aplicación esté un momento en mantenimiento. Lo que tengas apuntado sin subir sigue guardado en el móvil.</p>
+    <button onclick="location.replace('https://repasos.unikdi.com')">Volver a intentarlo</button>
+  </div>
+</body>
+</html>

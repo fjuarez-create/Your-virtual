@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Privacidad · UNIK repasos</title>
+<meta name="description" content="Qué datos guarda UNIK repasos, para qué y durante cuánto tiempo.">
+<link rel="icon" href="assets/icons/favicon.svg" type="image/svg+xml">
+<style>
+  /* Esta página la lee el revisor de Apple sin haber entrado en la
+     aplicación, así que no depende de nada: ni de la sesión, ni del
+     service worker, ni de una hoja de estilos de fuera. */
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: #f5f5f5; color: #000;
+    font: 400 16px/1.6 'Neue Haas Grotesk Display Pro', 'Inter Tight',
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    padding: calc(env(safe-area-inset-top) + 32px) 20px
+             calc(env(safe-area-inset-bottom) + 64px);
+  }
+  main { max-width: 640px; margin: 0 auto; }
+  .marca {
+    display: inline-flex; align-items: center; gap: 12px;
+    margin-bottom: 34px; text-decoration: none; color: inherit;
+  }
+  .marca span { font-weight: 500; letter-spacing: .02em; color: #8c8c8c; font-size: 14px; }
+  h1 { font-size: 34px; line-height: 1.15; letter-spacing: -.02em; font-weight: 500; margin: 0 0 8px; }
+  .fecha { color: #8c8c8c; font-size: 14px; margin: 0 0 36px; }
+  h2 {
+    font-size: 20px; line-height: 1.3; font-weight: 500;
+    margin: 40px 0 10px; letter-spacing: -.01em;
+  }
+  p { margin: 0 0 14px; }
+  ul { margin: 0 0 14px; padding-left: 22px; }
+  li { margin-bottom: 7px; }
+  strong { font-weight: 500; }
+  .caja {
+    background: #fff; border-radius: 20px; padding: 20px 22px; margin: 22px 0;
+  }
+  .caja p:last-child { margin-bottom: 0; }
+  .destacado { background: #d6cabc; }
+  footer { margin-top: 48px; color: #8c8c8c; font-size: 14px; }
+  a { color: #064d2d; }
+</style>
+</head>
+<body>
+<main>
+  <a class="marca" href="./">
+    <svg width="34" height="34" viewBox="0 0 512 512" aria-hidden="true">
+      <rect width="512" height="512" rx="112" fill="#111112"/>
+      <path d="M150 262 L222 336 L366 182" fill="none" stroke="#9b8f7f"
+            stroke-width="46" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <span>UNIK REPASOS</span>
+  </a>
+
+  <h1>Privacidad</h1>
+  <p class="fecha">Última actualización: 19 de agosto de 2026</p>
+
+  <p>UNIK repasos es una herramienta de trabajo interna para el equipo de
+  una promoción: promotora, arquitectos, aparejador, jefes de obra y
+  subcontratas. No es una aplicación abierta al público y hace falta una
+  cuenta facilitada por la promotora para entrar.</p>
+
+  <div class="caja destacado">
+    <p><strong>Lo más corto que se puede decir:</strong> esta aplicación
+    no lleva publicidad, no lleva ninguna herramienta de medición, no
+    pide la ubicación, y no comparte nada con otras empresas. Los datos
+    que guarda son los del trabajo de la obra y solo los ve el equipo de
+    esa obra.</p>
+  </div>
+
+  <h2>Quién responde de los datos</h2>
+  <p>UNIK Diseño e Interiorismo, responsable del tratamiento. Puedes
+  ejercer los derechos que se explican más abajo escribiendo a la
+  dirección de contacto que aparece en
+  <a href="https://unikdi.com">unikdi.com</a>.</p>
+
+  <h2>Qué se guarda</h2>
+  <ul>
+    <li><strong>De tu cuenta:</strong> tu nombre, tu correo electrónico,
+    tu empresa o cargo, y tu contraseña, que se guarda cifrada y que
+    nadie —tampoco nosotros— puede leer.</li>
+    <li><strong>Del trabajo:</strong> las tareas que apuntas, sus fotos,
+    los vídeos y las notas de voz, los comentarios y los mensajes de cada
+    vivienda, y la marca de quién hizo cada cosa y cuándo.</li>
+    <li><strong>De la sesión:</strong> una cookie técnica para
+    mantenerte dentro sin volver a escribir la contraseña, y el registro
+    de los intentos de acceso fallidos, para frenar a quien pruebe
+    contraseñas a lo bruto.</li>
+  </ul>
+
+  <h2>Qué NO se guarda</h2>
+  <ul>
+    <li><strong>La ubicación.</strong> La aplicación no la pide nunca.</li>
+    <li><strong>Tus contactos, tu agenda ni tu carrete.</strong> Solo la
+    foto concreta que tú elijas adjuntar.</li>
+    <li><strong>Datos de navegación o de uso.</strong> No hay analítica,
+    ni estadísticas, ni ninguna pieza de terceros midiendo nada.</li>
+    <li><strong>Identificadores de publicidad.</strong> No hay
+    publicidad, ni la habrá.</li>
+  </ul>
+
+  <h2>Para qué se usa</h2>
+  <p>Para lo único para lo que existe la aplicación: llevar el control
+  de los repasos de las viviendas, saber qué falta, quién lo arregló y
+  quién lo dio por bueno, y poder sacar el informe de una vivienda.</p>
+  <p>Los datos <strong>no se usan para ninguna otra cosa</strong>: ni
+  para perfilar a nadie, ni para medir el rendimiento de las personas,
+  ni para cederlos a terceros.</p>
+
+  <h2>La cámara, el micrófono y el carrete</h2>
+  <p>La aplicación pide permiso para la <strong>cámara</strong> cuando
+  vas a hacer la foto de un remate, para el <strong>micrófono</strong>
+  cuando grabas una nota de voz o un recorrido, y para el
+  <strong>carrete</strong> cuando adjuntas una imagen que ya tenías.</p>
+  <p>Cada permiso se pide en el momento en que hace falta y se puede
+  denegar. Lo captado va a la tarea o al hilo de la vivienda: no se
+  manda a ningún otro sitio.</p>
+
+  <h2>Quién puede verlo</h2>
+  <p>Las personas del equipo de esa promoción que tienen cuenta. Dentro
+  del equipo, lo que cada uno puede hacer depende de su papel: la
+  constructora da los remates por completados y la dirección facultativa
+  los verifica o los rechaza.</p>
+  <p>Nadie de fuera del equipo tiene acceso. No se venden ni se ceden
+  datos a nadie.</p>
+
+  <h2>Dónde están</h2>
+  <p>En un servidor contratado por UNIK dentro de la Unión Europea. Todo
+  el tráfico entre el móvil y el servidor va cifrado con HTTPS.</p>
+  <p>Además, para que la aplicación funcione sin cobertura, una copia de
+  tus tareas y tus fotos se guarda <strong>en tu propio móvil</strong>.
+  Esa copia se borra al cerrar sesión o al desinstalar la aplicación.</p>
+
+  <h2>Cuánto tiempo</h2>
+  <p>Los datos de la obra se conservan mientras dure la promoción y
+  después el tiempo que la promotora necesite para responder de la
+  posventa y de sus obligaciones legales. Tu cuenta se conserva mientras
+  formes parte del equipo; cuando dejas de formar parte se desactiva.</p>
+  <p>Lo que ya está escrito en un acta o en un informe firmado no se
+  borra, porque es el registro de lo que se vio ese día. Ahí queda quién
+  lo apuntó, igual que en un parte de obra en papel.</p>
+
+  <h2>Tus derechos</h2>
+  <p>Puedes pedir acceder a tus datos, corregirlos, que se borren,
+  limitar u oponerte a su tratamiento, y llevártelos. Se contesta en el
+  plazo de un mes.</p>
+  <p>Si crees que no se ha hecho bien, puedes reclamar ante la Agencia
+  Española de Protección de Datos
+  (<a href="https://www.aepd.es">aepd.es</a>).</p>
+
+  <h2>Menores</h2>
+  <p>Es una herramienta profesional. No está dirigida a menores de 18
+  años ni se les crean cuentas.</p>
+
+  <h2>Cambios</h2>
+  <p>Si esto cambia, se cambia esta página y se actualiza la fecha de
+  arriba. Si el cambio fuera importante, se avisa dentro de la propia
+  aplicación.</p>
+
+  <footer>
+    <p>UNIK repasos · <a href="./">Volver a la aplicación</a></p>
+  </footer>
+</main>
+</body>
+</html>

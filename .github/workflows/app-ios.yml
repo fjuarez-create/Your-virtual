@@ -1,0 +1,222 @@
+name: Publicar la app de iPhone
+
+# Compila la app de iOS y la sube a App Store Connect, para que aparezca
+# en TestFlight. NO la envía a revisión: eso lo hace Fran desde la web de
+# Apple cuando quiera, con un botón.
+#
+# La app es un envoltorio: por dentro abre repasos.unikdi.com. Así, cada
+# mejora de la web llega sola a todos los móviles y no hay que volver a
+# pasar por la tienda. Solo hay que volver a compilar y subir cuando
+# cambie algo del propio envoltorio (un permiso nuevo del móvil, el
+# icono, las notificaciones).
+#
+# Secretos necesarios (Settings → Secrets and variables → Actions).
+# Todos van del bloc de notas de Fran a los secretos de GitHub, sin
+# pasar por ninguna conversación:
+#
+#   IOS_EQUIPO                 el Team ID de Apple (10 caracteres)
+#   IOS_CERTIFICADO_P12        el certificado de distribución, en base64
+#   IOS_CERTIFICADO_CLAVE      la contraseña de ese certificado
+#   IOS_PERFIL                 el perfil de aprovisionamiento, en base64
+#   APPSTORE_CLAVE_ID          el Key ID de la clave de App Store Connect
+#   APPSTORE_EMISOR_ID         el Issuer ID de App Store Connect
+#   APPSTORE_CLAVE_P8          el fichero .p8 de esa clave, en base64
+#
+# En movil/README.md está explicado paso a paso de dónde sale cada uno.
+#
+# Si vas por Xcode Cloud, este robot no hace falta para nada: ahí firma
+# Apple y no hay que sacar ningún certificado de ningún sitio.
+
+# Se dispara al empujar su fichero-señal, igual que los otros robots.
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/uniq-repasos-app-2ja8y2]
+    paths: ['movil/LANZAR-APP-IOS.txt']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: app-ios-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Si todavía no están puestos los secretos se dice claramente y no se
+  # arranca la máquina de Apple. Es mejor eso que reventar veinte
+  # minutos después con un error de firma que no explica nada.
+  mirar-secretos:
+    runs-on: ubuntu-latest
+    outputs:
+      seguir: ${{ steps.repaso.outputs.seguir }}
+    steps:
+      - id: repaso
+        env:
+          EQUIPO: ${{ secrets.IOS_EQUIPO }}
+          CERT: ${{ secrets.IOS_CERTIFICADO_P12 }}
+          PERFIL: ${{ secrets.IOS_PERFIL }}
+          CLAVE_ID: ${{ secrets.APPSTORE_CLAVE_ID }}
+          EMISOR: ${{ secrets.APPSTORE_EMISOR_ID }}
+          CLAVE_P8: ${{ secrets.APPSTORE_CLAVE_P8 }}
+        run: |
+          FALTAN=""
+          [ -z "$EQUIPO" ]   && FALTAN="$FALTAN IOS_EQUIPO"
+          [ -z "$CERT" ]     && FALTAN="$FALTAN IOS_CERTIFICADO_P12"
+          [ -z "$PERFIL" ]   && FALTAN="$FALTAN IOS_PERFIL"
+          [ -z "$CLAVE_ID" ] && FALTAN="$FALTAN APPSTORE_CLAVE_ID"
+          [ -z "$EMISOR" ]   && FALTAN="$FALTAN APPSTORE_EMISOR_ID"
+          [ -z "$CLAVE_P8" ] && FALTAN="$FALTAN APPSTORE_CLAVE_P8"
+          if [ -n "$FALTAN" ]; then
+            echo "seguir=no" >> "$GITHUB_OUTPUT"
+            {
+              echo "## Todavía no se puede compilar la app"
+              echo ""
+              echo "Faltan estos secretos en **Settings → Secrets and variables → Actions**:"
+              echo ""
+              for s in $FALTAN; do echo "- \`$s\`"; done
+              echo ""
+              echo "Están explicados paso a paso en \`movil/README.md\`."
+              echo "Si vas por Xcode Cloud, este robot no hace falta."
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "seguir=si" >> "$GITHUB_OUTPUT"
+            echo "Secretos completos: se compila." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  compilar:
+    needs: mirar-secretos
+    if: needs.mirar-secretos.outputs.seguir == 'si'
+    runs-on: macos-14
+    timeout-minutes: 45
+
+    steps:
+      - name: Traer el repositorio
+        uses: actions/checkout@v4
+
+      - name: Preparar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Instalar lo que necesita el envoltorio
+        working-directory: movil
+        run: npm ci
+
+      - name: Sincronizar el proyecto de iOS
+        working-directory: movil
+        run: npx cap sync ios
+
+      - name: Instalar las dependencias nativas
+        working-directory: movil/ios/App
+        run: pod install --repo-update
+
+      # El certificado y el perfil se meten en un llavero temporal que se
+      # borra al acabar. Nunca quedan escritos en el disco de la máquina
+      # más allá de esta ejecución.
+      - name: Poner el certificado y el perfil
+        env:
+          CERT: ${{ secrets.IOS_CERTIFICADO_P12 }}
+          CLAVE: ${{ secrets.IOS_CERTIFICADO_CLAVE }}
+          PERFIL: ${{ secrets.IOS_PERFIL }}
+        run: |
+          set -euo pipefail
+          LLAVERO="$RUNNER_TEMP/compilar.keychain-db"
+          CLAVE_LLAVERO="$(uuidgen)"
+
+          echo "$CERT" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          echo "$PERFIL" | base64 --decode > "$RUNNER_TEMP/perfil.mobileprovision"
+
+          security create-keychain -p "$CLAVE_LLAVERO" "$LLAVERO"
+          security set-keychain-settings -lut 3600 "$LLAVERO"
+          security unlock-keychain -p "$CLAVE_LLAVERO" "$LLAVERO"
+          security import "$RUNNER_TEMP/cert.p12" -P "$CLAVE" -A \
+            -t cert -f pkcs12 -k "$LLAVERO"
+          security set-key-partition-list -S apple-tool:,apple: \
+            -k "$CLAVE_LLAVERO" "$LLAVERO" > /dev/null
+          security list-keychain -d user -s "$LLAVERO"
+
+          PERFIL_PLIST=$(security cms -D -i "$RUNNER_TEMP/perfil.mobileprovision")
+          echo "$PERFIL_PLIST" > "$RUNNER_TEMP/perfil.plist"
+          UUID=$(/usr/libexec/PlistBuddy -c 'Print :UUID' "$RUNNER_TEMP/perfil.plist")
+          NOMBRE=$(/usr/libexec/PlistBuddy -c 'Print :Name' "$RUNNER_TEMP/perfil.plist")
+
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          cp "$RUNNER_TEMP/perfil.mobileprovision" \
+            "$HOME/Library/MobileDevice/Provisioning Profiles/$UUID.mobileprovision"
+          echo "PERFIL_NOMBRE=$NOMBRE" >> "$GITHUB_ENV"
+
+          rm -f "$RUNNER_TEMP/cert.p12" "$RUNNER_TEMP/perfil.mobileprovision" "$RUNNER_TEMP/perfil.plist"
+
+      # Cada subida a Apple tiene que llevar un número de compilación
+      # distinto del anterior. El del propio robot vale y va solo.
+      - name: Numerar esta compilación
+        working-directory: movil/ios/App
+        run: |
+          sed -i '' "s/CURRENT_PROJECT_VERSION = .*;/CURRENT_PROJECT_VERSION = ${{ github.run_number }};/g" \
+            App.xcodeproj/project.pbxproj
+
+      - name: Compilar y archivar
+        working-directory: movil/ios/App
+        run: |
+          set -euo pipefail
+          xcodebuild -workspace App.xcworkspace -scheme App \
+            -configuration Release -sdk iphoneos \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM="${{ secrets.IOS_EQUIPO }}" \
+            PROVISIONING_PROFILE_SPECIFIER="$PERFIL_NOMBRE" \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
+            archive
+
+      - name: Sacar el .ipa
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/opciones.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store</string>
+            <key>teamID</key><string>${{ secrets.IOS_EQUIPO }}</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>provisioningProfiles</key><dict>
+              <key>com.unikdi.repasos</key><string>${PERFIL_NOMBRE}</string>
+            </dict>
+            <key>uploadSymbols</key><true/>
+            <key>destination</key><string>export</string>
+          </dict></plist>
+          PLIST
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/opciones.plist" \
+            -exportPath "$RUNNER_TEMP/salida"
+          ls -la "$RUNNER_TEMP/salida"
+
+      - name: Subir a App Store Connect
+        env:
+          CLAVE_ID: ${{ secrets.APPSTORE_CLAVE_ID }}
+          EMISOR: ${{ secrets.APPSTORE_EMISOR_ID }}
+          CLAVE_P8: ${{ secrets.APPSTORE_CLAVE_P8 }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.appstoreconnect/private_keys"
+          echo "$CLAVE_P8" | base64 --decode \
+            > "$HOME/.appstoreconnect/private_keys/AuthKey_$CLAVE_ID.p8"
+          IPA=$(ls "$RUNNER_TEMP"/salida/*.ipa | head -1)
+          xcrun altool --upload-app -f "$IPA" -t ios \
+            --apiKey "$CLAVE_ID" --apiIssuer "$EMISOR"
+          rm -f "$HOME"/.appstoreconnect/private_keys/*.p8
+          echo "Subida la compilación ${{ github.run_number }}. En unos minutos aparece en TestFlight." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Guardar el .ipa por si acaso
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unik-repasos-ios
+          path: ${{ runner.temp }}/salida/*.ipa
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Recoger el llavero
+        if: always()
+        run: security delete-keychain "$RUNNER_TEMP/compilar.keychain-db" || true
