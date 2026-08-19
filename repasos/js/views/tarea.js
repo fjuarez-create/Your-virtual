@@ -728,6 +728,22 @@ async function menuTarea(t, listaId, suya) {
         h('div.row-lead', null, icon('casa', 18)),
         h('div.grow', null, h('div.row-title', null, 'Cambiar la estancia o el oficio')),
       ) : null,
+      // La voz y el vídeo viven aquí, en el menú, y no en la pantalla:
+      // la ficha del diseño es la foto del remate y lo que hay que
+      // hacer con ella. Pero un remate que se explica mejor hablando
+      // —o moviendo la cámara por la grieta— tiene que poder grabarse
+      // sin salir de la tarea.
+      h('button.row', { onclick: () => cerrar('voz') },
+        h('div.row-lead', null, icon('mic', 18)),
+        h('div.grow', null,
+          h('div.row-title', null, 'Grabar una nota de voz'),
+          h('div.row-sub', null, 'Se oye al final de la tarea'),
+        ),
+      ),
+      h('button.row', { onclick: () => cerrar('video') },
+        h('div.row-lead', null, icon('video', 18)),
+        h('div.grow', null, h('div.row-title', null, 'Añadir un vídeo')),
+      ),
       visuales.length > 1 ? h('button.row', { onclick: () => cerrar('portada') },
         h('div.row-lead', null, icon('image', 18)),
         h('div.grow', null,
@@ -749,6 +765,8 @@ async function menuTarea(t, listaId, suya) {
 
   if (accion === 'texto') return editarTexto(t);
   if (accion === 'estancia') return editarEstancia(t);
+  if (accion === 'voz') return añadirAudio(t);
+  if (accion === 'video') return añadirVideo(t);
 
   if (accion === 'portada' || accion === 'borrar-medio') {
     const elegido = await sheet((cerrar) => [
