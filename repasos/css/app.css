@@ -14,10 +14,25 @@
   font-display: swap;
 }
 
-/* La letra del rediseño. El Figma pide Neue Haas Grotesk Display Pro,
-   que es de pago; Inter Tight es su gemela libre y aquí hace su papel.
-   Si algún día llegan los ficheros con licencia, se añaden con el mismo
-   nombre de familia que abajo va primero y todo queda clavado. */
+/* La letra de la casa, ya con licencia: la Neue Haas Grotesk Display
+   Pro que Fran compró, corte 45 Light, la que quiere en toda la app.
+
+   Se declara para TODOS los pesos —de 100 a 900— aunque el fichero sea
+   uno solo. Así, cuando el diseño pide un 500, el navegador usa esta y
+   no se inventa un engordado de la letra, que es lo que hace cuando no
+   encuentra el peso pedido y deja los textos sucios.
+
+   Al lado queda la Roman (la 55, con la que está hecho el Figma): si al
+   verlo en obra la Light resulta demasiado fina a pleno sol, es cambiar
+   una línea. Inter Tight se queda detrás como red de seguridad. */
+@font-face {
+  font-family: 'Neue Haas Grotesk Display Pro';
+  src: url('../assets/fonts/neue-haas-display-light.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 @font-face {
   font-family: 'Inter Tight';
   src: url('../assets/fonts/inter-tight-latin-400-normal.woff2') format('woff2');
@@ -83,7 +98,7 @@
   --r-sm: 13px;
   --shadow: 0 14px 40px rgba(17, 17, 18, 0.10);
   --shadow-sm: 0 4px 16px rgba(17, 17, 18, 0.07);
-  --font: 'Open Sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font: 'Neue Haas Grotesk Display Pro', 'Inter Tight', 'Segoe UI', system-ui, -apple-system, sans-serif;
   /* ─── El rediseño 2026, con los valores exactos del Figma ───
      La letra a peso 500 en casi todo, y estos colores medidos del
      archivo: el fondo #f5f5f5, el verde botella de lo verificado, el
@@ -104,7 +119,7 @@
   --d-gris-suave: #f0f0f0;
   --d-anillo-fondo: #d9d9d9;
   --d-radio: 16px;
-  --font-titulo: 'PP Eiko', 'Open Sans', serif;
+  --font-titulo: 'Neue Haas Grotesk Display Pro', 'Inter Tight', 'Helvetica Neue', Arial, sans-serif;
 
   --tab-h: 104px;           /* alto que reserva la barra inferior */
   --pad: 20px;

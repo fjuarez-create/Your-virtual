@@ -459,7 +459,7 @@ function chivatoDeLetra() {
     style: { margin: '0 0 8px', textAlign: 'center', fontSize: '13px', color: 'var(--d-gris)' },
   });
   const mirar = () => {
-    const cargada = document.fonts?.check?.('500 16px "Inter Tight"');
+    const cargada = document.fonts?.check?.('500 16px "Neue Haas Grotesk Display Pro"');
     linea.textContent = cargada
       ? 'Letra del rediseño: cargada'
       : 'Letra del rediseño: SIN CARGAR (el móvil está usando la de reserva)';
