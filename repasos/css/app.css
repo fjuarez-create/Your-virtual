@@ -1634,8 +1634,35 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 /* En el banner, bajito, la franja acaba en media pastilla. */
 .d-banner .d-mordida::before { border-radius: 20px 16.5px 16.5px 0; }
 .d-banner-texto { position: relative; display: block; padding: 13px 76px 13px 16px; }
-.d-banner-rotulo { display: block; font-size: 16px; font-weight: 500; }
-.d-banner-cifra { display: block; font-size: 32px; font-weight: 500; line-height: 1.25; }
+.d-banner-rotulo { display: block; font-size: 16px; line-height: 24px; font-weight: 500; }
+.d-banner-cifra { display: block; font-size: 32px; font-weight: 500; line-height: 40px; margin-top: 4px; }
+
+/* ─── La banda de avance de una vivienda ───────────────────────
+   Beige siempre, la frase arriba y el porcentaje grande debajo, con
+   el anillo asomando por la esquina de abajo a la derecha.
+
+   El hueco del anillo se recorta con una máscara y no con el mordisco
+   de las tarjetas: aquel está cortado a mano para los 177 px de una
+   tarjeta de vivienda y en una banda de 94 deja un escalón. La
+   máscara da la curva exacta sea cual sea el alto. */
+.d-avance-banda { position: relative; }
+.d-avance-banda::before {
+  content: ''; position: absolute; inset: 0;
+  background: var(--d-beige); border-radius: 20px;
+  -webkit-mask: radial-gradient(circle 33.5px at calc(100% - 26.5px) calc(100% - 27.5px), transparent 98%, #000 100%);
+  mask: radial-gradient(circle 33.5px at calc(100% - 26.5px) calc(100% - 27.5px), transparent 98%, #000 100%);
+}
+.d-avance-texto { position: relative; display: block; padding: 13px 76px 13px 16px; }
+.d-avance-rotulo { display: block; font-size: 16px; line-height: 24px; font-weight: 500; color: var(--d-tinta); }
+.d-avance-cifra {
+  display: block; font-size: 32px; font-weight: 500; line-height: 40px;
+  margin-top: 4px; color: var(--d-tinta); letter-spacing: -0.01em;
+}
+.d-avance-anillo {
+  position: absolute; right: -1px; bottom: 0; width: 55px; height: 55px;
+  display: grid; place-items: center;
+  --anillo-color: var(--tramo, var(--d-verde)); --anillo-fondo: #d9d9d9;
+}
 .d-banner-boton {
   position: absolute; right: -1px; bottom: 0;
   width: 55px; height: 55px; border-radius: 999px;
@@ -1670,8 +1697,15 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 .d-tarjeta-pie { position: absolute; top: 116px; left: 16px; display: flex; gap: 8px; }
 .d-tarjeta-anillo {
   position: absolute; right: -1px; bottom: 0; width: 55px; height: 55px;
-  --anillo-color: var(--d-verde); --anillo-fondo: #d9d9d9;
+  --anillo-color: var(--tramo, var(--d-verde)); --anillo-fondo: #d9d9d9;
 }
+/* El color del avance, en los tres tramos de siempre: hasta el 30 rojo
+   oscuro, hasta el 70 naranja oscuro, y verde oscuro de ahí para
+   arriba. Son las mismas tintas que ya usaba la barra de avance, para
+   que una villa no se vea de un color en la lista y de otro dentro. */
+.tramo-rojo { --tramo: #651d17; }
+.tramo-ambar { --tramo: #683c03; }
+.tramo-verde { --tramo: var(--d-verde); }
 .d-chip {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 9px 14px; border-radius: 999px;
@@ -1807,9 +1841,12 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
   font: 500 14px var(--d-font); color: var(--d-tinta);
 }
 .d-escribir input::placeholder { color: var(--d-gris); }
+/* El avión de mandar: gris mientras no hay nada escrito y topo en
+   cuanto lo hay. Un botón encendido sobre una caja vacía promete algo
+   que al pulsarlo no pasa. */
 .d-escribir-mandar {
   width: 36px; height: 36px; border-radius: 999px; flex: none;
-  background: var(--d-tinta); color: #fff; display: grid; place-items: center;
+  background: var(--d-beige-tinta); color: #fff; display: grid; place-items: center;
 }
 .d-escribir-mandar svg { width: 18px; height: 18px; }
 
@@ -1927,25 +1964,14 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 }
 
 /* ─── La ficha de la vivienda ───────────────────────────────────
-   Calcada del Figma: la tarjeta de avance con sus tres pieles y la
-   bola roja del PDF, el botón negro de nueva inspección, los repasos
-   en pastilla con su redondel, y el chat de la villa con sus marcas
-   de leído. */
-.d-avance { position: relative; display: block; width: 100%; border-radius: 20px; padding: 11px 12px 16px; text-align: left; }
-.d-avance.rojo { background: var(--d-rojo-suave); --avance-tinta: #651d17; --avance-pista: rgba(101, 29, 23, .14); }
-.d-avance.ambar { background: #fef4e6; --avance-tinta: #683c03; --avance-pista: rgba(255, 255, 255, .28); }
-.d-avance.verde { background: var(--d-verde-suave); --avance-tinta: var(--d-verde); --avance-pista: rgba(255, 255, 255, .28); }
-.d-avance-pista { display: block; height: 9px; border-radius: 999px; background: var(--avance-pista); overflow: hidden; }
-.d-avance-pista i { display: block; height: 100%; border-radius: 999px; background: var(--avance-tinta); }
-.d-avance-cifra { display: block; font-size: 18px; line-height: 24px; color: var(--avance-tinta); margin-top: 14px; }
-.d-avance-frase { display: block; font-size: 14px; line-height: 20px; color: var(--d-tinta); padding-right: 60px; }
-.d-avance-pdf {
-  position: absolute; right: 0; bottom: 0; width: 54px; height: 54px;
-  border-radius: 999px; background: #b90003; color: #fff;
-  display: grid; place-items: center;
-}
-.d-avance-pdf svg { width: 24px; height: 24px; }
+   La banda de avance está más arriba, con el anillo. Aquí quedan el
+   botón negro de nueva inspección, los repasos verificados en
+   pastilla con su redondel, y el chat de la villa con sus marcas de
+   leído.
 
+   La tarjeta de avance de tres pieles y la bola roja del PDF se
+   fueron: el color lo lleva ahora el anillo, y el PDF vive en el menú
+   de los tres puntos de arriba. */
 .d-boton-negro {
   width: 100%; height: 48px; border-radius: 999px;
   background: var(--d-tinta); color: #fff; font-size: 16px; font-weight: 500;
@@ -1968,7 +1994,14 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
   text-align: left; font-size: 16px; line-height: 24px; color: var(--d-tinta);
 }
 .d-repaso + .d-repaso { margin-top: 8px; }
-.d-repaso .grow { flex: 1; min-width: 0; }
+/* Una línea y ni una más. Estas pastillas son ya lo verificado: se
+   miran de refilón para comprobar que está, no se leen. Si una frase
+   larga las hiciera crecer a dos y tres líneas, lo cerrado ocuparía
+   más pantalla que lo que queda por hacer. */
+.d-repaso .grow {
+  flex: 1; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .d-repaso-bola {
   width: 36px; height: 36px; flex: none; border-radius: 999px;
   border: 3px solid #d9d9d9; display: grid; place-items: center; color: #fff;
@@ -1993,8 +2026,6 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 .d-mensaje-pie .tics { color: #6864f2; }
 .d-mensaje-txt { flex: 1; min-width: 0; font-size: 14px; line-height: 20px; color: var(--d-tinta); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .d-mensaje-bolita { width: 8px; height: 8px; flex: none; border-radius: 50%; background: #37c4f8; }
-/* En el chat de la villa el botón de mandar va en el topo del diseño. */
-.d-escribir.d-chat .d-escribir-mandar { background: var(--d-beige-tinta); }
 
 /* ─── La ficha de la tarea ──────────────────────────────────────
    Calcada del Figma: la foto grande, el chip del gremio con su cara,

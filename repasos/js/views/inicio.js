@@ -107,6 +107,11 @@ export async function render() {
     refrescar();
   };
   caja.addEventListener('keydown', (e) => { if (e.key === 'Enter') mandar(); });
+  // Apagado mientras la caja está vacía: un avión encendido sobre una
+  // caja en blanco promete algo que al pulsarlo no pasa.
+  const botonMandar = h('button.d-escribir-mandar',
+    { 'aria-label': 'Publicar', disabled: true, onclick: mandar }, icon('avionPapel'));
+  caja.addEventListener('input', () => { botonMandar.disabled = !caja.value.trim(); });
 
   return {
     sinTabs: true,
@@ -155,7 +160,7 @@ export async function render() {
       muro,
       h('div.d-escribir', null,
         caja,
-        h('button.d-escribir-mandar', { 'aria-label': 'Publicar', onclick: mandar }, icon('avionPapel')),
+        botonMandar,
       ),
     ],
   };

@@ -886,14 +886,52 @@ export function cuandoVilla(iso) {
 }
 
 /**
+ * Los tres tramos del avance, los mismos en toda la app.
+ *
+ * Rojo oscuro hasta el 30, naranja oscuro hasta el 70, verde oscuro de
+ * ahí para arriba. El color y la frase van juntos y viven aquí una
+ * sola vez: si el chip de una tarjeta dijera «verde» y el anillo de
+ * al lado saliera ámbar con el mismo porcentaje, quien lo mira deja de
+ * fiarse de los dos.
+ */
+export function tramoAvance(pct) {
+  const n = Math.max(0, Math.min(100, Math.round(pct || 0)));
+  if (n < 30) return { clase: 'rojo', frase: 'Aún quedan muchos repasos' };
+  if (n < 70) return { clase: 'ambar', frase: 'Vamos viendo avances' };
+  return { clase: 'verde', frase: 'Estamos a punto' };
+}
+
+/**
+ * La banda beige del avance de una vivienda: la frase arriba, el
+ * porcentaje grande debajo y el anillo asomando por la esquina, con el
+ * mordisco del diseño alrededor.
+ *
+ * La banda es siempre beige y el color lo lleva el anillo. Antes se
+ * teñía la tarjeta entera y una villa al 20 % pintaba media pantalla
+ * de rojo: la casa no va mal, va empezada.
+ */
+export function bannerAvance(pct, { total = 0 } = {}) {
+  const t = tramoAvance(pct);
+  const valor = Math.max(0, Math.min(100, Math.round(pct || 0)));
+  return h(`div.d-avance-banda.tramo-${t.clase}`, null,
+    h('span.d-avance-texto', null,
+      h('span.d-avance-rotulo', null, total ? t.frase : 'Sin repasos todavía'),
+      h('span.d-avance-cifra', null, `${valor}%`),
+    ),
+    h('span.d-avance-anillo', null, anillo(valor, { tam: 55, grosor: 5, etiqueta: false })),
+  );
+}
+
+/**
  * La tarjeta blanca con mordisco del diseño: cabecera con la mano y el
  * cuándo, las caras arriba a la derecha, el título grande, los dos
  * chips y el anillo de avance asomando por la esquina. La usan la
  * lista de viviendas y el módulo de la promoción en la home.
  */
 export function tarjetaVilla({ titulo, cuando, caras = [], hechas, total, pct, alPinchar }) {
-  const chipPct = pct === 100 && total ? 'macizo' : pct < 30 ? 'rojo' : pct < 70 ? 'ambar' : 'verde';
-  return h('button.d-tarjeta', { onclick: alPinchar },
+  const t = tramoAvance(pct);
+  const chipPct = pct === 100 && total ? 'macizo' : t.clase;
+  return h(`button.d-tarjeta.tramo-${t.clase}`, { onclick: alPinchar },
     h('span.d-mordida'),
     h('span.d-mordida-esquina'),
     h('div.d-tarjeta-cab', null,
@@ -939,7 +977,7 @@ export function cuandoTarea(iso) {
  * sin entrar. Por eso ocupa el mismo sitio que el anillo de avance en
  * la otra tarjeta, que es donde el ojo ya sabe que hay algo.
  */
-export function tarjetaTarea({ cuando, quien, titulo, villa, oficioObj, foto, alPinchar }) {
+export function tarjetaTarea({ cuando, quien, titulo, villa, oficioObj, foto, chips = null, alPinchar }) {
   const bola = h('span.d-tarjeta-foto');
   if (foto) {
     bola.style.backgroundImage = `url("${foto}")`;
@@ -957,9 +995,12 @@ export function tarjetaTarea({ cuando, quien, titulo, villa, oficioObj, foto, al
       quien ? h('span.d-tarjeta-caras', null, avatar(quien, { tam: 36 })) : null,
     ),
     h('div.d-tarjeta-titulo', null, titulo),
+    // Fuera de una vivienda los dos chips son la casa y el oficio.
+    // Dentro de una, la casa ya la dice el título de la pantalla y lo
+    // que hace falta saber es en qué habitación está el remate.
     h('div.d-tarjeta-pie', null,
-      h('span.d-chip.tarea', null, villa),
-      oficioObj ? h('span.d-chip.tarea', null, oficioObj.nombre) : null,
+      (chips || [villa, oficioObj?.nombre]).filter(Boolean)
+        .map((c) => h('span.d-chip.tarea', null, c)),
     ),
     bola,
   );
@@ -980,7 +1021,7 @@ export function tarjetaTarea({ cuando, quien, titulo, villa, oficioObj, foto, al
  * @param {Array} p.oficiosLibres  [{id, nombre}] con tareas en este estado
  * @returns {Promise<{vivienda: string, oficios: string[]}|null>} null si se cierra
  */
-export function hojaFiltroTareas({ vivienda = '', oficios = [], viviendas = [], oficiosLibres = [] }) {
+export function hojaFiltroTareas({ vivienda = '', oficios = [], viviendas = [], oficiosLibres = [], conVivienda = true }) {
   return new Promise((resolve) => {
     let elegida = vivienda;
     const marcados = new Set(oficios);
@@ -1029,7 +1070,10 @@ export function hojaFiltroTareas({ vivienda = '', oficios = [], viviendas = [], 
         h('span', null, 'Filtrar tareas'),
         h('button.x', { 'aria-label': 'Cerrar', onclick: () => { cerrar(); resolve(null); } }, icon('x')),
       ),
-      h('div.d-carta-selector-caja', null, selector),
+      // Dentro de una vivienda no se elige vivienda: ya estás en ella,
+      // y una fila que dice «Todas las viviendas» ahí solo invita a
+      // salirse de la casa que estás repasando sin querer.
+      conVivienda ? h('div.d-carta-selector-caja', null, selector) : null,
       lista,
       h('div.d-carta-pie', null, boton),
     );

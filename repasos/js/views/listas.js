@@ -15,19 +15,15 @@ import { h, icon, sheet, toast, avatar, fechaCorta, hora } from '../ui.js';
 import { promocion, unidad, oficio, estado as estadoDe, puedeCrearLista } from '../catalog.js';
 import * as store from '../store.js';
 import {
-  tarjetaActa, hojaZonas, hojaOficios, caraDeGremio,
+  tarjetaActa, tarjetaTarea, cuandoTarea, bannerAvance, hojaZonas, hojaFiltroTareas, caraDeGremio,
   avisoLocal, barraSync, menuFlotante, filaMenu, filaMenuFichero, bandeja,
 } from '../piezas.js';
 import { hojaDePuerta, nombreDeFichero } from '../pdf.js';
 import { abrirMensaje } from '../mensajes.js';
 import { ir, conFiltros, filtrosDeRuta, anotarFiltros } from '../app.js';
 
-/* Las frases de la tarjeta de avance, las del diseño, por tramo. */
-const FRASES = [
-  [30, 'rojo', 'Aún quedan muchos repasos'],
-  [70, 'ambar', 'Vamos viendo avances'],
-  [101, 'verde', 'Estamos a punto'],
-];
+/* Los tramos y sus frases viven en piezas.js, con el anillo: el color
+   y la frase tienen que decir lo mismo en toda la app. */
 
 export async function render({ promoId, unidadId }) {
   const p = promocion(promoId);
@@ -36,36 +32,66 @@ export async function render({ promoId, unidadId }) {
 
   const { actas, tareas } = await store.tareasDeUnidad(unidadId);
 
+  // La foto de cada tarea, para las tarjetas grandes de la lista.
+  const portadas = new Map();
+  for (const t of tareas) portadas.set(t.id, await store.urlDePortada(t));
+
   const total = tareas.length;
   const hechas = tareas.filter((t) => t.estado === 'verificada').length;
   const pct = total ? Math.round((100 * hechas) / total) : 0;
-  const [, piel, frase] = FRASES.find(([tope]) => pct < tope);
 
   // El filtro llega puesto desde la lista de viviendas; la estancia es
   // un vistazo de dentro de la casa y no viaja en la dirección.
   let { estado, oficio: oficioId } = filtrosDeRuta();
   let estancia = '';
 
-  /* ─── La lista de repasos ─── */
-  const listado = h('div.d-repasos');
+  /* ─── La lista de repasos ───
+     Lo que queda por hacer va en la tarjeta grande del diseño: foto,
+     quién lo vio, cuándo y en qué habitación. Es lo que se mira
+     andando por la casa y necesita decirlo todo sin abrirse.
+
+     Lo verificado baja a su propia lista, en pastilla y de una línea:
+     ya está hecho, se comprueba de refilón y no compite por el sitio
+     con lo que falta. */
+  const listado = h('div.d-lista-tareas');
+  const verificados = h('div.d-repasos');
+  const bloqueVerificados = h('div', { style: { display: 'none' } },
+    h('p.d-epigrafe', null, 'Repasos verificados'), verificados);
+
   const pintar = () => {
-    const visibles = tareas
-      .filter((t) => encaja(t, estado, oficioId, estancia))
-      // Lo verificado al final, tachado, sin sacarlo de la lista: lo
-      // que se viene a mirar es lo que queda, lo cerrado se consulta.
-      .sort((a, b) => (a.estado === 'verificada' ? 1 : 0) - (b.estado === 'verificada' ? 1 : 0));
-    listado.replaceChildren(...visibles.map((t) => {
-      const hecho = t.estado === 'verificada';
-      return h('button.d-repaso', { class: hecho ? 'hecho' : '', onclick: () => ir(`#/l/${t.listaId}/t/${t.id}`) },
-        h('span.grow', null, t.texto || 'Sin texto'),
-        h('span.d-repaso-bola', null, hecho ? icon('check') : null),
-      );
-    }));
-    if (!visibles.length) {
-      listado.append(h('p.d-epigrafe', {
+    const visibles = tareas.filter((t) => encaja(t, estado, oficioId, estancia));
+    const abiertas = visibles.filter((t) => t.estado !== 'verificada');
+    const hechas2 = visibles.filter((t) => t.estado === 'verificada');
+
+    listado.replaceChildren(...abiertas.map((t) => tarjetaTarea({
+      cuando: cuandoTarea(t.creado),
+      quien: t.creadoPor ? store.persona(t.creadoPor, t.creadoPorNombre) : null,
+      titulo: t.texto || 'Sin descripción',
+      // Aquí la casa ya la dice el título de la pantalla: los dos
+      // chips son la habitación y el oficio, que es lo que distingue
+      // un remate de otro dentro de la misma villa.
+      chips: [t.zona, oficio(t.oficio)?.nombre],
+      oficioObj: oficio(t.oficio),
+      foto: portadas.get(t.id) || null,
+      alPinchar: () => ir(`#/l/${t.listaId}/t/${t.id}`),
+    })));
+    if (!abiertas.length) {
+      listado.append(h('p', {
         style: { color: 'var(--d-gris)', textAlign: 'center', padding: '24px 0', fontSize: '15px' },
-      }, total ? 'Ningún repaso encaja con este filtro.' : 'Sin repasos todavía. Abre una inspección y ve apuntando.'));
+      }, !total
+        ? 'Sin repasos todavía. Abre una inspección y ve apuntando.'
+        : hechas2.length
+          ? 'Nada pendiente con este filtro. Lo verificado está abajo.'
+          : 'Ningún repaso encaja con este filtro.'));
     }
+
+    verificados.replaceChildren(...hechas2.map((t) =>
+      h('button.d-repaso.hecho', { onclick: () => ir(`#/l/${t.listaId}/t/${t.id}`) },
+        h('span.grow', null, t.texto || 'Sin texto'),
+        h('span.d-repaso-bola', null, icon('check')),
+      )));
+    bloqueVerificados.style.display = hechas2.length ? '' : 'none';
+
     pintarFiltros();
   };
 
@@ -102,12 +128,22 @@ export async function render({ promoId, unidadId }) {
     },
   }, h('span', null, 'Seleccionar estancia'), icon('caretAbajo'));
 
+  // La misma hoja «Filtrar tareas» que las listas de la obra, pero sin
+  // la vivienda —ya estás dentro de una— y sin la estancia, que está a
+  // un dedo en el desplegable de aquí al lado. Y solo los oficios que
+  // esta casa tiene: un filtro que lleva a una lista vacía es una
+  // promesa rota.
   const bolaFiltros = h('button.d-bola-filtros', {
     'aria-label': 'Filtros',
     onclick: async () => {
-      const elegidos = await hojaOficios(oficiosElegidos(oficioId), { multiple: true, conTodos: true });
-      if (elegidos === null) return;
-      oficioId = elegidos.length ? elegidos.join(',') : 'todos';
+      const hay = [...new Set(tareas.map((t) => t.oficio))].filter(Boolean);
+      const r = await hojaFiltroTareas({
+        oficios: oficiosElegidos(oficioId),
+        oficiosLibres: hay.map((id) => oficio(id)).sort((a, b) => a.nombre.localeCompare(b.nombre)),
+        conVivienda: false,
+      });
+      if (!r) return;
+      oficioId = r.oficios.length ? r.oficios.join(',') : 'todos';
       cambio();
     },
   }, icon('cursores'));
@@ -163,9 +199,14 @@ export async function render({ promoId, unidadId }) {
     if (!texto) return;
     await store.escribirMensaje(unidadId, promoId, texto);
     cajaEscribir.value = '';
+    botonMandar.disabled = true;
     pintarChat();
   };
   cajaEscribir.addEventListener('keydown', (e) => { if (e.key === 'Enter') mandar(); });
+  // Apagado mientras no hay nada escrito, como en toda la app.
+  const botonMandar = h('button.d-escribir-mandar',
+    { 'aria-label': 'Enviar', disabled: true, onclick: mandar }, icon('avionPapel'));
+  cajaEscribir.addEventListener('input', () => { botonMandar.disabled = !cajaEscribir.value.trim(); });
 
   /* ─── El menú de los tres puntos: el PDF y las actas firmadas ─── */
   const menu = () => sheet((cerrar) => [
@@ -209,30 +250,31 @@ export async function render({ promoId, unidadId }) {
       ),
       avisoLocal() || barraSync(),
 
-      h('button.d-avance', { class: piel, onclick: () => descargarVivienda(p, u, tareas) },
-        h('span.d-avance-pista', null, h('i', { style: { width: pct + '%' } })),
-        h('span.d-avance-cifra', null, `${pct}%`),
-        h('span.d-avance-frase', null, total ? frase : 'Sin repasos todavía'),
-        h('span.d-avance-pdf', null, icon('documento')),
-      ),
+      // El PDF ya no vive aquí: se baja desde los tres puntos de
+      // arriba. Esta banda solo informa, y el color lo lleva el anillo.
+      bannerAvance(pct, { total }),
 
+      h('p.d-epigrafe', null, 'Lista de repasos'),
+      h('div.d-fila-selector', null, desplegable, bolaFiltros),
+      filtros,
+      listado,
+
+      // El botón va debajo de la lista: se entra en la casa a ver qué
+      // hay, y solo cuando ya lo has visto tiene sentido apuntar algo
+      // nuevo.
       h('p.d-epigrafe', null, 'Inspecciones'),
       puedeCrearLista(store.sesion())
         ? h('button.d-boton-negro', { onclick: nueva }, icon('plus'), 'Nueva inspección')
         : null,
 
-      filtros,
-      h('div.d-fila-selector', null, desplegable, bolaFiltros),
-
-      h('p.d-epigrafe', null, 'Lista de repasos'),
-      listado,
+      bloqueVerificados,
 
       h('p.d-epigrafe', null, `Mensajes relativos a la ${u.nombre}`),
       h('div.d-filtro-buscar', { style: { margin: '10px 0 12px' } }, icon('search'), buscador),
       chat,
       h('div.d-chat.d-escribir', null,
         cajaEscribir,
-        h('button.d-escribir-mandar', { 'aria-label': 'Enviar', onclick: mandar }, icon('avionPapel')),
+        botonMandar,
       ),
     ],
   };
