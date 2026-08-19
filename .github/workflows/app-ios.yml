@@ -110,10 +110,12 @@ jobs:
         with:
           node-version: '20'
 
+      # 3.3 y no 3.2: alguna de las piezas de fastlane ya exige 3.3, y
+      # con la anterior el «bundle install» se planta antes de empezar.
       - name: Preparar Ruby y fastlane
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: '3.2'
+          ruby-version: '3.3'
           bundler-cache: true
           working-directory: movil
 
