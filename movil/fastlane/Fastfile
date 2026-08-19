@@ -45,15 +45,14 @@ platform :ios do
     )
 
     revocar_certificados_viejos
-    ruta_cert = crear_certificado(clave)
-    perfil = crear_perfil(clave)
+    crear_certificado(clave: clave)
+    perfil = crear_perfil(clave: clave)
 
     numerar
-    compilar(perfil)
-    subir(clave)
+    compilar(perfil: perfil)
+    subir(clave: clave)
 
     UI.success("Subida la compilación. En unos minutos aparece en TestFlight.")
-    ruta_cert
   end
 
   # ─── Los pasos, uno a uno ──────────────────────────────────────
@@ -87,9 +86,9 @@ platform :ios do
     end
   end
 
-  private_lane :crear_certificado do |clave|
+  private_lane :crear_certificado do |op|
     cert(
-      api_key: clave,
+      api_key: op[:clave],
       generate_apple_certs: true,
       development: false,
       keychain_path: ENV.fetch("LLAVERO_RUTA"),
@@ -99,9 +98,9 @@ platform :ios do
     lane_context[SharedValues::CERT_FILE_PATH]
   end
 
-  private_lane :crear_perfil do |clave|
+  private_lane :crear_perfil do |op|
     sigh(
-      api_key: clave,
+      api_key: op[:clave],
       app_identifier: IDENTIFICADOR,
       platform: "ios",
       force: true,
@@ -120,7 +119,8 @@ platform :ios do
     )
   end
 
-  private_lane :compilar do |perfil|
+  private_lane :compilar do |op|
+    perfil = op[:perfil]
     build_app(
       workspace: "#{RUTA_PROYECTO}/App.xcworkspace",
       scheme: "App",
@@ -141,9 +141,9 @@ platform :ios do
     )
   end
 
-  private_lane :subir do |clave|
+  private_lane :subir do |op|
     upload_to_testflight(
-      api_key: clave,
+      api_key: op[:clave],
       ipa: "#{ENV.fetch('RUNNER_TEMP')}/salida/UNIK-Works.ipa",
       # No se espera a que Apple termine de procesarla: son diez o quince
       # minutos de máquina alquilada mirando una barra de progreso.
