@@ -73,7 +73,7 @@ try {
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<title>Instalación · UNIK repasos</title>
+<title>Instalación · UNIK Works</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   body { font-family: system-ui, sans-serif; background: #f2f2f0; color: #161618;
@@ -90,7 +90,7 @@ try {
 </head>
 <body>
   <div class="caja">
-    <h1>UNIK repasos</h1>
+    <h1>UNIK Works</h1>
     <p class="sub">Instalación del servidor</p>
     <ul>
       <?php foreach ($pasos as $paso): ?>

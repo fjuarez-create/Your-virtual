@@ -231,10 +231,13 @@ case "$QUE" in
     lanzar "$OPC" "cd \"$DIR\"; cls -1" 2>/dev/null | sed 's/^/  /'
 
     fallos=0
-    # privacidad.html entra en la lista a propósito: es la página que
-    # Apple tiene que poder leer para dejar la app en la tienda. Si un
-    # día deja de subir, que se entere el despliegue y no el revisor.
-    for f in index.html sw.js manifest.webmanifest privacidad.html \
+    # Las tres páginas sueltas entran en la lista a propósito: son las
+    # que Apple tiene que poder leer para dejar la app en la tienda, y
+    # sus direcciones están escritas en la ficha. Si un día dejan de
+    # subir, que se entere el despliegue y no el revisor.
+    for f in index.html sw.js manifest.webmanifest \
+             privacidad.html soporte.html marketing.html \
+             assets/marketing/inicio.jpg \
              css/app.css js/app.js js/store.js \
              api/index.php api/lib/nucleo.php assets/fonts/opensans-var.woff2; do
       if [ "$(contar_remoto "$f")" -ge 1 ]; then

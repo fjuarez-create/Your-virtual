@@ -180,7 +180,7 @@ function altaUsuario() {
  */
 export function hojaCredenciales(usuario, password, titulo = 'Acceso') {
   const texto = [
-    'UNIK repasos — tu acceso',
+    'UNIK Works — tu acceso',
     '',
     `Nombre: ${usuario.nombre}`,
     `Usuario: ${usuario.email}`,
@@ -194,7 +194,7 @@ export function hojaCredenciales(usuario, password, titulo = 'Acceso') {
     compartir.addEventListener('click', async () => {
       try {
         if (navigator.share) {
-          await navigator.share({ title: 'UNIK repasos', text: texto });
+          await navigator.share({ title: 'UNIK Works', text: texto });
         } else {
           await navigator.clipboard.writeText(texto);
           toast('Copiado al portapapeles');

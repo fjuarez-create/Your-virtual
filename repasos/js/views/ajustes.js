@@ -122,7 +122,7 @@ export async function render() {
       ),
 
       h('p', { style: { margin: '24px 0 8px', textAlign: 'center', fontSize: '13px', color: 'var(--d-gris)' } },
-        'UNIK repasos · versión ' + (window.REPASOS_CONFIG?.build || 'local')),
+        'UNIK Works · versión ' + (window.REPASOS_CONFIG?.build || 'local')),
       // El chivato de la letra: dice en el propio móvil si la
       // tipografía del rediseño ha cargado o el navegador la ha
       // sustituido. Para diagnosticar sin ordenador de por medio.

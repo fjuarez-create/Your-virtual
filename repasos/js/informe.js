@@ -58,7 +58,7 @@ export async function informe(lista, { abrirImpresion = false } = {}) {
     h('div.inf-hoja', null,
       h('header.inf-cab', null,
         h('div', null,
-          h('p.inf-marca', null, 'UNIK repasos'),
+          h('p.inf-marca', null, 'UNIK Works'),
           h('h1', null, `${u?.nombre || lista.unidadId}`),
           h('p.inf-sub', null, `${p?.nombre || lista.promoId} · ${f.nombre}`),
         ),
@@ -71,7 +71,7 @@ export async function informe(lista, { abrirImpresion = false } = {}) {
       ),
       ...fichas,
       h('footer.inf-pie', null,
-        'Documento generado desde UNIK repasos. Las fotografías corresponden al estado de la vivienda en la fecha de la inspección.'),
+        'Documento generado desde UNIK Works. Las fotografías corresponden al estado de la vivienda en la fecha de la inspección.'),
     ),
   );
 

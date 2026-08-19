@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>UNIK Works — los repasos de obra, sin papeles</title>
+<meta name="description" content="UNIK Works es la herramienta de gestión y seguimiento de repasos de obra de las promociones desarrolladas bajo la marca UNIK: propiedad, dirección facultativa y constructora en un mismo entorno.">
+<link rel="icon" href="assets/icons/favicon.svg" type="image/svg+xml">
+<meta property="og:title" content="UNIK Works">
+<meta property="og:description" content="Gestiona, documenta y verifica los repasos de obra de las promociones desarrolladas por UNIK.">
+<meta property="og:image" content="https://repasos.unikdi.com/assets/marketing/vivienda.jpg">
+<style>
+  /* La página que Apple enseña como «marketing URL». La abre cualquiera
+     desde la ficha de la tienda, sin cuenta y sin haber entrado nunca en
+     la aplicación, así que no depende de la sesión ni de nada de fuera.
+     Solo la tipografía de la propia app, que ya está en el servidor. */
+  :root {
+    color-scheme: light;
+    --tinta: #000; --gris: #8c8c8c; --fondo: #f5f5f5;
+    --beige: #d6cabc; --topo: #736b5c; --verde: #064d2d;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--fondo); color: var(--tinta);
+    font: 400 16px/1.6 'Neue Haas Grotesk Display Pro', 'Inter Tight',
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    padding: calc(env(safe-area-inset-top) + 32px) 20px
+             calc(env(safe-area-inset-bottom) + 56px);
+    -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 900px; margin: 0 auto; }
+  .marca {
+    display: inline-flex; align-items: center; gap: 12px;
+    margin-bottom: 44px; text-decoration: none; color: inherit;
+  }
+  .marca span { font-weight: 500; letter-spacing: .06em; color: var(--gris); font-size: 13px; }
+
+  h1 {
+    font-size: clamp(34px, 7vw, 54px); line-height: 1.06;
+    letter-spacing: -.032em; font-weight: 500; margin: 0 0 18px; max-width: 15ch;
+  }
+  .entradilla {
+    font-size: clamp(17px, 2.4vw, 21px); line-height: 1.45;
+    color: #454545; margin: 0 0 14px; max-width: 62ch;
+  }
+  .quien { color: var(--gris); margin: 0 0 12px; max-width: 62ch; }
+
+  h2 {
+    font-size: clamp(24px, 3.4vw, 32px); line-height: 1.15; font-weight: 500;
+    letter-spacing: -.02em; margin: 56px 0 14px;
+  }
+  h3 { font-size: 20px; line-height: 1.25; font-weight: 500; margin: 0 0 8px; letter-spacing: -.01em; }
+  p { margin: 0 0 14px; }
+  strong { font-weight: 500; }
+  a { color: var(--verde); }
+
+  /* El recorrido por la aplicación: capturas y texto, alternando el
+     lado en pantalla ancha y apilados en el móvil. */
+  .paso {
+    display: grid; gap: 22px; align-items: center;
+    grid-template-columns: 1fr; margin: 34px 0;
+  }
+  .paso .texto p:last-child { margin-bottom: 0; }
+  .movil {
+    background: #fff; border-radius: 26px; padding: 10px;
+    box-shadow: 0 12px 34px rgba(0, 0, 0, .09);
+    max-width: 280px; margin: 0 auto;
+  }
+  .movil img { display: block; width: 100%; border-radius: 18px; }
+  @media (min-width: 720px) {
+    .paso { grid-template-columns: 300px 1fr; gap: 44px; margin: 60px 0; }
+    .paso.derecha { grid-template-columns: 1fr 300px; }
+    .paso.derecha .movil { order: 2; }
+    .paso.derecha .texto { order: 1; }
+  }
+
+  .lista { background: #fff; border-radius: 22px; padding: 24px 26px; margin: 24px 0; }
+  .lista ul { margin: 0; padding-left: 20px; }
+  .lista li { margin-bottom: 9px; }
+  .lista li:last-child { margin-bottom: 0; }
+
+  .banda {
+    background: var(--beige); border-radius: 22px;
+    padding: 26px 26px; margin: 44px 0 0;
+  }
+  .banda p:last-child { margin-bottom: 0; }
+
+  .aviso {
+    border: 1px solid #dcdcdc; border-radius: 22px;
+    padding: 22px 24px; margin: 24px 0; color: #454545;
+  }
+  .aviso p:last-child { margin-bottom: 0; }
+
+  footer { margin-top: 56px; color: var(--gris); font-size: 14px; line-height: 1.7; }
+  footer a { color: var(--gris); }
+</style>
+</head>
+<body>
+<main>
+  <a class="marca" href="./">
+    <svg width="36" height="36" viewBox="0 0 512 512" aria-hidden="true">
+      <rect width="512" height="512" rx="112" fill="#111112"/>
+      <path d="M150 262 L222 336 L366 182" fill="none" stroke="#9b8f7f"
+            stroke-width="46" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <span>UNIK WORKS</span>
+  </a>
+
+  <h1>Los repasos de la obra, sin una sola hoja de papel</h1>
+  <p class="entradilla">Gestiona, documenta y verifica los repasos de obra
+  de las promociones desarrolladas por UNIK, conectando a técnicos,
+  constructora y propiedad.</p>
+  <p class="quien">Pensada para usarse andando por la vivienda, con una
+  mano y sin quitarse el casco.</p>
+
+  <h2>De la incidencia a la verificación</h2>
+  <p class="entradilla">UNIK Works reúne en un mismo entorno a propiedad,
+  dirección facultativa, constructora y profesionales de cada proyecto, y
+  permite registrar, organizar, documentar y verificar las tareas de
+  revisión de una promoción de forma sencilla y estructurada.</p>
+
+  <div class="paso">
+    <div class="movil"><img src="assets/marketing/inicio.jpg" alt="Pantalla de inicio de UNIK Works, con las tareas pendientes de revisar, las verificadas y las rechazadas." loading="lazy"></div>
+    <div class="texto">
+      <h3>El día, de un vistazo</h3>
+      <p>Al abrir la aplicación, cada persona ve lo suyo: lo que está
+      pendiente de revisión, lo que se ha dado por bueno y lo que ha
+      vuelto rechazado. La información y las funciones se adaptan al
+      perfil de cada usuario.</p>
+    </div>
+  </div>
+
+  <div class="paso derecha">
+    <div class="movil"><img src="assets/marketing/viviendas.jpg" alt="Listado de viviendas de la promoción con el porcentaje de avance de cada una." loading="lazy"></div>
+    <div class="texto">
+      <h3>El avance de cada vivienda</h3>
+      <p>Todas las casas de la promoción, con su grado de avance y su
+      anillo de color: rojo mientras queda mucho, ámbar cuando va
+      avanzando, verde cuando está a punto. Se filtra por oficio, por
+      estado y por lo que haga falta.</p>
+    </div>
+  </div>
+
+  <div class="paso">
+    <div class="movil"><img src="assets/marketing/vivienda.jpg" alt="Ficha de una vivienda con su porcentaje de avance y la lista de repasos pendientes." loading="lazy"></div>
+    <div class="texto">
+      <h3>Lo que queda en esta casa</h3>
+      <p>Dentro de una vivienda, los repasos pendientes con su foto, su
+      estancia y su oficio. Lo verificado baja al final, tachado: ya está
+      hecho y no tiene que quitarle sitio a lo que falta.</p>
+    </div>
+  </div>
+
+  <div class="paso derecha">
+    <div class="movil"><img src="assets/marketing/tarea.jpg" alt="Detalle de una tarea con dos fotografías del remate, la vivienda, la estancia y el oficio." loading="lazy"></div>
+    <div class="texto">
+      <h3>Cada remate, con su foto</h3>
+      <p>Una tarea se apunta delante del defecto y con una foto hecha en
+      ese momento. Sin foto no hay tarea, porque una frase suelta no la
+      puede comprobar quien llegue después, y quien la escribió ya no
+      está delante.</p>
+    </div>
+  </div>
+
+  <div class="paso">
+    <div class="movil"><img src="assets/marketing/tareas.jpg" alt="Listado de tareas filtrado por estado, mostrando las completadas pendientes de verificar." loading="lazy"></div>
+    <div class="texto">
+      <h3>Cada mano en su sitio</h3>
+      <p>La constructora da los remates por completados. La dirección
+      facultativa los revisa antes de su validación definitiva: los
+      verifica, o los rechaza explicando qué sigue mal. Nunca la misma
+      persona las dos cosas, y por eso el porcentaje de avance significa
+      algo.</p>
+    </div>
+  </div>
+
+  <h2>Qué se puede hacer</h2>
+  <div class="lista">
+    <ul>
+      <li>Crear inspecciones y registrar nuevos repasos directamente desde obra.</li>
+      <li>Asociar cada tarea a una vivienda, estancia, oficio o subcontrata.</li>
+      <li>Incorporar fotografías para documentar cada incidencia.</li>
+      <li>Consultar las tareas pendientes, completadas, verificadas o rechazadas.</li>
+      <li>Filtrar las incidencias por vivienda, oficio, estado y otros criterios del proyecto.</li>
+      <li>Realizar el seguimiento del grado de avance de cada vivienda.</li>
+      <li>Revisar los trabajos comunicados como terminados antes de su validación definitiva.</li>
+      <li>Mantener un historial de comentarios y comunicaciones de cada vivienda.</li>
+      <li>Identificar rápidamente las tareas que requieren intervención o revisión.</li>
+      <li>Generar documentación e informes de seguimiento de las inspecciones realizadas.</li>
+    </ul>
+  </div>
+
+  <h2>En obra no siempre hay cobertura</h2>
+  <p class="entradilla">En un sótano, en un garaje o en una planta sin
+  señal, la aplicación sigue funcionando. Las tareas y las fotografías se
+  guardan en el móvil y se suben solas en cuanto vuelve la conexión.
+  Nadie tiene que acordarse de nada.</p>
+
+  <div class="banda">
+    <h3>Un proceso ordenado, visual y trazable</h3>
+    <p>UNIK Works centraliza el proceso de repasos para conseguir un
+    seguimiento más ordenado, visual y trazable desde la detección de una
+    incidencia hasta su resolución y verificación final.</p>
+  </div>
+
+  <div class="aviso">
+    <p><strong>Acceso restringido.</strong> UNIK Works es una herramienta
+    de uso profesional. El acceso está limitado a usuarios autorizados
+    vinculados a promociones gestionadas por UNIK Desarrollos
+    Inmobiliarios, S.L. o a proyectos en los que la compañía participe.
+    No hay registro abierto: las cuentas las facilita la promotora.</p>
+  </div>
+
+  <footer>
+    <p>UNIK Works, de UNIK Desarrollos Inmobiliarios, S.L.</p>
+    <p>
+      <a href="soporte.html">Soporte</a> ·
+      <a href="privacidad.html">Privacidad</a> ·
+      <a href="./">Abrir la aplicación</a>
+    </p>
+  </footer>
+</main>
+</body>
+</html>

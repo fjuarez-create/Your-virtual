@@ -2,7 +2,7 @@
   "name": "unik-repasos-movil",
   "version": "1.0.0",
   "private": true,
-  "description": "El envoltorio nativo de UNIK repasos: la app de la tienda que abre repasos.unikdi.com",
+  "description": "El envoltorio nativo de UNIK Works: la app de la tienda que abre repasos.unikdi.com",
   "scripts": {
     "sincronizar": "cap sync ios",
     "copiar": "cap copy ios"

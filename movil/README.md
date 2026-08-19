@@ -1,4 +1,4 @@
-# La app de UNIK repasos para el iPhone
+# La app de UNIK Works para el iPhone
 
 Esta carpeta es el **envoltorio**: la app que se descarga de la App Store
 y que por dentro abre `repasos.unikdi.com`.
@@ -31,7 +31,7 @@ vez cada muchos meses.
 
 | | |
 |---|---|
-| Nombre | UNIK repasos |
+| Nombre | UNIK Works |
 | Identificador | `com.unikdi.repasos` |
 | Versión | 1.0 |
 | Mínimo | iPhone con iOS 13 o superior |
@@ -54,7 +54,7 @@ En [appstoreconnect.apple.com](https://appstoreconnect.apple.com) →
 **Mis apps** → **+** → **Nueva app**.
 
 - Plataforma: **iOS**
-- Nombre: **UNIK repasos**
+- Nombre: **UNIK Works**
 - Idioma principal: **Español (España)**
 - ID del paquete: elige `com.unikdi.repasos` de la lista. Si no aparece,
   primero hay que crearlo en
@@ -77,7 +77,7 @@ clave del paso siguiente.
 En [developer.apple.com](https://developer.apple.com/account/resources/authkeys)
 → **Keys** → **+**:
 
-- Key Name: `Notificaciones UNIK repasos`
+- Key Name: `Notificaciones UNIK Works`
 - Marca **Apple Push Notifications service (APNs)**
 - **Continue** → **Register**
 

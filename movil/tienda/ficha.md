@@ -9,7 +9,7 @@ suene a folleto.
 ## Nombre
 
 ```
-UNIK repasos
+UNIK Works
 ```
 
 ## Subtítulo (30 caracteres como mucho)
@@ -32,7 +32,7 @@ repasos,obra,construccion,remates,posventa,vivienda,promotora,arquitecto,apareja
 ## Descripción
 
 ```
-UNIK repasos es la herramienta con la que el equipo de una promoción
+UNIK Works es la herramienta con la que el equipo de una promoción
 lleva los repasos de sus viviendas: lo que falta, quién lo arregla y
 quién lo da por bueno.
 
@@ -80,7 +80,13 @@ Primera versión.
 ## URL de soporte
 
 ```
-https://repasos.unikdi.com
+https://repasos.unikdi.com/soporte.html
+```
+
+## URL de marketing
+
+```
+https://repasos.unikdi.com/marketing.html
 ```
 
 ## URL de la política de privacidad

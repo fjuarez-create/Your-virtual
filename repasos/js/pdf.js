@@ -154,7 +154,7 @@ export function hojaDePuerta({ vivienda, promocion, fecha, autor, tareas }) {
 
   const cabecera = (primera) => {
     if (primera) {
-      pag.texto(MARGEN, y, 'UNIK REPASOS', { tam: 9, negrita: true, gris: 0.45 });
+      pag.texto(MARGEN, y, 'UNIK WORKS', { tam: 9, negrita: true, gris: 0.45 });
       y -= 30;
       pag.texto(MARGEN, y, vivienda, { tam: 30, negrita: true });
       y -= 20;
