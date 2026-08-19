@@ -121,6 +121,22 @@ platform :ios do
 
   private_lane :compilar do |op|
     perfil = op[:perfil]
+
+    # La firma se escribe SOLO en el objetivo «App», dentro del propio
+    # proyecto. Antes se pasaba por la línea de órdenes y eso se lo
+    # aplicaba a todo lo que hay en el espacio de trabajo, incluidos los
+    # módulos de Capacitor, que no se firman: la compilación se caía con
+    # «CapacitorStatusBar does not support provisioning profiles».
+    update_code_signing_settings(
+      path: "#{RUTA_PROYECTO}/App.xcodeproj",
+      targets: ["App"],
+      use_automatic_signing: false,
+      team_id: EQUIPO,
+      bundle_identifier: IDENTIFICADOR,
+      code_sign_identity: "Apple Distribution",
+      profile_name: perfil
+    )
+
     build_app(
       workspace: "#{RUTA_PROYECTO}/App.xcworkspace",
       scheme: "App",
@@ -133,11 +149,6 @@ platform :ios do
         signingStyle: "manual",
         teamID: EQUIPO
       },
-      codesigning_identity: "Apple Distribution",
-      xcargs: "DEVELOPMENT_TEAM=#{EQUIPO} " \
-              "PROVISIONING_PROFILE_SPECIFIER='#{perfil}' " \
-              "CODE_SIGN_STYLE=Manual " \
-              "CODE_SIGN_IDENTITY='Apple Distribution'",
       silent: false,
       clean: true
     )
