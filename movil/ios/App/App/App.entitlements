@@ -3,6 +3,19 @@
 <plist version="1.0">
 <dict>
 	<!--
+	  DE MOMENTO ESTE FICHERO NO SE USA.
+
+	  Está escrito y listo, pero desenganchado del proyecto: el App ID
+	  de Apple todavía no tiene activadas las notificaciones, y cuando
+	  la app pide un permiso que el App ID no concede, el perfil de
+	  firma no cuadra y la compilación se cae con «doesn't include the
+	  aps-environment entitlement».
+
+	  Para activarlo, dos pasos: marcar Push Notifications en el App ID
+	  (developer.apple.com → Identifiers → com.unikdi.repasos) y volver
+	  a poner CODE_SIGN_ENTITLEMENTS = App/App.entitlements en las dos
+	  configuraciones del proyecto.
+
 	  Los permisos especiales que la app le pide a iOS.
 
 	  De momento solo uno: poder recibir notificaciones. Va en

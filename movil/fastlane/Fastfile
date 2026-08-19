@@ -133,9 +133,11 @@ platform :ios do
         signingStyle: "manual",
         teamID: EQUIPO
       },
+      codesigning_identity: "Apple Distribution",
       xcargs: "DEVELOPMENT_TEAM=#{EQUIPO} " \
               "PROVISIONING_PROFILE_SPECIFIER='#{perfil}' " \
-              "CODE_SIGN_STYLE=Manual",
+              "CODE_SIGN_STYLE=Manual " \
+              "CODE_SIGN_IDENTITY='Apple Distribution'",
       silent: false,
       clean: true
     )
