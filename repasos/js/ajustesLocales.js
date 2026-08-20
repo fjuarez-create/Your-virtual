@@ -53,3 +53,26 @@ export function usaIA(usuario) {
 export function ponerUsaIA(usuario, valor) {
   escribir(usuario?.id, 'ia-al-crear', !!valor);
 }
+
+/* ─── Juntar en una tarea las fotos de lo mismo ────────────────────
+
+   En un recorrido es normal sacar dos o tres fotos del mismo defecto:
+   una de lejos para situarlo y otra de cerca para que se vea. Con una
+   tarea por foto salen tres órdenes de trabajo para un solo remate, y
+   además desordenadas: «quitar el router» y «repasar la mancha que hay
+   detrás» son la misma faena contada en dos trozos.
+
+   Encendido, la IA agrupa esas fotos en una sola tarea con todas
+   dentro. Apagado, sale una tarea por foto, que es como estaba antes.
+
+   Nace encendido porque es lo que se parece a cómo se habla en obra
+   —«aquí hay que hacer esto», y se dan dos vueltas alrededor—, pero se
+   puede apagar: hay quien prefiere una foto por tarea para poder
+   cerrarlas por separado. */
+export function juntaFotos(usuario) {
+  return leer(usuario?.id, 'juntar-fotos-recorrido', true) !== false;
+}
+
+export function ponerJuntaFotos(usuario, valor) {
+  escribir(usuario?.id, 'juntar-fotos-recorrido', !!valor);
+}

@@ -7,7 +7,7 @@ import * as db from '../db.js';
 import { barraSync, chevron, cabecera, CAB_BOLA, hojaFoto, ctaAccion, ctaCancelar, abrirPagina } from '../piezas.js';
 import * as ejemplos from '../ejemplos.js';
 import { PROMOCIONES } from '../catalog.js';
-import { usaIA, ponerUsaIA } from '../ajustesLocales.js';
+import { usaIA, ponerUsaIA, juntaFotos, ponerJuntaFotos } from '../ajustesLocales.js';
 import { ir, refrescar, versionEsperando, aplicarVersionEsperando } from '../app.js';
 
 export async function render() {
@@ -38,6 +38,9 @@ export async function render() {
   /** El interruptor de la IA, con la palanca del diseño. */
   const casillaIA = h('input', { type: 'checkbox', role: 'switch', checked: usaIA(u) || null });
   casillaIA.addEventListener('change', () => ponerUsaIA(u, casillaIA.checked));
+
+  const casillaJuntar = h('input', { type: 'checkbox', role: 'switch', checked: juntaFotos(u) || null });
+  casillaJuntar.addEventListener('change', () => ponerJuntaFotos(u, casillaJuntar.checked));
 
   return {
     sinTabs: true,
@@ -80,6 +83,12 @@ export async function render() {
         h('p.d-grupo-titulo', null, 'Preferencias'),
         item('edit', 'Que la IA proponga el texto',
           'Al crear una tarea desde una foto o la galería', null, { derecha: casillaIA }),
+        // En un recorrido es normal sacar dos fotos de lo mismo: una de
+        // lejos para situarlo y otra de cerca. Encendido, eso es una
+        // tarea con dos fotos; apagado, dos tareas.
+        item('image', 'Juntar las fotos de un mismo repaso',
+          'En un recorrido, varias fotos de la misma cosa salen como una sola tarea',
+          null, { derecha: casillaJuntar }),
       ) : null,
 
       // Solo aparece cuando de verdad hay una versión esperando. Es la

@@ -438,7 +438,11 @@ function claude_redactar_recorrido(): void
         responder_error(400, 'No hay nada que redactar: ni fotos ni nada dicho.', 'sin-nada');
     }
 
-    responder(claude_redactar($texto, $limpias, $gremios, $miradas, $sitios));
+    // Juntar o no las fotos del mismo remate: lo decide cada uno en
+    // sus ajustes. Si no viene el campo se junta, que es lo normal —y
+    // así una versión vieja del móvil sigue funcionando igual.
+    $juntar = !isset($datos['juntar']) || (bool) $datos['juntar'];
+    responder(claude_redactar($texto, $limpias, $gremios, $miradas, $sitios, $juntar));
 }
 
 /* ═══════════════════════════════════════════════════════════════

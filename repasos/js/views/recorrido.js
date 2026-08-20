@@ -28,6 +28,7 @@ import {
   menuFlotante, filaMenu, filaMenuFichero,
 } from '../piezas.js';
 import { alCerrarRecorrido, nombreCorto } from '../frases.js';
+import { juntaFotos } from '../ajustesLocales.js';
 import { paraMirar, prepararImagen } from '../media.js';
 import { ir } from '../app.js';
 
@@ -356,9 +357,17 @@ export async function render({ promoId, unidadId }) {
         zona: v.zona || '',
         tocado: !!v.tocado, zonaTocada: !!v.zonaTocada,
         fuera: !!v.fuera, guardada: !!v.guardada,
+        // Absorbida = esta foto es de un remate que ya cuenta otra
+        // ficha. No está fuera —su foto va a ir en la tarea— pero no
+        // tiene ficha propia.
+        absorbida: !!v.absorbida,
+        extras: Array.isArray(v.extras) ? v.extras.slice() : [],
         confianza: v.confianza || null, sinFoto: false,
       };
     });
+    const porMarca = new Map(fichas.map((f) => [String(f.marca.id), f]));
+    /** Las fotos de una ficha: la suya y las que haya absorbido. */
+    const fotosDe = (f) => [f.marca, ...f.extras.map((id) => porMarca.get(String(id))?.marca).filter(Boolean)];
 
     /* Apuntar lo repasado. Se espera un momento entre tecla y tecla:
        guardar el recorrido reescribe el registro entero —con su audio y
@@ -373,6 +382,7 @@ export async function render({ promoId, unidadId }) {
           id: f.marca.id, texto: f.texto, oficio: f.oficio, zona: f.zona,
           tocado: f.tocado, zonaTocada: f.zonaTocada,
           fuera: f.fuera, guardada: f.guardada, confianza: f.confianza,
+          absorbida: f.absorbida, extras: f.extras,
         }));
         try { await store.guardarRecorrido(rec); } catch { /* al siguiente cambio */ }
       };
@@ -430,7 +440,7 @@ export async function render({ promoId, unidadId }) {
     };
 
     /* ─── Por dónde vamos ─── */
-    const vivas = () => fichas.filter((f) => !f.fuera);
+    const vivas = () => fichas.filter((f) => !f.fuera && !f.absorbida);
     const cerradas = () => vivas().filter((f) => f.guardada);
     const abiertas = () => vivas().filter((f) => !f.guardada);
     let mirando = abiertas()[0] || vivas()[0] || null;
@@ -614,12 +624,49 @@ export async function render({ promoId, unidadId }) {
       const validar = () => { guardarBtn.disabled = !(f.texto.trim() && f.oficio && f.zona); };
       validar();
 
+      /* Las otras fotos del mismo remate, en tira debajo de la
+         principal. Salen cuando la IA ha agrupado varias: hay que poder
+         verlas y quitarlas de aquí sin perder la tarea. */
+      const extras = f.extras.length ? h('div.d-rec-extras', null,
+        ...f.extras.map((id) => {
+          const g = porMarca.get(String(id));
+          if (!g) return null;
+          const u2 = URL.createObjectURL(g.marca.blob);
+          urlsSueltas.push(u2);
+          return h('button.d-rec-extra', {
+            'aria-label': 'Otra foto de este mismo repaso',
+            onclick: () => openViewer(h('img', { src: u2, alt: '' })),
+          },
+            h('img', { src: u2, alt: '' }),
+            h('span.quitar', {
+              'aria-label': 'Sacarla de este repaso',
+              onclick: async (ev) => {
+                ev.stopPropagation();
+                if (!await confirmar({
+                  texto: 'Esta foto vuelve a ser un repaso aparte, con su propia tarea. '
+                    + 'El texto de éste se queda como está.',
+                  ok: 'Separarla en otro repaso',
+                  icono: 'cursores',
+                  conservar: 'Dejarla aquí',
+                  mini: u2,
+                })) return;
+                g.absorbida = false;
+                f.extras = f.extras.filter((x) => String(x) !== String(id));
+                await apuntar({ ya: true });
+                pintarFicha();
+              },
+            }, icon('x', 14)),
+          );
+        }).filter(Boolean),
+      ) : null;
+
       lienzo.replaceChildren(...[
         // La barra de por dónde vas, pegada bajo la cabecera.
         h('div.d-rec-avance', null,
           ...l.map((x) => h('span', { class: x === f ? 'aqui' : (x.guardada ? 'hecha' : '') })),
         ),
         foto,
+        extras,
         campo('Zona o estancia', selZona),
         campo('Oficio o subcontrata', selGremio),
         h('div.d-campo', null,
@@ -669,10 +716,13 @@ export async function render({ promoId, unidadId }) {
           listaId: lista.id, texto: f.texto.trim(), oficio: f.oficio, zona: f.zona,
         });
         if (!f.sinFoto) {
-          await store.añadirMedio(t.id, {
-            tipo: 'imagen', blob: f.marca.blob, mime: 'image/jpeg',
-            ancho: f.marca.ancho, alto: f.marca.alto,
-          });
+          // Todas las fotos del remate, no solo la principal.
+          for (const m of fotosDe(f)) {
+            await store.añadirMedio(t.id, {
+              tipo: 'imagen', blob: m.blob, mime: 'image/jpeg',
+              ancho: m.ancho, alto: m.alto,
+            });
+          }
         }
       }
       await store.marcarRecorridoUsado(rec.id, lista.id);
@@ -812,6 +862,7 @@ export async function render({ promoId, unidadId }) {
             OFICIOS.map((o) => ({ id: o.id, nombre: o.nombre })),
             fotos,
             ZONAS,
+            juntaFotos(store.sesion()),
           );
 
           const porId = new Map(conFicha.map((f) => [String(f.marca.id), f]));
@@ -836,6 +887,17 @@ export async function render({ promoId, unidadId }) {
             if (ficha.zona && ZONAS.includes(ficha.zona)) {
               f.zona = ficha.zona;
               f.zonaTocada = true;
+            }
+            /* Las otras fotos del mismo remate se meten en esta
+               ficha y dejan de tener la suya. La tarea saldrá con las
+               dos —o las tres— dentro, que es lo que se quiere ver al
+               abrirla: el sitio de lejos y el defecto de cerca. */
+            f.extras = [];
+            for (const otro of ficha.con || []) {
+              const g = porMarca.get(String(otro));
+              if (!g || g === f || g.fuera || g.absorbida) continue;
+              g.absorbida = true;
+              f.extras.push(g.marca.id);
             }
             if (ficha.origen === 'foto') vistas += 1; else dichas += 1;
           }

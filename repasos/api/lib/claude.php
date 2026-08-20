@@ -109,7 +109,7 @@ function claude_borrar_clave(): void
  * es peor que un parte con un hueco: manda a alguien a arreglar algo
  * que no existe y quema la confianza en el resto de la lista.
  */
-function claude_instrucciones(array $oficios, array $zonas = []): string
+function claude_instrucciones(array $oficios, array $zonas = [], bool $juntar = true): string
 {
     $lista = '';
     foreach ($oficios as $o) {
@@ -127,6 +127,31 @@ function claude_instrucciones(array $oficios, array $zonas = []): string
             . "  alguien al baño que no era; una vacía solo pide que la escriban.\n"
         : "\nNo pongas estancia: deja ese campo vacío siempre.\n";
 
+    /* Una ficha por foto, o una ficha por REMATE.
+
+       Con una por foto salen tres órdenes de trabajo para un solo
+       defecto cuando alguien saca tres fotos de lo mismo, y además
+       contadas a trozos: «quitar el router» y «repasar la mancha que
+       hay detrás» son la misma faena. Agrupando, sale una orden con
+       sus tres fotos dentro, que es como se habla en obra. */
+    $agrupar = $juntar
+        ? "Devuelve una ficha por REMATE, no por foto.\n\n"
+            . "Es normal que sacara varias fotos de la misma cosa: una de lejos\n"
+            . "para situarla y otra de cerca para que se vea, o el estorbo que\n"
+            . "hay que quitar y el defecto que tapaba. Cuando dos o más fotos\n"
+            . "sean del MISMO remate, devuelve una sola ficha: el id de la más\n"
+            . "clara, y las demás en «con».\n\n"
+            . "Agrupa solo cuando estés seguro de que es lo mismo. Ante la duda,\n"
+            . "fichas separadas: dos órdenes de más se cierran; una orden que se\n"
+            . "come un remate lo deja sin hacer.\n\n"
+            . "Y no agrupes por cercanía ni por gremio: dos desconchones\n"
+            . "distintos de la misma pared son dos remates, aunque los arregle\n"
+            . "el mismo pintor de una pasada.\n\n"
+            . "Cada foto tiene que salir exactamente una vez, como «id» de una\n"
+            . "ficha o dentro del «con» de otra. Ninguna se queda fuera."
+        : "Devuelve una ficha por cada foto, en el mismo orden, con su mismo id.\n\n"
+            . "Deja «con» siempre vacío: aquí no se agrupa nada.";
+
     return <<<TXT
 Eres el ayudante de un arquitecto que acaba de recorrer una vivienda en
 obra pasando revista a los remates. Cada vez que encontraba algo tocaba
@@ -137,7 +162,7 @@ Te doy las fotos que tomó, cada una con el segundo del recorrido en que
 se hizo, y —si dijo algo— lo que dijo. Tu trabajo es convertir eso en
 las órdenes de trabajo que se le van a pasar al jefe de obra.
 
-Devuelve una ficha por cada foto, en el mismo orden, con su mismo id.
+{$agrupar}
 
 DE DÓNDE SACAS CADA FICHA, por este orden:
 1. Si algo de lo que dijo se le puede atribuir a esa foto, manda lo que
@@ -266,8 +291,15 @@ function claude_esquema(array $oficios, array $zonas = []): array
                         // encima, lo leído de una foto se mira dos veces.
                         'origen' => ['type' => 'string', 'enum' => ['dicho', 'foto']],
                         'confianza' => ['type' => 'string', 'enum' => ['alta', 'media', 'baja']],
+                        // Las OTRAS fotos del mismo remate. En un
+                        // recorrido es normal sacar dos o tres de lo
+                        // mismo —una de lejos para situarlo, otra de
+                        // cerca para que se vea—, y eso es una sola
+                        // orden de trabajo con varias fotos, no tres
+                        // órdenes. Vacío cuando la foto va sola.
+                        'con' => ['type' => 'array', 'items' => ['type' => 'string']],
                     ],
-                    'required' => ['id', 'texto', 'oficio', 'zona', 'origen', 'confianza'],
+                    'required' => ['id', 'texto', 'oficio', 'zona', 'origen', 'confianza', 'con'],
                     'additionalProperties' => false,
                 ],
             ],
@@ -287,7 +319,7 @@ function claude_esquema(array $oficios, array $zonas = []): array
  * poder leer por qué —sin clave, sin saldo, sin salida a internet— y
  * escribir las tareas a mano, que es lo que hacía hasta ayer.
  */
-function claude_redactar(string $texto, array $marcas, array $oficios, array $fotos = [], array $zonas = []): array
+function claude_redactar(string $texto, array $marcas, array $oficios, array $fotos = [], array $zonas = [], bool $juntar = true): array
 {
     $clave = claude_clave();
     if ($clave === '') {
@@ -306,7 +338,7 @@ function claude_redactar(string $texto, array $marcas, array $oficios, array $fo
     $cuerpo = [
         'model' => CLAUDE_MODELO,
         'max_tokens' => claude_tope_salida(count($marcas)),
-        'system' => claude_instrucciones($oficios, $zonas),
+        'system' => claude_instrucciones($oficios, $zonas, $juntar),
         'messages' => [
             ['role' => 'user', 'content' => claude_mensaje($texto, $marcas, $fotos)],
         ],
