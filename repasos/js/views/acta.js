@@ -6,10 +6,10 @@
 
    Cada línea lleva a su tarea. El acta cuenta lo que pasó; la tarea es
    donde se sigue trabajando. */
-import { h, icon, grupoAvatares, toast, hora } from '../ui.js';
+import { h, icon, grupoAvatares, toast, hora, trasLaOnda } from '../ui.js';
 import * as store from '../store.js';
 import { PROMOCIONES, unidad, oficio } from '../catalog.js';
-import { menuTarjeta, avisoLocal, barraSync } from '../piezas.js';
+import { cabecera, menuTarjeta, avisoLocal, barraSync } from '../piezas.js';
 import { actaDelDia, nombreDeFichero } from '../pdf.js';
 import { ir } from '../app.js';
 import { fechaDeActa, diaDeLaSemana } from './historial.js';
@@ -47,7 +47,11 @@ export async function render({ fecha }) {
     if (elegido === 'pdf') bajar();
   };
 
-  const bajar = () => {
+  /* El PDF se fabrica entero de una sentada y sin soltar el hilo. Se le
+     dan dos fotogramas de margen para que la onda del botón arranque
+     antes: si no, la ola se queda congelada a medias mientras el móvil
+     monta el documento y parece que la app se ha colgado. */
+  const bajar = () => trasLaOnda(() => {
     const blob = actaDelDia({
       fecha: acta.fecha,
       titulo: fechaDeActa(acta.fecha, { conAno: true }),
@@ -75,7 +79,7 @@ export async function render({ fecha }) {
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 4000);
     toast('Acta descargada');
-  };
+  });
 
   const cifra = (n, rotulo, clase) => (n ? h('div.d-acta-cifra', { class: clase },
     h('span.n', null, String(n)),
@@ -85,11 +89,7 @@ export async function render({ fecha }) {
     sinTabs: true,
     clase: 'pantalla-diseno',
     contenido: [
-      h('div.d-cab-dentro', null,
-        h('button.d-bola', { 'aria-label': 'Volver', onclick: () => ir('#/listas') }, icon('arrowLeft')),
-        h('div.d-titulo', null, 'Acta'),
-        h('button.d-bola', { 'aria-label': 'Más opciones', onclick: menu }, icon('puntos')),
-      ),
+      cabecera({ volver: '#/listas', titulo: 'Acta', menu }),
       avisoLocal() || barraSync(),
 
       // La portada del acta: la fecha grande, como en el papel.

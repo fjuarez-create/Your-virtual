@@ -472,3 +472,85 @@ export function emptyState(iconName, title, text, action) {
     action && h('div', { style: { marginTop: '20px' } }, action),
   );
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   QUE SE NOTE QUE SE PULSA — la onda de los botones anchos.
+   ═══════════════════════════════════════════════════════════════ */
+
+/**
+ * La onda que sale de donde has puesto el dedo, solo en los botones de
+ * ancho completo.
+ *
+ * En un botón ancho el cambio de tono es igual en toda la pastilla: te
+ * dice que se ha pulsado algo, pero no *dónde*. Con el pulgar tapando
+ * media pantalla eso es información que falta, y la onda la da. Es para
+ * lo que se inventó, y no de adorno.
+ *
+ * En las bolas de 55 px no se pone, y es a propósito: ahí la ola
+ * recorre 27 px, no se lee como movimiento y solo hace ruido. Las bolas
+ * y las tarjetas se quedan con el cambio de tono, que es lo que les
+ * pega. La regla, para no tener que pensarla cada vez: todo lo que se
+ * toca cambia de tono; solo lo ancho y lo que decide algo lleva además
+ * la onda.
+ *
+ * Cuatro cosas la salvan de parecer barata, y las cuatro están puestas:
+ *   · blanco al 13 %, nunca una sombra oscura: el negro no oscurece más
+ *     y lo que sale es una mancha sucia;
+ *   · recortada por la pastilla —el overflow lo pone el CSS—, que si no
+ *     la ola asoma por las esquinas redondeadas;
+ *   · 300 ms, no los 550 largos de Android: estos botones navegan o
+ *     descargan, y una ola creciendo cuando la pantalla ya ha cambiado
+ *     se ve rota;
+ *   · arranca al apoyar el dedo, no al soltarlo, que si no llega tarde
+ *     siempre.
+ *
+ * Se engancha una sola vez a todo el documento, así que vale también
+ * para los botones que nazcan después.
+ */
+/* Quién lleva onda. Hoy, los botones negros de ancho completo y nadie
+   más: Guardar tarea, Nueva inspección, Bajar el acta en PDF, Rechazar
+   tarea y los del recorrido. Sumar otro es añadirlo a esta línea. */
+const CON_ONDA = '.d-boton-negro';
+
+export function arrancarOndas() {
+  document.addEventListener('pointerdown', (e) => {
+    const boton = e.target?.closest?.(CON_ONDA);
+    if (!boton || boton.disabled) return;
+
+    const caja = boton.getBoundingClientRect();
+    const x = e.clientX - caja.left;
+    const y = e.clientY - caja.top;
+    // El radio llega hasta la esquina más lejana: así la ola cubre la
+    // pastilla entera venga el dedo de donde venga.
+    const radio = Math.max(
+      Math.hypot(x, y), Math.hypot(caja.width - x, y),
+      Math.hypot(x, caja.height - y), Math.hypot(caja.width - x, caja.height - y),
+    );
+
+    const onda = h('span.d-onda', {
+      style: {
+        left: `${x}px`, top: `${y}px`,
+        width: `${radio * 2}px`, height: `${radio * 2}px`,
+      },
+    });
+    boton.append(onda);
+    onda.addEventListener('animationend', () => onda.remove(), { once: true });
+    // Cinturón por si la animación no llega a correr —pestaña en
+    // segundo plano, movimiento reducido—: que no se queden ondas
+    // pegadas dentro del botón para siempre.
+    setTimeout(() => onda.remove(), 700);
+  }, { passive: true });
+}
+
+/**
+ * Deja que la onda arranque antes de ponerse a trabajar.
+ *
+ * El botón de bajar el acta fabrica el PDF entero de una sentada y sin
+ * soltar el hilo. Si la ola sale y acto seguido el móvil se pone a ello,
+ * se queda congelada a medias y parece que la app se ha colgado. Con dos
+ * fotogramas de margen la animación ya está corriendo cuando empieza el
+ * trabajo, y lo que se ve es una ola normal.
+ */
+export function trasLaOnda(fn) {
+  requestAnimationFrame(() => requestAnimationFrame(fn));
+}

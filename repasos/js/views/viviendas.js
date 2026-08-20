@@ -15,7 +15,7 @@ import { h, icon, toast } from '../ui.js';
 import { PROMOCIONES, promocion, unidades, oficio, estado } from '../catalog.js';
 import * as store from '../store.js';
 import {
-  cabDiseno, tarjetaVilla, cuandoVilla, hojaOficios, caraDeGremio,
+  cabecera, tarjetaVilla, cuandoVilla, hojaOficios, caraDeGremio,
   avisoLocal, barraSync,
 } from '../piezas.js';
 import { ir, conFiltros, filtrosDeRuta, anotarFiltros } from '../app.js';
@@ -135,7 +135,7 @@ export async function render({ promoId, desdeTab = false }) {
     sinTabs: true,
     clase: 'pantalla-diseno',
     contenido: [
-      cabDiseno('viviendas'),
+      cabecera({ seccion: 'viviendas' }),
       h('h1.d-saludo', null, 'Viviendas'),
       avisoLocal() || barraSync(),
       h('div.d-fila-selector', null, conmutador, bolaFiltros),

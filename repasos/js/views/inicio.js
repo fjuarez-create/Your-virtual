@@ -17,7 +17,7 @@
 import { h, icon, avatar, toast, fechaCorta, hora } from '../ui.js';
 import * as store from '../store.js';
 import { PROMOCIONES, unidad, estado, puedeVerificar } from '../catalog.js';
-import { avisoLocal, barraSync, cabDiseno, tarjetaVilla, cuandoVilla } from '../piezas.js';
+import { avisoLocal, barraSync, cabecera, tarjetaVilla, cuandoVilla } from '../piezas.js';
 import { ir, conFiltros, refrescar } from '../app.js';
 
 /**
@@ -167,7 +167,7 @@ export async function render() {
     clase: 'pantalla-diseno',
     contenido: [
       /* La cabecera del diseño: la cara y las tres bolas. */
-      cabDiseno('inicio'),
+      cabecera({ seccion: 'inicio' }),
 
       h('h1.d-saludo', null, saludo(yo)),
       avisoLocal() || barraSync(),

@@ -5,7 +5,7 @@ import { h, icon, sheet, toast, confirmSheet, avatar, emptyState } from '../ui.j
 import * as api from '../api.js';
 import * as store from '../store.js';
 import { EMPRESAS, contrasenaInicial, verificaPorDefecto } from '../catalog.js';
-import { cabecera, chevron, hojaFoto } from '../piezas.js';
+import { cabeceraClasica, chevron, hojaFoto } from '../piezas.js';
 import { ir, refrescar } from '../app.js';
 
 export async function render() {
@@ -26,7 +26,7 @@ export async function render() {
     sinTabs: true,
     fab: h('button.fab', { onclick: () => altaUsuario() }, icon('plus'), 'Nuevo usuario'),
     contenido: [
-      cabecera('Usuarios', 'Equipo con acceso a los repasos', { volverA: '#/ajustes' }),
+      cabeceraClasica('Usuarios', 'Equipo con acceso a los repasos', { volverA: '#/ajustes' }),
       h('h1.display', { style: { marginTop: '10px' } }, 'Equipo'),
 
       error

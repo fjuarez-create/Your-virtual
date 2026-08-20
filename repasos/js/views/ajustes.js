@@ -4,7 +4,7 @@ import { h, icon, sheet, toast, confirmSheet, avatar, pesoLegible } from '../ui.
 import * as store from '../store.js';
 import * as api from '../api.js';
 import * as db from '../db.js';
-import { barraSync, chevron, cabeceraTab, cabeceraDentro, hojaFoto, ctaAccion, ctaCancelar, abrirPagina } from '../piezas.js';
+import { barraSync, chevron, cabecera, CAB_BOLA, hojaFoto, ctaAccion, ctaCancelar, abrirPagina } from '../piezas.js';
 import * as ejemplos from '../ejemplos.js';
 import { PROMOCIONES } from '../catalog.js';
 import { usaIA, ponerUsaIA } from '../ajustesLocales.js';
@@ -43,14 +43,13 @@ export async function render() {
     sinTabs: true,
     clase: 'pantalla-diseno',
     contenido: [
-      // La cabecera de la plantilla: flecha en bola blanca, título en
-      // el centro y la propia cara a la derecha, quieta, para saber de
-      // quién son estos ajustes.
-      h('div.d-cab-dentro', null,
-        h('button.d-bola', { 'aria-label': 'Volver', onclick: () => ir('#/') }, icon('arrowLeft')),
-        h('span.d-titulo', null, 'Ajustes'),
-        avatar(u, { tam: 54 }),
-      ),
+      // La cabecera de siempre, con la propia cara a la derecha en vez
+      // del menú: quieta, solo para saber de quién son estos ajustes.
+      cabecera({
+        volver: '#/',
+        titulo: 'Ajustes',
+        derecha: avatar(u, { tam: CAB_BOLA }),
+      }),
 
       // Quién eres. La plantilla no lo trae, pero en una app con diez
       // usuarios que comparten móviles de obra, verlo evita sustos.

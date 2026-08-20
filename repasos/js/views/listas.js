@@ -15,7 +15,8 @@ import { h, icon, toast, avatar, fechaCorta, hora } from '../ui.js';
 import { promocion, unidad, oficio, estado as estadoDe, puedeCrearLista } from '../catalog.js';
 import * as store from '../store.js';
 import {
-  tarjetaActa, tarjetaTarea, cuandoTarea, bannerAvance, hojaZonas, hojaFiltroTareas, caraDeGremio,
+  cabecera, tarjetaActa, tarjetaTarea, cuandoTarea, bannerAvance, hojaZonas, hojaFiltroTareas,
+  caraDeGremio,
   avisoLocal, barraSync, menuFlotante, menuTarjeta, filaMenu, filaMenuFichero, bandeja,
 } from '../piezas.js';
 import { hojaDePuerta, nombreDeFichero } from '../pdf.js';
@@ -241,14 +242,11 @@ export async function render({ promoId, unidadId }) {
     sinTabs: true,
     clase: 'pantalla-diseno',
     contenido: [
-      h('div.d-cab-dentro', null,
-        h('button.d-bola', {
-          'aria-label': 'Volver',
-          onclick: () => ir(conFiltros('#/viviendas', filtrosDeRuta())),
-        }, icon('arrowLeft')),
-        h('div.d-titulo', null, u.nombre),
-        h('button.d-bola', { 'aria-label': 'Más opciones', onclick: menu }, icon('puntos')),
-      ),
+      cabecera({
+        volver: () => ir(conFiltros('#/viviendas', filtrosDeRuta())),
+        titulo: u.nombre,
+        menu,
+      }),
       avisoLocal() || barraSync(),
 
       // El PDF ya no vive aquí: se baja desde los tres puntos de

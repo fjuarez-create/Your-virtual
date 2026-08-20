@@ -15,7 +15,7 @@ import { promocion, unidad, unidades, oficio as oficioDe } from '../catalog.js';
 import * as store from '../store.js';
 import * as media from '../media.js';
 import {
-  hojaZonas, hojaOficios, hojaFecha, hojaFotoAcciones, menuFlotante, filaMenu,
+  cabecera, hojaZonas, hojaOficios, hojaFecha, hojaFotoAcciones, menuFlotante, filaMenu,
   bandeja, caraDeGremio,
 } from '../piezas.js';
 import { ir } from '../app.js';
@@ -190,16 +190,13 @@ export async function render({ promoId, unidadId }) {
     sinTabs: true,
     clase: 'pantalla-diseno',
     contenido: [
-      h('div.d-cab-dentro', null,
-        h('button.d-bola', { 'aria-label': 'Volver', onclick: () => ir(rutaVilla) }, icon('arrowLeft')),
-        h('div.d-titulo', null, 'Nueva tarea'),
-        h('button.d-bola', {
-          'aria-label': 'Más opciones',
-          onclick: () => menuFlotante((cerrar) => [
-            filaMenu('trash', 'Descartar el borrador', () => { cerrar(); ir(rutaVilla); }),
-          ]),
-        }, icon('puntos')),
-      ),
+      cabecera({
+        volver: rutaVilla,
+        titulo: 'Nueva tarea',
+        menu: () => menuFlotante((cerrar) => [
+          filaMenu('trash', 'Descartar el borrador', () => { cerrar(); ir(rutaVilla); }),
+        ]),
+      }),
 
       cajaFotos,
 

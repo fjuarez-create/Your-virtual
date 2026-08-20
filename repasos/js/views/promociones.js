@@ -4,7 +4,7 @@ import { h, icon } from '../ui.js';
 import { PROMOCIONES } from '../catalog.js';
 import { unidades } from '../catalog.js';
 import * as store from '../store.js';
-import { chevron, cabecera } from '../piezas.js';
+import { chevron, cabeceraClasica } from '../piezas.js';
 import { ir } from '../app.js';
 
 export async function render() {
@@ -42,7 +42,7 @@ export async function render() {
   return {
     sinTabs: true,
     contenido: [
-      cabecera('Promociones', 'Elige el desarrollo', { volverA: '#/' }),
+      cabeceraClasica('Promociones', 'Elige el desarrollo', { volverA: '#/' }),
       h('h1.display', { style: { marginTop: '10px' } }, 'Promociones'),
       h('p.sub', { style: { marginTop: '10px', marginBottom: '8px' } },
         'Elige el desarrollo cuyas viviendas vas a repasar.'),

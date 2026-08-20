@@ -22,7 +22,7 @@ import * as store from '../store.js';
 import * as api from '../api.js';
 import * as grabadora from '../recorrido.js';
 import {
-  cabeceraDentro, cerrarVuelta, hojaOficios, hojaZonas, hojaBienHecho, ctaAccion, ctaCancelar,
+  cabecera, hojaOficios, hojaZonas, hojaBienHecho, ctaAccion, ctaCancelar,
   menuFlotante, filaMenu, filaMenuFichero,
 } from '../piezas.js';
 import { alCerrarRecorrido, nombreCorto } from '../frases.js';
@@ -84,15 +84,15 @@ export async function render({ promoId, unidadId }) {
   // La cabecera se guarda para poder tocarla desde el repaso: allí la
   // flecha de volver deja de navegar (irse dejaría el recorrido a
   // medias sin decirlo) y el título pasa a «Nueva lista - Villa N».
-  const bolaVolver = h('button.d-bola', { 'aria-label': 'Volver', onclick: () => ir(volver) }, icon('arrowLeft'));
-  const tituloCab = h('div.d-titulo', null, u.nombre);
-  const cabecera = h('div.d-cab-dentro', null,
-    bolaVolver,
-    tituloCab,
-    h('button.d-bola', { 'aria-label': 'Más opciones', onclick: () => menuFlotante((cerrar) => [
+  // Para eso están ponerTitulo() y ponerVuelta(), que la cabecera trae
+  // puestos encima.
+  const cab = cabecera({
+    volver,
+    titulo: u.nombre,
+    menu: () => menuFlotante((cerrar) => [
       filaMenu('x', 'Salir del recorrido', () => { cerrar(); ir(volver); }),
-    ]) }, icon('puntos')),
-  );
+    ]),
+  });
 
   // Los gremios que más salen aquí, para tenerlos a un toque al repasar.
   const sugeridos = await store.oficiosMasUsados(unidadId, 4);
@@ -681,8 +681,12 @@ export async function render({ promoId, unidadId }) {
     // La flecha de volver deja de navegar a propósito: irse por ahí
     // dejaría el recorrido a medias sin decirlo. El recorrido sigue en
     // el móvil, así que cerrar la app por accidente no pierde nada.
-    tituloCab.textContent = `Nueva lista - ${u.nombre}`;
-    bolaVolver.onclick = () => toast('Guarda o elimina cada tarea para terminar. Lo grabado no se pierde.');
+    //
+    // Se cambia con ponerVuelta() y no colgándole un onclick nuevo
+    // encima: el de antes está puesto con addEventListener y seguiría
+    // disparando también, así que la flecha avisaría Y se iría igual.
+    cab.ponerTitulo(`Nueva lista - ${u.nombre}`);
+    cab.ponerVuelta(() => toast('Guarda o elimina cada tarea para terminar. Lo grabado no se pierde.'));
 
     lienzo.replaceChildren(
       h('div.rec-resumen', null,
@@ -701,7 +705,7 @@ export async function render({ promoId, unidadId }) {
     sinTabs: true,
     clase: 'pantalla-diseno pantalla-recorrido',
     contenido: [
-      cabecera,
+      cab,
       lienzo,
     ],
     // Al salir de la pantalla hay que soltar cámara y micrófono sí o sí:

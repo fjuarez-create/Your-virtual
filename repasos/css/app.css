@@ -1566,22 +1566,182 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
   content: ''; position: fixed; inset: 0; z-index: -1; background: var(--d-fondo);
 }
 
-/* ─── Cabecera: la cara a la izquierda, las tres bolas a la derecha ── */
+/* ═══ LA CABECERA ═══════════════════════════════════════════════
+
+   Una sola para las diez pantallas, en dos formas: la de fuera —la
+   cara y las tres bolas de navegación— y la de dentro —volver, título
+   y acción—. Las dos salen de estos tres números, así que miden
+   exactamente lo mismo y caen a la misma altura.
+
+   Antes cada pantalla escribía la suya y por eso la cara quedaba medio
+   píxel más baja que las bolas, y en Ajustes acababa un píxel antes
+   del borde derecho que en todas las demás. Lo montaba todo la vista,
+   y bastaba con que una pusiera 54 donde otra ponía 55.
+
+   Quien las dibuja ahora es cabecera(), en js/piezas.js.  ═══ */
+:root {
+  /* ── GEMELO de CAB_BOLA en js/piezas.js: la cara la dibuja avatar()
+     con las medidas puestas en el propio elemento, y ésas no leen
+     variables de CSS. Si cambia una, cambia la otra. ── */
+  --cab-bola: 55px;   /* el diámetro de todo lo redondo de la cabecera */
+  --cab-hueco: 4px;   /* el aire entre una bola y la siguiente */
+  --cab-aire: 8px;    /* el margen de arriba y el de abajo */
+}
+
 .d-cab {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 8px 0 8px;
+  display: flex; align-items: center; gap: var(--cab-hueco);
+  padding: var(--cab-aire) 0;
+  min-height: calc(var(--cab-bola) + var(--cab-aire) * 2);
 }
-.d-cab .avatar { width: 54px; height: 54px; }
-.d-cab-menu { display: flex; gap: 4px; }
+
+/* Todo lo redondo de la cabecera mide igual, venga de donde venga: la
+   cara, las tres bolas, la flecha de volver y los tres puntos. */
+.d-cab .d-bola,
+.d-cab .avatar,
+.d-cab .d-cab-hueco {
+  width: var(--cab-bola); height: var(--cab-bola);
+  flex: 0 0 var(--cab-bola);
+}
+
+/* La de fuera: las tres bolas, pegadas al borde derecho. */
+.d-cab-menu { display: flex; gap: var(--cab-hueco); margin-left: auto; }
+
+/* La de dentro: el título se come el centro y los dos flancos miden lo
+   mismo, así que queda centrado de verdad y no «casi». */
+.d-cab.dentro .d-titulo {
+  flex: 1; min-width: 0; text-align: center;
+  font-size: 24px; line-height: 32px;
+  letter-spacing: -0.005em; font-weight: 500;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
 .d-bola {
-  width: 55px; height: 55px; border-radius: 999px;
-  display: grid; place-items: center;
+  border-radius: 999px; display: grid; place-items: center;
   background: #fff; color: var(--d-tinta);
-  transition: transform var(--mov-corto) var(--sal-estandar);
 }
-.d-bola:active { transform: scale(0.93); }
 .d-bola.activa { background: var(--d-tinta); color: #fff; }
 .d-bola svg { width: 24px; height: 24px; }
+
+/* Al cambiar de sección, el negro de la bola nueva entra fundido en vez
+   de aparecer de golpe: medio parpadeo menos y el salto de pantalla se
+   lee como un movimiento.
+
+   Quien decide si toca fundir es cabecera(), en js/piezas.js, poniendo
+   la clase «entrando». No se pone en .activa a secas porque la pantalla
+   se repinta sola cada vez que la sincronización trae algo nuevo, y la
+   bola parpadearía sola mientras estás mirando la lista. */
+.d-bola.activa.entrando { animation: cab-entra-negro var(--mov-medio) var(--sal-estandar); }
+@keyframes cab-entra-negro {
+  from { background: #fff; color: var(--d-tinta); }
+  to   { background: var(--d-tinta); color: #fff; }
+}
+
+
+/* ═══ QUE SE NOTE QUE SE PULSA ═══════════════════════════════════
+
+   Lo importante no es el efecto: es el reloj. El tono entra de golpe al
+   apoyar el dedo y sale despacio al levantarlo. Con una transición
+   simétrica —o al revés— un toque rápido no llega a verse y la pantalla
+   parece muerta. Por eso el reposo dura --pulsa-sale y :active pone la
+   transición a cero.
+
+   Hasta ahora esto no existía: en todo el rediseño había dos reglas de
+   :active y ninguna cambiaba de color. Y arriba del fichero,
+   -webkit-tap-highlight-color: transparent apaga hasta el destello que
+   pondría iOS por su cuenta. Se tocaba y no pasaba nada.
+
+   Lo claro se apaga un punto con brightness, que vale igual para el
+   blanco de las tarjetas y para el beige del día de hoy sin escribir un
+   color por variante. Lo negro no puede oscurecer más, así que ésos
+   aclaran y llevan su color puesto a mano.   ═══ */
+:root { --pulsa-sale: 190ms; }
+
+.d-bola, .d-cab .avatar, .d-boton-negro, .d-selector-estado, .d-bola-embudo,
+.d-bola-filtros, .d-desplegable, .d-tarjeta, .d-acta-dia,
+.d-acta-linea, .d-repaso, .d-mensaje, .d-item {
+  transition: filter var(--pulsa-sale) var(--sal-estandar),
+              background-color var(--pulsa-sale) var(--sal-estandar),
+              transform var(--pulsa-sale) var(--sal-estandar);
+}
+
+/* Al apoyar el dedo, sin transición ninguna: instantáneo. */
+.d-bola:active, .d-cab .avatar:active, .d-boton-negro:active,
+.d-selector-estado:active, .d-bola-embudo:active, .d-bola-filtros:active,
+.d-desplegable:active, .d-tarjeta:active, .d-acta-dia:active,
+.d-acta-linea:active, .d-repaso:active, .d-mensaje:active, .d-item:active {
+  transition-duration: 0s;
+}
+
+/* Lo redondo y lo pequeño: un punto de sombra y un pellizco de tamaño.
+
+   La cara entra aquí con nombre y apellidos porque trae de serie su
+   propio :active del diseño de antes, que la encogía a 0,92 y no le
+   cambiaba el tono: al lado de las bolas se notaba que iban por libre. */
+.d-bola:active, .d-cab .avatar:active, .d-selector-estado:active,
+.d-bola-embudo:active, .d-bola-filtros:active, .d-desplegable:active {
+  filter: brightness(0.93); transform: scale(0.96);
+}
+
+/* Las tarjetas y las filas anchas se encogen mucho menos: a este tamaño
+   un 4 % ya no es un pellizco, es un salto. */
+.d-tarjeta:active, .d-acta-dia:active, .d-acta-linea:active,
+.d-repaso:active, .d-mensaje:active {
+  animation: none; filter: brightness(0.93); transform: scale(0.99);
+}
+
+/* Lo negro aclara, que oscurecer no puede.
+
+   Y el «animation: none» no es un capricho. Los hijos directos de
+   .screen llevan la animación de entrada con fill-mode «both», y una
+   animación terminada sigue mandando sobre el transform para siempre:
+   sin esta línea el botón cambiaba de tono pero no se encogía —medido
+   en el navegador, no supuesto— porque la animación lo tenía clavado en
+   «none». Donde el elemento no cuelga de .screen, no hace nada. */
+.d-bola.activa:active { filter: none; background: #262626; }
+.d-boton-negro:active { animation: none; background: #262626; transform: scale(0.985); }
+.d-boton-negro.rojo:active { background: #c23429; }
+.d-boton-negro.verde:active { background: #0a6b3e; }
+
+/* Las filas de Ajustes no tienen fondo propio —van sobre la tarjeta
+   blanca del grupo—, así que a éstas hay que ponérselo. La caja de la
+   fila se define arriba, con el resto de .d-item; aquí solo el tono. */
+.d-item:active { background: var(--d-gris-suave); }
+
+/* Con el movimiento reducido se va el tamaño y se queda el tono, que es
+   lo que dice que la app te ha oído. La regla general del principio del
+   fichero deja todas las transiciones en 0,01 ms, y así un toque rápido
+   no se vería: aquí se les devuelve la salida. */
+@media (prefers-reduced-motion: reduce) {
+  .d-bola, .d-cab .avatar, .d-boton-negro, .d-selector-estado,
+  .d-bola-embudo, .d-bola-filtros, .d-desplegable, .d-tarjeta,
+  .d-acta-dia, .d-acta-linea, .d-repaso, .d-mensaje, .d-item {
+    transition-duration: var(--pulsa-sale) !important;
+  }
+  .d-bola:active, .d-cab .avatar:active, .d-boton-negro:active,
+  .d-selector-estado:active, .d-bola-embudo:active, .d-bola-filtros:active,
+  .d-desplegable:active, .d-tarjeta:active, .d-acta-dia:active,
+  .d-acta-linea:active, .d-repaso:active, .d-mensaje:active, .d-item:active {
+    transform: none; transition-duration: 0s !important;
+  }
+}
+
+/* ─── La onda del dedo ───
+   Solo en los botones de ancho completo. Quién la lleva, por qué, y por
+   qué NO la llevan las bolas está contado en arrancarOndas(), en
+   js/piezas.js. Aquí solo hace falta que la pastilla la recorte: sin
+   overflow, la ola asoma por las esquinas redondeadas. */
+.d-boton-negro { position: relative; overflow: hidden; }
+.d-onda {
+  position: absolute; border-radius: 50%; pointer-events: none;
+  background: rgba(255, 255, 255, 0.13);
+  transform: translate(-50%, -50%) scale(0);
+  animation: d-onda 300ms var(--sal-estandar) forwards;
+}
+@keyframes d-onda {
+  0%   { transform: translate(-50%, -50%) scale(0); opacity: 1; }
+  55%  { opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+}
 
 /* ─── El saludo del día ── */
 .d-saludo {
@@ -1731,8 +1891,10 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
   color: var(--d-gris); display: grid; place-items: center;
 }
 .d-selector button[aria-pressed='true'] { background: var(--d-beige); color: var(--d-tinta); }
+/* Lo mismo en la ficha de la vivienda: el desplegable de estancia mide
+   48 y esta bola tiene que medir 48. */
 .d-bola-filtros {
-  width: 56px; height: 56px; flex: none; border-radius: 999px;
+  width: 48px; height: 48px; flex: none; border-radius: 999px;
   background: #fff; color: var(--d-gris); display: grid; place-items: center;
 }
 .d-bola-filtros svg { width: 24px; height: 24px; }
@@ -1852,24 +2014,27 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
    bola blanca y el título centrado, y el contenido en tarjetas
    blancas agrupadas —el epígrafe dentro de la tarjeta— con filas de
    icono, rótulo y flechita. El rojo solo para salir. */
-.d-cab-dentro {
-  display: grid; grid-template-columns: 55px 1fr 55px;
-  align-items: center; padding: 8px 0;
-}
-.d-cab-dentro .d-titulo {
-  text-align: center; font-size: 24px; line-height: 32px;
-  letter-spacing: -0.005em; font-weight: 500;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-
 .d-grupo {
+  /* El aire lateral de la tarjeta. Las filas de dentro se asoman
+     justo esto por cada lado para que la banda de pulsado llegue al
+     borde, así que el número tiene que ser uno solo. */
+  --grupo-aire: 16px;
   background: #fff; border-radius: var(--d-radio);
-  padding: 14px 16px 6px; margin-top: 14px;
+  padding: 14px var(--grupo-aire) 6px; margin-top: 14px;
 }
 .d-grupo-titulo { font-size: 15px; font-weight: 500; margin-bottom: 4px; }
+/* La fila sale a los bordes de la tarjeta con margen negativo y se
+   devuelve el mismo margen como relleno: el texto queda exactamente
+   donde estaba y, al pulsarla, la banda gris llega de lado a lado en
+   vez de quedarse en un recuadro flotando en medio. */
 .d-item {
   display: flex; align-items: center; gap: 12px;
-  width: 100%; min-height: 52px; padding: 6px 0;
+  /* El ancho va escrito y no en «auto» porque casi todas estas filas
+     son <button>, y un botón en «auto» se encoge a su contenido: las
+     que llevaban texto corto se quedaban a media tarjeta. */
+  width: calc(100% + var(--grupo-aire) * 2);
+  margin: 0 calc(var(--grupo-aire) * -1); min-height: 52px;
+  padding: 6px var(--grupo-aire); border-radius: 14px;
   text-align: left; font-family: var(--d-font);
   font-size: 16px; font-weight: 500; color: var(--d-tinta);
 }
@@ -2337,8 +2502,12 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
   font: 500 16px/24px var(--d-font); color: var(--d-tinta); text-align: left;
 }
 .d-selector-estado svg { width: 24px; height: 24px; color: var(--d-gris); flex: none; }
+/* La bola de al lado del selector mide lo que el selector, no más:
+   antes eran 56 contra 48 y el círculo sobresalía por arriba y por
+   abajo de la pastilla, que es de lo que menos se perdona en una fila
+   de dos piezas. */
 .d-bola-embudo {
-  width: 56px; height: 56px; flex: none; border-radius: 999px;
+  width: 48px; height: 48px; flex: none; border-radius: 999px;
   background: #fff; border: 0; cursor: pointer; display: grid; place-items: center;
   color: var(--d-gris);
 }

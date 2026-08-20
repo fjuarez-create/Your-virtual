@@ -20,7 +20,7 @@ import {
 } from '../catalog.js';
 import * as store from '../store.js';
 import {
-  cabDiseno, tarjetaTarea, cuandoTarea, hojaFiltroTareas, menuFlotante, menuTarjeta, filaMenu,
+  cabecera, tarjetaTarea, cuandoTarea, hojaFiltroTareas, menuFlotante, menuTarjeta, filaMenu,
   avisoLocal, barraSync,
 } from '../piezas.js';
 import { ir } from '../app.js';
@@ -277,11 +277,7 @@ export async function render({ promoId, estadoId = 'resuelta' }) {
     sinTabs: true,
     clase: 'pantalla-diseno',
     contenido: [
-      h('div.d-cab-dentro', null,
-        h('button.d-bola', { 'aria-label': 'Volver', onclick: () => ir('#/') }, icon('arrowLeft')),
-        h('div.d-titulo', null, 'Tareas'),
-        h('button.d-bola', { 'aria-label': 'Más opciones', onclick: menu }, icon('puntos')),
-      ),
+      cabecera({ volver: '#/', titulo: 'Tareas', menu }),
       avisoLocal() || barraSync(),
       h('div.d-fila-filtro', null, selector, bolaFiltros),
       filtros,

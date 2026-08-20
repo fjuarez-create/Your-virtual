@@ -16,7 +16,7 @@ import {
 } from '../catalog.js';
 import * as store from '../store.js';
 import * as media from '../media.js';
-import { hojaBienHecho, hojaFotoAcciones, cuandoTarea, menuTarjeta } from '../piezas.js';
+import { cabecera, hojaBienHecho, hojaFotoAcciones, cuandoTarea, menuTarjeta } from '../piezas.js';
 import { alCompletar, nombreCorto } from '../frases.js';
 import { ir, refrescar, conFiltros, filtrosDeRuta } from '../app.js';
 import { fotosDe, soltarFotos } from '../pendientes.js';
@@ -273,13 +273,13 @@ export async function render({ listaId, tareaId }) {
     sinTabs: true,
     clase: 'pantalla-diseno',
     contenido: [
-      h('div.d-cab-dentro', null,
-        h('button.d-bola', { 'aria-label': 'Volver', onclick: () => ir(rutaVilla) }, icon('arrowLeft')),
-        // El título dice en qué estado está la tarea, que es lo que
-        // hay que saber al abrirla; de qué casa es ya lo dice su chip.
-        h('div.d-titulo', null, `Tarea ${e.nombre.toLowerCase()}`),
-        h('button.d-bola', { 'aria-label': 'Más opciones', onclick: () => menuTarea(t, listaId, suya) }, icon('puntos')),
-      ),
+      // El título dice en qué estado está la tarea, que es lo que hay
+      // que saber al abrirla; de qué casa es ya lo dice su chip.
+      cabecera({
+        volver: rutaVilla,
+        titulo: `Tarea ${e.nombre.toLowerCase()}`,
+        menu: () => menuTarea(t, listaId, suya),
+      }),
 
       h('p.d-creada', null,
         `Creada por ${t.creadoPorNombre || 'alguien'}, ${cuandoTarea(t.creado).toLowerCase()}`),

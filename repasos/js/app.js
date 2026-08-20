@@ -5,7 +5,7 @@
    { contenido, tab, fab, sinTabs }. Aquí solo se monta el armazón:
    zona desplazable, botón de acción y barra inferior.
    ═══════════════════════════════════════════════════════════════ */
-import { h, icon, toast } from './ui.js';
+import { h, icon, toast, arrancarOndas } from './ui.js';
 import * as store from './store.js';
 import * as api from './api.js';
 import { borrarBase } from './db.js';
@@ -337,6 +337,10 @@ async function arrancar() {
   // navegar, que se lee como un fallo.
   await store.cargarPersonas();
   window.addEventListener('hashchange', enrutar);
+  // La onda del dedo de los botones anchos. Se engancha una sola vez a
+  // todo el documento, así que vale también para los botones que se
+  // creen después, y antes de pintar para que valga desde el primero.
+  arrancarOndas();
   await enrutar();
   quitarPantallaDeArranque();
   vigilarDatosNuevos();

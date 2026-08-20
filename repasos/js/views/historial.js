@@ -17,7 +17,7 @@ import { h, icon, grupoAvatares, emptyState } from '../ui.js';
 import * as store from '../store.js';
 import { PROMOCIONES, unidad, unidades } from '../catalog.js';
 import {
-  cabDiseno, menuFlotante, filaMenu, avisoLocal, barraSync, menuTarjeta,
+  cabecera, menuFlotante, filaMenu, avisoLocal, barraSync, menuTarjeta,
 } from '../piezas.js';
 import { ir } from '../app.js';
 
@@ -57,7 +57,7 @@ export async function render() {
       sinTabs: true,
       clase: 'pantalla-diseno',
       contenido: [
-        cabDiseno('listas'),
+        cabecera({ seccion: 'listas' }),
         h('h1.d-saludo', null, 'Actas'),
         emptyState('clipboard', 'Todavía no hay ningún día de obra',
           'El acta se abre sola con el primer repaso que se apunte. Cada día tendrá la suya, con lo que se haya tocado y quién estuvo.'),
@@ -169,7 +169,7 @@ export async function render() {
     sinTabs: true,
     clase: 'pantalla-diseno',
     contenido: [
-      cabDiseno('listas'),
+      cabecera({ seccion: 'listas' }),
       h('h1.d-saludo', null, 'Actas'),
       avisoLocal() || barraSync(),
       h('div.d-fila-filtro', null, selector, bolaFiltros),

@@ -164,8 +164,12 @@ function ajustarTitulo(nodo, { hermanos = null, optico = false, escala = 1 } = {
   return nodo;
 }
 
-/** Cabecera con flecha de volver, título, subtítulo y acciones. */
-export function cabecera(titulo, sub, { volverA, acciones = [] } = {}) {
+/* Cabecera con flecha de volver, título, subtítulo y acciones.
+
+   Es la del diseño de antes y solo la usan las dos pantallas que aún no
+   se han rediseñado —Promociones y Usuarios—. El nombre bueno,
+   cabecera(), se lo lleva la de ahora, que está más abajo. */
+export function cabeceraClasica(titulo, sub, { volverA, acciones = [] } = {}) {
   return h('div.topbar', null,
     volverA && h('button.icon-btn', {
       'aria-label': 'Volver',
@@ -912,28 +916,118 @@ export function tareaFila(t, { portada, donde, filtros = null } = {}) {
 
 /* ═══ Piezas del rediseño 2026 ═══ */
 
+/* ═══════════════════════════════════════════════════════════════
+   LA CABECERA — una sola para toda la aplicación.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* El diámetro de todo lo redondo que va arriba: la cara, las tres bolas
+   de navegación, la flecha de volver y la de los tres puntos.
+
+   Este número vive por duplicado, aquí y en --cab-bola del CSS, porque
+   la cara la dibuja avatar() con las medidas puestas a mano en el
+   propio elemento y ésas no leen variables de CSS. Si se cambia uno hay
+   que cambiar el otro; los dos llevan la misma marca para encontrarse.
+   ── GEMELO de --cab-bola en css/app.css ── */
+export const CAB_BOLA = 55;
+
+/* En qué sección estaba la última cabecera de fuera que se pintó, para
+   saber si el negro de la bola tiene que entrar fundido o ya estaba
+   ahí. Empieza en null: al abrir la app no se funde nada, que la
+   pantalla entera ya viene con su propia animación de entrada. */
+let seccionPintada = null;
+
 /**
- * La cabecera del rediseño: la cara de quien mira (que lleva a
- * Ajustes) y las tres bolas de navegación. La bola activa va en negro.
+ * La cabecera de todas las pantallas, con dos formas y ninguna más.
+ *
+ *   cabecera({ seccion: 'inicio' })
+ *       La de fuera, la de las tres raíces: la cara a la izquierda
+ *       —que lleva a Ajustes— y las tres bolas de navegación a la
+ *       derecha, con la de la sección en la que estás en negro.
+ *
+ *   cabecera({ volver: '#/viviendas', titulo: 'Villa 01', menu: abrir })
+ *       La de dentro: la flecha a la izquierda, el título centrado y la
+ *       acción a la derecha.
+ *
+ * Antes cada pantalla se escribía la suya a mano, y bastaba con que una
+ * pusiera la cara a 54 px y otra la bola a 55 para que se vieran
+ * desalineadas sin que nadie supiera por qué: en Ajustes la cara
+ * acababa un píxel antes del borde que las bolas de las demás
+ * pantallas. Ahora las medidas se deciden aquí y en los tokens --cab-*,
+ * y mover un píxel es moverlo en las diez pantallas a la vez.
+ *
+ * Opciones de la forma de dentro:
+ *   volver   ruta ('#/viviendas') o función, para la flecha.
+ *   titulo   el texto del centro.
+ *   menu     función que abre el menú de los tres puntos.
+ *   derecha  un elemento propio para el hueco de la derecha, cuando no
+ *            es un menú (Ajustes pone ahí tu cara).
+ *
+ * Devuelve el nodo con dos apaños encima, para quien tenga que cambiar
+ * la cabecera con la pantalla ya montada —el recorrido lo hace al pasar
+ * a «nueva lista»—: ponerTitulo() y ponerVuelta().
  */
-export function cabDiseno(activa = 'inicio') {
-  const yo = store.sesion();
-  const bola = (clave, icono, rotulo, adonde) =>
-    h('button.d-bola', {
-      class: activa === clave ? 'activa' : '',
-      'aria-label': rotulo,
-      'aria-current': activa === clave ? 'true' : null,
-      onclick: activa === clave ? null : () => ir(adonde),
-    }, icon(icono));
-  return h('div.d-cab', null,
-    avatar(yo, { tam: 54, onclick: () => ir('#/ajustes') }),
-    h('div.d-cab-menu', null,
-      bola('inicio', 'brujula', 'Inicio', '#/'),
-      bola('viviendas', 'casa', 'Viviendas', '#/viviendas'),
-      bola('listas', 'periodico', 'Actas', '#/listas'),
-    ),
+export function cabecera({ seccion, volver, titulo = '', menu, derecha } = {}) {
+  /* ─── La de fuera: la cara y las tres bolas ─── */
+  if (seccion) {
+    /* El negro de la bola entra fundido solo cuando se CAMBIA de
+       sección, no cada vez que se pinta. La pantalla se repinta sola en
+       cuanto la sincronización trae algo nuevo, y sin esta cuenta la
+       bola parpadearía de blanco a negro sola, sin que nadie la hubiera
+       tocado, mientras estás mirando la lista. */
+    const cambioDeSeccion = seccionPintada !== null && seccionPintada !== seccion;
+    seccionPintada = seccion;
+
+    const bola = (clave, icono, rotulo, adonde) =>
+      h('button.d-bola', {
+        class: [
+          seccion === clave ? 'activa' : '',
+          seccion === clave && cambioDeSeccion ? 'entrando' : '',
+        ].filter(Boolean).join(' '),
+        'aria-label': rotulo,
+        'aria-current': seccion === clave ? 'true' : null,
+        onclick: seccion === clave ? null : () => ir(adonde),
+      }, icon(icono));
+    return h('div.d-cab', null,
+      avatar(store.sesion(), { tam: CAB_BOLA, onclick: () => ir('#/ajustes') }),
+      h('div.d-cab-menu', null,
+        bola('inicio', 'brujula', 'Inicio', '#/'),
+        bola('viviendas', 'casa', 'Viviendas', '#/viviendas'),
+        bola('listas', 'periodico', 'Actas', '#/listas'),
+      ),
+    );
+  }
+
+  /* ─── La de dentro: volver, título y acción ───
+
+     La vuelta se guarda en una caja en vez de colgarla directamente del
+     botón, para poder cambiarla después. Ponerle un onclick nuevo
+     encima no valdría: h() engancha con addEventListener y el de antes
+     seguiría disparando también, así que la flecha haría las dos cosas
+     a la vez. */
+  const salida = { ir: () => (typeof volver === 'function' ? volver() : ir(volver || '#/')) };
+  const atras = h('button.d-bola', {
+    'aria-label': 'Volver',
+    onclick: () => salida.ir(),
+  }, icon('arrowLeft'));
+  const rotulo = h('div.d-titulo', null, titulo);
+
+  const nodo = h('div.d-cab.dentro', null,
+    atras,
+    rotulo,
+    derecha
+      || (menu
+        ? h('button.d-bola', { 'aria-label': 'Más opciones', onclick: menu }, icon('puntos'))
+        /* Sin nada a la derecha se deja el hueco igualmente: si no, el
+           título se descentra y el desplazamiento se nota al pasar de
+           una pantalla a la siguiente. */
+        : h('span.d-cab-hueco')),
   );
+
+  nodo.ponerTitulo = (t) => { rotulo.textContent = t; };
+  nodo.ponerVuelta = (fn) => { salida.ir = fn; };
+  return nodo;
 }
+
 
 /** El cuándo de la tarjeta: «Hoy, 9:02 h» · «Ayer, 14:35 h» · «12 agosto, 2026». */
 const MESES_LARGOS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
