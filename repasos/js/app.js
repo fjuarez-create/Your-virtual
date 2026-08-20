@@ -153,6 +153,18 @@ function pintar({ contenido, tab, fab, sinTabs, clase, alSalir = null }) {
   const nodos = Array.isArray(contenido) ? contenido : [contenido];
   for (const n of nodos) if (n) screen.append(n);
 
+  // Si es la MISMA pantalla que ya estaba —un repintado, no un cambio
+  // de sitio— se conserva por dónde iba. Al borrar una nota de voz en
+  // una tarea larga, o cuando la sincronización trae algo de otro
+  // móvil, la pantalla se rehace: devolverla al principio deja a quien
+  // está trabajando buscando otra vez dónde estaba.
+  const anterior = app.querySelector('.screen');
+  if (rutaPintada !== rutaActual) alturaPintada = 0;
+  // La ruedecita de «cargando» no cuenta: mide cero y borraría la
+  // altura de la pantalla de verdad que estaba debajo.
+  else if (anterior && !anterior.classList.contains('cargando')) alturaPintada = anterior.scrollTop;
+  rutaPintada = rutaActual;
+
   // Se conservan los nodos flotantes (aviso, hoja, visor) entre pantallas.
   // La cápsula también, si seguimos en una sección con botonera: así la
   // bolita se desliza hasta la nueva en vez de reaparecer de cero.
@@ -172,11 +184,19 @@ function pintar({ contenido, tab, fab, sinTabs, clase, alSalir = null }) {
   // El aviso flotante se coloca según lo que haya debajo (ver app.css).
   app.classList.toggle('con-fab', !!fab);
   app.classList.toggle('sin-tabs', !!sinTabs);
-  screen.scrollTop = 0;
+  screen.scrollTop = alturaPintada;
 }
+/* La ruta de lo que hay pintado ahora mismo, y por dónde iba: sirven
+   para distinguir un repintado de un cambio de pantalla. */
+let rutaPintada = null;
+let alturaPintada = 0;
 
 function cargando() {
-  pintar({ contenido: h('div', { style: { display: 'grid', placeItems: 'center', minHeight: '50vh' } }, h('div.spin')), sinTabs: true });
+  pintar({
+    contenido: h('div', { style: { display: 'grid', placeItems: 'center', minHeight: '50vh' } }, h('div.spin')),
+    sinTabs: true,
+    clase: 'cargando',
+  });
 }
 
 async function enrutar() {

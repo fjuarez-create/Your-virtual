@@ -55,7 +55,9 @@ export async function render({ promoId, unidadId }) {
       papelera(0),
     ));
     if (resto.length) {
-      cajaFotos.append(h('div.d-carrusel', null, resto.map((f, i) => {
+      // Con una sola foto en la tira, ancho completo: el recorte que
+      // deja ver que hay otra a la derecha solo tiene sentido si la hay.
+      cajaFotos.append(h('div.d-carrusel', { class: resto.length === 1 ? 'una' : '' }, resto.map((f, i) => {
         const u2 = URL.createObjectURL(f.blob);
         return h('div.celda', {
           style: { backgroundImage: `url("${u2}")` },

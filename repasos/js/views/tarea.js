@@ -20,6 +20,19 @@ import { hojaBienHecho, hojaFotoAcciones, cuandoTarea } from '../piezas.js';
 import { alCompletar, nombreCorto } from '../frases.js';
 import { ir, refrescar, conFiltros, filtrosDeRuta } from '../app.js';
 
+/**
+ * Las fotos que alguien ha hecho para completar o verificar y todavía
+ * no ha mandado, guardadas por tarea y fuera de la pantalla.
+ *
+ * Viven aquí porque la pantalla se rehace entera más veces de las que
+ * uno cree —al mandar un mensaje, al borrar una nota de voz, cuando la
+ * sincronización trae algo de otro móvil—, y una foto hecha en obra que
+ * desaparece sin avisar es de lo peor que puede pasar en esta
+ * aplicación: hay que volver a la vivienda, buscar el remate y
+ * repetirla. Se sueltan solas al verificar o al completar la tarea.
+ */
+const fotosPendientes = new Map();
+
 export async function render({ listaId, tareaId }) {
   const t = await store.tarea(tareaId);
   if (!t) { toast('La tarea ya no existe', 'err'); ir('#/l/' + listaId, { reemplazar: true }); return { contenido: [] }; }
@@ -111,7 +124,12 @@ export async function render({ listaId, tareaId }) {
   );
 
   /* ─── Las fotos que se hacen para completar o verificar ─── */
-  const fotosNuevas = [];
+  // Se guardan fuera de la pantalla, por tarea: cualquier repintado
+  // —una sincronización que trae datos de otro móvil, por ejemplo—
+  // construye esta pantalla de cero, y hasta hoy la foto recién hecha
+  // se perdía sin decir nada. Se sueltan al verificar o completar.
+  if (!fotosPendientes.has(t.id)) fotosPendientes.set(t.id, []);
+  const fotosNuevas = fotosPendientes.get(t.id);
   const carrete = h('div.d-carrusel', { style: { display: 'none' } });
   const botonFoto = h('button.d-fantasma', {
     onclick: () => hojaFotoAcciones(meterFotos),
@@ -133,6 +151,11 @@ export async function render({ listaId, tareaId }) {
       }, icon('trash')));
     }));
     carrete.style.display = fotosNuevas.length ? 'flex' : 'none';
+    // Con una sola foto ocupa todo el ancho, con los mismos márgenes
+    // que el resto de la pantalla. El recorte del 92 % solo tiene
+    // sentido cuando hay más de una: es lo que enseña que hay otra
+    // esperando a la derecha.
+    carrete.classList.toggle('una', fotosNuevas.length === 1);
     botonFoto.replaceChildren(icon('plus'), document.createTextNode(
       fotosNuevas.length ? 'Añadir más fotos (opcional)' : (puedeVerificarla
         ? 'Añadir foto para verificar tarea'
@@ -160,10 +183,20 @@ export async function render({ listaId, tareaId }) {
     onclick: async () => {
       const texto = cajaMensaje.value.trim();
       if (!texto) return;
-      await store.añadirComentario(t.id, { texto, tipo: 'nota' });
-      cajaMensaje.value = '';
-      toast('Añadido al hilo');
-      refrescar();
+      mandarNota.disabled = true;
+      try {
+        const nuevo = await store.añadirComentario(t.id, { texto, tipo: 'nota' });
+        cajaMensaje.value = '';
+        // El mensaje se mete en el hilo tal cual, sin rehacer la
+        // pantalla: repintarla se llevaba por delante la foto que
+        // estuviera puesta para verificar y devolvía la vista al
+        // principio, con la tarea a medio hacer.
+        hilo.añadirMensaje(nuevo);
+        toast('Añadido al hilo');
+      } catch (err) {
+        toast(err.message || 'No se ha podido añadir', 'err');
+        mandarNota.disabled = !cajaMensaje.value.trim();
+      }
     },
   }, icon('avionPapel'));
   cajaMensaje.addEventListener('input', () => { mandarNota.disabled = !cajaMensaje.value.trim(); });
@@ -181,6 +214,9 @@ export async function render({ listaId, tareaId }) {
     accion.disabled = true;
     try {
       await store.cambiarEstado(t.id, destino, { texto: cajaMensaje.value.trim(), imagenes: fotosNuevas });
+      // Ya están mandadas: se sueltan para que no vuelvan a aparecer si
+      // alguien abre otra vez esta tarea.
+      fotosPendientes.delete(t.id);
       if (destino === 'verificada') {
         toast('Verificada');
         volverALaLista();
@@ -226,6 +262,8 @@ export async function render({ listaId, tareaId }) {
     } catch { /* si no se puede leer, a la vivienda */ }
     ir(desde || rutaVilla);
   };
+
+  const hilo = hiloDeTarea(t, comentarios, mediosPorComentario);
 
   const bloqueAccion = [];
   if (puedeCompletar || puedeVerificarla) {
@@ -279,7 +317,7 @@ export async function render({ listaId, tareaId }) {
         });
       })) : null,
 
-      hiloDeTarea(t, comentarios, mediosPorComentario),
+      hilo,
 
       audios.length ? h('div', { style: { marginTop: '20px' } },
         h('p.d-epigrafe', null, 'Notas de voz'),
@@ -434,45 +472,64 @@ function avisoRechazo(comentarios) {
 }
 
 /** Hilo de la tarea: rechazos y notas, en orden. */
+/**
+ * El hilo de la tarea.
+ *
+ * Devuelve el bloque con un añadido: `bloque.añadirMensaje(c)`, que
+ * mete un mensaje nuevo sin rehacer la pantalla. Eso importa más de lo
+ * que parece: repintar entera la tarea para enseñar una línea de texto
+ * se llevaba por delante la foto que se acababa de adjuntar para
+ * verificar, y devolvía la pantalla al principio.
+ */
 function hiloDeTarea(t, comentarios, mediosPorComentario) {
+  const cuenta = h('p.eyebrow', null, `Hilo${comentarios.length ? ' · ' + comentarios.length : ''}`);
   const bloque = h('div', { style: { marginTop: '24px' } },
     h('div.topbar', null,
-      h('div.grow', null, h('p.eyebrow', null, `Hilo${comentarios.length ? ' · ' + comentarios.length : ''}`)),
+      h('div.grow', null, cuenta),
       h('button.tag', { onclick: () => hojaNota(t) }, 'Añadir nota'),
     ),
   );
 
-  if (!comentarios.length) {
-    bloque.append(h('p.hint', { style: { marginTop: '4px' } },
-      'Aquí quedan los rechazos y las notas que se vayan añadiendo.'));
-    return bloque;
-  }
-
+  const vacio = comentarios.length ? null : h('p.hint', { style: { marginTop: '4px' } },
+    'Aquí quedan los rechazos y las notas que se vayan añadiendo.');
   const hilo = h('div.hilo', { style: { marginTop: '10px' } });
-  for (const c of comentarios) {
-    const fotos = mediosPorComentario.get(c.id) || [];
-    hilo.append(h('div.mensaje', { class: c.tipo === 'rechazo' ? 'rechazo' : '' },
-      h('div.mensaje-cab', null,
-        c.tipo === 'rechazo' ? h('span.tag.rojo', null, 'Rechazo') : null,
-        h('span.mensaje-autor', null, c.creadoPorNombre),
-        c.creadoPorEmpresa ? h('span.mensaje-empresa', null, c.creadoPorEmpresa) : null,
-        h('span.mensaje-fecha', null, `${fechaCorta(c.creado)} · ${hora(c.creado)}`),
-      ),
-      c.texto ? h('p.mensaje-texto', null, c.texto) : null,
-      fotos.length ? h('div.rail', { style: { marginTop: '9px' } },
-        fotos.map((m) => {
-          const url = store.urlDeMedio(m);
-          return h('div.m', {
-            role: 'button', tabindex: '0',
-            style: url ? { backgroundImage: `url("${url}")` } : null,
-            onclick: () => url && openViewer(h('img', { src: url, alt: '' })),
-          });
-        }),
-      ) : null,
-    ));
-  }
-  bloque.append(hilo);
+  for (const c of comentarios) hilo.append(mensajeDelHilo(c, mediosPorComentario.get(c.id) || []));
+  bloque.append(vacio || hilo);
+
+  let cuantos = comentarios.length;
+  bloque.añadirMensaje = (c, fotos = []) => {
+    if (!cuantos) vacio.replaceWith(hilo);
+    cuantos += 1;
+    cuenta.textContent = `Hilo · ${cuantos}`;
+    // Sin mover la pantalla: quien escribe desde el bloque de verificar
+    // sigue teniendo delante su foto y su botón, y el aviso de «añadido
+    // al hilo» ya dice que ha entrado.
+    hilo.append(mensajeDelHilo(c, fotos));
+  };
   return bloque;
+}
+
+/** Un mensaje del hilo: quién, cuándo, qué dijo y sus fotos. */
+function mensajeDelHilo(c, fotos) {
+  return h('div.mensaje', { class: c.tipo === 'rechazo' ? 'rechazo' : '' },
+    h('div.mensaje-cab', null,
+      c.tipo === 'rechazo' ? h('span.tag.rojo', null, 'Rechazo') : null,
+      h('span.mensaje-autor', null, c.creadoPorNombre),
+      c.creadoPorEmpresa ? h('span.mensaje-empresa', null, c.creadoPorEmpresa) : null,
+      h('span.mensaje-fecha', null, `${fechaCorta(c.creado)} · ${hora(c.creado)}`),
+    ),
+    c.texto ? h('p.mensaje-texto', null, c.texto) : null,
+    fotos.length ? h('div.rail', { style: { marginTop: '9px' } },
+      fotos.map((m) => {
+        const url = store.urlDeMedio(m);
+        return h('div.m', {
+          role: 'button', tabindex: '0',
+          style: url ? { backgroundImage: `url("${url}")` } : null,
+          onclick: () => url && openViewer(h('img', { src: url, alt: '' })),
+        });
+      }),
+    ) : null,
+  );
 }
 
 /**

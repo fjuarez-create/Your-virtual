@@ -2153,6 +2153,11 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
   border-radius: 8px; overflow: hidden;
   background: #e9e7e4 center / cover no-repeat;
 }
+/* Una sola foto ocupa el ancho entero, con el mismo margen a un lado
+   que al otro. El 92 % está para cuando hay más de una: ese trocito
+   que asoma es lo que dice que a la derecha viene otra. Con una sola
+   no dice nada, solo parece mal alineada. */
+.d-carrusel.una .celda { flex: 0 0 100%; }
 .d-pie-placa {
   position: sticky; bottom: 0; z-index: 5;
   margin: 20px -10px 0; padding: 12px;
