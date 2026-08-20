@@ -241,7 +241,11 @@ export async function render({ promoId, unidadId }) {
         lienzo.closest('.screen')?.classList.remove('grabando');
         pintarRepaso(pendiente);
       }) : null,
-      filaMenu('stop', 'Cancelar', () => { cerrar(); ir(volver); }),
+      // Aspa y no el cuadrado de «parar»: aquí todavía no se ha grabado
+      // nada —el pop up sale con la grabación en pausa—, así que esto no
+      // detiene un recorrido, se va sin empezarlo. El cuadrado salía en
+      // pantalla como una casilla vacía y no se entendía qué era.
+      filaMenu('x', 'Cancelar', () => { cerrar(); ir(volver); }),
     ].filter(Boolean), { conX: false });
   };
 
