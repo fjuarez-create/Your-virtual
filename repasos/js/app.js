@@ -397,17 +397,30 @@ async function registrarServiceWorker() {
   if (location.protocol === 'file:') return;
   let registro;
   try {
-    registro = await navigator.serviceWorker.register('sw.js');
+    // «updateViaCache: none»: al comprobar si hay versión nueva, que no
+    // se conforme con la copia que el navegador tenga guardada de este
+    // mismo fichero. Si lo hiciera, podría no enterarse en horas.
+    registro = await navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' });
   } catch { return; /* sin caché offline, pero la app funciona */ }
+
+  // Si el relevo toma el mando —porque lo ha pedido esta pantalla o
+  // porque lo ha pedido otra pestaña— hay que recargar. Lo que queda en
+  // memoria es de la versión anterior, y a partir de ese momento todo
+  // lo que se pida vendrá de la caché nueva: la mezcla otra vez. Se
+  // engancha una sola vez, aquí, y no dentro de ningún manejador.
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (saltandoVersion) location.reload();
+    else if (!hayAlgoAMedias()) location.reload();
+    // Con algo a medias no se recarga: lo que haya en pantalla vale más
+    // que la versión nueva, y si algo se descuadra el enrutador ya
+    // recarga solo al fallar (ver esFalloDeCodigo).
+  });
 
   // La versión nueva no entra en caliente: espera a que se cierre la
   // aplicación (ver sw.js). Como el que está usándola no tiene manera
-  // de saberlo, se le dice una vez —y una sola— por sesión.
-  const avisar = () => {
-    if (sessionStorage.getItem('aviso-version') === '1') return;
-    sessionStorage.setItem('aviso-version', '1');
-    toast('Hay una versión nueva. Se pone al cerrar y abrir la app.');
-  };
+  // de saberlo, se avisa (ver avisarDeVersion, que no repite el aviso
+  // más de una vez por hora).
+  const avisar = () => avisarDeVersion();
   if (registro.waiting && navigator.serviceWorker.controller) avisar();
   registro.addEventListener('updatefound', () => {
     const nueva = registro.installing;
@@ -442,16 +455,53 @@ const RATO_FUERA = 5 * 60 * 1000;
  */
 function aplicarAlVolver(registro) {
   let escondidaDesde = 0;
-  document.addEventListener('visibilitychange', () => {
+  document.addEventListener('visibilitychange', async () => {
     if (document.hidden) { escondidaDesde = Date.now(); return; }
-    if (!registro.waiting || !navigator.serviceWorker.controller) return;
+    if (!navigator.serviceWorker.controller) return;
     if (Date.now() - escondidaDesde < RATO_FUERA) return;
-    if (hayAlgoAMedias()) return;
-    // Cuando el relevo tome el mando, el navegador avisa; ahí se
-    // recarga y la aplicación entera nace con la versión nueva.
-    navigator.serviceWorker.addEventListener('controllerchange', () => location.reload(), { once: true });
-    registro.waiting.postMessage({ tipo: 'saltar-espera' });
+    // Preguntar por una versión nueva, que si no nadie pregunta. El
+    // navegador lo hace al abrir una página, y dentro de la app del
+    // iPhone solo hay UNA: la del arranque. Sin esto, una app que se
+    // queda cinco días en segundo plano no se enteraría de tres
+    // despliegues seguidos.
+    try { await registro.update(); } catch { /* sin red: otra vez será */ }
+    if (!registro.waiting) return;
+    if (hayAlgoAMedias()) { avisarDeVersion(); return; }
+    aplicarVersionEsperando(registro);
   });
+}
+
+/* Que la recarga por cambio de mando no dude cuando es esta pantalla la
+   que lo ha pedido. */
+let saltandoVersion = false;
+
+/** Le dice al relevo que tome el mando. La recarga viene después. */
+export function aplicarVersionEsperando(registro) {
+  if (!registro?.waiting) return false;
+  saltandoVersion = true;
+  registro.waiting.postMessage({ tipo: 'saltar-espera' });
+  return true;
+}
+
+/**
+ * ¿Hay una versión esperando? La usa Ajustes para enseñar el botón de
+ * ponerla, que es la salida a mano para quien nunca cierra la app.
+ */
+export async function versionEsperando() {
+  if (!('serviceWorker' in navigator)) return null;
+  try {
+    const r = await navigator.serviceWorker.getRegistration();
+    return r?.waiting ? r : null;
+  } catch { return null; }
+}
+
+/* El aviso de que hay versión nueva, para poder repetirlo desde otro
+   sitio que no sea el registro. */
+function avisarDeVersion() {
+  const ultimo = Number(sessionStorage.getItem('aviso-version') || 0);
+  if (Date.now() - ultimo < 60 * 60 * 1000) return;
+  sessionStorage.setItem('aviso-version', String(Date.now()));
+  toast('Hay una versión nueva. Se pone al cerrar y abrir la app.');
 }
 
 /** ¿Hay algo empezado que una recarga se llevaría por delante? */

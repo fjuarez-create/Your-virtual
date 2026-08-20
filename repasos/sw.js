@@ -12,7 +12,12 @@
 const VERSION = '__BUILD__';
 const CACHE = 'unik-repasos-' + VERSION;
 
-const ARMAZON = [
+/* EL CÓDIGO: o entra entero, o esta versión no se instala.
+   Si faltara una pieza, el hueco se rellenaría más tarde desde la red
+   —o sea, desde el despliegue que hubiera ese día— y volveríamos a
+   tener media aplicación de cada. Mejor que la instalación falle y se
+   quede mandando la versión de antes, que funciona. */
+const CODIGO = [
   './',
   'index.html',
   'manifest.webmanifest',
@@ -27,6 +32,10 @@ const ARMAZON = [
   'js/recorrido.js',
   'js/piezas.js',
   'js/pendientes.js',
+  'js/frases.js',
+  'js/mensajes.js',
+  'js/ajustesLocales.js',
+  'js/ejemplos.js',
   'js/catalog.js',
   'js/informe.js',
   'js/pdf.js',
@@ -43,6 +52,11 @@ const ARMAZON = [
   'js/views/historial.js',
   'js/views/ajustes.js',
   'js/views/usuarios.js',
+];
+
+/* LO DEMÁS: tipografías, iconos y las caras de los gremios. Que falte
+   una cara no rompe nada, así que aquí sí se toleran los fallos. */
+const EXTRAS = [
   'assets/fonts/neue-haas-display-roman.woff2',
   'assets/fonts/opensans-var.woff2',
   'assets/fonts/inter-tight-latin-400-normal.woff2',
@@ -72,12 +86,30 @@ const ARMAZON = [
   'assets/gremios/rodapies.webp',
 ];
 
+/* La lista entera, para el resto del fichero y para la comprobación
+   que hace el despliegue. */
+const ARMAZON = [...CODIGO, ...EXTRAS];
+
+
 self.addEventListener('install', (e) => {
   e.waitUntil((async () => {
     const cache = await caches.open(CACHE);
-    // addAll falla entero si un solo fichero falla; se añade uno a uno
-    // para que un icono ausente no deje la app sin caché.
-    await Promise.all(ARMAZON.map((u) => cache.add(u).catch(() => {})));
+    // Todo con «reload», saltándose la caché del navegador: si no, al
+    // guardarse la versión nueva podría meter dentro un fichero viejo
+    // que el navegador tuviera por su cuenta, y volveríamos a tener
+    // media versión de cada.
+    //
+    // El código, de una pieza y sin perdón: si falla uno solo, falla la
+    // instalación entera y sigue mandando la versión anterior.
+    await cache.addAll(CODIGO.map((u) => new Request(u, { cache: 'reload' })));
+    // Lo demás, lo que se pueda: una cara de gremio que no baje no
+    // puede impedir que entre una versión nueva.
+    await Promise.all(EXTRAS.map(async (u) => {
+      try {
+        const res = await fetch(u, { cache: 'reload' });
+        if (res.ok) await cache.put(u, res);
+      } catch { /* ya bajará al usarla */ }
+    }));
   })());
   // AQUÍ NO SE LLAMA A skipWaiting(), Y ES A PROPÓSITO.
   //
@@ -153,7 +185,15 @@ self.addEventListener('fetch', (e) => {
     if (guardada) return guardada;
     try {
       const res = await fetch(req);
-      if (res.ok && res.type === 'basic') cache.put(req, res.clone());
+      // Se guarda lo que no sea código. Un fichero .js que no estuviera
+      // en la caché de esta versión viene de la red, o sea del último
+      // despliegue: guardarlo aquí sería sellar a fuego una mezcla de
+      // dos versiones, y el fallo dejaría de curarse recargando. El
+      // despliegue comprueba que no falte ninguno (ver
+      // .github/scripts/comprobar-armazon.py), así que esto es el
+      // cinturón por si alguna vez se cuela uno.
+      const esCodigo = /\.js(\?|$)/.test(url.pathname + url.search);
+      if (res.ok && res.type === 'basic' && !esCodigo) cache.put(req, res.clone());
       return res;
     } catch {
       const porRuta = await cache.match(req, { ignoreSearch: true });

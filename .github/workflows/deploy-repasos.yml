@@ -65,6 +65,14 @@ jobs:
           fi
           echo "Los tres secretos están puestos."
 
+      # La lista de ficheros que el service worker guarda para funcionar
+      # sin cobertura se escribe a mano, y una vez se quedó corta: cuatro
+      # módulos se pedían a la red en mitad de la sesión, o sea al último
+      # despliegue, mientras el resto de la app iba con la versión del
+      # móvil. Media aplicación de cada. Esto lo cuenta antes de subir.
+      - name: Comprobar que el service worker guarda todo el código
+        run: python3 ../.github/scripts/comprobar-armazon.py .
+
       # El SHA sella la versión en index.html y en sw.js. Al cambiar, el
       # service worker tira su caché entera y ningún móvil se queda con
       # media versión vieja y media nueva.

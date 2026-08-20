@@ -8,13 +8,14 @@ import { barraSync, chevron, cabeceraTab, cabeceraDentro, hojaFoto, ctaAccion, c
 import * as ejemplos from '../ejemplos.js';
 import { PROMOCIONES } from '../catalog.js';
 import { usaIA, ponerUsaIA } from '../ajustesLocales.js';
-import { ir, refrescar } from '../app.js';
+import { ir, refrescar, versionEsperando, aplicarVersionEsperando } from '../app.js';
 
 export async function render() {
   const u = store.sesion();
   const ocupacion = await espacioUsado();
   const admin = store.esAdmin();
   const hayEjemplos = admin ? await ejemplos.cuantos() : 0;
+  const relevo = await versionEsperando();
 
   // Si el servidor es viejo y todavía no conoce la ruta, la fila se
   // enseña igual como «sin poner»: es lo que hay, y al pulsarla dirá
@@ -78,6 +79,16 @@ export async function render() {
         h('p.d-grupo-titulo', null, 'Preferencias'),
         item('edit', 'Que la IA proponga el texto',
           'Al crear una tarea desde una foto o la galería', null, { derecha: casillaIA }),
+      ) : null,
+
+      // Solo aparece cuando de verdad hay una versión esperando. Es la
+      // salida a mano para quien nunca cierra la aplicación: el iPhone
+      // las deja vivas días y podría quedarse atrás sin saberlo.
+      relevo ? h('div.d-grupo', null,
+        h('p.d-grupo-titulo', null, 'Versión'),
+        item('refresh', 'Poner la versión nueva',
+          'La aplicación se recarga; lo que no esté mandado se pierde',
+          () => ponerVersionNueva(relevo)),
       ) : null,
 
       h('div.d-grupo', null,
@@ -512,6 +523,24 @@ async function arreglarPruebas() {
     + (conFoto ? ` · ${conFoto} con foto` : ''));
   store.sincronizar({ forzar: true });
   refrescar();
+}
+
+/**
+ * Pone la versión que estuviera esperando, ahora mismo.
+ *
+ * Se avisa de lo que cuesta: recargar es empezar de cero, y una foto
+ * hecha y sin mandar se queda por el camino. Por eso esto es un botón
+ * y no algo que pase solo mientras alguien trabaja.
+ */
+async function ponerVersionNueva(registro) {
+  const seguir = await confirmSheet({
+    title: '¿Poner la versión nueva?',
+    text: 'La aplicación se recarga. Si tienes una foto hecha y sin mandar o algo a medio escribir, mándalo antes.',
+    ok: 'Poner la versión nueva',
+  });
+  if (!seguir) return;
+  if (!aplicarVersionEsperando(registro)) { toast('Ya no hay ninguna esperando'); return; }
+  toast('Poniendo la versión nueva…');
 }
 
 async function quitarEjemplos() {

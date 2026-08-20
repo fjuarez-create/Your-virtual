@@ -25,6 +25,16 @@ DirectoryIndex index.html
   <FilesMatch "\.(woff2|png|svg|jpg|jpeg|webp)$">
     Header set Cache-Control "public, max-age=31536000, immutable"
   </FilesMatch>
+
+  # El código va sin guardar en el navegador, a propósito. Quien lo
+  # guarda es el service worker, versión a versión; si además el
+  # navegador se quedara con su copia por su cuenta, al instalarse una
+  # versión nueva podría meter dentro un fichero de la anterior y
+  # tendríamos media aplicación de cada. Revalidar cuesta nada: lo que
+  # se sirve rápido sale de la caché del service worker.
+  <FilesMatch "\.(js|css)$">
+    Header set Cache-Control "no-cache, must-revalidate"
+  </FilesMatch>
 </IfModule>
 
 <IfModule mod_mime.c>
