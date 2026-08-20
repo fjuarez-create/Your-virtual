@@ -26,6 +26,7 @@ const ARMAZON = [
   'js/media.js',
   'js/recorrido.js',
   'js/piezas.js',
+  'js/pendientes.js',
   'js/catalog.js',
   'js/informe.js',
   'js/pdf.js',
@@ -77,16 +78,36 @@ self.addEventListener('install', (e) => {
     // addAll falla entero si un solo fichero falla; se añade uno a uno
     // para que un icono ausente no deje la app sin caché.
     await Promise.all(ARMAZON.map((u) => cache.add(u).catch(() => {})));
-    self.skipWaiting();
   })());
+  // AQUÍ NO SE LLAMA A skipWaiting(), Y ES A PROPÓSITO.
+  //
+  // La versión nueva se queda esperando a que se cierre la aplicación.
+  // Si tomara el mando en caliente, la pantalla que ya está abierta
+  // seguiría con el código viejo en memoria y las pantallas que se
+  // abren después —que se piden en el momento de tocarlas— vendrían de
+  // la caché nueva: mitad y mitad. Eso es lo que reventó al entrar en
+  // Tareas con «Importing binding name 'menuTarjeta' is not found»: la
+  // pantalla era nueva y la pieza que usaba, vieja.
+  //
+  // Con esto, una sesión entera va con una sola versión de principio a
+  // fin, y la nueva entra al abrir la aplicación de nuevo.
 });
 
 self.addEventListener('activate', (e) => {
   e.waitUntil((async () => {
     const nombres = await caches.keys();
     await Promise.all(nombres.filter((n) => n !== CACHE).map((n) => caches.delete(n)));
-    await self.clients.claim();
   })());
+  // Tampoco clients.claim(): si esta versión acaba de activarse es
+  // porque no quedaba ninguna pantalla abierta, y la primera que se
+  // abra ya nace con ella.
+});
+
+/* Por si algún día se quiere un botón de «actualizar ahora»: la página
+   manda este aviso y la versión nueva toma el mando en el acto. Sin
+   nadie que lo mande, no pasa nada. */
+self.addEventListener('message', (e) => {
+  if (e.data?.tipo === 'saltar-espera') self.skipWaiting();
 });
 
 self.addEventListener('fetch', (e) => {
@@ -100,15 +121,26 @@ self.addEventListener('fetch', (e) => {
   // fotos con sesión, y una copia cacheada solo puede confundir.
   if (url.pathname.includes('/api/')) return;
 
-  // Navegación: red primero para recoger despliegues nuevos; si no hay
-  // red, el index cacheado abre la app y IndexedDB pone los datos.
+  // Navegación: la portada sale de esta misma caché, no de la red.
+  //
+  // Parece al revés de lo lógico —¿no habría que ir a por lo último?—
+  // pero es justo lo contrario: si el index viniera de la red sería el
+  // del despliegue de hace un minuto, mientras el código de la app
+  // sigue siendo el de esta caché. Página nueva con aplicación vieja.
+  //
+  // Lo nuevo entra por su camino: el navegador comprueba este mismo
+  // fichero en cada arranque, se instala la versión siguiente y toma
+  // el mando cuando la aplicación se cierra. Una versión entera cada
+  // vez, nunca media.
   if (req.mode === 'navigate') {
     e.respondWith((async () => {
+      const cache = await caches.open(CACHE);
+      const guardada = (await cache.match('index.html')) || (await cache.match('./'));
+      if (guardada) return guardada;
       try {
         return await fetch(req);
       } catch {
-        const cache = await caches.open(CACHE);
-        return (await cache.match('index.html')) || (await cache.match('./')) || Response.error();
+        return Response.error();
       }
     })());
     return;

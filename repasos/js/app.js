@@ -9,6 +9,7 @@ import { h, icon, toast } from './ui.js';
 import * as store from './store.js';
 import * as api from './api.js';
 import { borrarBase } from './db.js';
+import { hayFotosSinMandar } from './pendientes.js';
 
 /* ─── Rutas ───────────────────────────────────────────────────── */
 const RUTAS = [
@@ -234,6 +235,11 @@ async function enrutar() {
   } catch (e) {
     clearTimeout(temporizador);
     console.error(e);
+    // Si lo que ha fallado es traer el código de la pantalla, no hay
+    // nada que explicarle a nadie: se recarga y ya. Pasa cuando la
+    // versión del móvil y la del servidor no coinciden a mitad de
+    // sesión, y una recarga las pone de acuerdo.
+    if (esFalloDeCodigo(e) && puedeRecargarse()) { location.reload(); return; }
     pintar({
       contenido: [
         h('h1.display', null, 'Algo ha fallado'),
@@ -243,6 +249,47 @@ async function enrutar() {
       sinTabs: true,
     });
   }
+}
+
+/**
+ * ¿El fallo es de traer el código de una pantalla?
+ *
+ * Las pantallas se piden en el momento de abrirlas, no al arrancar. Si
+ * entre medias ha entrado un despliegue y algo queda descuadrado, lo
+ * que salta es esto: un módulo que no llega, o que llega y no trae lo
+ * que otro esperaba de él —«Importing binding name … is not found»—.
+ * No es un fallo de la obra ni de los datos: es código a medio
+ * cambiar, y se arregla solo recargando.
+ */
+function esFalloDeCodigo(e) {
+  const m = String(e?.message || e || '');
+  // Cada navegador lo cuenta con sus palabras, y hay que reconocerlas
+  // todas: la de Safari es la que vio Fran en el iPhone, la de Chrome
+  // es la que sale al probarlo aquí, y la de Firefox por si acaso. La
+  // última es cuando el servidor devuelve una página en vez de un
+  // fichero de código, que también acaba en «algo ha fallado».
+  return /importing binding name/i.test(m)                 // Safari
+    || /does not provide an export named/i.test(m)          // Chrome
+    || /doesn't provide an export named/i.test(m)           // Firefox
+    || /dynamically imported module/i.test(m)               // los tres
+    || /module script/i.test(m)
+    || /unexpected token ['"‘]?</i.test(m);                 // llegó HTML
+}
+
+/**
+ * Recargar sí, pero una vez.
+ *
+ * Si el problema no fuera la versión sino algo que se repite, recargar
+ * en bucle dejaría la aplicación dando vueltas para siempre y sin
+ * decir nada. Con esto, el segundo intento en el mismo minuto ya
+ * enseña la pantalla de error, que al menos se puede leer y contar.
+ */
+function puedeRecargarse() {
+  const ahora = Date.now();
+  const ultima = Number(sessionStorage.getItem('recarga-por-codigo') || 0);
+  if (ahora - ultima < 60000) return false;
+  sessionStorage.setItem('recarga-por-codigo', String(ahora));
+  return true;
 }
 
 /** Desliza la bolita hasta la sección indicada sin rehacer la cápsula. */
@@ -345,10 +392,75 @@ function vigilarDatosNuevos() {
   });
 }
 
-function registrarServiceWorker() {
+async function registrarServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
   if (location.protocol === 'file:') return;
-  navigator.serviceWorker.register('sw.js').catch(() => { /* sin caché offline */ });
+  let registro;
+  try {
+    registro = await navigator.serviceWorker.register('sw.js');
+  } catch { return; /* sin caché offline, pero la app funciona */ }
+
+  // La versión nueva no entra en caliente: espera a que se cierre la
+  // aplicación (ver sw.js). Como el que está usándola no tiene manera
+  // de saberlo, se le dice una vez —y una sola— por sesión.
+  const avisar = () => {
+    if (sessionStorage.getItem('aviso-version') === '1') return;
+    sessionStorage.setItem('aviso-version', '1');
+    toast('Hay una versión nueva. Se pone al cerrar y abrir la app.');
+  };
+  if (registro.waiting && navigator.serviceWorker.controller) avisar();
+  registro.addEventListener('updatefound', () => {
+    const nueva = registro.installing;
+    if (!nueva) return;
+    nueva.addEventListener('statechange', () => {
+      // «installed» con alguien ya al mando quiere decir: hay relevo
+      // esperando. Sin nadie al mando es la primera instalación, y esa
+      // no hay que anunciarla.
+      if (nueva.state === 'installed' && navigator.serviceWorker.controller) avisar();
+    });
+  });
+
+  aplicarAlVolver(registro);
+}
+
+/* Cuánto tiene que estar guardada la aplicación para que al volver se
+   considere una vuelta y no un vistazo al reloj. */
+const RATO_FUERA = 5 * 60 * 1000;
+
+/**
+ * Aplica la versión que esté esperando cuando se vuelve a la app tras
+ * un rato fuera y no hay nada a medias.
+ *
+ * Hace falta porque el iPhone no cierra las aplicaciones: las deja
+ * vivas en segundo plano días enteros. Sin esto, quien no cierre la app
+ * a mano se quedaría con la versión de hace un mes y con un aviso que
+ * no sabe cómo quitarse.
+ *
+ * Y solo cuando no hay nada a medias, porque recargar es empezar de
+ * cero: si hay una hoja abierta, un texto a medio escribir, una foto
+ * hecha y sin mandar o un recorrido grabando, se deja para la próxima.
+ */
+function aplicarAlVolver(registro) {
+  let escondidaDesde = 0;
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { escondidaDesde = Date.now(); return; }
+    if (!registro.waiting || !navigator.serviceWorker.controller) return;
+    if (Date.now() - escondidaDesde < RATO_FUERA) return;
+    if (hayAlgoAMedias()) return;
+    // Cuando el relevo tome el mando, el navegador avisa; ahí se
+    // recarga y la aplicación entera nace con la versión nueva.
+    navigator.serviceWorker.addEventListener('controllerchange', () => location.reload(), { once: true });
+    registro.waiting.postMessage({ tipo: 'saltar-espera' });
+  });
+}
+
+/** ¿Hay algo empezado que una recarga se llevaría por delante? */
+function hayAlgoAMedias() {
+  if (hayFotosSinMandar()) return true;
+  if (document.querySelector('.sheet, .viewer.on, .informe, .pantalla-recorrido, .d-visor, .d-menu-velo, .d-velo, .d-hoja-acciones')) return true;
+  if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return true;
+  if (location.hash.includes('/recorrido')) return true;
+  return false;
 }
 
 /**

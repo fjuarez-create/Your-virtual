@@ -19,19 +19,7 @@ import * as media from '../media.js';
 import { hojaBienHecho, hojaFotoAcciones, cuandoTarea, menuTarjeta } from '../piezas.js';
 import { alCompletar, nombreCorto } from '../frases.js';
 import { ir, refrescar, conFiltros, filtrosDeRuta } from '../app.js';
-
-/**
- * Las fotos que alguien ha hecho para completar o verificar y todavía
- * no ha mandado, guardadas por tarea y fuera de la pantalla.
- *
- * Viven aquí porque la pantalla se rehace entera más veces de las que
- * uno cree —al mandar un mensaje, al borrar una nota de voz, cuando la
- * sincronización trae algo de otro móvil—, y una foto hecha en obra que
- * desaparece sin avisar es de lo peor que puede pasar en esta
- * aplicación: hay que volver a la vivienda, buscar el remate y
- * repetirla. Se sueltan solas al verificar o al completar la tarea.
- */
-const fotosPendientes = new Map();
+import { fotosDe, soltarFotos } from '../pendientes.js';
 
 export async function render({ listaId, tareaId }) {
   const t = await store.tarea(tareaId);
@@ -128,8 +116,7 @@ export async function render({ listaId, tareaId }) {
   // —una sincronización que trae datos de otro móvil, por ejemplo—
   // construye esta pantalla de cero, y hasta hoy la foto recién hecha
   // se perdía sin decir nada. Se sueltan al verificar o completar.
-  if (!fotosPendientes.has(t.id)) fotosPendientes.set(t.id, []);
-  const fotosNuevas = fotosPendientes.get(t.id);
+  const fotosNuevas = fotosDe(t.id);
   const carrete = h('div.d-carrusel', { style: { display: 'none' } });
   // El rótulo de este botón cambia según haya fotos puestas o no, así
   // que vive en su propio hueco y solo se le cambia el texto: se
@@ -221,7 +208,7 @@ export async function render({ listaId, tareaId }) {
       await store.cambiarEstado(t.id, destino, { texto: cajaMensaje.value.trim(), imagenes: fotosNuevas });
       // Ya están mandadas: se sueltan para que no vuelvan a aparecer si
       // alguien abre otra vez esta tarea.
-      fotosPendientes.delete(t.id);
+      soltarFotos(t.id);
       if (destino === 'verificada') {
         toast('Verificada');
         volverALaLista();
