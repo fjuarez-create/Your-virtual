@@ -655,6 +655,50 @@ export function menuFlotante(construir, { conX = true } = {}) {
  * cincuenta viviendas, por ejemplo—: repetir la misma casita cincuenta
  * veces no distingue nada y roba el sitio por el que se lee.
  */
+/**
+ * El menú de los tres puntos: una tarjeta sobre el fondo borroso, con
+ * su título arriba y su X a la derecha, y las filas con el mismo aire
+ * que las de Ajustes —icono a la izquierda, rótulo, y el detalle en
+ * pequeño debajo si hace falta—.
+ *
+ * Devuelve lo que se haya elegido (el `id` de la fila) o null si se
+ * cierra sin elegir, para poder escribir `const accion = await …`.
+ *
+ * Las filas se pasan como datos y no como nodos, y admiten null entre
+ * medias: así una opción que solo ve quien creó la tarea se escribe
+ * con un `edita ? {...} : null` y no ensucia la llamada.
+ */
+export function menuTarjeta(titulo, filas, { extra = null } = {}) {
+  return new Promise((resolver) => {
+    const cerrar = (valor = null) => { velo.remove(); resolver(valor); };
+    const tarjeta = h('div.d-menu-tarjeta', null,
+      h('div.d-menu-cab', null,
+        h('span.d-menu-titulo', null, titulo),
+        h('button.d-menu-x', { 'aria-label': 'Cerrar', onclick: () => cerrar(null) }, icon('x')),
+      ),
+      ...filas.filter(Boolean).map((f) => h('button.d-menu-fila', {
+        class: f.rojo ? 'rojo' : '',
+        onclick: () => cerrar(f.id),
+      },
+        f.icono ? icon(f.icono) : null,
+        h('span.grow', null,
+          f.rotulo,
+          f.sub ? h('span.d-menu-sub', null, f.sub) : null),
+      )),
+      extra,
+    );
+    // Lo que se cuelga en `extra` son enlaces —las actas de la
+    // vivienda—, así que tocar cualquiera cierra el menú: si no, la
+    // tarjeta se quedaría flotando encima de la pantalla nueva.
+    if (extra) extra.addEventListener('click', () => cerrar(null));
+
+    const velo = h('div.d-menu-velo', {
+      onclick: (e) => { if (e.target === velo) cerrar(null); },
+    }, tarjeta);
+    document.body.append(velo);
+  });
+}
+
 export function filaMenu(icono, rotulo, accion) {
   if (!icono) return h('button.d-hoja-fila.suelta', { onclick: accion }, rotulo);
   return h('button.d-hoja-fila', { onclick: accion }, icon(icono), rotulo);

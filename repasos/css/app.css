@@ -2083,8 +2083,8 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 /* ─── El velo con desenfoque, el modal de enhorabuena y la hoja de
    «Hacer foto / Seleccionar de la galería» ── */
 .d-velo {
-  position: fixed; inset: 0; z-index: 70; background: rgba(0, 0, 0, .2);
-  -webkit-backdrop-filter: blur(7px); backdrop-filter: blur(7px);
+  position: fixed; inset: 0; z-index: 70; background: rgba(0, 0, 0, .32);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
   display: grid; place-items: center; padding: 16px;
 }
 .d-modal {
@@ -2102,8 +2102,8 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
   background: var(--d-beige-tinta); color: #fff; font-size: 16px; font-weight: 500;
 }
 .d-hoja-acciones {
-  position: fixed; inset: 0; z-index: 70; background: rgba(0, 0, 0, .2);
-  -webkit-backdrop-filter: blur(7px); backdrop-filter: blur(7px);
+  position: fixed; inset: 0; z-index: 70; background: rgba(0, 0, 0, .32);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
   display: flex; flex-direction: column; justify-content: flex-end;
   align-items: center; gap: 22px;
   padding: 16px 16px calc(env(safe-area-inset-bottom) + 24px);
@@ -2125,6 +2125,44 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
   display: grid; place-items: center;
 }
 .d-hoja-acciones-x svg { width: 20px; height: 20px; }
+
+/* ─── El menú de los tres puntos ────────────────────────────────
+   Mismo fondo borroso que el resto de menús de la aplicación, y
+   encima una tarjeta con el título, su X y las filas al estilo de
+   Ajustes: icono a la izquierda y el rótulo alineado con él. */
+.d-menu-velo {
+  position: fixed; inset: 0; z-index: 70; background: rgba(0, 0, 0, .32);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  display: flex; flex-direction: column; justify-content: flex-end; align-items: center;
+  padding: 16px 16px calc(env(safe-area-inset-bottom) + 24px);
+}
+.d-menu-tarjeta {
+  width: min(100%, 480px); max-height: 82vh; overflow-y: auto;
+  background: #fcfcfc; border-radius: 20px; padding: 14px 8px 10px;
+  animation: rise 0.28s cubic-bezier(0.22, 0.8, 0.25, 1) both;
+}
+.d-menu-cab { display: flex; align-items: center; gap: 12px; padding: 0 8px 4px; }
+.d-menu-titulo { flex: 1; font-size: 17px; font-weight: 500; color: var(--d-tinta); }
+.d-menu-x {
+  width: 34px; height: 34px; flex: none; border-radius: 999px;
+  display: grid; place-items: center; color: var(--d-gris);
+}
+.d-menu-x svg { width: 22px; height: 22px; }
+.d-menu-fila {
+  display: flex; align-items: center; gap: 14px; width: 100%;
+  min-height: 56px; padding: 8px; border-radius: 14px;
+  text-align: left; font: 500 17px var(--d-font); color: var(--d-tinta);
+}
+.d-menu-fila:active { background: var(--d-gris-suave); }
+.d-menu-fila svg { width: 24px; height: 24px; flex: none; color: var(--d-beige-tinta); }
+.d-menu-fila .grow { flex: 1; min-width: 0; }
+.d-menu-sub { display: block; font-size: 14px; font-weight: 400; color: var(--d-gris); margin-top: 1px; }
+.d-menu-fila.rojo { color: var(--d-rojo); }
+.d-menu-fila.rojo svg { color: var(--d-rojo); }
+/* Lo que se cuelgue debajo de las filas —las actas de la vivienda—
+   respira lo mismo que ellas. */
+.d-menu-extra { padding: 6px 8px 0; }
+.d-menu-extra .d-epigrafe { margin: 10px 0 8px; }
 
 /* ─── El formulario de nueva tarea ──────────────────────────────
    Calcado del Figma: campos de rótulo con asterisco y pastilla,

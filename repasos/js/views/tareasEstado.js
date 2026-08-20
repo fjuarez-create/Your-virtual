@@ -20,7 +20,7 @@ import {
 } from '../catalog.js';
 import * as store from '../store.js';
 import {
-  cabDiseno, tarjetaTarea, cuandoTarea, hojaFiltroTareas, menuFlotante, filaMenu,
+  cabDiseno, tarjetaTarea, cuandoTarea, hojaFiltroTareas, menuFlotante, menuTarjeta, filaMenu,
   avisoLocal, barraSync,
 } from '../piezas.js';
 import { ir } from '../app.js';
@@ -232,12 +232,20 @@ export async function render({ promoId, estadoId = 'resuelta' }) {
   };
 
   /* ─── El menú de los tres puntos ─── */
-  const menu = () => menuFlotante((cerrar) => [
-    ...ORDENES.map((o) => filaMenu(orden === o.id ? 'check' : 'listaChecks', o.rotulo, () => {
-      cerrar(); orden = o.id; pintar();
-    })),
-    filaMenu('download', 'Bajar la lista en PDF', () => { cerrar(); bajarPdf(); }),
-  ]);
+  const menu = async () => {
+    const elegido = await menuTarjeta('Tareas', [
+      ...ORDENES.map((o) => ({
+        id: `orden:${o.id}`,
+        icono: orden === o.id ? 'check' : 'listaChecks',
+        rotulo: o.rotulo,
+      })),
+      { id: 'pdf', icono: 'download', rotulo: 'Bajar la lista en PDF' },
+    ]);
+    if (!elegido) return;
+    if (elegido === 'pdf') { bajarPdf(); return; }
+    orden = elegido.replace('orden:', '');
+    pintar();
+  };
 
   const bajarPdf = () => {
     const items = visibles();

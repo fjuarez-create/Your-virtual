@@ -336,7 +336,7 @@ function vigilarDatosNuevos() {
     // la pantalla de repaso se llevaría por delante los textos escritos.
     // La ruta además del DOM: mientras el recorrido se está montando,
     // la pantalla vieja sigue puesta y el selector solo no lo ve.
-    const ocupado = document.querySelector('.sheet, .viewer.on, .informe, .pantalla-recorrido, .d-visor, .d-hoja-acciones, .d-velo')
+    const ocupado = document.querySelector('.sheet, .viewer.on, .informe, .pantalla-recorrido, .d-visor, .d-hoja-acciones, .d-menu-velo, .d-velo')
       || location.hash.includes('/recorrido')
       || ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName);
     if (ocupado) return;

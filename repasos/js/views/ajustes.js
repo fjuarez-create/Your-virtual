@@ -98,6 +98,8 @@ export async function render() {
       // Solo para quien administra: los datos de muestra y el servidor.
       admin ? h('div.d-grupo', null,
         h('p.d-grupo-titulo', null, 'Datos de ejemplo'),
+        item('edit', 'Arreglar los textos de prueba',
+          'Cambia lo escrito a lo loco por repasos de verdad', () => arreglarPruebas()),
         item('users', 'Crear actas de ejemplo',
           'Tres actas firmadas por el equipo, para ver cómo queda', () => montarEjemplos()),
         hayEjemplos ? item('trash', 'Quitar las actas de ejemplo',
@@ -447,6 +449,69 @@ async function montarEjemplos() {
   } catch (e) {
     toast(e.message || 'No se pudieron crear', 'err');
   }
+}
+
+/**
+ * Cambia los textos escritos a lo loco por repasos de verdad.
+ *
+ * Enseña primero la lista con lo que hay y lo que quedaría, cada uno
+ * con su casilla: esto reescribe tareas de la obra, y hacerlo a ciegas
+ * sería la manera más rápida de cargarse una que sí valía. Todas vienen
+ * marcadas, pero quien mira quita las que no toquen.
+ */
+async function arreglarPruebas() {
+  const p = PROMOCIONES.find((x) => x.activa);
+  if (!p) return toast('No hay ninguna promoción activa', 'err');
+
+  const candidatos = await ejemplos.candidatosDePrueba(p.id);
+  if (!candidatos.length) return toast('No hay ningún texto de prueba');
+
+  const marcadas = new Set(candidatos.map((c) => c.tarea.id));
+  const contador = h('span');
+  const pintarContador = () => {
+    contador.textContent = marcadas.size === 1 ? 'Arreglar 1 tarea' : `Arreglar ${marcadas.size} tareas`;
+  };
+
+  const seguir = await sheet((cerrar) => {
+    const boton = h('button.btn.ink.full', {
+      onclick: () => cerrar(true),
+    }, contador);
+    pintarContador();
+    return [
+      h('h2.title', null, 'Textos de prueba'),
+      h('p.sub', null,
+        `${candidatos.length} ${candidatos.length === 1 ? 'tarea parece' : 'tareas parecen'} `
+        + 'escritas para probar. Cada una pasaría a ser un repaso de verdad, '
+        + 'con su oficio y su estancia. Quita las que sí valgan.'),
+      h('div.stack', { style: { marginTop: '14px', gap: '10px' } },
+        candidatos.map((c) => {
+          const casilla = h('input', { type: 'checkbox', checked: true });
+          casilla.addEventListener('change', () => {
+            if (casilla.checked) marcadas.add(c.tarea.id); else marcadas.delete(c.tarea.id);
+            pintarContador();
+            boton.disabled = !marcadas.size;
+          });
+          return h('label.row', null,
+            h('div.row-lead', null, casilla),
+            h('div.grow', null,
+              h('div.row-sub', { style: { textDecoration: 'line-through' } }, c.tarea.texto || 'Sin texto'),
+              h('div.row-title', null, c.nuevo.texto),
+            ),
+          );
+        })),
+      boton,
+      h('button.btn.ghost.full', { onclick: () => cerrar(false) }, 'Cancelar'),
+    ];
+  });
+  if (!seguir || !marcadas.size) return;
+
+  const elegidos = candidatos.filter((c) => marcadas.has(c.tarea.id));
+  toast('Arreglando…');
+  const { hechas, conFoto } = await ejemplos.arreglarTextos(elegidos);
+  toast(`${hechas} ${hechas === 1 ? 'tarea arreglada' : 'tareas arregladas'}`
+    + (conFoto ? ` · ${conFoto} con foto` : ''));
+  store.sincronizar({ forzar: true });
+  refrescar();
 }
 
 async function quitarEjemplos() {

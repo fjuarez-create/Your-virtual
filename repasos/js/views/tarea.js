@@ -16,7 +16,7 @@ import {
 } from '../catalog.js';
 import * as store from '../store.js';
 import * as media from '../media.js';
-import { hojaBienHecho, hojaFotoAcciones, cuandoTarea } from '../piezas.js';
+import { hojaBienHecho, hojaFotoAcciones, cuandoTarea, menuTarjeta } from '../piezas.js';
 import { alCompletar, nombreCorto } from '../frases.js';
 import { ir, refrescar, conFiltros, filtrosDeRuta } from '../app.js';
 
@@ -781,50 +781,21 @@ async function menuTarea(t, listaId, suya) {
   // que uno escribió no lo cambia otro: una tarea es lo que alguien
   // dijo haber visto, y si un tercero la reescribe deja de serlo.
   const edita = suya;
-  const accion = await sheet((cerrar) => [
-    h('h2.title', null, 'Tarea'),
-    h('div.stack', null,
-      edita ? h('button.row', { onclick: () => cerrar('texto') },
-        h('div.row-lead', null, icon('edit', 18)),
-        h('div.grow', null, h('div.row-title', null, 'Editar la descripción')),
-      ) : null,
-      edita ? h('button.row', { onclick: () => cerrar('estancia') },
-        h('div.row-lead', null, icon('casa', 18)),
-        h('div.grow', null, h('div.row-title', null, 'Cambiar la estancia o el oficio')),
-      ) : null,
-      // La voz y el vídeo viven aquí, en el menú, y no en la pantalla:
-      // la ficha del diseño es la foto del remate y lo que hay que
-      // hacer con ella. Pero un remate que se explica mejor hablando
-      // —o moviendo la cámara por la grieta— tiene que poder grabarse
-      // sin salir de la tarea.
-      h('button.row', { onclick: () => cerrar('voz') },
-        h('div.row-lead', null, icon('mic', 18)),
-        h('div.grow', null,
-          h('div.row-title', null, 'Grabar una nota de voz'),
-          h('div.row-sub', null, 'Se oye al final de la tarea'),
-        ),
-      ),
-      h('button.row', { onclick: () => cerrar('video') },
-        h('div.row-lead', null, icon('video', 18)),
-        h('div.grow', null, h('div.row-title', null, 'Añadir un vídeo')),
-      ),
-      visuales.length > 1 ? h('button.row', { onclick: () => cerrar('portada') },
-        h('div.row-lead', null, icon('image', 18)),
-        h('div.grow', null,
-          h('div.row-title', null, 'Elegir la foto del listado'),
-          h('div.row-sub', null, 'La que se ve sin abrir la tarea'),
-        ),
-      ) : null,
-      visuales.length ? h('button.row.danger', { onclick: () => cerrar('borrar-medio') },
-        h('div.row-lead', null, icon('trash', 18)),
-        h('div.grow', null, h('div.row-title', null, 'Borrar una foto o vídeo')),
-      ) : null,
-      edita ? h('button.row.danger', { onclick: () => cerrar('borrar') },
-        h('div.row-lead', null, icon('trash', 18)),
-        h('div.grow', null, h('div.row-title', null, 'Borrar la tarea entera')),
-      ) : null,
-    ),
-    h('button.btn.ghost.full', { onclick: () => cerrar(null) }, 'Cancelar'),
+  const accion = await menuTarjeta('Tarea', [
+    edita ? { id: 'texto', icono: 'edit', rotulo: 'Editar la descripción' } : null,
+    edita ? { id: 'estancia', icono: 'casa', rotulo: 'Cambiar la estancia o el oficio' } : null,
+    // La voz y el vídeo viven aquí, en el menú, y no en la pantalla:
+    // la ficha del diseño es la foto del remate y lo que hay que
+    // hacer con ella. Pero un remate que se explica mejor hablando
+    // —o moviendo la cámara por la grieta— tiene que poder grabarse
+    // sin salir de la tarea.
+    { id: 'voz', icono: 'mic', rotulo: 'Grabar una nota de voz', sub: 'Se oye al final de la tarea' },
+    { id: 'video', icono: 'video', rotulo: 'Añadir un vídeo' },
+    visuales.length > 1
+      ? { id: 'portada', icono: 'image', rotulo: 'Elegir la foto del listado', sub: 'La que se ve sin abrir la tarea' }
+      : null,
+    visuales.length ? { id: 'borrar-medio', icono: 'trash', rotulo: 'Borrar una foto o vídeo', rojo: true } : null,
+    edita ? { id: 'borrar', icono: 'trash', rotulo: 'Borrar la tarea entera', rojo: true } : null,
   ]);
 
   if (accion === 'texto') return editarTexto(t);

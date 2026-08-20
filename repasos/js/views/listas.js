@@ -11,12 +11,12 @@
    Villa 04 quiere saber qué queda por hacer en esa casa, no en cuál de
    las tres visitas salió cada cosa. Las actas siguen existiendo —son
    la firma de quién vio qué y cuándo— y viven en el menú de arriba. */
-import { h, icon, sheet, toast, avatar, fechaCorta, hora } from '../ui.js';
+import { h, icon, toast, avatar, fechaCorta, hora } from '../ui.js';
 import { promocion, unidad, oficio, estado as estadoDe, puedeCrearLista } from '../catalog.js';
 import * as store from '../store.js';
 import {
   tarjetaActa, tarjetaTarea, cuandoTarea, bannerAvance, hojaZonas, hojaFiltroTareas, caraDeGremio,
-  avisoLocal, barraSync, menuFlotante, filaMenu, filaMenuFichero, bandeja,
+  avisoLocal, barraSync, menuFlotante, menuTarjeta, filaMenu, filaMenuFichero, bandeja,
 } from '../piezas.js';
 import { hojaDePuerta, nombreDeFichero } from '../pdf.js';
 import { abrirMensaje } from '../mensajes.js';
@@ -209,16 +209,17 @@ export async function render({ promoId, unidadId }) {
   cajaEscribir.addEventListener('input', () => { botonMandar.disabled = !cajaEscribir.value.trim(); });
 
   /* ─── El menú de los tres puntos: el PDF y las actas firmadas ─── */
-  const menu = () => sheet((cerrar) => [
-    h('h2.title', null, u.nombre),
-    h('div.stack', { style: { marginTop: '12px', gap: '8px' } },
-      h('button.row', { onclick: () => { cerrar(); descargarVivienda(p, u, tareas); } },
-        icon('documento', 20), h('div.grow', null, h('div.row-title', null, 'PDF con lo que queda aquí'))),
-    ),
-    actas.length ? h('p.eyebrow', { style: { marginTop: '18px' } }, 'Actas de la vivienda') : null,
-    actas.length ? h('div.stack', { style: { marginTop: '8px', gap: '8px' } },
-      ...actas.map((a) => tarjetaActa(a, { dentroDeVivienda: true, filtros: { estado, oficio: oficioId } }))) : null,
-  ]);
+  const menu = async () => {
+    const extra = actas.length ? h('div.d-menu-extra', null,
+      h('p.d-epigrafe', null, 'Actas de la vivienda'),
+      h('div.stack', { style: { gap: '8px' } },
+        ...actas.map((a) => tarjetaActa(a, { dentroDeVivienda: true, filtros: { estado, oficio: oficioId } }))),
+    ) : null;
+    const elegido = await menuTarjeta(u.nombre, [
+      { id: 'pdf', icono: 'documento', rotulo: 'PDF con lo que queda aquí' },
+    ], { extra });
+    if (elegido === 'pdf') descargarVivienda(p, u, tareas);
+  };
 
   /* ─── Nueva inspección: el menú de tres opciones del diseño ───
      Foto o galería llevan al formulario de nueva tarea con lo

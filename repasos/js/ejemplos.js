@@ -17,6 +17,7 @@
    ═══════════════════════════════════════════════════════════════ */
 import * as store from './store.js';
 import * as db from './db.js';
+import * as media from './media.js';
 import { unidades, FASE_UNICA } from './catalog.js';
 
 export const PREFIJO = 'Ejemplo · ';
@@ -133,4 +134,156 @@ async function viviendasLibres(promoId, cuantas) {
     .filter((u) => !(resumen.get(u.id)?.total))
     .slice(-cuantas)          // desde el final: las primeras suelen ser las que se repasan antes
     .reverse();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Los repasos de verdad
+
+   Al probar la aplicación se escriben tareas a lo bruto —«af af af»,
+   «prueba 2»— porque lo que se está mirando es si el botón funciona,
+   no lo que pone. Luego esas frases se quedan ahí, y la obra parece
+   un cuaderno de garabatos.
+
+   Esta lista es el recambio: repasos como los de una vivienda que
+   entrega dentro de un mes, cuando lo gordo está hecho y lo que queda
+   son remates, ajustes y limpiezas. Cada uno con su oficio, su
+   estancia y el nombre de la foto que le corresponde.
+   ═══════════════════════════════════════════════════════════════ */
+export const REPASOS_REALES = [
+  { texto: 'Rodapié despegado en el encuentro con la corredera del salón', oficio: 'rodapies', zona: 'Salón', foto: 'rodapie-despegado' },
+  { texto: 'Junta del alicatado abierta detrás del inodoro', oficio: 'pavimentos', zona: 'Baño secundario', foto: 'junta-alicatado' },
+  { texto: 'La corredera del salón roza al cerrar y no encaja el pestillo', oficio: 'carp-aluminio', zona: 'Salón', foto: 'corredera-roza' },
+  { texto: 'Gotelé sin igualar en el techo del pasillo', oficio: 'pintura', zona: 'Pasillo', foto: 'gotele-techo' },
+  { texto: 'Enchufe del dormitorio principal suelto en la caja', oficio: 'electricidad', zona: 'Dormitorio principal', foto: 'enchufe-suelto' },
+  { texto: 'El monomando del office gotea por la base', oficio: 'fontaneria', zona: 'Cocina', foto: 'monomando-gotea' },
+  { texto: 'Cajón inferior de la cocina no cierra a tope', oficio: 'cocinas', zona: 'Cocina', foto: 'cajon-cocina' },
+  { texto: 'Desconchón en el revoco de la fachada sur, a la altura del contador', oficio: 'fachada', zona: 'Fachada', foto: 'desconchon-revoco' },
+  { texto: 'Falta el tope de goma en la puerta del baño principal', oficio: 'carp-madera', zona: 'Baño principal', foto: 'tope-puerta' },
+  { texto: 'Rejilla de ventilación del vestidor sin colocar', oficio: 'aire', zona: 'Vestidor', foto: 'rejilla-ventilacion' },
+  { texto: 'Baldosa levantada junto al ventanal del salón', oficio: 'pavimentos', zona: 'Salón', foto: 'baldosa-levantada' },
+  { texto: 'Silicona del plato de ducha con hongos, hay que rehacerla', oficio: 'fontaneria', zona: 'Baño principal', foto: 'silicona-ducha' },
+  { texto: 'Barandilla de la escalera con holgura en el anclaje inferior', oficio: 'barandillas', zona: 'Escalera', foto: 'barandilla-holgura' },
+  { texto: 'Vidrio de la barandilla de la terraza rayado', oficio: 'barandillas-vidrio', zona: 'Jardín', foto: 'vidrio-rayado' },
+  { texto: 'El videoportero no da imagen desde el portón', oficio: 'videoporteros', zona: 'Entrada', foto: 'videoportero' },
+  { texto: 'Mecanismo del pulsador del pasillo montado del revés', oficio: 'electricidad', zona: 'Pasillo', foto: 'pulsador-reves' },
+  { texto: 'Manchas de yeso en el pavimento de la entrada', oficio: 'general', zona: 'Entrada', foto: 'manchas-yeso' },
+  { texto: 'Falta remate de aluminio en el antepecho del dormitorio 2', oficio: 'carp-aluminio', zona: 'Dormitorio 2', foto: 'remate-antepecho' },
+  { texto: 'Puerta del armario del distribuidor desalineada', oficio: 'carp-madera', zona: 'Distribuidor', foto: 'puerta-armario' },
+  { texto: 'Fuga en el desagüe del lavadero, gotea al suelo', oficio: 'fontaneria', zona: 'Lavadero', foto: 'fuga-desague' },
+  { texto: 'El foco del baño secundario parpadea', oficio: 'electricidad', zona: 'Baño secundario', foto: 'foco-parpadea' },
+  { texto: 'Junta de dilatación del sótano sin sellar', oficio: 'pavimentos', zona: 'Sótano', foto: 'junta-dilatacion' },
+  { texto: 'Marcas de la cinta del pladur en el techo del salón', oficio: 'pladur', zona: 'Salón', foto: 'cinta-pladur' },
+  { texto: 'Repasar el rejuntado del alicatado de la cocina', oficio: 'pavimentos', zona: 'Cocina', foto: 'rejuntado-cocina' },
+  { texto: 'Grifo del jardín sin volante', oficio: 'fontaneria', zona: 'Jardín', foto: 'grifo-jardin' },
+  { texto: 'El riego del seto de la entrada no llega a los últimos goteros', oficio: 'jardines', zona: 'Jardín', foto: 'riego-goteros' },
+  { texto: 'Falta el vierteaguas de la ventana del aseo', oficio: 'carp-aluminio', zona: 'Aseo', foto: 'vierteaguas' },
+  { texto: 'La puerta de entrada roza en el marco por la parte alta', oficio: 'carp-madera', zona: 'Entrada', foto: 'puerta-roza' },
+  { texto: 'Iluminación de la cubierta sin conectar al reloj', oficio: 'electricidad', zona: 'Cubierta', foto: 'luz-cubierta' },
+  { texto: 'Escalón con el canto descascarillado en el tramo de subida', oficio: 'pavimentos', zona: 'Escalera', foto: 'canto-escalon' },
+  { texto: 'Encimera de la cocina con un golpe junto al fregadero', oficio: 'cocinas', zona: 'Cocina', foto: 'encimera-golpe' },
+  { texto: 'La bomba de la piscina hace ruido al arrancar', oficio: 'piscinas', zona: 'Jardín', foto: 'bomba-piscina' },
+  { texto: 'Falta sellar el paso de instalaciones del sótano', oficio: 'general', zona: 'Sótano', foto: 'paso-instalaciones' },
+  { texto: 'La persiana del dormitorio 1 baja torcida', oficio: 'carp-aluminio', zona: 'Dormitorio 1', foto: 'persiana-torcida' },
+  { texto: 'Marca de humedad en el techo del baño secundario', oficio: 'pintura', zona: 'Baño secundario', foto: 'humedad-techo' },
+  { texto: 'Termo del lavadero sin fijar a la pared', oficio: 'fontaneria', zona: 'Lavadero', foto: 'termo-sin-fijar' },
+  { texto: 'Zócalo del jardín con las juntas abiertas en la esquina', oficio: 'fachada', zona: 'Jardín', foto: 'zocalo-juntas' },
+  { texto: 'Puerta corredera del vestidor descarrilada', oficio: 'carp-madera', zona: 'Vestidor', foto: 'corredera-vestidor' },
+  { texto: 'Rejilla del sumidero de la terraza suelta', oficio: 'fontaneria', zona: 'Jardín', foto: 'sumidero-suelto' },
+  { texto: 'Pomo del armario del dormitorio 2 flojo', oficio: 'cocinas', zona: 'Dormitorio 2', foto: 'pomo-flojo' },
+];
+
+/**
+ * ¿Esto se escribió para probar y no dice nada?
+ *
+ * Es una sospecha, no una sentencia: lo que decida esta función se
+ * enseña antes con su casilla, y quien mira quita lo que no toque. Por
+ * eso puede permitirse ser generosa —«prueba de estanqueidad» es una
+ * tarea legítima y aquí caería—: el coste de un falso positivo es una
+ * casilla que se desmarca, y el de dejarse uno, una obra con garabatos.
+ */
+export function pareceDePrueba(texto) {
+  const t = String(texto || '').trim();
+  if (!t) return true;
+  const bajo = t.toLowerCase();
+  if (t.length < 8) return true;                                  // «af», «ok», «xxx»
+  if (!/[aeiouáéíóúü]/.test(bajo)) return true;                   // sin una sola vocal
+  if (/(.)\1{2,}/.test(bajo)) return true;                        // «oruebaaaaa»
+  if (/^(\S{1,4})([\s,.-]*\1){2,}$/.test(bajo)) return true;      // «af af af», «afafaf»
+  if (/\b(prueba|pruebas|probando|test|testing|asdf|qwer|bla+|lorem|kk|xd)\b/.test(bajo)) return true;
+  return false;
+}
+
+/**
+ * Las tareas de la promoción que parecen de prueba, cada una con el
+ * repaso de verdad que le tocaría.
+ *
+ * Cada vivienda empieza a coger de un punto distinto de la lista para
+ * que dos casas seguidas no salgan con los mismos repasos, y dentro de
+ * una casa no se repite ninguno hasta agotar los cuarenta.
+ */
+export async function candidatosDePrueba(promoId) {
+  const listas = (await db.getAll('listas')).filter((l) => !l.borrada && l.promoId === promoId);
+  const casaDe = new Map(listas.map((l) => [l.id, l.unidadId]));
+  const tareas = (await db.getAll('tareas'))
+    .filter((t) => !t.borrada && casaDe.has(t.listaId) && pareceDePrueba(t.texto))
+    .sort((a, b) => String(a.creado || '').localeCompare(String(b.creado || '')));
+
+  const puestas = new Map();
+  return tareas.map((t) => {
+    const unidadId = casaDe.get(t.listaId);
+    const n = puestas.get(unidadId) || 0;
+    puestas.set(unidadId, n + 1);
+    const salto = (parseInt(String(unidadId).split(':')[1], 10) || 0) * 7;
+    return { tarea: t, unidadId, nuevo: REPASOS_REALES[(salto + n) % REPASOS_REALES.length] };
+  });
+}
+
+/**
+ * Cambia el texto, el oficio y la estancia de cada tarea elegida, y le
+ * pone su foto si esa foto está en la aplicación.
+ *
+ * La foto solo se pone si la tarea no tenía ninguna: si alguien se
+ * molestó en hacer una en obra, esa manda por encima de cualquier
+ * imagen de muestra.
+ */
+export async function arreglarTextos(candidatos, alAvanzar = null) {
+  let hechas = 0;
+  let conFoto = 0;
+  for (const c of candidatos) {
+    await store.actualizarTarea(c.tarea.id, {
+      texto: c.nuevo.texto,
+      oficio: c.nuevo.oficio,
+      zona: c.nuevo.zona,
+    });
+    const medios = await store.mediosDeTarea(c.tarea.id);
+    if (!medios.some((m) => m.tipo === 'imagen')) {
+      if (await ponerFotoDeMuestra(c.tarea.id, c.nuevo.foto)) conFoto += 1;
+    }
+    hechas += 1;
+    alAvanzar?.(hechas, candidatos.length);
+  }
+  return { hechas, conFoto };
+}
+
+/**
+ * Coge la foto de muestra de la propia aplicación y la mete en la tarea
+ * como si se acabara de hacer.
+ *
+ * Si esa foto todavía no está subida, no pasa nada y la tarea se queda
+ * con la imagen del oficio y su pie explicándolo, que es lo que había
+ * antes. Así esto se puede usar hoy y las fotos entran cuando entren.
+ */
+async function ponerFotoDeMuestra(tareaId, nombre) {
+  if (!nombre) return false;
+  try {
+    const res = await fetch(`assets/ejemplos/${nombre}.jpg`);
+    if (!res.ok) return false;
+    const blob = await res.blob();
+    if (!blob.size || !String(blob.type).startsWith('image/')) return false;
+    const img = await media.prepararImagen(blob);
+    await store.añadirMedio(tareaId, { tipo: 'imagen', ...img });
+    return true;
+  } catch {
+    return false;
+  }
 }
