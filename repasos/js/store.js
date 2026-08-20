@@ -1402,3 +1402,156 @@ export async function arrancarSync() {
     if (!document.hidden && navigator.onLine) sincronizar();
   });
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Las actas del día
+
+   Un acta de obra no es la ficha de una casa: es el registro de una
+   visita. Se va una mañana, se recorren cinco viviendas, y eso es UN
+   hecho con su fecha y su gente, no cinco documentos sueltos.
+
+   Por eso el acta del día no se crea ni se guarda: se deduce. Todo lo
+   que pasó entre las 00:00 y las 23:59 de una fecha —repasos nuevos,
+   completados, verificados, rechazados y las notas que se escribieron—
+   es el acta de ese día. No hay nada que abrir, nada que nombrar y
+   nada que se pueda olvidar de cerrar, y funciona hacia atrás con todo
+   lo que ya hay hecho.
+   ═══════════════════════════════════════════════════════════════ */
+
+/** La fecha de un instante, en la zona horaria del propio móvil. */
+export function diaDe(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const dos = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${dos(d.getMonth() + 1)}-${dos(d.getDate())}`;
+}
+
+/* Un comentario escrito a la vez que un cambio de estado es la
+   explicación de ese cambio, no otro hecho: el motivo del rechazo, el
+   parte de lo arreglado. Se pega al cambio en vez de contarse aparte. */
+const MARGEN_NOTA = 90 * 1000;
+
+/**
+ * Todas las actas de la promoción, una por día con actividad, de la más
+ * reciente a la más antigua.
+ */
+export async function actasPorDia(promoId) {
+  const listas = (await db.getAll('listas')).filter((l) => !l.borrada && l.promoId === promoId);
+  const casaDe = new Map(listas.map((l) => [l.id, l.unidadId]));
+  const tareas = (await db.getAll('tareas')).filter((t) => !t.borrada && casaDe.has(t.listaId));
+  const porTarea = new Map(tareas.map((t) => [t.id, t]));
+  const comentarios = (await db.getAll('comentarios'))
+    .filter((c) => !c.borrada && porTarea.has(c.tareaId))
+    .sort((a, b) => String(a.creado).localeCompare(String(b.creado)));
+
+  // Las notas que explican un cambio de estado, apartadas para pegarlas
+  // a él; el resto son hechos por sí mismas.
+  const notaDelCambio = new Map();
+  const sueltas = [];
+  for (const c of comentarios) {
+    const t = porTarea.get(c.tareaId);
+    const pegada = t.estadoEn
+      && Math.abs(new Date(c.creado) - new Date(t.estadoEn)) <= MARGEN_NOTA;
+    if (pegada && !notaDelCambio.has(t.id)) notaDelCambio.set(t.id, c);
+    else sueltas.push(c);
+  }
+
+  const dias = new Map();
+  const meter = (cuando, evento) => {
+    const fecha = diaDe(cuando);
+    if (!fecha) return;
+    if (!dias.has(fecha)) dias.set(fecha, { fecha, eventos: [] });
+    dias.get(fecha).eventos.push({ ...evento, cuando });
+  };
+
+  for (const t of tareas) {
+    const unidadId = casaDe.get(t.listaId);
+    meter(t.creado, {
+      tipo: 'nueva',
+      tareaId: t.id,
+      listaId: t.listaId,
+      unidadId,
+      quien: t.creadoPorNombre,
+      quienId: t.creadoPor,
+      texto: t.texto,
+      oficio: t.oficio,
+      zona: t.zona,
+    });
+    if (t.estado !== 'pendiente' && t.estadoEn) {
+      const nota = notaDelCambio.get(t.id);
+      meter(t.estadoEn, {
+        tipo: t.estado,                    // resuelta · verificada · rechazada
+        tareaId: t.id,
+        listaId: t.listaId,
+        unidadId,
+        quien: t.estadoPor,
+        quienId: null,
+        texto: t.texto,
+        nota: nota?.texto || '',
+        oficio: t.oficio,
+        zona: t.zona,
+      });
+    }
+  }
+  for (const c of sueltas) {
+    const t = porTarea.get(c.tareaId);
+    meter(c.creado, {
+      tipo: 'nota',
+      tareaId: t.id,
+      listaId: t.listaId,
+      unidadId: casaDe.get(t.listaId),
+      quien: c.creadoPorNombre,
+      quienId: c.creadoPor,
+      texto: t.texto,
+      nota: c.texto,
+      oficio: t.oficio,
+      zona: t.zona,
+    });
+  }
+
+  return [...dias.values()]
+    .map((d) => montarActa(d))
+    .sort((a, b) => b.fecha.localeCompare(a.fecha));
+}
+
+/** El acta de un día concreto, o null si ese día no se tocó la obra. */
+export async function actaDeUnDia(promoId, fecha) {
+  const todas = await actasPorDia(promoId);
+  return todas.find((a) => a.fecha === fecha) || null;
+}
+
+/** Ordena los hechos del día, los agrupa por vivienda y saca las cifras. */
+function montarActa(dia) {
+  const eventos = dia.eventos.sort((a, b) => String(a.cuando).localeCompare(String(b.cuando)));
+
+  const porVilla = new Map();
+  for (const e of eventos) {
+    if (!porVilla.has(e.unidadId)) porVilla.set(e.unidadId, []);
+    porVilla.get(e.unidadId).push(e);
+  }
+
+  const gente = new Map();
+  for (const e of eventos) {
+    if (e.quien && !gente.has(e.quien)) gente.set(e.quien, { id: e.quienId || e.quien, nombre: e.quien });
+  }
+
+  const cuantos = (tipo) => eventos.filter((e) => e.tipo === tipo).length;
+  return {
+    fecha: dia.fecha,
+    desde: eventos[0]?.cuando || null,
+    hasta: eventos[eventos.length - 1]?.cuando || null,
+    eventos,
+    villas: [...porVilla.entries()]
+      .map(([unidadId, suyos]) => ({ unidadId, eventos: suyos }))
+      .sort((a, b) => String(a.unidadId).localeCompare(String(b.unidadId), 'es', { numeric: true })),
+    gente: [...gente.values()],
+    conteo: {
+      nuevas: cuantos('nueva'),
+      completadas: cuantos('resuelta'),
+      verificadas: cuantos('verificada'),
+      rechazadas: cuantos('rechazada'),
+      notas: cuantos('nota'),
+      total: eventos.length,
+    },
+  };
+}

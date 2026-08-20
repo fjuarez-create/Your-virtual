@@ -25,6 +25,7 @@ const RUTAS = [
   { patron: /^\/l\/([^/]+)\/t\/([^/]+)$/,     vista: () => import('./views/tarea.js'),        params: (m) => ({ listaId: m[1], tareaId: m[2] }) },
   { patron: /^\/tareas\/([^/]+)$/,           vista: () => import('./views/tareasEstado.js'), params: (m) => ({ estadoId: m[1] }) },
   { patron: /^\/listas$/,                     vista: () => import('./views/historial.js'),    params: () => ({}) },
+  { patron: /^\/acta\/(\d{4}-\d{2}-\d{2})$/,   vista: () => import('./views/acta.js'),         params: (m) => ({ fecha: m[1] }) },
   { patron: /^\/ajustes$/,                    vista: () => import('./views/ajustes.js'),      params: () => ({}) },
   { patron: /^\/usuarios$/,                   vista: () => import('./views/usuarios.js'),     params: () => ({}) },
 ];

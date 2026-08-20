@@ -74,16 +74,66 @@ function latin1(texto) {
     .join('');
 }
 
+/* Los colores de la aplicación, tal cual, para que el papel y la
+   pantalla hablen el mismo idioma. En PDF van de 0 a 1. */
+const COLOR = {
+  tinta: [0, 0, 0],
+  gris: [0.55, 0.55, 0.55],
+  beige: [0.839, 0.792, 0.737],      // #d6cabc
+  beigeSuave: [0.937, 0.925, 0.910], // #efecE8
+  topo: [0.451, 0.420, 0.361],       // #736b5c
+  verde: [0.024, 0.302, 0.176],      // #064d2d
+  verdeSuave: [0.878, 0.937, 0.906],
+  rojo: [0.396, 0.114, 0.090],       // #651d17
+  rojoSuave: [0.984, 0.918, 0.910],
+  ambar: [0.408, 0.235, 0.012],      // #683c03
+  ambarSuave: [0.996, 0.957, 0.902],
+  papel: [1, 1, 1],
+  tarjeta: [0.969, 0.969, 0.965],   // el gris de las tarjetas, muy suave para el papel
+  fondo: [0.961, 0.961, 0.961],
+};
+const c3 = (c) => c.map((n) => n.toFixed(3)).join(' ');
+
 class Pagina {
   constructor() { this.ops = []; }
-  texto(x, y, cadena, { tam = 11, negrita = false, gris = 0 } = {}) {
+  texto(x, y, cadena, { tam = 11, negrita = false, gris = 0, color = null, espaciado = 0 } = {}) {
     this.ops.push(
       'BT',
-      `${gris} g`,
+      color ? `${c3(color)} rg` : `${gris} g`,
       `/${negrita ? 'F2' : 'F1'} ${tam} Tf`,
+      espaciado ? `${espaciado} Tc` : '0 Tc',
       `1 0 0 1 ${x.toFixed(2)} ${y.toFixed(2)} Tm`,
       `(${escapar(latin1(cadena))}) Tj`,
       'ET',
+    );
+  }
+  /** Un rectángulo macizo. */
+  relleno(x, y, ancho, alto, color) {
+    this.ops.push(`${c3(color)} rg`, `${x.toFixed(2)} ${y.toFixed(2)} ${ancho.toFixed(2)} ${alto.toFixed(2)} re f`);
+  }
+  /**
+   * Una pastilla: rectángulo con las esquinas redondeadas. El PDF no
+   * las trae, así que se dibujan con cuatro curvas. El 0,5523 es la
+   * constante de siempre para que una curva de Bézier pase por un
+   * cuarto de círculo sin que se note.
+   */
+  pastilla(x, y, ancho, alto, radio, color) {
+    const r = Math.min(radio, alto / 2, ancho / 2);
+    const k = r * 0.5523;
+    const x2 = x + ancho;
+    const y2 = y + alto;
+    this.ops.push(
+      `${c3(color)} rg`,
+      `${(x + r).toFixed(2)} ${y.toFixed(2)} m`,
+      `${(x2 - r).toFixed(2)} ${y.toFixed(2)} l`,
+      `${(x2 - r + k).toFixed(2)} ${y.toFixed(2)} ${x2.toFixed(2)} ${(y + r - k).toFixed(2)} ${x2.toFixed(2)} ${(y + r).toFixed(2)} c`,
+      `${x2.toFixed(2)} ${(y2 - r).toFixed(2)} l`,
+      `${x2.toFixed(2)} ${(y2 - r + k).toFixed(2)} ${(x2 - r + k).toFixed(2)} ${y2.toFixed(2)} ${(x2 - r).toFixed(2)} ${y2.toFixed(2)} c`,
+      `${(x + r).toFixed(2)} ${y2.toFixed(2)} l`,
+      `${(x + r - k).toFixed(2)} ${y2.toFixed(2)} ${x.toFixed(2)} ${(y2 - r + k).toFixed(2)} ${x.toFixed(2)} ${(y2 - r).toFixed(2)} c`,
+      `${x.toFixed(2)} ${(y + r).toFixed(2)} l`,
+      `${x.toFixed(2)} ${(y + r - k).toFixed(2)} ${(x + r - k).toFixed(2)} ${y.toFixed(2)} ${(x + r).toFixed(2)} ${y.toFixed(2)} c`,
+      'f',
     );
   }
   linea(x1, y1, x2, y2, grosor = 0.8, gris = 0) {
@@ -217,6 +267,168 @@ export function hojaDePuerta({ vivienda, promocion, fecha, autor, tareas }) {
     p.texto(MARGEN, MARGEN - 14,
       `${tareas.length} ${tareas.length === 1 ? 'tarea' : 'tareas'}  ·  Página ${i + 1} de ${paginas.length}`,
       { tam: 8.5, gris: 0.55 });
+  });
+
+  return ensamblar(paginas);
+}
+
+/* ─── El acta del día ─────────────────────────────────────────── */
+
+/* Cómo se cuenta en papel cada cosa que le pasó a un repaso, y de qué
+   color va su barra. Los mismos verbos y los mismos colores que en la
+   pantalla: quien mira el PDF y quien mira el móvil tienen que estar
+   viendo lo mismo. */
+const HECHOS_PDF = {
+  nueva: { rotulo: 'APUNTADO', color: COLOR.gris, fondo: COLOR.fondo },
+  resuelta: { rotulo: 'COMPLETADO', color: COLOR.ambar, fondo: COLOR.ambarSuave },
+  verificada: { rotulo: 'VERIFICADO', color: COLOR.verde, fondo: COLOR.verdeSuave },
+  rechazada: { rotulo: 'RECHAZADO', color: COLOR.rojo, fondo: COLOR.rojoSuave },
+  nota: { rotulo: 'NOTA', color: COLOR.topo, fondo: COLOR.beigeSuave },
+};
+
+/**
+ * El acta de un día de obra, en papel.
+ *
+ * Se lee como un parte de visita: la portada con la fecha en grande y
+ * quién estuvo, el resumen del día en cuatro cifras, y debajo, casa por
+ * casa y hora a hora, todo lo que se hizo. Es el documento que la
+ * promotora manda a la constructora, así que tiene que poder imprimirse
+ * y entenderse sin haber visto nunca la aplicación.
+ *
+ * @returns {Blob} el PDF listo para descargar o compartir
+ */
+export function actaDelDia({ titulo, diaSemana, promocion, gente, conteo, villas }) {
+  const anchoUtil = A4.ancho - MARGEN * 2;
+  const paginas = [];
+  let pag = new Pagina();
+  let y = 0;
+
+  const nuevaPagina = (primera) => {
+    pag = new Pagina();
+    if (primera) {
+      // La banda beige de la portada, del ancho del papel.
+      pag.relleno(0, A4.alto - 168, A4.ancho, 168, COLOR.beige);
+      let by = A4.alto - 52;
+      pag.texto(MARGEN, by, 'UNIK WORKS', { tam: 8.5, negrita: true, color: COLOR.topo, espaciado: 2.2 });
+      pag.texto(A4.ancho - MARGEN - anchoTexto('ACTA DE OBRA', 8.5, true) - 24, by, 'ACTA DE OBRA',
+        { tam: 8.5, negrita: true, color: COLOR.topo, espaciado: 2.2 });
+      by -= 44;
+      pag.texto(MARGEN, by, titulo, { tam: 30, negrita: true, color: COLOR.tinta });
+      by -= 22;
+      pag.texto(MARGEN, by, `${diaSemana} · ${promocion}`, { tam: 12.5, color: COLOR.topo });
+      y = A4.alto - 168 - 34;
+    } else {
+      pag.texto(MARGEN, A4.alto - 44, `Acta del ${titulo}`, { tam: 9, negrita: true, color: COLOR.topo, espaciado: 1.2 });
+      pag.linea(MARGEN, A4.alto - 54, A4.ancho - MARGEN, A4.alto - 54, 0.7, 0.85);
+      y = A4.alto - 78;
+    }
+  };
+  let villaEnCurso = '';
+  const sitio = (alto) => {
+    if (y - alto >= MARGEN + 24) return;
+    paginas.push(pag);
+    nuevaPagina(false);
+    // Un acta se lee meses después: si una vivienda se parte entre dos
+    // páginas, la segunda tiene que decir de qué casa está hablando.
+    if (villaEnCurso) {
+      pag.texto(MARGEN, y, `${villaEnCurso} (sigue)`, { tam: 13, negrita: true, color: COLOR.tinta });
+      y -= 8;
+      pag.linea(MARGEN, y, A4.ancho - MARGEN, y, 0.8, 0.85);
+      y -= 18;
+    }
+  };
+
+  nuevaPagina(true);
+
+  /* ─── Quién estuvo ─── */
+  pag.texto(MARGEN, y, 'QUIENES ESTUVIERON', { tam: 8.5, negrita: true, color: COLOR.gris, espaciado: 1.6 });
+  y -= 18;
+  const nombres = gente.length ? gente.join('  ·  ') : 'Sin firmar';
+  for (const linea of partir(nombres, anchoUtil, 13)) {
+    pag.texto(MARGEN, y, linea, { tam: 13, color: COLOR.tinta });
+    y -= 17;
+  }
+  y -= 16;
+
+  /* ─── Las cifras del día, en pastillas ─── */
+  const cifras = [
+    { n: conteo.nuevas, rotulo: conteo.nuevas === 1 ? 'repaso nuevo' : 'repasos nuevos', c: COLOR.tinta, f: COLOR.fondo },
+    { n: conteo.completadas, rotulo: conteo.completadas === 1 ? 'completado' : 'completados', c: COLOR.ambar, f: COLOR.ambarSuave },
+    { n: conteo.verificadas, rotulo: conteo.verificadas === 1 ? 'verificado' : 'verificados', c: COLOR.verde, f: COLOR.verdeSuave },
+    { n: conteo.rechazadas, rotulo: conteo.rechazadas === 1 ? 'rechazado' : 'rechazados', c: COLOR.rojo, f: COLOR.rojoSuave },
+  ].filter((x) => x.n > 0);
+
+  if (cifras.length) {
+    const hueco = 9;
+    const ancho = (anchoUtil - hueco * (cifras.length - 1)) / cifras.length;
+    const alto = 58;
+    cifras.forEach((x, i) => {
+      const cx = MARGEN + i * (ancho + hueco);
+      pag.pastilla(cx, y - alto, ancho, alto, 12, x.f);
+      pag.texto(cx + 14, y - 28, String(x.n), { tam: 24, negrita: true, color: x.c });
+      pag.texto(cx + 14, y - 44, x.rotulo, { tam: 9, color: COLOR.topo });
+    });
+    y -= alto + 26;
+  }
+
+  /* ─── Y el detalle, casa por casa ─── */
+  for (const villa of villas) {
+    villaEnCurso = '';
+    sitio(74);
+    villaEnCurso = villa.nombre;
+    pag.texto(MARGEN, y, villa.nombre, { tam: 17, negrita: true, color: COLOR.tinta });
+    const cuantos = villa.eventos.length === 1 ? '1 apunte' : `${villa.eventos.length} apuntes`;
+    pag.texto(A4.ancho - MARGEN - anchoTexto(cuantos, 10), y, cuantos, { tam: 10, color: COLOR.gris });
+    y -= 10;
+    pag.linea(MARGEN, y, A4.ancho - MARGEN, y, 1.1, 0.78);
+    y -= 20;
+
+    for (const e of villa.eventos) {
+      const hecho = HECHOS_PDF[e.tipo] || HECHOS_PDF.nota;
+      const sangria = 62;
+      const anchoTextoUtil = anchoUtil - sangria - 6;
+      const lineas = partir(e.texto, anchoTextoUtil, 11.5);
+      const lineasNota = e.nota ? partir(`«${e.nota}»`, anchoTextoUtil, 10) : [];
+      const alto = 16 + lineas.length * 14 + (lineasNota.length ? lineasNota.length * 12.5 + 3 : 0) + 15;
+
+      sitio(alto + 10);
+
+      // La pastilla de fondo y la barra de color, como en la pantalla.
+      pag.pastilla(MARGEN, y - alto + 8, anchoUtil, alto, 10, COLOR.tarjeta);
+      pag.pastilla(MARGEN, y - alto + 8, 3.5, alto, 1.6, hecho.color);
+
+      pag.texto(MARGEN + 12, y - 4, e.hora, { tam: 10, negrita: true, color: COLOR.gris });
+      pag.texto(MARGEN + sangria, y - 4, hecho.rotulo, { tam: 8, negrita: true, color: hecho.color, espaciado: 1.1 });
+      if (e.quien) {
+        pag.texto(MARGEN + sangria + anchoTexto(hecho.rotulo, 8, true) + 12, y - 4, `· ${e.quien}`,
+          { tam: 8.5, color: COLOR.gris });
+      }
+      let ty = y - 20;
+      for (const linea of lineas) {
+        pag.texto(MARGEN + sangria, ty, linea, { tam: 11.5, color: COLOR.tinta });
+        ty -= 14;
+      }
+      for (const linea of lineasNota) {
+        pag.texto(MARGEN + sangria, ty - 1, linea, { tam: 10, color: COLOR.topo });
+        ty -= 12.5;
+      }
+      const pie = [e.oficio, e.zona].filter(Boolean).join(' · ');
+      if (pie) pag.texto(MARGEN + sangria, ty - 1, pie, { tam: 8.5, color: COLOR.gris });
+
+      y -= alto + 6;
+    }
+    y -= 14;
+    villaEnCurso = '';
+  }
+
+  paginas.push(pag);
+
+  // El pie, ya sabiendo cuántas páginas hay.
+  paginas.forEach((p, i) => {
+    p.linea(MARGEN, MARGEN - 6, A4.ancho - MARGEN, MARGEN - 6, 0.7, 0.85);
+    p.texto(MARGEN, MARGEN - 20, `${promocion}  ·  ${titulo}`, { tam: 8.5, color: COLOR.gris });
+    const pie = `Página ${i + 1} de ${paginas.length}`;
+    p.texto(A4.ancho - MARGEN - anchoTexto(pie, 8.5), MARGEN - 20, pie, { tam: 8.5, color: COLOR.gris });
   });
 
   return ensamblar(paginas);

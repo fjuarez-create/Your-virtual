@@ -50,6 +50,7 @@ const CODIGO = [
   'js/views/nuevaTarea.js',
   'js/views/tareasEstado.js',
   'js/views/historial.js',
+  'js/views/acta.js',
   'js/views/ajustes.js',
   'js/views/usuarios.js',
 ];

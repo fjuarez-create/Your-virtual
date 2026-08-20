@@ -1,43 +1,56 @@
-/* El archivo de actas de la promoción, entero y en orden.
+/* ACTAS — el archivo de la obra, un acta por día.
 
-   Misma cabecera que Inicio y Viviendas —la cara a la izquierda y la
-   cápsula de bolitas a la derecha, con la suya encendida—, el titular
-   en el mismo sitio, y el filtro de una sola fila: el desplegable con
-   el estado a la izquierda y la bola del embudo a la derecha para los
-   oficios. Antes esto eran cinco chips y un selector aparte, que
-   ocupaban media pantalla antes de enseñar la primera acta.
+   Un acta de obra no es la ficha de una casa: es el registro de una
+   visita. Se va una mañana, se recorren cinco viviendas, y eso es UN
+   hecho con su fecha y su gente. Antes aquí había un documento por
+   lista de repasos y salían cuatro «Acta Villa 01» seguidas que no se
+   distinguían entre sí; ahora hay una por día y dentro va lo que se
+   tocó, agrupado por vivienda.
 
-   Un acta se busca casi siempre sabiendo de qué vivienda es, y para eso
-   está el pie de cada vivienda. Aquí se viene a otra cosa: a recorrer
-   lo firmado de toda la promoción, que es consulta de despacho y no de
-   obra.
+   El acta no se crea ni se nombra: se abre sola con el primer repaso
+   del día. Nadie tiene que acordarse de nada.
 
-   Mientras solo haya una promoción activa se entra directo a la suya y
-   no se pierde un toque en elegirla. En cuanto haya dos, el selector
-   vuelve por su cuenta desde el catálogo. */
-import { h, icon, emptyState } from '../ui.js';
+   Misma cabecera que Inicio y Viviendas, el titular en su sitio y una
+   sola fila de filtro: el mes a la izquierda y la bola del embudo a la
+   derecha para la vivienda. */
+import { h, icon, grupoAvatares, emptyState } from '../ui.js';
 import * as store from '../store.js';
-import { PROMOCIONES, ESTADOS, estado, oficio, puedeCrearLista } from '../catalog.js';
+import { PROMOCIONES, unidad, unidades } from '../catalog.js';
 import {
-  tarjetaActa, ctaNuevaLista, cabDiseno, menuFlotante, filaMenu, hojaOficios,
-  avisoLocal, barraSync,
+  cabDiseno, menuFlotante, filaMenu, avisoLocal, barraSync, menuTarjeta,
 } from '../piezas.js';
-import { ir, filtrosDeRuta, anotarFiltros } from '../app.js';
+import { ir } from '../app.js';
 
-/* «Todas» delante, y detrás los cuatro estados de siempre. */
-const VISTAS = [{ id: 'todas', rotulo: 'Todas' },
-  ...ESTADOS.map((e) => ({ id: e.id, rotulo: e.plural }))];
+const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+  'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+
+/** «12 de agosto» · «12 de agosto de 2025» si no es de este año. */
+export function fechaDeActa(fecha, { conAno = false } = {}) {
+  const [a, m, d] = String(fecha).split('-').map(Number);
+  const corto = `${d} de ${MESES[m - 1]}`;
+  return conAno || a !== new Date().getFullYear() ? `${corto} de ${a}` : corto;
+}
+
+/** «miércoles» — el día de la semana de una fecha suelta. */
+export function diaDeLaSemana(fecha, { mayuscula = false } = {}) {
+  const [a, m, d] = String(fecha).split('-').map(Number);
+  const dia = DIAS[new Date(a, m - 1, d).getDay()];
+  return mayuscula ? dia.charAt(0).toUpperCase() + dia.slice(1) : dia;
+}
+
+/** «AGOSTO 2026», para el epígrafe que separa los meses. */
+function mesDe(fecha) {
+  const [a, m] = String(fecha).split('-').map(Number);
+  return `${MESES[m - 1]} ${a}`.toUpperCase();
+}
 
 export async function render() {
   const activas = PROMOCIONES.filter((p) => p.activa);
   const p = activas.length === 1 ? activas[0] : null;
   if (!p) { ir('#/promociones', { reemplazar: true }); return { contenido: [] }; }
 
-  const actas = await store.actasConDatos({ promoId: p.id });
-
-  // Desde aquí no se sabe de qué vivienda es, así que primero hay que
-  // elegirla. Dentro de una vivienda, el mismo botón la crea directamente.
-  const cta = puedeCrearLista(store.sesion()) ? ctaNuevaLista(() => ir('#/viviendas')) : null;
+  const actas = await store.actasPorDia(p.id);
 
   if (!actas.length) {
     return {
@@ -46,76 +59,110 @@ export async function render() {
       contenido: [
         cabDiseno('listas'),
         h('h1.d-saludo', null, 'Actas'),
-        emptyState('clipboard', 'Todavía no hay actas',
-          'Cuando crees la primera lista de repaso aparecerá aquí, con su fecha y quién la hizo.',
-          puedeCrearLista(store.sesion())
-            ? h('button.btn.ink', { onclick: () => ir('#/viviendas') }, icon('plus'), 'Nueva lista de repasos')
-            : null),
+        emptyState('clipboard', 'Todavía no hay ningún día de obra',
+          'El acta se abre sola con el primer repaso que se apunte. Cada día tendrá la suya, con lo que se haya tocado y quién estuvo.'),
       ],
     };
   }
 
-  let { estado: vista, oficio: oficioId } = filtrosDeRuta();
-  if (!VISTAS.some((v) => v.id === vista)) vista = 'todas';
+  /* ─── Filtros: el mes y la vivienda ─── */
+  let mes = 'todos';
+  let villa = '';
 
-  const lista = h('div.stack.actas');
-  const contador = h('p.d-epigrafe');
-  const filtros = h('div.d-filtros-tareas');
-  const cuantos = h('p.d-cuantos-filtros');
+  const meses = [];
+  for (const a of actas) {
+    const clave = a.fecha.slice(0, 7);
+    const ya = meses.find((x) => x.clave === clave);
+    if (ya) ya.cuantos += 1;
+    else meses.push({ clave, rotulo: mesDe(a.fecha), cuantos: 1 });
+  }
 
-  /* ─── El desplegable del estado y la bola de los oficios ─── */
+  const villasConActas = () => {
+    const vistas = new Set();
+    for (const a of actas) for (const v of a.villas) vistas.add(v.unidadId);
+    return unidades(p.id).filter((u) => vistas.has(u.id));
+  };
+
+  const visibles = () => actas.filter((a) => {
+    if (mes !== 'todos' && !a.fecha.startsWith(mes)) return false;
+    if (villa && !a.villas.some((v) => v.unidadId === villa)) return false;
+    return true;
+  });
+
   const selector = h('button.d-selector-estado', {
-    onclick: () => menuFlotante((cerrar) => VISTAS.map((v) => filaMenu(
-      v.id === vista ? 'check' : 'listaChecks',
-      `${v.rotulo} (${cuantasHay(actas, v.id, oficioId)})`,
-      () => { cerrar(); vista = v.id; cambio(); },
-    )), { conX: true }),
+    onclick: () => menuFlotante((cerrar) => [
+      filaMenu(mes === 'todos' ? 'check' : 'calendario', `Todos los meses (${actas.length})`,
+        () => { cerrar(); mes = 'todos'; pintar(); }),
+      ...meses.map((x) => filaMenu(mes === x.clave ? 'check' : 'calendario',
+        `${x.rotulo.charAt(0) + x.rotulo.slice(1).toLowerCase()} (${x.cuantos})`,
+        () => { cerrar(); mes = x.clave; pintar(); })),
+    ], { conX: true }),
   }, h('span'), icon('caretAbajo'));
 
   const bolaFiltros = h('button.d-bola-embudo', {
-    'aria-label': 'Filtrar por oficio',
+    'aria-label': 'Filtrar por vivienda',
     onclick: async () => {
-      const elegidos = await hojaOficios(oficiosElegidos(oficioId), { multiple: true, conTodos: true });
-      if (elegidos === null) return;
-      oficioId = elegidos.length ? elegidos.join(',') : 'todos';
-      cambio();
+      const elegida = await menuTarjeta('Ver solo una vivienda', [
+        { id: '', icono: villa ? 'listaChecks' : 'check', rotulo: 'Todas las viviendas' },
+        ...villasConActas().map((u) => ({
+          id: u.id,
+          icono: villa === u.id ? 'check' : 'casa',
+          rotulo: u.nombre,
+        })),
+      ]);
+      if (elegida === null) return;
+      villa = elegida;
+      pintar();
     },
   }, icon('cursores'));
 
+  const filtros = h('div.d-filtros-tareas');
+  const cuantos = h('p.d-cuantos-filtros');
+  const epigrafe = h('p.d-epigrafe');
+  const lista = h('div.d-actas-dias');
+
   const pintar = () => {
-    const visibles = actas.filter((a) => encaja(a, vista, oficioId));
-    lista.replaceChildren(...visibles.map((a) =>
-      tarjetaActa(a, { filtros: { estado: vista, oficio: oficioId } })));
-    if (!visibles.length) {
-      lista.append(h('p.sub.center', { style: { padding: '30px 0' } },
-        'Ninguna acta encaja con este filtro.'));
-    }
+    const dias = visibles();
 
-    selector.querySelector('span').textContent =
-      `${VISTAS.find((v) => v.id === vista).rotulo} (${visibles.length})`;
-    contador.textContent = visibles.length === actas.length
-      ? `${actas.length} ${actas.length === 1 ? 'acta' : 'actas'}`
-      : `${visibles.length} de ${actas.length} actas`;
+    selector.querySelector('span').textContent = mes === 'todos'
+      ? `Todos los meses (${dias.length})`
+      : `${meses.find((x) => x.clave === mes)?.rotulo.toLowerCase() || ''} (${dias.length})`;
 
-    // Las pastillas de lo que hay puesto, con su única X. Los oficios
-    // viven ahora dentro de la bola, así que sin esto no habría manera
-    // de saber que hay un filtro puesto sin abrirla.
     const piezas = [];
-    if (vista !== 'todas') piezas.push(h('span.pastilla', null, estado(vista).plural));
-    for (const id of oficiosElegidos(oficioId)) piezas.push(h('span.pastilla', null, oficio(id).nombre));
+    if (villa) piezas.push(h('span.pastilla', null, unidad(villa)?.nombre || 'Vivienda'));
     if (piezas.length) {
       piezas.push(h('button.quitar', {
-        'aria-label': 'Quitar los filtros',
-        onclick: () => { vista = 'todas'; oficioId = 'todos'; cambio(); },
+        'aria-label': 'Quitar el filtro',
+        onclick: () => { villa = ''; pintar(); },
       }, icon('x')));
     }
     filtros.replaceChildren(...piezas);
     filtros.style.display = piezas.length ? '' : 'none';
-    const n = piezas.length - 1;
-    cuantos.textContent = piezas.length ? `Has aplicado ${n} ${n === 1 ? 'filtro' : 'filtros'}` : '';
-    cuantos.style.display = piezas.length ? '' : 'none';
+    cuantos.textContent = villa ? 'Solo los días en los que se tocó esa vivienda' : '';
+    cuantos.style.display = villa ? '' : 'none';
+
+    epigrafe.textContent = dias.length === 1
+      ? '1 día de obra'
+      : `${dias.length} días de obra`;
+
+    // Las tarjetas, con su mes por encima cuando cambia.
+    const hoy = store.diaDe(new Date().toISOString());
+    const nodos = [];
+    let mesPuesto = '';
+    for (const a of dias) {
+      const suyo = mesDe(a.fecha);
+      if (suyo !== mesPuesto) {
+        mesPuesto = suyo;
+        nodos.push(h('p.d-actas-mes', null, suyo));
+      }
+      nodos.push(tarjetaDelDia(a, { hoy }));
+    }
+    if (!nodos.length) {
+      nodos.push(h('p.d-epigrafe', { style: { color: 'var(--d-gris)', textAlign: 'center', padding: '30px 0' } },
+        'Ningún día encaja con este filtro.'));
+    }
+    lista.replaceChildren(...nodos);
   };
-  const cambio = () => { anotarFiltros({ estado: vista, oficio: oficioId }); pintar(); };
   pintar();
 
   return {
@@ -128,38 +175,49 @@ export async function render() {
       h('div.d-fila-filtro', null, selector, bolaFiltros),
       filtros,
       cuantos,
-      contador,
-      cta,
+      epigrafe,
       lista,
     ],
   };
 }
 
-/** Cuántas actas quedarían en cada opción del desplegable. */
-function cuantasHay(actas, vista, oficioId) {
-  return actas.filter((a) => encaja(a, vista, oficioId)).length;
-}
-
-/** El filtro de oficio viaja en la dirección como lista: «pladur,cocinas». */
-function oficiosElegidos(oficioId) {
-  return oficioId && oficioId !== 'todos' ? String(oficioId).split(',').filter(Boolean) : [];
-}
-
 /**
- * Los dos filtros se cruzan, con el criterio común del almacén salvo en
- * «Verificadas», que aquí es más estricto: un acta verificada es la que
- * lo está ENTERA. Una vivienda es un sitio donde uno busca dónde ir, y
- * le vale con que haya algo verificado; un acta es un documento, y o
- * está cerrada o no lo está. Además esta opción es la única forma que
- * hay en esta pantalla de encontrar las actas ya firmadas del todo: las
- * viviendas tienen para eso el conmutador «Finalizadas», y las actas no
- * tienen conmutador ninguno.
+ * La tarjeta de un día: la fecha grande, quién estuvo, las viviendas
+ * que se tocaron y lo que se hizo, contado con los mismos chips de
+ * colores que el resto de la aplicación.
+ *
+ * El día de hoy va en beige y con el rótulo «en curso»: sigue vivo, y
+ * lo que se apunte en el próximo rato caerá dentro de él.
  */
-function encaja({ conteo }, vista, oficioId) {
-  if (vista === 'verificada') {
-    if (!store.actaTerminada(conteo)) return false;
-  } else if (!store.encajaEstado(conteo, vista)) return false;
-  const elegidos = oficiosElegidos(oficioId);
-  if (elegidos.length && !elegidos.some((id) => store.oficiosSegun(conteo, vista).has(id))) return false;
-  return true;
+function tarjetaDelDia(acta, { hoy }) {
+  const c = acta.conteo;
+  const esHoy = acta.fecha === hoy;
+  const villas = acta.villas.map((v) => unidad(v.unidadId)?.nombre).filter(Boolean);
+
+  const chip = (n, texto, clase) => (n
+    ? h('span.d-chip', { class: clase }, `${n} ${texto}`)
+    : null);
+
+  return h('button.d-acta-dia', {
+    class: esHoy ? 'hoy' : '',
+    onclick: () => ir(`#/acta/${acta.fecha}`),
+  },
+    h('div.d-acta-dia-cab', null,
+      h('div.grow', null,
+        h('p.d-acta-dia-cuando', null, esHoy ? 'Hoy · en curso' : diaDeLaSemana(acta.fecha, { mayuscula: true })),
+        h('p.d-acta-dia-fecha', null, fechaDeActa(acta.fecha)),
+      ),
+      grupoAvatares(acta.gente.map((g) => store.persona(g.id, g.nombre)),
+        { tam: 40, max: 3, solape: 13 }),
+    ),
+    h('p.d-acta-dia-villas', null,
+      villas.length <= 3 ? villas.join(' · ') : `${villas.slice(0, 3).join(' · ')} y ${villas.length - 3} más`),
+    h('div.d-acta-dia-chips', null,
+      chip(c.nuevas, c.nuevas === 1 ? 'repaso nuevo' : 'repasos nuevos', ''),
+      chip(c.completadas, c.completadas === 1 ? 'completado' : 'completados', 'ambar'),
+      chip(c.verificadas, c.verificadas === 1 ? 'verificado' : 'verificados', 'verde'),
+      chip(c.rechazadas, c.rechazadas === 1 ? 'rechazado' : 'rechazados', 'rojo'),
+      chip(c.notas, c.notas === 1 ? 'nota' : 'notas', ''),
+    ),
+  );
 }

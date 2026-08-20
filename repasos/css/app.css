@@ -2458,3 +2458,127 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 .d-boton-negro.verde { background: var(--d-verde); }
 .d-boton-negro.verde:disabled { background: #d9d9d9; }
 .d-boton-negro.rojo { background: var(--d-rojo); margin-top: 10px; }
+
+/* ═══════════════════════════════════════════════════════════════
+   ACTAS POR DÍA
+
+   El archivo de la obra: una tarjeta por jornada, con la fecha en
+   grande, quién estuvo y lo que se hizo en chips del mismo idioma de
+   color que el resto de la aplicación. Y dentro, el acta del día leída
+   como un parte de visita, casa por casa y hora a hora.
+   ═══════════════════════════════════════════════════════════════ */
+.d-actas-dias { display: flex; flex-direction: column; gap: 12px; }
+.d-actas-mes {
+  margin: 18px 2px 2px; font-size: 13px; font-weight: 500;
+  letter-spacing: .1em; color: var(--d-gris);
+}
+.d-actas-dias > .d-actas-mes:first-child { margin-top: 4px; }
+
+.d-acta-dia {
+  display: block; width: 100%; text-align: left;
+  background: #fff; border-radius: var(--d-radio); padding: 16px;
+}
+/* El día de hoy sigue vivo: lo que se apunte dentro de un rato cae
+   aquí, así que se marca en beige como todo lo que está en curso. */
+.d-acta-dia.hoy { background: var(--d-beige); }
+.d-acta-dia-cab { display: flex; align-items: flex-start; gap: 12px; }
+.d-acta-dia-cuando { margin: 0; font-size: 14px; color: var(--d-gris); }
+.d-acta-dia.hoy .d-acta-dia-cuando { color: var(--d-beige-tinta); font-weight: 500; }
+.d-acta-dia-fecha {
+  margin: 2px 0 0; font-size: 26px; line-height: 32px; font-weight: 500;
+  letter-spacing: -.015em; color: var(--d-tinta);
+}
+.d-acta-dia-villas {
+  margin: 10px 0 0; font-size: 15px; color: var(--d-gris);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.d-acta-dia.hoy .d-acta-dia-villas { color: var(--d-beige-tinta); }
+.d-acta-dia-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.d-acta-dia-chips .d-chip { font-size: 13px; padding: 7px 11px; }
+.d-acta-dia.hoy .d-acta-dia-chips .d-chip { background: rgba(255, 255, 255, .55); }
+.d-acta-dia.hoy .d-acta-dia-chips .d-chip.verde,
+.d-acta-dia.hoy .d-acta-dia-chips .d-chip.ambar,
+.d-acta-dia.hoy .d-acta-dia-chips .d-chip.rojo { background: #fff; }
+
+/* ─── El acta de un día ─────────────────────────────────────── */
+.d-acta-portada {
+  background: #fff; border-radius: var(--d-radio);
+  padding: 22px 20px 24px; margin-top: 8px;
+}
+.d-acta-portada.hoy { background: var(--d-beige); }
+.d-acta-eyebrow {
+  margin: 0; font-size: 13px; font-weight: 500; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--d-gris);
+}
+.d-acta-portada.hoy .d-acta-eyebrow { color: var(--d-beige-tinta); }
+.d-acta-fecha {
+  margin: 8px 0 0; font-size: 34px; line-height: 38px; font-weight: 500;
+  letter-spacing: -.025em; color: var(--d-tinta);
+}
+.d-acta-sub { margin: 8px 0 0; font-size: 15px; color: var(--d-gris); }
+.d-acta-portada.hoy .d-acta-sub { color: var(--d-beige-tinta); }
+
+.d-acta-gente { display: flex; align-items: center; gap: 12px; }
+.d-acta-nombres { margin: 0; font-size: 15px; color: var(--d-tinta); min-width: 0; }
+
+/* Las cifras del día. Grandes porque son el resumen: lo primero que
+   se mira al abrir un acta es cuánto se movió ese día. */
+.d-acta-cifras { display: flex; flex-wrap: wrap; gap: 8px; }
+.d-acta-cifra {
+  flex: 1 1 128px; background: #fff; border-radius: 16px; padding: 14px 16px;
+}
+.d-acta-cifra .n {
+  display: block; font-size: 28px; line-height: 32px; font-weight: 500;
+  letter-spacing: -.02em; color: var(--d-tinta);
+}
+.d-acta-cifra .r { display: block; font-size: 13px; color: var(--d-gris); margin-top: 2px; }
+.d-acta-cifra.verde .n { color: var(--d-verde); }
+.d-acta-cifra.ambar .n { color: #683c03; }
+.d-acta-cifra.rojo .n { color: #651d17; }
+
+/* Cada vivienda del día, con su rótulo a la izquierda y cuántos
+   apuntes lleva a la derecha. */
+.d-acta-villa {
+  display: flex; align-items: baseline; gap: 10px; margin: 26px 2px 10px;
+}
+.d-acta-villa-nombre {
+  font-size: 20px; font-weight: 500; letter-spacing: -.01em; color: var(--d-tinta);
+}
+.d-acta-villa-cuantos { margin-left: auto; font-size: 14px; color: var(--d-gris); }
+
+.d-acta-lineas { display: flex; flex-direction: column; gap: 8px; }
+/* Una línea del acta: la hora a la izquierda, en su columna, y el
+   hecho a la derecha. La barra de color dice de un vistazo qué pasó
+   sin tener que leer. */
+.d-acta-linea {
+  display: flex; gap: 12px; width: 100%; text-align: left;
+  background: #fff; border-radius: 16px; padding: 13px 14px;
+  border-left: 4px solid var(--d-gris-suave);
+}
+.d-acta-linea.completada { border-left-color: #e2b35f; }
+.d-acta-linea.verificada { border-left-color: var(--d-verde); }
+.d-acta-linea.rechazada { border-left-color: var(--d-rojo); }
+.d-acta-linea.nota { border-left-color: var(--d-beige); }
+.d-acta-hora {
+  flex: none; width: 44px; font-size: 14px; font-weight: 500;
+  color: var(--d-gris); padding-top: 1px;
+}
+.d-acta-cuerpo { min-width: 0; display: block; }
+.d-acta-hecho {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 13px; font-weight: 500; color: var(--d-gris);
+}
+.d-acta-hecho svg { width: 14px; height: 14px; flex: none; }
+.d-acta-linea.completada .d-acta-hecho { color: #683c03; }
+.d-acta-linea.verificada .d-acta-hecho { color: var(--d-verde); }
+.d-acta-linea.rechazada .d-acta-hecho { color: var(--d-rojo); }
+.d-acta-quien { font-weight: 400; color: var(--d-gris); }
+.d-acta-texto {
+  display: block; margin-top: 3px; font-size: 16px; line-height: 21px;
+  color: var(--d-tinta);
+}
+.d-acta-nota {
+  display: block; margin-top: 4px; font-size: 14px; line-height: 19px;
+  color: var(--d-beige-tinta); font-style: italic;
+}
+.d-acta-pie { display: block; margin-top: 5px; font-size: 13px; color: var(--d-gris); }
