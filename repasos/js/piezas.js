@@ -10,7 +10,7 @@ import * as media from './media.js';
 import * as store from './store.js';
 import * as api from './api.js';
 import {
-  unidad, oficio, estado, rebotada, imagenDeOficio, ESTADOS, OFICIOS, ZONAS,
+  unidad, oficio, estado, rebotada, imagenDeOficio, ESTADOS, OFICIOS, ZONAS, PLANTAS,
 } from './catalog.js';
 import { ir, conFiltros } from './app.js';
 
@@ -595,75 +595,82 @@ export function caraDeGremio(o, tam = 40) {
  */
 /* Qué icono lleva cada estancia.
 
-   No es adorno: una lista de diecinueve palabras parecidas —«Baño
-   secundario», «Baño principal», «Dormitorio 1», «Dormitorio 2»— se lee
-   entera cada vez, palabra por palabra, hasta dar con la buena. Con un
-   dibujo delante se recorre con la vista y se encuentra de un golpe.
+   No es adorno: una lista de palabras parecidas —«Baño principal»,
+   «Baño suite», «Dormitorio 1», «Dormitorio 2»— se lee entera cada vez
+   hasta dar con la buena. Con un dibujo delante se recorre con la vista
+   y se encuentra de un golpe.
 
    Los tres dormitorios comparten cama a propósito: son la misma clase
    de habitación, y darles iconos distintos inventaría una diferencia
-   que no existe. Lo que los distingue es el número, que va al lado. Los
-   tres baños, en cambio, sí son cosas distintas —un aseo no tiene
-   ducha— y por eso llevan inodoro, ducha y bañera. */
+   que no existe. Lo que los separa es el número, que va al lado. Los
+   baños sí llevan iconos distintos porque sí son cosas distintas: un
+   aseo no tiene ducha. */
 const ICONO_DE_ESTANCIA = {
-  'Salón': 'sofa',
-  'Cocina': 'cazuela',
-  'Lavadero': 'lavadora',
-  'Aseo': 'inodoro',
-  'Baño secundario': 'ducha',
+  Aseo: 'inodoro',
+  Cocina: 'cazuela',
+  Entrada: 'puerta',
+  Escalera: 'peldanos',
+  Lavadero: 'lavadora',
+  Salón: 'sofa',
   'Baño principal': 'banera',
-  'Sótano': 'archivador',
-  'Pasillo': 'camino',
-  'Escalera': 'peldanos',
-  'Distribuidor': 'cruce',
-  'Entrada': 'puerta',
+  'Baño suite': 'ducha',
   'Dormitorio 1': 'cama',
   'Dormitorio 2': 'cama',
-  'Dormitorio principal': 'cama',
-  'Vestidor': 'percha',
+  'Dormitorio suite': 'cama',
+  Pasillo: 'camino',
+  'Patio trasero p. alta': 'sol',
+  'Terraza p. alta': 'sombrilla',
   'Acceso exterior': 'puertaAbierta',
-  'Jardín': 'arbol',
-  'Fachada': 'edificio',
-  'Cubierta': 'tejado',
+  Cubierta: 'tejado',
+  Jardín: 'arbol',
+  Sótano: 'archivador',
 };
 
 /**
  * Elegir una cosa de una lista, en la tarjeta de siempre.
  *
- * En una sola columna y no en pastillas envueltas. Las pastillas
- * ahorran alto, pero cada renglón acaba donde le toca según lo larga
- * que sea la palabra anterior, así que la vista no tiene por dónde
- * bajar: hay que leerlas todas. Una columna se recorre de un vistazo.
+ * `grupos` son bloques de opciones. Se separan con un hueco, sin
+ * rótulo: el hueco ya dice que son grupos, y tres renglones para poner
+ * «Planta baja», «Planta alta» y «Otros» sería gastar pantalla en decir
+ * lo que se ve solo. En una lista que se consulta de pie en una casa,
+ * cada renglón cuenta.
  *
- * `opciones` son textos o {id, rotulo, icono}.
+ * Las filas van densas y con flechita, como las de Ajustes: sin el
+ * texto pequeño de debajo cada opción ocupa la mitad, y caben el doble
+ * en la misma pantalla.
  */
-export function menuLista(titulo, opciones, { actual = '', quitar = '', icono = null } = {}) {
+export function menuLista(titulo, grupos, { actual = '', quitar = '', icono = null } = {}) {
   return new Promise((resolver) => {
     const cerrar = (valor) => { velo.remove(); resolver(valor); };
 
-    const fila = (valor, rotulo, ico, clase = '') => h('button.d-menu-fila', {
+    const fila = (valor, rotulo, ico, clase = '') => h('button.d-fila-elegir', {
       class: [clase, valor === actual ? 'puesta' : ''].filter(Boolean).join(' '),
       'aria-pressed': valor === actual ? 'true' : 'false',
       onclick: () => cerrar(valor),
     },
       ico ? icon(ico) : null,
       h('span.grow', null, rotulo),
-      // El check solo en la elegida: marca dónde estás sin repetir un
-      // adorno en las otras dieciocho.
-      valor === actual ? icon('check') : null,
+      // En la elegida, el check ocupa el sitio de la flecha. Así el
+      // borde derecho tiene siempre algo —ninguna fila se queda coja— y
+      // dónde estás se ve sin buscarlo.
+      valor === actual ? icon('check') : chevron(),
     );
 
-    const tarjeta = h('div.d-menu-tarjeta', { role: 'dialog', 'aria-modal': 'true' },
+    const bloque = (opciones, clase = '') => h('div.d-bloque-elegir', { class: clase },
+      ...opciones.map((o) => (typeof o === 'string'
+        ? fila(o, o, icono ? icono(o) : null)
+        : fila(o.id, o.rotulo, o.icono))),
+    );
+
+    const tarjeta = h('div.d-menu-tarjeta.elegir', { role: 'dialog', 'aria-modal': 'true' },
       h('div.d-menu-cab', null,
         h('span.d-menu-titulo', null, titulo),
         h('button.d-menu-x', { 'aria-label': 'Cerrar', onclick: () => cerrar(null) }, icon('x')),
       ),
-      ...opciones.map((o) => (typeof o === 'string'
-        ? fila(o, o, icono ? icono(o) : null)
-        : fila(o.id, o.rotulo, o.icono))),
+      ...grupos.filter((g) => g.length).map((g) => bloque(g)),
       // Quitar la elección solo aparece si hay algo que quitar: un botón
       // que no hace nada enseña a no leer los botones.
-      actual && quitar ? fila('', quitar, 'x', 'rojo') : null,
+      actual && quitar ? bloque([{ id: '', rotulo: quitar, icono: 'x' }], 'rojo') : null,
     );
 
     const velo = h('div.d-menu-velo', {
@@ -674,20 +681,23 @@ export function menuLista(titulo, opciones, { actual = '', quitar = '', icono = 
 }
 
 /**
- * La estancia de un repaso.
+ * La estancia de un repaso, por plantas.
  *
- * Antes iba en la hoja de abajo del diseño antiguo, con su barra de
- * CANCELAR en mayúsculas: era el único sitio de la app que seguía
- * abriéndose así. Ahora usa la misma tarjeta que todos.
+ * Si la tarea trae una estancia que ya no está en el catálogo —porque
+ * se quitara de la lista después— se añade igualmente, en su propio
+ * bloque y la primera. Lo que se guarda en cada tarea es el texto y no
+ * un identificador, así que sin esto abrir una tarea vieja y tocar la
+ * estancia la borraría sin querer.
  */
 export function hojaZonas(actual) {
-  return menuLista('Estancia', ZONAS, {
+  const grupos = PLANTAS.map((p) => p.zonas);
+  if (actual && !ZONAS.includes(actual)) grupos.unshift([actual]);
+  return menuLista('Estancia', grupos, {
     actual,
     quitar: 'Sin estancia',
     icono: (z) => ICONO_DE_ESTANCIA[z] || 'casa',
   });
 }
-
 export function hojaBienHecho({ titulo, frase, usuario, boton = 'Seguir' }) {
   // El modal de enhorabuena del Figma: velo con desenfoque, tarjeta
   // clara con su aspa, la cara en grande, el titular, la frase y el

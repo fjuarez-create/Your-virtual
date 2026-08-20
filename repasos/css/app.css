@@ -1656,7 +1656,7 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
    aclaran y llevan su color puesto a mano.   ═══ */
 :root { --pulsa-sale: 190ms; }
 
-.d-bola, .d-cab .avatar, .d-confirmar-x, .d-boton-negro, .d-selector-estado,
+.d-bola, .d-cab .avatar, .d-confirmar-x, .d-fila-elegir, .d-boton-negro, .d-selector-estado,
 .d-bola-embudo, .d-bola-filtros, .d-desplegable, .d-tarjeta, .d-acta-dia,
 .d-acta-linea, .d-repaso, .d-mensaje, .d-item {
   transition: filter var(--pulsa-sale) var(--sal-estandar),
@@ -1665,7 +1665,7 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 }
 
 /* Al apoyar el dedo, sin transición ninguna: instantáneo. */
-.d-bola:active, .d-cab .avatar:active, .d-confirmar-x:active,
+.d-bola:active, .d-cab .avatar:active, .d-confirmar-x:active, .d-fila-elegir:active,
 .d-boton-negro:active, .d-selector-estado:active, .d-bola-embudo:active,
 .d-bola-filtros:active, .d-desplegable:active, .d-tarjeta:active,
 .d-acta-dia:active, .d-acta-linea:active, .d-repaso:active,
@@ -1708,6 +1708,7 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
    blanca del grupo—, así que a éstas hay que ponérselo. La caja de la
    fila se define arriba, con el resto de .d-item; aquí solo el tono. */
 .d-item:active { background: var(--d-gris-suave); }
+.d-fila-elegir:active { background: #e8e8e8; }
 
 /* Con el movimiento reducido se va el tamaño y se queda el tono, que es
    lo que dice que la app te ha oído. La regla general del principio del
@@ -2335,11 +2336,35 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 .d-menu-sub { display: block; font-size: 14px; font-weight: 400; color: var(--d-gris); margin-top: 1px; }
 .d-menu-fila.rojo { color: var(--d-rojo); }
 .d-menu-fila.rojo svg { color: var(--d-rojo); }
-/* La elegida. Fondo suave y no negro macizo: en una lista de
-   diecinueve, una fila negra pesa tanto que se lee antes que el
-   título, y lo que se viene a hacer aquí es escoger otra. */
-.d-menu-fila.puesta { background: var(--d-gris-suave); font-weight: 500; }
-.d-menu-fila.puesta > svg:last-child { color: var(--d-tinta); margin-left: 4px; }
+
+/* ─── Elegir de una lista ───
+   Las filas van densas, como las de Ajustes: sin el texto pequeño de
+   debajo cada opción ocupa la mitad y caben el doble en la pantalla.
+   La flechita de la derecha marca el borde y da el ritmo de la
+   columna. */
+.d-menu-tarjeta.elegir { padding: 14px 8px 12px; }
+.d-bloque-elegir + .d-bloque-elegir {
+  /* El hueco es lo que separa las plantas. Sin rótulos: se ve solo. */
+  margin-top: 14px; padding-top: 14px;
+  border-top: 1px solid rgba(0, 0, 0, .07);
+}
+.d-fila-elegir {
+  display: flex; align-items: center; gap: 14px; width: 100%;
+  min-height: 48px; padding: 4px 8px; border-radius: 12px;
+  text-align: left; font: 400 17px/24px var(--d-font); color: var(--d-tinta);
+  background: transparent;
+}
+.d-fila-elegir .grow { flex: 1; min-width: 0; }
+.d-fila-elegir > svg:first-child { width: 24px; height: 24px; flex: none; color: var(--d-beige-tinta); }
+.d-fila-elegir .chev { width: 18px; height: 18px; flex: none; color: var(--d-gris); opacity: .7; }
+.d-fila-elegir > svg:last-child { width: 20px; height: 20px; flex: none; }
+/* La elegida. Fondo suave y no negro macizo: en una lista larga una
+   fila negra pesa más que el título, y a lo que se viene aquí es a
+   escoger otra. */
+.d-fila-elegir.puesta { background: var(--d-gris-suave); font-weight: 500; }
+.d-fila-elegir.puesta > svg:last-child { color: var(--d-tinta); }
+.d-bloque-elegir.rojo .d-fila-elegir,
+.d-bloque-elegir.rojo .d-fila-elegir > svg { color: var(--d-rojo); }
 /* ─── El «¿seguro?» ───
    La tarjeta con las dos salidas —la que borra y la que conserva— y la
    X redonda suelta debajo. La X va fuera de la tarjeta a propósito: es

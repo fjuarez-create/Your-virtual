@@ -286,12 +286,51 @@ export function estadosPermitidos(usuario) {
    ppal», «Baño Principal» y «bño principal» conviviendo, y el filtro
    por estancia dejaría de funcionar el primer día.
    ═══════════════════════════════════════════════════════════════ */
-export const ZONAS = [
-  'Salón', 'Cocina', 'Lavadero', 'Aseo', 'Baño secundario', 'Baño principal',
-  'Sótano', 'Pasillo', 'Escalera', 'Distribuidor', 'Entrada',
-  'Dormitorio 1', 'Dormitorio 2', 'Dormitorio principal', 'Vestidor',
-  'Acceso exterior', 'Jardín', 'Fachada', 'Cubierta',
+/* ═══ Las estancias de una vivienda, por plantas ═══════════════
+
+   Van agrupadas y no en una lista corrida porque diecinueve palabras
+   parecidas seguidas no se recorren con la vista: se leen. Partidas por
+   planta, buscar «Baño suite» es mirar el bloque de arriba, no la lista
+   entera.
+
+   Dentro de cada planta van en orden alfabético. En una lista que se
+   consulta —no que se recorre— el alfabeto es lo único que todo el
+   mundo sabe de antemano; cualquier otro orden hay que aprendérselo.
+
+   Las plantas NO llevan nombre en la pantalla. El hueco entre bloques
+   ya dice que son grupos, y tres rótulos ocupando renglones para decir
+   lo que se ve solo es gastar pantalla.
+
+   OJO CON QUITAR ESTANCIAS. Lo que se guarda en cada tarea es el texto
+   («Salón»), no un identificador, así que una tarea vieja con una
+   estancia que ya no esté en esta lista sigue enseñándola bien, pero
+   deja de poder filtrarse por ella. Por eso el selector añade siempre
+   la estancia que traiga la tarea aunque no esté aquí. */
+export const PLANTAS = [
+  {
+    id: 'baja',
+    nombre: 'Planta baja',
+    zonas: ['Aseo', 'Cocina', 'Entrada', 'Escalera', 'Lavadero', 'Salón'],
+  },
+  {
+    id: 'alta',
+    nombre: 'Planta alta',
+    zonas: [
+      'Baño principal', 'Baño suite', 'Dormitorio 1', 'Dormitorio 2',
+      'Dormitorio suite', 'Pasillo', 'Patio trasero p. alta', 'Terraza p. alta',
+    ],
+  },
+  {
+    id: 'otros',
+    nombre: 'Otros',
+    zonas: ['Acceso exterior', 'Cubierta', 'Jardín', 'Sótano'],
+  },
 ];
+
+/* La lista llana, para lo que solo necesita saber si una estancia vale:
+   la IA, que la recibe cerrada para no inventarse un «baño de arriba»,
+   y los filtros. */
+export const ZONAS = PLANTAS.flatMap((p) => p.zonas);
 
 /** Las tareas de antes de que existiera el campo no tienen estancia. */
 export const ZONA_VACIA = '';
