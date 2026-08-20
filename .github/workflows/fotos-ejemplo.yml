@@ -8,8 +8,14 @@ name: Buscar fotos de muestra
 # Desde este ordenador no se puede: su salida a internet está limitada
 # a unos pocos dominios y Commons no es uno.
 
+# Se dispara empujando su fichero-señal, como los demás robots: el
+# botón de «ejecutar a mano» de GitHub solo aparece para los flujos que
+# están en la rama principal, y esta aplicación vive en la suya.
 on:
   workflow_dispatch:
+  push:
+    branches: [claude/uniq-repasos-app-2ja8y2]
+    paths: ['.github/LANZAR-FOTOS.txt']
 
 permissions:
   contents: write
