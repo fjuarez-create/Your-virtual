@@ -84,10 +84,55 @@ else
   exit 1
 fi
 
+# ¿Hay una instalación de UNIK repasos en esta carpeta? api/config.php lo
+# escribe el instalador y no viaja nunca en el despliegue, así que su
+# presencia es la huella de que esto es la casa y no la del vecino.
+hay_instalacion() {
+  [ "$(lanzar "$OPC" "cd \"$1\"; cls -1 \"api/config.php\"" 2>/dev/null | grep -c . || true)" -ge 1 ]
+}
+
+# Lista una carpeta remota, sin ruido.
+listar() {
+  lanzar "$OPC" "cd \"$1\"; cls -1" 2>/dev/null | tr -d '\r' | sed 's#/$##' | grep . || true
+}
+
 DIR="${FTP_SERVER_DIR:-}"
 case "$DIR" in "" | "." | "./") DIR="" ;; esac
+
+# Sin carpeta escrita a mano, se busca.
+#
+# Antes esto solo miraba si existía «httpdocs» y, si no, se plantaba en la
+# raíz de la sesión. Con eso bastaba mientras la cuenta FTP entrara siempre
+# por el mismo sitio; el día que el hosting la recreó apuntando a otro
+# lado, el despliegue se paró en seco sin más pista que «la carpeta está
+# vacía» —y arreglarlo pedía entrar al panel a mirar rutas—.
+#
+# Ahora se recorren los sitios donde suele estar una web —la propia raíz,
+# los nombres habituales, y un nivel de subcarpetas— hasta dar con la que
+# tiene la huella. Buscar es de solo lectura: no escribe nada, así que no
+# puede romper nada. Y como la condición para aceptar una carpeta es la
+# misma que exige el guardián de más abajo, esto no relaja la seguridad:
+# solo le ahorra a alguien tener que averiguar la ruta a mano.
+if [ -z "$DIR" ] && [ "${PRIMERA_INSTALACION:-}" != "true" ]; then
+  RAIZ=$(listar ".")
+  CANDIDATAS=". httpdocs public_html www web htdocs"
+  for sub in $RAIZ; do
+    case "$sub" in logs | tmp | anon_ftp | error_docs | .well-known | cgi-bin) continue ;; esac
+    CANDIDATAS="$CANDIDATAS $sub $sub/httpdocs $sub/public_html"
+  done
+  for c in $CANDIDATAS; do
+    if hay_instalacion "$c"; then
+      DIR="$c"
+      echo "Instalación de UNIK repasos encontrada en «$c»."
+      break
+    fi
+  done
+fi
+
+# Ni escrita ni encontrada: se vuelve a lo de siempre y que decida el
+# guardián. En una primera instalación de verdad es lo correcto.
 if [ -z "$DIR" ]; then
-  if lanzar "$OPC" "cls -1" 2>/dev/null | tr -d '\r/' | grep -qx httpdocs; then
+  if printf '%s\n' "$(listar '.')" | grep -qx httpdocs; then
     DIR=httpdocs
   else
     DIR=.
@@ -147,6 +192,36 @@ case "$QUE" in
         echo "" >&2
         echo "Al estar vacía, si de verdad es la primera instalación puedes lanzar" >&2
         echo "el workflow a mano marcando «primera_instalacion»." >&2
+      fi
+
+      # El plano de lo que se ve desde esta cuenta.
+      #
+      # Ya se ha buscado la instalación por las carpetas habituales y no
+      # estaba, así que lo que queda es enseñar el terreno: dónde entra la
+      # sesión y qué cuelga de ahí, dos niveles. Con eso se sabe si la
+      # cuenta apunta a otro sitio o si de verdad no ve la web, que son dos
+      # problemas distintos y se arreglan de manera distinta.
+      #
+      # Va con los errores a la vista —sin 2>/dev/null— porque una carpeta
+      # que no se deja listar y una carpeta vacía se cuentan igual y no son
+      # lo mismo: si el servidor está diciendo «permiso denegado», eso es
+      # justo lo que hay que leer.
+      echo "" >&2
+      echo "─── Lo que ve esta cuenta FTP ───" >&2
+      echo "Por dónde entra la sesión:" >&2
+      lanzar "$OPC" "pwd" 2>&1 | sed 's/^/    /' >&2
+      echo "Raíz de la sesión:" >&2
+      RAIZ_VISTA=$(lanzar "$OPC" "cls -1" 2>&1 | tr -d '\r' | sed 's#/$##' | grep . || true)
+      if [ -n "$RAIZ_VISTA" ]; then
+        printf '%s\n' "$RAIZ_VISTA" | sed 's/^/    /' >&2
+        for sub in $RAIZ_VISTA; do
+          case "$sub" in logs | tmp | anon_ftp | error_docs | cgi-bin) continue ;; esac
+          echo "    $sub/" >&2
+          lanzar "$OPC" "cd \"$sub\"; cls -1" 2>&1 | tr -d '\r' | sed 's#/$##' \
+            | grep . | head -25 | sed 's/^/        /' >&2 || true
+        done
+      else
+        echo "    (no se ve nada, ni siquiera un error)" >&2
       fi
       exit 1
     fi
