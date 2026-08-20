@@ -81,6 +81,11 @@ export async function render({ promoId, unidadId }) {
   // queda atrapado por los ancestros y sale con alto cero.
   let visorActual = null;
 
+  /* Las direcciones temporales que se crean para poder oír la grabación.
+     Se sueltan al salir de la pantalla: cada una retiene el audio entero
+     en memoria mientras viva, y en un móvil de obra eso se nota. */
+  const urlsSueltas = [];
+
   // La cabecera se guarda para poder tocarla desde el repaso: allí la
   // flecha de volver deja de navegar (irse dejaría el recorrido a
   // medias sin decirlo) y el título pasa a «Nueva lista - Villa N».
@@ -318,8 +323,38 @@ export async function render({ promoId, unidadId }) {
       tocado: false, zonaTocada: false, fuera: false, confianza: null,
     }));
 
-    const audio = h('audio', { controls: true, preload: 'metadata', style: { width: '100%' } });
-    audio.src = URL.createObjectURL(rec.audio);
+    /* El reproductor del paseo, si es que hay algo que reproducir.
+
+       Va con red, y es la parte importante de esta pantalla. El audio es
+       lo único frágil de todo el recorrido: es un Blob que ha dormido en
+       la base de datos del móvil, y un Blob guardado puede volver
+       inservible —iOS lo tira cuando anda justo de espacio, y hay
+       versiones que lo devuelven vacío—. Las fotos, en cambio, siempre
+       vuelven.
+
+       Antes esto eran dos líneas sin protección, y si el audio no valía
+       reventaba JUSTO AQUÍ, antes de pintar una sola ficha: la pantalla
+       se quedaba en blanco con la cabecera y nada más. Y como el rescate
+       del recorrido a medias pasa por esta misma línea, las fotos del
+       paseo se volvían irrecuperables: no había forma de llegar a ellas.
+       Un recorrido de una hora por una casa, perdido por la grabación de
+       voz, que es lo que menos importa de las tres cosas.
+
+       Ahora, si el audio no vale, se dice y se sigue. */
+    const audio = (() => {
+      if (!(rec.audio instanceof Blob) || !rec.audio.size) return null;
+      try {
+        const nodo = h('audio', { controls: true, preload: 'metadata', style: { width: '100%' } });
+        nodo.src = URL.createObjectURL(rec.audio);
+        urlsSueltas.push(nodo.src);
+        return nodo;
+      } catch {
+        return null;
+      }
+    })();
+    const avisoSinAudio = audio ? null : h('p.hint', null,
+      'La grabación de voz de este recorrido no se puede reproducir. '
+      + 'Las fotos y las marcas están todas: sigue apuntando las tareas.');
 
     const listado = h('div.d-propuestas');
 
@@ -541,7 +576,10 @@ export async function render({ promoId, unidadId }) {
           // Primero se escucha. Solo si no hay ya texto: lo que haya
           // escrito la persona manda sobre la grabación, y lo que ya se
           // transcribió una vez no se vuelve a pagar.
-          if (!campo.value.trim() && rec.audio) {
+          // La misma comprobación que arriba: un audio que no vale no
+          // puede tumbar la redacción de las tareas. Sin él se redacta
+          // con las fotos, que es de donde sale casi todo.
+          if (!campo.value.trim() && rec.audio instanceof Blob && rec.audio.size) {
             rotulo.textContent = 'ESCUCHANDO…';
             aviso.textContent = 'Pasando a texto lo que dijiste.';
             try {
@@ -692,7 +730,7 @@ export async function render({ promoId, unidadId }) {
       h('div.rec-resumen', null,
         h('p.d-epigrafe', { style: { margin: '0 0 8px' } },
           `${grabadora.reloj(rec.duracion)} y ${rec.marcas.length} ${rec.marcas.length === 1 ? 'marca' : 'marcas'}`),
-        audio,
+        audio || avisoSinAudio,
       ),
       dictado(),
       listado,
@@ -719,6 +757,8 @@ export async function render({ promoId, unidadId }) {
       document.removeEventListener('visibilitychange', alTapar);
       visorActual?.remove();
       visorActual = null;
+      for (const u of urlsSueltas) URL.revokeObjectURL(u);
+      urlsSueltas.length = 0;
       const m = mando;
       mando = null;
       if (!m) return;
