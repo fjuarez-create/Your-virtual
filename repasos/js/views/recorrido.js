@@ -14,7 +14,9 @@
    estos mismos campos llegarán rellenos y el trabajo será repasar en
    vez de escribir.
    ═══════════════════════════════════════════════════════════════ */
-import { h, icon, toast, openViewer, sheet, fechaCorta, confirmar } from '../ui.js';
+import {
+  h, icon, toast, openViewer, sheet, fechaCorta, confirmar, pantallaTrabajando,
+} from '../ui.js';
 import {
   promocion, unidad, FASE_UNICA, OFICIO_POR_DEFECTO, OFICIOS, ZONAS, oficio, puedeCrearLista,
 } from '../catalog.js';
@@ -27,7 +29,7 @@ import {
 } from '../piezas.js';
 import { alCerrarRecorrido, nombreCorto } from '../frases.js';
 import { paraMirar, prepararImagen } from '../media.js';
-import { ir, refrescar } from '../app.js';
+import { ir } from '../app.js';
 
 /**
  * Cuántas fotos como mucho viajan a que las miren en un recorrido.
@@ -86,6 +88,12 @@ export async function render({ promoId, unidadId }) {
      en memoria mientras viva, y en un móvil de obra eso se nota. */
   const urlsSueltas = [];
 
+  /* Lo que el repaso deja aquí para que se ejecute antes de salir de la
+     pantalla. Sin esto, lo tecleado en el último segundo se quedaba en
+     el aire: el apunte va con un respiro de un segundo entre tecla y
+     tecla, y salir corriendo lo pillaba a medias. */
+  let guardarAlSalir = null;
+
   // La cabecera se guarda para poder tocarla desde el repaso: allí la
   // flecha de volver deja de navegar (irse dejaría el recorrido a
   // medias sin decirlo) y el título pasa a «Nueva lista - Villa N».
@@ -95,7 +103,11 @@ export async function render({ promoId, unidadId }) {
     volver,
     titulo: u.nombre,
     menu: () => menuFlotante((cerrar) => [
-      filaMenu('x', 'Salir del recorrido', () => { cerrar(); ir(volver); }),
+      filaMenu('x', 'Salir del recorrido', async () => {
+        cerrar();
+        await guardarAlSalir?.();
+        ir(volver);
+      }),
     ]),
   });
 
@@ -310,41 +322,80 @@ export async function render({ promoId, unidadId }) {
     pintarRepaso(rec);
   };
 
-  /* ─── 3. Repasando ─── */
+  /* ─── 3. Repasando: una ficha por pantalla ────────────────────
+
+     Antes esto era un rollo largo con las siete fotos a tamaño
+     completo, una detrás de otra y sin nada que dijera dónde acababa
+     una y empezaba la siguiente. Tenía todo el sentido cuando había
+     que escribirlo todo a mano: era un formulario.
+
+     Ahora la IA ya pone la estancia, el oficio y el texto, y lo que
+     queda es otra cosa —mirar, corregir si hace falta y confirmar—.
+     Eso se hace de una en una y rápido, no bajando por una columna de
+     dos metros. Así que el repaso es ahora una ficha por pantalla, con
+     su número («Repaso 3 de 7») y con vuelta atrás: pasar siete
+     seguidas dando a Guardar es fácil de hacer sin mirar, y hay que
+     poder volver a la anterior.
+
+     Y todo lo repasado se apunta en el propio recorrido según se hace.
+     Antes vivía solo en memoria: salir de la pantalla —una llamada, un
+     atrás sin querer— se llevaba por delante lo escrito, incluido lo
+     que acababa de redactar la IA y que ya estaba pagado. */
   const pintarRepaso = (rec) => {
-    // Ninguna marca llega sin gremio: se propone el que más sale en esta
-    // vivienda. Con quince fotos delante, obligar a abrir quince
-    // desplegables es lo que convierte un buen recorrido en un rato de
-    // trabajo administrativo, y todos se pueden cambiar de un toque.
     let ultimo = sugeridos[0] || OFICIO_POR_DEFECTO;
     let ultimaZona = '';
-    const fichas = rec.marcas.map((m) => ({
-      marca: m, texto: '', oficio: ultimo, zona: '',
-      tocado: false, zonaTocada: false, fuera: false, confianza: null,
-    }));
+
+    // Lo ya repasado vuelve tal cual estaba.
+    const previas = new Map((rec.fichas || []).map((x) => [String(x.id), x]));
+    const fichas = rec.marcas.map((m) => {
+      const v = previas.get(String(m.id)) || {};
+      return {
+        marca: m,
+        texto: v.texto || '',
+        oficio: v.oficio || ultimo,
+        zona: v.zona || '',
+        tocado: !!v.tocado, zonaTocada: !!v.zonaTocada,
+        fuera: !!v.fuera, guardada: !!v.guardada,
+        confianza: v.confianza || null, sinFoto: false,
+      };
+    });
+
+    /* Apuntar lo repasado. Se espera un momento entre tecla y tecla:
+       guardar el recorrido reescribe el registro entero —con su audio y
+       sus fotos dentro— y hacerlo en cada letra pondría el móvil a
+       trabajar para nada. Con `ya` se escribe en el acto, que es lo que
+       toca al cerrar una ficha o al salir. */
+    let esperando = null;
+    const apuntar = ({ ya = false } = {}) => {
+      clearTimeout(esperando);
+      const escribir = async () => {
+        rec.fichas = fichas.map((f) => ({
+          id: f.marca.id, texto: f.texto, oficio: f.oficio, zona: f.zona,
+          tocado: f.tocado, zonaTocada: f.zonaTocada,
+          fuera: f.fuera, guardada: f.guardada, confianza: f.confianza,
+        }));
+        try { await store.guardarRecorrido(rec); } catch { /* al siguiente cambio */ }
+      };
+      if (ya) return escribir();
+      esperando = setTimeout(escribir, 1200);
+      return Promise.resolve();
+    };
+    guardarAlSalir = () => apuntar({ ya: true });
 
     /* El reproductor del paseo, si es que hay algo que reproducir.
 
-       Va con red, y es la parte importante de esta pantalla. El audio es
-       lo único frágil de todo el recorrido: es un Blob que ha dormido en
-       la base de datos del móvil, y un Blob guardado puede volver
-       inservible —iOS lo tira cuando anda justo de espacio, y hay
-       versiones que lo devuelven vacío—. Las fotos, en cambio, siempre
-       vuelven.
+       Va con red porque el audio es lo único frágil del recorrido: es un
+       Blob que ha dormido en la base del móvil, y un Blob guardado puede
+       volver inservible —iOS lo tira cuando anda justo de espacio—. Las
+       fotos y las marcas vuelven siempre.
 
-       Antes esto eran dos líneas sin protección, y si el audio no valía
-       reventaba JUSTO AQUÍ, antes de pintar una sola ficha: la pantalla
-       se quedaba en blanco con la cabecera y nada más. Y como el rescate
-       del recorrido a medias pasa por esta misma línea, las fotos del
-       paseo se volvían irrecuperables: no había forma de llegar a ellas.
-       Un recorrido de una hora por una casa, perdido por la grabación de
-       voz, que es lo que menos importa de las tres cosas.
-
-       Ahora, si el audio no vale, se dice y se sigue. */
+       Sin esta comprobación reventaba aquí, antes de pintar una sola
+       ficha, y como el rescate del recorrido a medias pasa por la misma
+       línea, las fotos se volvían irrecuperables. */
     const audio = (() => {
       if (!(rec.audio instanceof Blob) || !rec.audio.size) return null;
       try {
-        const nodo = h('audio', { controls: true, preload: 'metadata', style: { width: '100%' } });
+        const nodo = h('audio.d-audio', { controls: true, preload: 'metadata' });
         nodo.src = URL.createObjectURL(rec.audio);
         urlsSueltas.push(nodo.src);
         return nodo;
@@ -352,27 +403,13 @@ export async function render({ promoId, unidadId }) {
         return null;
       }
     })();
-    const avisoSinAudio = audio ? null : h('p.hint', null,
-      'La grabación de voz de este recorrido no se puede reproducir. '
-      + 'Las fotos y las marcas están todas: sigue apuntando las tareas.');
 
-    const listado = h('div.d-propuestas');
-
-    /** Enciende o apaga el «Guardar» de cada tarjeta según lo relleno. */
-    const validar = () => {
-      for (const f of fichas) f.pintarBoton?.();
-    };
-
-    /**
-     * El gremio elegido en una marca se propaga a las de después. Un
-     * recorrido va habitación por habitación: si en el baño dices
-     * «alicatado», lo que viene detrás casi siempre es lo mismo hasta
-     * que cambias de sitio.
-     *
-     * Se para en la primera marca que ya hayas decidido tú, y hacia
-     * atrás no toca nada: tus decisiones mandan sobre todo lo que viene
-     * después de ellas, y nunca se deshacen.
-     */
+    /* ─── El contagio de siempre ───
+       El gremio y la estancia elegidos en una marca se propagan a las
+       de después: un recorrido va habitación por habitación, así que la
+       siguiente está casi siempre en el mismo sitio y es del mismo
+       oficio. Se para en la primera que ya hayas decidido tú, y hacia
+       atrás no toca nada. */
     const contagiar = (desde, gremio) => {
       let visto = false;
       for (const f of fichas) {
@@ -380,15 +417,8 @@ export async function render({ promoId, unidadId }) {
         if (!visto || f.fuera) continue;
         if (f.tocado) break;
         f.oficio = gremio;
-        f.pintarGremio?.();
       }
     };
-
-    /**
-     * La estancia se contagia igual, y con más razón todavía: un
-     * recorrido se hace habitación por habitación, así que la marca
-     * siguiente está casi siempre en el mismo sitio que la anterior.
-     */
     const contagiarZona = (desde, z) => {
       let visto = false;
       for (const f of fichas) {
@@ -396,119 +426,199 @@ export async function render({ promoId, unidadId }) {
         if (!visto || f.fuera) continue;
         if (f.zonaTocada) break;
         f.zona = z;
-        f.pintarZona?.();
       }
     };
 
-    const pintarFichas = () => {
-      const vivas = fichas.filter((f) => !f.fuera && !f.guardada);
-      listado.replaceChildren(...vivas.map((f) => ficha(f)));
-      // El alto solo se puede medir con la caja ya puesta en la página.
-      for (const f of vivas) if (f.texto) f.crecer?.();
-      validar();
+    /* ─── Por dónde vamos ─── */
+    const vivas = () => fichas.filter((f) => !f.fuera);
+    const cerradas = () => vivas().filter((f) => f.guardada);
+    const abiertas = () => vivas().filter((f) => !f.guardada);
+    let mirando = abiertas()[0] || vivas()[0] || null;
+
+    const irAFicha = (f) => { mirando = f; pintarFicha(); };
+    const vecina = (paso) => {
+      const l = vivas();
+      const i = l.indexOf(mirando);
+      return i < 0 ? null : l[i + paso] || null;
     };
 
-    const ficha = (f) => {
-      const url = f.sinFoto ? null : URL.createObjectURL(f.marca.blob);
+    /* ─── La antesala: el paseo y la IA ───
+       Aquí se decide cómo se llenan las fichas: dejando que las escriba
+       la IA, o entrando a escribirlas a mano. */
+    const pintarAntesala = () => {
+      cab.ponerTitulo(u.nombre);
+      cab.ponerVuelta(() => salir());
+      const cuantas = vivas().length;
+      /* Con .filter(Boolean) y no a pelo: replaceChildren() convierte
+         un null en la palabra «null» y la escribe en la pantalla, al
+         revés que h(), que se los salta. */
+      lienzo.replaceChildren(...[
+        h('div.rec-resumen', null,
+          h('p.d-epigrafe', { style: { margin: '0 0 8px' } },
+            `${grabadora.reloj(rec.duracion)} y ${cuantas} ${cuantas === 1 ? 'foto' : 'fotos'}`),
+          audio || h('p.hint', null,
+            'La grabación de voz no se puede reproducir. Las fotos están todas.'),
+        ),
+        tarjetaIA(),
+        h('button.d-boton-negro.claro', { style: { marginTop: '14px' }, onclick: () => pintarFicha() },
+          cerradas().length
+            ? `Seguir el repaso (${cerradas().length} de ${cuantas} listas)`
+            : `Repasar ${cuantas === 1 ? 'la foto' : `las ${cuantas} fotos`} a mano`),
+      ].filter(Boolean));
+    };
 
-      /* La foto grande con su papelera. La papelera pregunta con el
-         menú del diseño, y al eliminar ofrece hacer otra, traerla de
-         la galería o dejar la tarea sin foto. */
-      const foto = h('div.d-foto', {
+    /* ─── Una ficha ─── */
+    const pintarFicha = () => {
+      if (!mirando || !vivas().length) { pintarAntesala(); return; }
+      if (!vivas().includes(mirando)) mirando = vivas()[0];
+      const f = mirando;
+      const l = vivas();
+      const n = l.indexOf(f) + 1;
+
+      cab.ponerTitulo(`Repaso ${n} de ${l.length}`);
+      // La flecha vuelve a la ficha anterior, y desde la primera sale de
+      // la pantalla. Salir ya no cuesta nada: está todo apuntado.
+      cab.ponerVuelta(() => (vecina(-1) ? irAFicha(vecina(-1)) : salir()));
+
+      const url = f.sinFoto ? null : URL.createObjectURL(f.marca.blob);
+      if (url) urlsSueltas.push(url);
+
+      /* La foto. La papelera de la esquina cambia la imagen —no borra la
+         ficha—, y por eso pregunta con las palabras exactas de lo que
+         hace. Borrar la ficha entera es el botón de abajo. */
+      const foto = h('div.d-foto.repaso', {
         style: url ? {} : { display: 'grid', placeItems: 'center', color: 'var(--d-gris)' },
-        onclick: (ev) => { if (ev.target.closest('.d-foto-papelera') || !url) return; openViewer(h('img', { src: url, alt: '' })); },
+        onclick: (ev) => {
+          if (ev.target.closest('.d-foto-papelera') || ev.target.closest('.tag') || !url) return;
+          openViewer(h('img', { src: url, alt: '' }));
+        },
       },
-        url ? h('img', { src: url, alt: 'Foto de la marca' }) : icon('image', 30),
-        h('span.tag', {
+        url ? h('img', { src: url, alt: 'Foto del repaso' }) : icon('image', 30),
+        // El trocito de grabación de este momento, solo si hay audio.
+        audio ? h('span.tag', {
           style: { position: 'absolute', left: '10px', top: '10px', background: 'rgba(0,0,0,.45)', color: '#fff' },
-          onclick: (ev) => { ev.stopPropagation(); audio.currentTime = Math.max(0, f.marca.ms / 1000 - 8); audio.play(); },
-        }, icon('play', 12), grabadora.reloj(f.marca.ms / 1000)),
+          onclick: (ev) => {
+            ev.stopPropagation();
+            audio.currentTime = Math.max(0, f.marca.ms / 1000 - 8);
+            audio.play();
+          },
+        }, icon('play', 12), grabadora.reloj(f.marca.ms / 1000)) : null,
         url ? h('button.d-foto-papelera', {
-          'aria-label': 'Borrar esta foto',
-          onclick: () => menuFlotante((cerrar) => [
-            filaMenu('trash', 'Eliminar imagen', () => { cerrar(); reponer(); }),
-            filaMenu('corazon', 'Conservar', cerrar),
-          ]),
+          'aria-label': 'Cambiar esta foto',
+          onclick: async () => {
+            if (await confirmar({
+              texto: 'Se quita esta foto y tendrás que hacer otra o traerla de la galería. '
+                + 'El texto y la estancia se quedan como están.',
+              ok: 'Cambiar la foto',
+              icono: 'camera',
+            })) reponer();
+          },
         }, icon('trash')) : null,
       );
-      // Al quitar la foto hay que poner otra: una tarea sin foto no sale
-      // de aquí. Si esta marca no vale, se elimina la propuesta entera,
-      // que para eso está su botón; lo que no se puede es mandar a la
-      // obra un remate que nadie va a saber reconocer.
+
       const reponer = () => menuFlotante((cerrar) => [
         filaMenuFichero(cerrar, { capture: 'environment', multiple: false }, 'camera', 'Hacer foto', cambiarFoto),
         filaMenuFichero(cerrar, { multiple: false }, 'image', 'Seleccionar de la galería', cambiarFoto),
-        filaMenu('corazon', 'Conservar la que había', cerrar),
+        filaMenu('corazon', 'Dejar la que había', cerrar),
       ], { conX: false });
       const cambiarFoto = async (ficheros) => {
         try {
           const img = await prepararImagen(ficheros[0]);
           f.marca.blob = img.blob; f.marca.ancho = img.ancho; f.marca.alto = img.alto;
           f.sinFoto = false;
-          pintarFichas();
+          await apuntar({ ya: true });
+          pintarFicha();
         } catch { toast('No se pudo leer la foto', 'err'); }
       };
 
-      /* Los campos del diseño: estancia y oficio en pastilla, y la
-         descripción en su caja. El contagio de siempre sigue vivo. */
-      const campo = (rotulo, pastilla) => h('div.d-campo', null,
+      /* Los campos: estancia y oficio en pastilla, y la descripción en
+         su caja. */
+      const campo = (rotulo, dentro) => h('div.d-campo', null,
         h('label.d-campo-rotulo', null, rotulo, h('span.req', null, '*')),
-        pastilla,
+        dentro,
       );
+
       const selZona = h('button.d-desplegable', { style: { width: '100%' }, onclick: async () => {
         const elegida = await hojaZonas(f.zona);
         if (elegida === null) return;
-        f.zona = elegida;
-        f.zonaTocada = true;
-        ultimaZona = elegida;
-        pintarZona();
+        f.zona = elegida; f.zonaTocada = true; ultimaZona = elegida;
         contagiarZona(f, elegida);
-      } }, h('span', null, ''), icon('caretAbajo'));
+        apuntar();
+        pintarZona(); validar();
+      } }, h('span'), icon('caretAbajo'));
       const pintarZona = () => {
         selZona.querySelector('span').textContent = f.zona || 'Seleccionar estancia';
         selZona.classList.toggle('puesto', !!f.zona);
       };
-      f.pintarZona = pintarZona;
       pintarZona();
 
       const selGremio = h('button.d-desplegable', { style: { width: '100%' }, onclick: async () => {
         const elegido = await hojaOficios(f.oficio || ultimo, { titulo: 'Oficio o subcontrata' });
-        if (elegido) poner(elegido);
-      } }, h('span', null, ''), icon('caretAbajo'));
-      const poner = (elegido, propio = true) => {
-        f.oficio = elegido;
-        if (propio) { f.tocado = true; ultimo = elegido; contagiar(f, elegido); }
-        pintarGremio();
-        validar();
-      };
+        if (!elegido) return;
+        f.oficio = elegido; f.tocado = true; ultimo = elegido;
+        contagiar(f, elegido);
+        apuntar();
+        pintarGremio(); validar();
+      } }, h('span'), icon('caretAbajo'));
       const pintarGremio = () => {
         selGremio.querySelector('span').textContent = f.oficio ? oficio(f.oficio).nombre : 'Seleccionar oficio';
         selGremio.classList.toggle('puesto', !!f.oficio);
       };
-      f.pintarGremio = pintarGremio;
       pintarGremio();
 
       const texto = h('textarea.d-area', {
-        rows: 2, placeholder: 'Qué hay que hacer aquí…', autocapitalize: 'sentences',
-        style: { minHeight: '73px' },
+        rows: 3, placeholder: 'Qué hay que hacer aquí…', autocapitalize: 'sentences',
+        style: { minHeight: '96px' },
       });
       texto.value = f.texto;
       const crecer = () => {
         texto.style.height = 'auto';
-        texto.style.height = Math.max(73, texto.scrollHeight) + 'px';
+        texto.style.height = Math.max(96, texto.scrollHeight) + 'px';
       };
-      texto.addEventListener('input', () => { f.texto = texto.value; crecer(); validar(); });
-      f.crecer = crecer;
+      texto.addEventListener('input', () => { f.texto = texto.value; crecer(); apuntar(); validar(); });
 
-      /* La pareja del diseño: eliminar en fantasma, guardar en negro
-         con el cerebro de la IA. */
+      /* El pie: guardar manda y eliminar se aparta.
+
+         Antes los dos ocupaban la mitad justa cada uno, del mismo
+         tamaño y pegados: uno no tiene vuelta atrás y el otro es lo que
+         se hace nueve de cada diez veces. Ahora eliminar es un botón
+         estrecho y callado, y guardar se lleva el ancho. */
       const guardarBtn = h('button.d-boton-negro', {
-        onclick: () => { f.guardada = true; pintarFichas(); comprobarCierre(); },
-      }, icon('cerebro'), 'Guardar');
-      f.pintarBoton = () => { guardarBtn.disabled = !(f.texto.trim() && f.oficio); };
-      f.pintarBoton();
+        onclick: async () => {
+          f.guardada = true;
+          await apuntar({ ya: true });
+          const sig = abiertas()[0];
+          if (sig) { irAFicha(sig); return; }
+          await cerrarElRepaso();
+        },
+      }, f.guardada ? 'Guardada · seguir' : 'Guardar');
 
-      return h('div.d-propuesta', { class: f.confianza === 'baja' ? 'dudosa' : '' },
+      const borrarBtn = h('button.d-fantasma.estrecho', {
+        'aria-label': 'Eliminar este repaso',
+        onclick: async () => {
+          if (!await confirmar({
+            texto: 'Se quita esta foto del recorrido y no se creará ninguna tarea con ella. '
+              + 'Las demás siguen como están.',
+            ok: 'Eliminar este repaso',
+            mini: url,
+          })) return;
+          f.fuera = true;
+          await apuntar({ ya: true });
+          const sig = vecina(1) || vecina(-1);
+          if (sig) { irAFicha(sig); return; }
+          if (!vivas().length) { await tirarElRecorrido(); return; }
+          pintarFicha();
+        },
+      }, icon('trash'));
+
+      const validar = () => { guardarBtn.disabled = !(f.texto.trim() && f.oficio && f.zona); };
+      validar();
+
+      lienzo.replaceChildren(...[
+        // La barra de por dónde vas, pegada bajo la cabecera.
+        h('div.d-rec-avance', null,
+          ...l.map((x) => h('span', { class: x === f ? 'aqui' : (x.guardada ? 'hecha' : '') })),
+        ),
         foto,
         campo('Zona o estancia', selZona),
         campo('Oficio o subcontrata', selGremio),
@@ -516,225 +626,42 @@ export async function render({ promoId, unidadId }) {
           h('label.d-campo-rotulo', null, 'Descripción', h('span.req', null, '*')),
           texto,
         ),
-        h('div.d-propuesta-botones', null,
-          h('button.d-fantasma', {
-            onclick: async () => {
-              /* Quitar una ficha de quince es una decisión pequeña, pero
-                 se pregunta igual: es una foto del paseo que no se puede
-                 volver a hacer, y el botón está justo al lado de
-                 «Guardar».
-
-                 La excepción es cuando ésta es la última que queda sin
-                 cerrar y no hay ninguna guardada: quitarla no borra una
-                 ficha, borra el recorrido entero, y ésa es otra pregunta
-                 —mucho más seria— que hace comprobarCierre() ahí abajo.
-                 Preguntar dos veces seguidas solo enseña a decir que sí
-                 sin leer. */
-              const seriaLaUltima = !fichas.some((x) => x.guardada)
-                && fichas.filter((x) => !x.fuera).length === 1;
-              if (!seriaLaUltima && !await confirmar({
-                texto: 'Se quita esta foto del recorrido y no se creará ninguna '
-                  + 'tarea con ella. Las demás siguen como están.',
-                ok: 'Eliminar este repaso',
-              })) return;
-              f.fuera = true;
-              pintarFichas();
-              comprobarCierre();
-            },
-          }, icon('trash'), 'Eliminar'),
-          guardarBtn,
-        ),
-      );
+        h('div.d-rec-pie', null, borrarBtn, guardarBtn),
+        // Cuando ya está todo cerrado, el remate se puede dar desde
+        // cualquier ficha sin tener que llegar hasta la última.
+        abiertas().length ? null : h('button.d-boton-negro.claro', {
+          style: { marginTop: '10px' },
+          onclick: () => crearLasTareas(),
+        }, `Crear ${cerradas().length === 1 ? 'la tarea' : `las ${cerradas().length} tareas`}`),
+      ].filter(Boolean));
+      requestAnimationFrame(() => { if (f.texto) crecer(); });
+      lienzo.closest('.screen')?.scrollTo?.({ top: 0 });
+      document.getElementById('app')?.scrollTo?.({ top: 0 });
     };
 
-    /**
-     * Que las tareas se escriban solas.
-     *
-     * Claude no oye —el audio de arriba no le sirve—, pero sí ve. Así
-     * que lo que viaja son las fotos, encogidas, y de cada una sale una
-     * tarea con su gremio sin que tengas que escribir nada.
-     *
-     * La caja de texto sigue estando, y ahora es lo que siempre debió
-     * ser: opcional. Lo que escribas o dictes ahí manda sobre lo que se
-     * vea en la foto, porque tú sabes qué mirabas y la foto no lo dice.
-     * Cuando la transcripción esté enchufada, llegará puesta sola.
-     *
-     * Y si no hay clave, si el hosting no sale a internet o si prefieres
-     * escribirlas tú, las fichas siguen ahí debajo igual que antes.
-     */
-    const dictado = () => {
-      if (!api.HAY_SERVIDOR) return null;
+    /* ─── El remate ─── */
 
-      const campo = h('textarea.d-area', {
-        rows: 3, autocapitalize: 'sentences',
-        style: { minHeight: '96px' },
-        placeholder: 'Se rellena solo con lo que dijiste. Si escribes aquí, manda lo tuyo…',
+    /** Al cerrar la última: se pregunta antes de crear nada. */
+    const cerrarElRepaso = async () => {
+      const buenas = cerradas();
+      if (!buenas.length) { await tirarElRecorrido(); return; }
+      const quiere = await confirmar({
+        titulo: 'Ese era el último',
+        texto: `Se crearán ${buenas.length} ${buenas.length === 1 ? 'tarea' : 'tareas'} en ${u.nombre}. `
+          + 'Puedes seguir revisándolas antes, que no se pierde nada.',
+        ok: `Crear ${buenas.length === 1 ? 'la tarea' : `las ${buenas.length} tareas`}`,
+        icono: 'check',
+        conservar: 'Seguir revisando',
+        iconoConservar: 'edit',
       });
-      // La transcripción de un recorrido de cuatro minutos no cabe en
-      // tres líneas: la caja crece con lo que le echen, igual que las de
-      // las fichas de abajo.
-      const crecerCampo = () => {
-        campo.style.height = 'auto';
-        campo.style.height = campo.scrollHeight + 'px';
-      };
-      campo.addEventListener('input', crecerCampo);
-      if (rec.transcripcion) {
-        campo.value = rec.transcripcion;
-        requestAnimationFrame(crecerCampo);
-      }
-      const aviso = h('p.hint');
-      const boton = h('button.d-boton-negro', { style: { marginTop: '10px' } },
-        icon('cerebro'), h('span.grow', null, 'Redactar las tareas'));
-      const rotulo = boton.querySelector('.grow');
-
-      boton.addEventListener('click', async () => {
-        const vivas = fichas.filter((f) => !f.fuera);
-        if (!vivas.length) return;
-        boton.disabled = true;
-        aviso.className = 'hint';
-        let nota = '';
-
-        try {
-          // Primero se escucha. Solo si no hay ya texto: lo que haya
-          // escrito la persona manda sobre la grabación, y lo que ya se
-          // transcribió una vez no se vuelve a pagar.
-          // La misma comprobación que arriba: un audio que no vale no
-          // puede tumbar la redacción de las tareas. Sin él se redacta
-          // con las fotos, que es de donde sale casi todo.
-          if (!campo.value.trim() && rec.audio instanceof Blob && rec.audio.size) {
-            rotulo.textContent = 'ESCUCHANDO…';
-            aviso.textContent = 'Pasando a texto lo que dijiste.';
-            try {
-              const t = await api.oidoTranscribir(rec.audio, rec.duracion);
-              campo.value = t.texto || '';
-              crecerCampo();
-              rec.transcripcion = campo.value;
-              await store.guardarRecorrido(rec);
-            } catch (e) {
-              // Que falle el oído no puede dejarte sin tareas: las fotos
-              // siguen ahí y de ellas ya sale un parte. Pero se dice, que
-              // si es la clave o el crédito hay que ir a arreglarlo.
-              nota = e?.codigo === 'sin-clave'
-                ? ''
-                : ` No se ha podido escuchar la grabación: ${e?.message || 'ha fallado'}`;
-            }
-          }
-
-          // Las fotos se encogen aquí, en el móvil: lo que sube por la
-          // línea de la obra son unos cientos de kilobytes y no ocho
-          // megas, y en la API se paga por lo que ocupa cada una.
-          const conFoto = vivas.slice(0, TOPE_FOTOS);
-          rotulo.textContent = 'PREPARANDO LAS FOTOS…';
-          const fotos = [];
-          for (const f of conFoto) {
-            aviso.textContent = `Preparando la foto ${fotos.length + 1} de ${conFoto.length}…`;
-            try {
-              fotos.push({ id: f.marca.id, b64: await paraMirar(f.marca.blob) });
-            } catch { /* si una foto no se deja leer, se manda sin ella */ }
-          }
-
-          rotulo.textContent = 'REDACTANDO…';
-          aviso.textContent = 'Puede tardar medio minuto. No cierres la pantalla.';
-          const r = await api.claudeRedactar(
-            campo.value.trim(),
-            vivas.map((f) => ({ id: f.marca.id, ms: f.marca.ms })),
-            OFICIOS.map((o) => ({ id: o.id, nombre: o.nombre })),
-            fotos,
-            ZONAS,
-          );
-
-          const porId = new Map(vivas.map((f) => [String(f.marca.id), f]));
-          let dichas = 0;
-          let vistas = 0;
-          for (const ficha of r.fichas || []) {
-            const f = porId.get(String(ficha.id));
-            if (!f) continue;
-            const texto = String(ficha.texto || '').trim();
-            f.confianza = ficha.confianza || null;
-            if (!texto) continue;
-            f.texto = texto;
-            // Lo redactado cuenta como decidido: el contagio de gremios
-            // no debe pisarlo después.
-            if (ficha.oficio && OFICIOS.some((o) => o.id === ficha.oficio)) {
-              f.oficio = ficha.oficio;
-              f.tocado = true;
-            }
-            // La estancia solo se acepta si está en la lista cerrada:
-            // un «baño de arriba» inventado rompería el filtro, que es
-            // justo para lo que existe el campo.
-            if (ficha.zona && ZONAS.includes(ficha.zona)) {
-              f.zona = ficha.zona;
-              f.zonaTocada = true;
-            }
-            if (ficha.origen === 'foto') vistas += 1; else dichas += 1;
-          }
-          pintarFichas();
-          aviso.className = 'hint';
-          aviso.textContent = resumen(dichas, vistas, vivas.length, vivas.length - conFoto.length) + nota;
-          rotulo.textContent = 'VOLVER A REDACTAR';
-          boton.disabled = false;
-        } catch (e) {
-          aviso.className = 'hint err';
-          aviso.textContent = e?.status === 404
-            ? 'El servidor todavía no tiene esta parte instalada.'
-            : (e?.message || 'No se ha podido redactar.');
-          rotulo.textContent = 'REDACTAR LAS TAREAS';
-          boton.disabled = false;
-        }
-      });
-
-      return h('div.rec-dictado', null,
-        h('p.d-epigrafe', { style: { margin: '0 0 4px' } }, 'Que las escriba solas'),
-        h('p.sub', { style: { marginTop: '4px' } },
-          'Se escucha lo que dijiste, se miran las fotos y sale una tarea de cada '
-          + 'una con su gremio. Un solo toque. Si prefieres escribirlo tú, hazlo '
-          + 'abajo: lo tuyo manda sobre la grabación y sobre lo que se vea.'),
-        h('div', { style: { marginTop: '10px' } }, campo),
-        aviso,
-        boton,
-      );
+      if (!quiere) { irAFicha(vivas()[0]); return; }
+      await crearLasTareas();
     };
 
-    /**
-     * El cierre del diseño: cuando la última tarjeta queda guardada o
-     * eliminada, se crean de una vez las guardadas —una lista nueva
-     * con todas dentro— y sale el modal de enhorabuena. Guardar
-     * tarjeta a tarjeta y crear al final no es contradictorio: si te
-     * vas a medias, el recorrido sigue en el móvil, entero.
-     */
-    const comprobarCierre = async () => {
-      if (fichas.some((f) => !f.fuera && !f.guardada)) return;
-      const buenas = fichas.filter((f) => f.guardada);
-      if (!buenas.length) {
-        /* Aquí no se está quitando una ficha: se está tirando el paseo
-           entero, y el borrado es definitivo —el recorrido sale de la
-           base del móvil y no hay de dónde traerlo—. Media hora andando
-           por una casa no se va por un dedo que roza el botón de al
-           lado, así que esto se pregunta con todas las letras y diciendo
-           cuánto se pierde.
-
-           Y si la respuesta es que no, las fichas vuelven: quien dice
-           «no descartes» quiere su recorrido de vuelta, no una pantalla
-           vacía. */
-        const seguro = await confirmar({
-          titulo: 'Has quitado todas las fichas',
-          texto: `Eliminar ahora borra el paseo entero: `
-            + `${rec.marcas.length} ${rec.marcas.length === 1 ? 'foto' : 'fotos'} y `
-            + `${grabadora.reloj(rec.duracion)} de grabación. No se puede recuperar.`,
-          ok: 'Eliminar el recorrido',
-          conservar: 'Conservar el recorrido',
-        });
-        if (!seguro) {
-          for (const f of fichas) f.fuera = false;
-          pintarFichas();
-          toast('Recorrido recuperado');
-          return;
-        }
-        await store.borrarRecorrido(rec.id);
-        toast('Recorrido descartado');
-        ir(volver);
-        return;
-      }
+    /** Las tareas, de una vez, y a la vivienda. */
+    const crearLasTareas = async () => {
+      const buenas = cerradas();
+      if (!buenas.length) return;
       toast('Creando las tareas…');
       const lista = await store.crearLista({ unidadId, promoId, fase: FASE_UNICA });
       for (const f of buenas) {
@@ -749,38 +676,202 @@ export async function render({ promoId, unidadId }) {
         }
       }
       await store.marcarRecorridoUsado(rec.id, lista.id);
+      guardarAlSalir = null;
       const yo = store.sesion();
       await hojaBienHecho({
         titulo: `Excelente${nombreCorto(yo) ? ', ' + nombreCorto(yo) : ''}`,
-        frase: 'Validación completa. Que empiecen los remates.',
+        frase: `${buenas.length} ${buenas.length === 1 ? 'tarea creada' : 'tareas creadas'}. Que empiecen los remates.`,
         usuario: yo,
         boton: `Volver a ${u.nombre}`,
       });
-      await refrescar();
+      /* Aquí NO se llama a refrescar(), y es la corrección importante.
+
+         refrescar() vuelve a pintar la pantalla en la que estás, y la
+         pantalla en la que estás es ésta: se montaba entera otra vez y
+         abría la cámara. Y como arrancar() asigna el mando después de un
+         await, la limpieza de la pantalla ya había pasado con el mando
+         vacío: nadie soltaba cámara ni micrófono. El punto verde se
+         quedaba encendido con la batería en obra. La vivienda se pinta
+         sola al llegar; no hay que refrescar nada. */
       ir(volver);
     };
 
-    pintarFichas();
+    /** Sin ninguna ficha viva no hay tareas: el paseo se tira entero. */
+    const tirarElRecorrido = async () => {
+      const seguro = await confirmar({
+        titulo: 'Has quitado todas las fotos',
+        texto: `Eliminar ahora borra el paseo entero: ${rec.marcas.length} `
+          + `${rec.marcas.length === 1 ? 'foto' : 'fotos'} y ${grabadora.reloj(rec.duracion)} `
+          + 'de grabación. No se puede recuperar.',
+        ok: 'Eliminar el recorrido',
+        conservar: 'Conservar el recorrido',
+      });
+      if (!seguro) {
+        for (const f of fichas) f.fuera = false;
+        await apuntar({ ya: true });
+        mirando = vivas()[0];
+        toast('Recorrido recuperado');
+        pintarFicha();
+        return;
+      }
+      guardarAlSalir = null;
+      await store.borrarRecorrido(rec.id);
+      toast('Recorrido descartado');
+      ir(volver);
+    };
 
-    // La flecha de volver deja de navegar a propósito: irse por ahí
-    // dejaría el recorrido a medias sin decirlo. El recorrido sigue en
-    // el móvil, así que cerrar la app por accidente no pierde nada.
-    //
-    // Se cambia con ponerVuelta() y no colgándole un onclick nuevo
-    // encima: el de antes está puesto con addEventListener y seguiría
-    // disparando también, así que la flecha avisaría Y se iría igual.
-    cab.ponerTitulo(`Nueva lista - ${u.nombre}`);
-    cab.ponerVuelta(() => toast('Guarda o elimina cada tarea para terminar. Lo grabado no se pierde.'));
+    /** Salir de la pantalla. Ya no cuesta nada: está todo apuntado. */
+    const salir = async () => {
+      await apuntar({ ya: true });
+      if (cerradas().length || fichas.some((f) => f.texto)) {
+        toast('Lo repasado se queda guardado en este móvil');
+      }
+      ir(volver);
+    };
 
-    lienzo.replaceChildren(
-      h('div.rec-resumen', null,
-        h('p.d-epigrafe', { style: { margin: '0 0 8px' } },
-          `${grabadora.reloj(rec.duracion)} y ${rec.marcas.length} ${rec.marcas.length === 1 ? 'marca' : 'marcas'}`),
-        audio || avisoSinAudio,
-      ),
-      dictado(),
-      listado,
-    );
+    /* ─── La tarjeta de la IA ─── */
+    const tarjetaIA = () => {
+      if (!api.HAY_SERVIDOR) return null;
+
+      const campo = h('textarea.d-area', {
+        rows: 3, autocapitalize: 'sentences', style: { minHeight: '96px' },
+        placeholder: 'Se rellena solo con lo que dijiste. Si escribes aquí, manda lo tuyo…',
+      });
+      const crecerCampo = () => {
+        campo.style.height = 'auto';
+        campo.style.height = campo.scrollHeight + 'px';
+      };
+      campo.addEventListener('input', crecerCampo);
+      if (rec.transcripcion) {
+        campo.value = rec.transcripcion;
+        requestAnimationFrame(crecerCampo);
+      }
+      const aviso = h('p.hint');
+      const boton = h('button.d-boton-negro', null,
+        icon('cerebro'), h('span.grow', null,
+          rec.fichas?.some((x) => x.texto) ? 'Volver a redactar' : 'Redactar las tareas'));
+      const rotulo = boton.querySelector('.grow');
+
+      boton.addEventListener('click', async () => {
+        const conFicha = vivas();
+        if (!conFicha.length) return;
+
+        /* Los tres pasos, siempre los tres a la vista aunque alguno se
+           salte: ver que «escuchar» ya está hecho es información, y una
+           lista que cambia de largo a mitad de la espera desorienta. */
+        const hayQueEscuchar = !campo.value.trim()
+          && rec.audio instanceof Blob && rec.audio.size > 0;
+        const paso = pantallaTrabajando([
+          'Escuchar la grabación',
+          'Preparar las fotos',
+          'Escribir las tareas',
+        ]);
+        let rendido = false;
+        paso.alRendirse(() => { rendido = true; toast('Seguimos sin la IA: escribe tú las tareas'); pintarFicha(); });
+        let nota = '';
+
+        try {
+          // Primero se escucha, y solo si no hay ya texto: lo que haya
+          // escrito la persona manda sobre la grabación, y lo que ya se
+          // transcribió una vez no se vuelve a pagar.
+          paso.ir(hayQueEscuchar ? 0 : 1, hayQueEscuchar
+            ? 'Pasando a texto lo que dijiste.'
+            : 'Ya estaba escrito: no se vuelve a escuchar.');
+          if (hayQueEscuchar) {
+            try {
+              const t = await api.oidoTranscribir(rec.audio, rec.duracion);
+              campo.value = t.texto || '';
+              crecerCampo();
+              rec.transcripcion = campo.value;
+              await store.guardarRecorrido(rec);
+            } catch (e) {
+              // Que falle el oído no puede dejarte sin tareas: las fotos
+              // siguen ahí y de ellas ya sale un parte.
+              nota = e?.codigo === 'sin-clave'
+                ? ''
+                : ` No se ha podido escuchar la grabación: ${e?.message || 'ha fallado'}`;
+            }
+          }
+
+          // Las fotos se encogen aquí, en el móvil: lo que sube por la
+          // línea de la obra son unos cientos de kilobytes y no ocho
+          // megas, y en la API se paga por lo que ocupa cada una.
+          const conFoto = conFicha.slice(0, TOPE_FOTOS);
+          const fotos = [];
+          for (const f of conFoto) {
+            paso.ir(1, `Foto ${fotos.length + 1} de ${conFoto.length}`, (fotos.length + 1) / conFoto.length);
+            try {
+              fotos.push({ id: f.marca.id, b64: await paraMirar(f.marca.blob) });
+            } catch { /* si una foto no se deja leer, se manda sin ella */ }
+          }
+
+          paso.ir(2, 'Escribiendo una tarea de cada foto.');
+          const r = await api.claudeRedactar(
+            campo.value.trim(),
+            conFicha.map((f) => ({ id: f.marca.id, ms: f.marca.ms })),
+            OFICIOS.map((o) => ({ id: o.id, nombre: o.nombre })),
+            fotos,
+            ZONAS,
+          );
+
+          const porId = new Map(conFicha.map((f) => [String(f.marca.id), f]));
+          let dichas = 0;
+          let vistas = 0;
+          for (const ficha of r.fichas || []) {
+            const f = porId.get(String(ficha.id));
+            if (!f) continue;
+            const t = String(ficha.texto || '').trim();
+            f.confianza = ficha.confianza || null;
+            if (!t) continue;
+            f.texto = t;
+            // Lo redactado cuenta como decidido: el contagio de gremios
+            // no debe pisarlo después.
+            if (ficha.oficio && OFICIOS.some((o) => o.id === ficha.oficio)) {
+              f.oficio = ficha.oficio;
+              f.tocado = true;
+            }
+            // La estancia solo se acepta si está en la lista cerrada: un
+            // «baño de arriba» inventado rompería el filtro, que es
+            // justo para lo que existe el campo.
+            if (ficha.zona && ZONAS.includes(ficha.zona)) {
+              f.zona = ficha.zona;
+              f.zonaTocada = true;
+            }
+            if (ficha.origen === 'foto') vistas += 1; else dichas += 1;
+          }
+
+          /* Lo redactado se apunta en el acto. Cuesta dinero y medio
+             minuto de espera: no puede depender de que no entre una
+             llamada en los diez segundos siguientes. */
+          await apuntar({ ya: true });
+          if (rendido) return;   // se cansó de esperar y ya está en las fichas
+          paso.quitar();
+          toast(resumen(dichas, vistas, conFicha.length, conFicha.length - conFoto.length) + nota);
+          mirando = abiertas()[0] || vivas()[0];
+          pintarFicha();
+        } catch (e) {
+          paso.quitar();
+          if (rendido) return;
+          aviso.className = 'hint err';
+          aviso.textContent = e?.status === 404
+            ? 'El servidor todavía no tiene esta parte instalada.'
+            : (e?.message || 'No se ha podido redactar.');
+          rotulo.textContent = 'Volver a intentarlo';
+        }
+      });
+
+      return h('div.rec-dictado', null,
+        h('p.d-epigrafe', { style: { margin: '0 0 4px' } }, 'Que las escriba solas'),
+        h('p.sub', { style: { marginTop: '4px' } },
+          'Se escucha lo que dijiste, se miran las fotos y sale una tarea de cada '
+          + 'una con su estancia y su gremio. Un solo toque.'),
+        h('div', { style: { marginTop: '10px' } }, campo),
+        aviso,
+        boton,
+      );
+    };
+
+    pintarAntesala();
   };
 
   pintarPreparado();
@@ -800,6 +891,10 @@ export async function render({ promoId, unidadId }) {
     // volver a entrar en la vivienda se ofrece repasarlo. Salir a mitad
     // de un recorrido casi nunca es «bórralo»; es el teléfono sonando.
     alSalir: () => {
+      // Lo repasado, antes que nada: es lo único que no se puede volver
+      // a hacer solo. La cámara se suelta igual justo después.
+      guardarAlSalir?.();
+      guardarAlSalir = null;
       document.removeEventListener('visibilitychange', alTapar);
       visorActual?.remove();
       visorActual = null;

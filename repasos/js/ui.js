@@ -376,6 +376,7 @@ export function confirmar({
   icono = 'trash',
   conservar = 'Conservar',
   iconoConservar = 'corazon',
+  mini = null,
 } = {}) {
   return new Promise((resolver) => {
     const cerrar = (valor) => { velo.remove(); resolver(valor); };
@@ -390,6 +391,9 @@ export function confirmar({
          que se va es media hora de trabajo, hay que decir CUÁNTO se
          pierde —«3 fotos y 6:12 de grabación»—, que es lo único que
          frena la mano de verdad. */
+      /* La miniatura de lo que se va a borrar. Con siete fichas casi
+         iguales, «esta foto» no dice cuál: verla quita toda la duda. */
+      mini ? h('div.d-confirmar-mini', null, h('img', { src: mini, alt: '' })) : null,
       titulo ? h('p.d-confirmar-titulo', null, titulo) : null,
       texto ? h('p.d-confirmar-texto', null, texto) : null,
       fila(ok, icono, true),
@@ -616,4 +620,74 @@ export function arrancarOndas() {
  */
 export function trasLaOnda(fn) {
   requestAnimationFrame(() => requestAnimationFrame(fn));
+}
+
+
+/* ═══════════════════════════════════════════════════════════════
+   LA PANTALLA DE «ESTOY TRABAJANDO»
+   ═══════════════════════════════════════════════════════════════ */
+
+/**
+ * Para las esperas largas de verdad: la IA escuchando la grabación y
+ * redactando las tareas, que son treinta o sesenta segundos.
+ *
+ * Un aro girando no basta a partir de diez segundos: sin nada que
+ * avance, un minuto se siente como tres y da la impresión de que la app
+ * se ha colgado. Aquí se ven los pasos, cuál va por dónde y la cuenta de
+ * fotos, que ya la sabe la app y antes solo salía en gris pequeño debajo
+ * de un botón apagado —que en esta app significa «no puedes pulsar
+ * esto», no «estoy trabajando»—.
+ *
+ * `pasos` son los rótulos, en orden. Se maneja con:
+ *   ir(n, detalle, fraccion)  pone el paso n en marcha y los de antes
+ *                             como hechos; `fraccion` (0…1) mueve la
+ *                             barra dentro del paso.
+ *   quitar()                  la retira.
+ *
+ * A los 75 segundos aparece una salida. No antes: si sale enseguida,
+ * la mitad de la gente la pulsa por impaciencia y se queda sin lo que
+ * ya estaba pagado. Y si nunca sale, una llamada que no responde te
+ * deja la pantalla secuestrada.
+ */
+export function pantallaTrabajando(pasos, { salida = 'Seguir sin la IA' } = {}) {
+  const filas = pasos.map((rotulo) => h('li.d-trabajando-paso', null,
+    h('span.marca', null, icon('check', 16)),
+    h('span.rotulo', null, rotulo),
+  ));
+  const detalle = h('p.d-trabajando-detalle');
+  const barra = h('span.tira');
+  const escape = h('button.d-trabajando-salida', { style: { visibility: 'hidden' } }, salida);
+
+  const capa = h('div.d-trabajando', { role: 'status', 'aria-live': 'polite' },
+    h('div.d-trabajando-centro', null,
+      h('div.d-trabajando-aro', null, icon('cerebro', 34)),
+      h('ol.d-trabajando-pasos', null, ...filas),
+      detalle,
+      h('div.d-trabajando-barra', null, barra),
+    ),
+    escape,
+  );
+
+  let rendido = null;
+  const reloj = setTimeout(() => { escape.style.visibility = ''; }, 75000);
+  const quitar = () => { clearTimeout(reloj); capa.remove(); };
+  escape.addEventListener('click', () => { quitar(); rendido?.(); });
+
+  document.body.append(capa);
+
+  return {
+    ir(n, texto = '', fraccion = 0) {
+      filas.forEach((fila, i) => {
+        fila.classList.toggle('hecho', i < n);
+        fila.classList.toggle('ahora', i === n);
+      });
+      detalle.textContent = texto;
+      // La barra avanza por pasos, y dentro de cada paso por lo que se
+      // sepa: las fotos se cuentan, escuchar y redactar no.
+      const pct = ((n + Math.min(1, Math.max(0, fraccion))) / pasos.length) * 100;
+      barra.style.width = pct.toFixed(1) + '%';
+    },
+    alRendirse(fn) { rendido = fn; },
+    quitar,
+  };
 }

@@ -2346,6 +2346,13 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
   background: #fcfcfc; border-radius: 22px;
   animation: rise 0.28s cubic-bezier(0.22, 0.8, 0.25, 1) both;
 }
+.d-confirmar-mini {
+  width: 92px; height: 92px; margin: 18px auto 0;
+  border-radius: 14px; overflow: hidden; background: var(--d-gris-suave);
+}
+.d-confirmar-mini img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.d-confirmar-mini + .d-confirmar-titulo { padding-top: 12px; }
+.d-confirmar-mini + .d-confirmar-texto { padding-top: 12px; }
 .d-confirmar-titulo {
   margin: 0; padding: 18px 20px 0;
   text-align: center; font-size: 17px; font-weight: 500; color: var(--d-tinta);
@@ -2464,6 +2471,55 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 .d-propuesta-botones { display: flex; gap: 14px; margin-top: 16px; }
 .d-propuesta-botones > * { flex: 1; }
 .d-propuesta .d-foto .tag { display: inline-flex; align-items: center; gap: 4px; border: none; }
+/* ═══ EL REPASO DEL RECORRIDO, FICHA A FICHA ═══════════════════
+
+   Una ficha por pantalla. Antes eran las siete seguidas en una
+   columna de dos metros, y no había forma de saber dónde acababa una
+   y empezaba la siguiente.  ═══ */
+
+/* Por dónde vas: un guión por ficha, el de ahora en negro y los ya
+   cerrados en topo. Con siete cabe de sobra, y de un vistazo sabes
+   cuánto queda sin leer ningún número. */
+.d-rec-avance { display: flex; gap: 5px; margin: 2px 0 14px; }
+.d-rec-avance span {
+  flex: 1; height: 4px; border-radius: 999px; background: #e4e2df;
+  transition: background var(--mov-medio) var(--sal-estandar);
+}
+.d-rec-avance span.hecha { background: var(--d-beige-tinta); }
+.d-rec-avance span.aqui { background: var(--d-tinta); }
+
+/* La foto del repaso: alta, pero no un cuadrado a todo lo ancho que se
+   coma la pantalla entera. Lo que importa de la foto se reconoce igual,
+   y así los campos entran sin desplazarse. */
+.d-foto.repaso { aspect-ratio: 4 / 3; border-radius: var(--d-radio); }
+
+/* El pie: guardar manda y eliminar se aparta.
+   Antes ocupaban la mitad justa cada uno, del mismo tamaño y pegados.
+   Uno no tiene vuelta atrás; el otro es lo que se hace nueve de cada
+   diez veces. */
+.d-rec-pie { display: flex; align-items: center; gap: 10px; margin-top: 18px; }
+.d-rec-pie .d-boton-negro { flex: 1; }
+.d-fantasma.estrecho {
+  width: 48px; height: 48px; flex: none; border-radius: 999px;
+  display: grid; place-items: center;
+  background: transparent; border: 1px solid #ddd9d4; color: var(--d-gris);
+}
+.d-fantasma.estrecho svg { width: 22px; height: 22px; }
+
+/* El botón secundario del rediseño: la misma pastilla, en claro. */
+.d-boton-negro.claro {
+  background: #fff; color: var(--d-tinta);
+}
+.d-boton-negro.claro:active { background: var(--d-gris-suave); }
+
+/* El reproductor del paseo, con la ropa de la app en vez del gris de
+   iOS. No se puede repintar por dentro —lo dibuja el sistema—, pero sí
+   sentarlo en su pastilla para que no cante tanto. */
+.d-audio {
+  width: 100%; height: 42px; display: block;
+  border-radius: 999px; background: var(--d-gris-suave);
+}
+
 /* El repaso del recorrido, con la ropa del rediseño. */
 .pantalla-diseno .rec-resumen,
 .pantalla-diseno .rec-dictado {
@@ -2794,3 +2850,79 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
   color: var(--d-beige-tinta); font-style: italic;
 }
 .d-acta-pie { display: block; margin-top: 5px; font-size: 13px; color: var(--d-gris); }
+
+
+/* ═══ LA PANTALLA DE «ESTOY TRABAJANDO» ═════════════════════════
+
+   Para las esperas de treinta o sesenta segundos: la IA escuchando y
+   redactando. Ocupa la pantalla entera a propósito —lo pidió Fran— y
+   por eso tiene que ganárselo: se ven los tres pasos, cuál va, la
+   cuenta de fotos y una barra que avanza. Un aro girando y nada más
+   haría que un minuto se sintiera como tres.  ═══ */
+.d-trabajando {
+  position: fixed; inset: 0; z-index: 90;
+  background: var(--d-fondo);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 26px;
+  padding: 32px 26px calc(env(safe-area-inset-bottom) + 26px);
+  animation: rise 0.3s cubic-bezier(0.22, 0.8, 0.25, 1) both;
+}
+.d-trabajando-centro {
+  display: flex; flex-direction: column; align-items: center;
+  width: min(100%, 420px);
+}
+
+/* El cerebro dentro de un aro que da vueltas: el mismo icono que el
+   botón que se acaba de pulsar, para que se vea que es lo suyo lo que
+   está pasando. */
+.d-trabajando-aro {
+  position: relative; width: 96px; height: 96px; flex: none;
+  display: grid; place-items: center; color: var(--d-tinta);
+}
+.d-trabajando-aro::before {
+  content: ''; position: absolute; inset: 0; border-radius: 50%;
+  border: 3px solid #e4e2df; border-top-color: var(--d-tinta);
+  animation: gira 900ms linear infinite;
+}
+@keyframes gira { to { transform: rotate(360deg); } }
+
+.d-trabajando-pasos { list-style: none; margin: 26px 0 0; padding: 0; width: 100%; }
+.d-trabajando-paso {
+  display: flex; align-items: center; gap: 12px;
+  padding: 9px 0; font-size: 17px; color: #b9b4ad;
+  transition: color var(--mov-medio) var(--sal-estandar);
+}
+.d-trabajando-paso .marca {
+  width: 24px; height: 24px; flex: none; border-radius: 50%;
+  display: grid; place-items: center;
+  background: #e4e2df; color: transparent;
+  transition: background var(--mov-medio) var(--sal-estandar),
+              color var(--mov-medio) var(--sal-estandar);
+}
+.d-trabajando-paso .marca svg { width: 15px; height: 15px; }
+.d-trabajando-paso.ahora { color: var(--d-tinta); font-weight: 500; }
+.d-trabajando-paso.ahora .marca { background: var(--d-tinta); }
+.d-trabajando-paso.hecho { color: var(--d-beige-tinta); }
+.d-trabajando-paso.hecho .marca { background: var(--d-beige-tinta); color: #fff; }
+
+.d-trabajando-detalle {
+  margin: 14px 0 0; min-height: 22px; width: 100%;
+  font-size: 15px; line-height: 22px; color: var(--d-gris);
+}
+.d-trabajando-barra {
+  width: 100%; height: 6px; margin-top: 16px;
+  border-radius: 999px; background: #e4e2df; overflow: hidden;
+}
+.d-trabajando-barra .tira {
+  display: block; width: 0; height: 100%; border-radius: 999px;
+  background: var(--d-tinta);
+  transition: width var(--mov-largo) var(--sal-estandar);
+}
+
+/* La salida, que aparece a los 75 segundos. Tarda a propósito: si
+   saliera enseguida, media obra la pulsaría por impaciencia y se
+   quedaría sin lo que ya está pagado. */
+.d-trabajando-salida {
+  height: 48px; padding: 0 22px; border-radius: 999px;
+  background: transparent; color: var(--d-gris); font-size: 15px;
+}
