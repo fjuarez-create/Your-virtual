@@ -292,3 +292,36 @@ jobs:
         run: |
           bash .github/scripts/ftp-deploy.sh comprobar
           echo "Publicado en https://repasos.unikdi.com/"
+
+      # La comprobación de arriba dice que los ficheros están en el
+      # servidor. Esta dice algo más difícil de saber y más importante:
+      # que lo que el servidor SIRVE es lo de ahora. Se le pide la
+      # portada y se mira que traiga el sello de esta compilación; si el
+      # hosting estuviera devolviendo una copia vieja, se ve aquí y no
+      # tres días después en el móvil de alguien.
+      - name: Comprobar que lo que se sirve es lo de ahora
+        timeout-minutes: 3
+        run: |
+          set -eu
+          BUILD="${GITHUB_SHA::8}"
+          PORTADA=""
+          for intento in 1 2 3 4 5; do
+            PORTADA="$(curl -fsS --max-time 20 "https://repasos.unikdi.com/index.html?v=${BUILD}" || true)"
+            case "$PORTADA" in
+              *"$BUILD"*)
+                echo "La portada que sirve el servidor lleva el sello ${BUILD}."
+                exit 0
+                ;;
+            esac
+            echo "Intento ${intento}: todavía no aparece el sello ${BUILD}."
+            sleep $((intento * 5))
+          done
+          if [ -z "$PORTADA" ]; then
+            # Que no se pueda preguntar no es lo mismo que estar mal
+            # subido: la subida ya se ha verificado por FTP. Se avisa y
+            # se sigue, en vez de teñir de rojo un despliegue correcto.
+            echo "::warning::No se ha podido pedir la portada al servidor para comprobar el sello ${BUILD}."
+            exit 0
+          fi
+          echo "::error::El servidor sigue sirviendo una portada sin el sello ${BUILD}. Puede ser una caché del hosting."
+          exit 1
