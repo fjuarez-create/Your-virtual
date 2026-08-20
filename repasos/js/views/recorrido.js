@@ -14,7 +14,7 @@
    estos mismos campos llegarán rellenos y el trabajo será repasar en
    vez de escribir.
    ═══════════════════════════════════════════════════════════════ */
-import { h, icon, toast, openViewer, sheet, fechaCorta } from '../ui.js';
+import { h, icon, toast, openViewer, sheet, fechaCorta, confirmar } from '../ui.js';
 import {
   promocion, unidad, FASE_UNICA, OFICIO_POR_DEFECTO, OFICIOS, ZONAS, oficio, puedeCrearLista,
 } from '../catalog.js';
@@ -518,7 +518,31 @@ export async function render({ promoId, unidadId }) {
         ),
         h('div.d-propuesta-botones', null,
           h('button.d-fantasma', {
-            onclick: () => { f.fuera = true; pintarFichas(); comprobarCierre(); },
+            onclick: async () => {
+              /* Quitar una ficha de quince es una decisión pequeña, pero
+                 se pregunta igual: es una foto del paseo que no se puede
+                 volver a hacer, y el botón está justo al lado de
+                 «Guardar».
+
+                 La excepción es cuando ésta es la última que queda sin
+                 cerrar y no hay ninguna guardada: quitarla no borra una
+                 ficha, borra el recorrido entero, y ésa es otra pregunta
+                 —mucho más seria— que hace comprobarCierre() ahí abajo.
+                 Preguntar dos veces seguidas solo enseña a decir que sí
+                 sin leer. */
+              const seriaLaUltima = !fichas.some((x) => x.guardada)
+                && fichas.filter((x) => !x.fuera).length === 1;
+              if (!seriaLaUltima && !await confirmar({
+                titulo: '¿Quitar este repaso?',
+                texto: 'Se quita esta foto del recorrido y no se creará ninguna '
+                  + 'tarea con ella. Las demás siguen como están.',
+                ok: 'Quitar',
+                peligro: true,
+              })) return;
+              f.fuera = true;
+              pintarFichas();
+              comprobarCierre();
+            },
           }, icon('trash'), 'Eliminar'),
           guardarBtn,
         ),
@@ -684,6 +708,30 @@ export async function render({ promoId, unidadId }) {
       if (fichas.some((f) => !f.fuera && !f.guardada)) return;
       const buenas = fichas.filter((f) => f.guardada);
       if (!buenas.length) {
+        /* Aquí no se está quitando una ficha: se está tirando el paseo
+           entero, y el borrado es definitivo —el recorrido sale de la
+           base del móvil y no hay de dónde traerlo—. Media hora andando
+           por una casa no se va por un dedo que roza el botón de al
+           lado, así que esto se pregunta con todas las letras y diciendo
+           cuánto se pierde.
+
+           Y si la respuesta es que no, las fichas vuelven: quien dice
+           «no descartes» quiere su recorrido de vuelta, no una pantalla
+           vacía. */
+        const seguro = await confirmar({
+          titulo: '¿Descartar el recorrido entero?',
+          texto: `Has quitado todas las fichas, así que esto borra el paseo completo: `
+            + `${rec.marcas.length} ${rec.marcas.length === 1 ? 'foto' : 'fotos'} y `
+            + `${grabadora.reloj(rec.duracion)} de grabación. No se puede recuperar.`,
+          ok: 'Sí, borrar el recorrido',
+          peligro: true,
+        });
+        if (!seguro) {
+          for (const f of fichas) f.fuera = false;
+          pintarFichas();
+          toast('Recorrido recuperado');
+          return;
+        }
         await store.borrarRecorrido(rec.id);
         toast('Recorrido descartado');
         ir(volver);

@@ -355,16 +355,51 @@ export function sheet(build) {
   });
 }
 
-/** Confirmación con dos botones. Resuelve a true/false. */
+/**
+ * «¿Seguro?», con el velo borroso y la tarjeta del diseño de ahora.
+ *
+ * Resuelve a true SOLO si se pulsa el botón de confirmar. Cerrar por la
+ * X, tocar fuera o darle a Cancelar valen todos que no, que es lo único
+ * razonable cuando detrás hay un borrado.
+ *
+ * El texto tiene que decir QUÉ se pierde y cuánto: «se borran 14 fotos
+ * y 6:12 de grabación» frena la mano; «esta acción no se puede
+ * deshacer», a secas, ya no lo lee nadie.
+ *
+ * El botón de confirmar va arriba, donde cae el pulgar, y el de
+ * cancelar debajo: si te vas a equivocar, que sea hacia atrás.
+ */
+export function confirmar({ titulo, texto = '', ok = 'Sí, seguir', peligro = false }) {
+  return new Promise((resolver) => {
+    const cerrar = (valor) => { velo.remove(); resolver(valor); };
+    const tarjeta = h('div.d-menu-tarjeta', { role: 'dialog', 'aria-modal': 'true' },
+      h('div.d-menu-cab', null,
+        h('span.d-menu-titulo', null, titulo),
+        h('button.d-menu-x', { 'aria-label': 'Cerrar', onclick: () => cerrar(false) }, icon('x')),
+      ),
+      texto ? h('p.d-confirmar-texto', null, texto) : null,
+      h('div.d-confirmar-botones', null,
+        h('button.d-boton-negro', {
+          class: peligro ? 'rojo' : '',
+          onclick: () => cerrar(true),
+        }, ok),
+        h('button.d-fantasma', { onclick: () => cerrar(false) }, 'Cancelar'),
+      ),
+    );
+    const velo = h('div.d-menu-velo', {
+      onclick: (e) => { if (e.target === velo) cerrar(false); },
+    }, tarjeta);
+    document.body.append(velo);
+  });
+}
+
+/* El nombre viejo, con los rótulos en inglés que quedaron de antes.
+   Lo llaman quince sitios de la app, así que cambiarlos todos es una
+   tarea aparte; mientras tanto, con esto los quince preguntan ya con la
+   tarjeta borrosa de ahora en vez de con la hoja de abajo del diseño
+   anterior. La pregunta no cambia: solo cambia cómo se ve. */
 export function confirmSheet({ title, text, ok = 'Confirmar', danger = false }) {
-  return sheet((close) => [
-    h('h2.title', null, title),
-    text && h('p.sub', null, text),
-    h('div.btn-row', null,
-      h('button.btn.ghost', { onclick: () => close(false) }, 'Cancelar'),
-      h('button.btn', { class: danger ? 'danger' : 'ink', onclick: () => close(true) }, ok),
-    ),
-  ]).then((v) => v === true);
+  return confirmar({ titulo: title, texto: text, ok, peligro: danger });
 }
 
 /* ─── Visor a pantalla completa ───────────────────────────────── */
