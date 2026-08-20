@@ -1656,8 +1656,8 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
    aclaran y llevan su color puesto a mano.   ═══ */
 :root { --pulsa-sale: 190ms; }
 
-.d-bola, .d-cab .avatar, .d-boton-negro, .d-selector-estado, .d-bola-embudo,
-.d-bola-filtros, .d-desplegable, .d-tarjeta, .d-acta-dia,
+.d-bola, .d-cab .avatar, .d-confirmar-x, .d-boton-negro, .d-selector-estado,
+.d-bola-embudo, .d-bola-filtros, .d-desplegable, .d-tarjeta, .d-acta-dia,
 .d-acta-linea, .d-repaso, .d-mensaje, .d-item {
   transition: filter var(--pulsa-sale) var(--sal-estandar),
               background-color var(--pulsa-sale) var(--sal-estandar),
@@ -1665,10 +1665,11 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 }
 
 /* Al apoyar el dedo, sin transición ninguna: instantáneo. */
-.d-bola:active, .d-cab .avatar:active, .d-boton-negro:active,
-.d-selector-estado:active, .d-bola-embudo:active, .d-bola-filtros:active,
-.d-desplegable:active, .d-tarjeta:active, .d-acta-dia:active,
-.d-acta-linea:active, .d-repaso:active, .d-mensaje:active, .d-item:active {
+.d-bola:active, .d-cab .avatar:active, .d-confirmar-x:active,
+.d-boton-negro:active, .d-selector-estado:active, .d-bola-embudo:active,
+.d-bola-filtros:active, .d-desplegable:active, .d-tarjeta:active,
+.d-acta-dia:active, .d-acta-linea:active, .d-repaso:active,
+.d-mensaje:active, .d-item:active {
   transition-duration: 0s;
 }
 
@@ -1677,8 +1678,9 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
    La cara entra aquí con nombre y apellidos porque trae de serie su
    propio :active del diseño de antes, que la encogía a 0,92 y no le
    cambiaba el tono: al lado de las bolas se notaba que iban por libre. */
-.d-bola:active, .d-cab .avatar:active, .d-selector-estado:active,
-.d-bola-embudo:active, .d-bola-filtros:active, .d-desplegable:active {
+.d-bola:active, .d-cab .avatar:active, .d-confirmar-x:active,
+.d-selector-estado:active, .d-bola-embudo:active, .d-bola-filtros:active,
+.d-desplegable:active {
   filter: brightness(0.93); transform: scale(0.96);
 }
 
@@ -2333,21 +2335,46 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 .d-menu-sub { display: block; font-size: 14px; font-weight: 400; color: var(--d-gris); margin-top: 1px; }
 .d-menu-fila.rojo { color: var(--d-rojo); }
 .d-menu-fila.rojo svg { color: var(--d-rojo); }
-/* El «¿seguro?»: la misma tarjeta, con la explicación y los dos
-   botones. El de confirmar arriba, donde cae el pulgar, y el de
-   cancelar debajo en fantasma: si te vas a equivocar, que sea hacia
-   atrás. */
+/* ─── El «¿seguro?» ───
+   La tarjeta con las dos salidas —la que borra y la que conserva— y la
+   X redonda suelta debajo. La X va fuera de la tarjeta a propósito: es
+   irse sin hacer nada, y separarla deja claro que no es una tercera
+   opción. Éste es el modal de todas las confirmaciones de la app. */
+.d-menu-velo.confirmar { justify-content: flex-end; gap: 12px; }
+.d-confirmar-tarjeta {
+  width: min(100%, 480px); overflow: hidden;
+  background: #fcfcfc; border-radius: 22px;
+  animation: rise 0.28s cubic-bezier(0.22, 0.8, 0.25, 1) both;
+}
+.d-confirmar-titulo {
+  margin: 0; padding: 18px 20px 0;
+  text-align: center; font-size: 17px; font-weight: 500; color: var(--d-tinta);
+}
 .d-confirmar-texto {
-  padding: 2px 8px 4px; margin: 0;
-  font-size: 15px; line-height: 22px; color: var(--d-gris);
+  margin: 0; padding: 6px 20px 14px;
+  text-align: center; font-size: 15px; line-height: 21px; color: var(--d-gris);
 }
-.d-confirmar-botones { display: flex; flex-direction: column; gap: 8px; padding: 12px 8px 4px; }
-.d-confirmar-botones .d-fantasma {
-  width: 100%; height: 48px; border-radius: 999px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 16px; font-weight: 500; color: var(--d-tinta);
+.d-confirmar-titulo + .d-confirmar-texto { padding-top: 4px; }
+.d-confirmar-fila {
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+  width: 100%; min-height: 64px; padding: 12px 18px;
+  font: 500 17px var(--d-font); color: var(--d-tinta);
+  background: transparent;
 }
-.d-confirmar-botones .d-boton-negro.rojo { margin-top: 0; }
+/* La raya entre las dos, y la de debajo del texto cuando lo hay: la
+   misma, para que la tarjeta se lea como una lista y no como un cajón
+   con cosas dentro. */
+.d-confirmar-fila + .d-confirmar-fila,
+.d-confirmar-texto + .d-confirmar-fila,
+.d-confirmar-titulo + .d-confirmar-fila { border-top: 1px solid rgba(0, 0, 0, .08); }
+.d-confirmar-fila svg { width: 24px; height: 24px; flex: none; color: var(--d-beige-tinta); }
+.d-confirmar-fila:active { background: var(--d-gris-suave); }
+.d-confirmar-x {
+  width: var(--cab-bola); height: var(--cab-bola); flex: none;
+  border-radius: 999px; display: grid; place-items: center;
+  background: #fff; color: var(--d-tinta);
+}
+.d-confirmar-x svg { width: 24px; height: 24px; }
 
 /* Lo que se cuelgue debajo de las filas —las actas de la vivienda—
    respira lo mismo que ellas. */

@@ -533,11 +533,9 @@ export async function render({ promoId, unidadId }) {
               const seriaLaUltima = !fichas.some((x) => x.guardada)
                 && fichas.filter((x) => !x.fuera).length === 1;
               if (!seriaLaUltima && !await confirmar({
-                titulo: '¿Quitar este repaso?',
                 texto: 'Se quita esta foto del recorrido y no se creará ninguna '
                   + 'tarea con ella. Las demás siguen como están.',
-                ok: 'Quitar',
-                peligro: true,
+                ok: 'Eliminar este repaso',
               })) return;
               f.fuera = true;
               pintarFichas();
@@ -719,12 +717,12 @@ export async function render({ promoId, unidadId }) {
            «no descartes» quiere su recorrido de vuelta, no una pantalla
            vacía. */
         const seguro = await confirmar({
-          titulo: '¿Descartar el recorrido entero?',
-          texto: `Has quitado todas las fichas, así que esto borra el paseo completo: `
+          titulo: 'Has quitado todas las fichas',
+          texto: `Eliminar ahora borra el paseo entero: `
             + `${rec.marcas.length} ${rec.marcas.length === 1 ? 'foto' : 'fotos'} y `
             + `${grabadora.reloj(rec.duracion)} de grabación. No se puede recuperar.`,
-          ok: 'Sí, borrar el recorrido',
-          peligro: true,
+          ok: 'Eliminar el recorrido',
+          conservar: 'Conservar el recorrido',
         });
         if (!seguro) {
           for (const f of fichas) f.fuera = false;

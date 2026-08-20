@@ -369,37 +369,65 @@ export function sheet(build) {
  * El botón de confirmar va arriba, donde cae el pulgar, y el de
  * cancelar debajo: si te vas a equivocar, que sea hacia atrás.
  */
-export function confirmar({ titulo, texto = '', ok = 'Sí, seguir', peligro = false }) {
+export function confirmar({
+  titulo = '',
+  texto = '',
+  ok = 'Eliminar',
+  icono = 'trash',
+  conservar = 'Conservar',
+  iconoConservar = 'corazon',
+} = {}) {
   return new Promise((resolver) => {
     const cerrar = (valor) => { velo.remove(); resolver(valor); };
-    const tarjeta = h('div.d-menu-tarjeta', { role: 'dialog', 'aria-modal': 'true' },
-      h('div.d-menu-cab', null,
-        h('span.d-menu-titulo', null, titulo),
-        h('button.d-menu-x', { 'aria-label': 'Cerrar', onclick: () => cerrar(false) }, icon('x')),
-      ),
+
+    const fila = (rotulo, ico, valor) => h('button.d-confirmar-fila', {
+      onclick: () => cerrar(valor),
+    }, icon(ico), h('span', null, rotulo));
+
+    const tarjeta = h('div.d-confirmar-tarjeta', { role: 'dialog', 'aria-modal': 'true' },
+      /* Título y explicación solo cuando hacen falta. Para «Eliminar
+         imagen» sobra todo: el propio rótulo ya lo dice. Pero cuando lo
+         que se va es media hora de trabajo, hay que decir CUÁNTO se
+         pierde —«3 fotos y 6:12 de grabación»—, que es lo único que
+         frena la mano de verdad. */
+      titulo ? h('p.d-confirmar-titulo', null, titulo) : null,
       texto ? h('p.d-confirmar-texto', null, texto) : null,
-      h('div.d-confirmar-botones', null,
-        h('button.d-boton-negro', {
-          class: peligro ? 'rojo' : '',
-          onclick: () => cerrar(true),
-        }, ok),
-        h('button.d-fantasma', { onclick: () => cerrar(false) }, 'Cancelar'),
-      ),
+      fila(ok, icono, true),
+      fila(conservar, iconoConservar, false),
     );
-    const velo = h('div.d-menu-velo', {
+
+    // La X va suelta debajo de la tarjeta, no dentro: es la salida sin
+    // hacer nada, y separarla de las dos opciones deja claro que no es
+    // una tercera.
+    const velo = h('div.d-menu-velo.confirmar', {
       onclick: (e) => { if (e.target === velo) cerrar(false); },
-    }, tarjeta);
+    },
+      tarjeta,
+      h('button.d-confirmar-x', { 'aria-label': 'Cerrar', onclick: () => cerrar(false) }, icon('x')),
+    );
     document.body.append(velo);
   });
 }
 
 /* El nombre viejo, con los rótulos en inglés que quedaron de antes.
-   Lo llaman quince sitios de la app, así que cambiarlos todos es una
+   Lo llaman quince sitios de la app, así que renombrarlos todos es una
    tarea aparte; mientras tanto, con esto los quince preguntan ya con la
-   tarjeta borrosa de ahora en vez de con la hoja de abajo del diseño
-   anterior. La pregunta no cambia: solo cambia cómo se ve. */
+   tarjeta de ahora. La pregunta no cambia: solo cómo se ve.
+
+   `danger` decide el par de filas. Un borrado se responde «Eliminar» o
+   «Conservar», que es la pareja natural: la vuelta atrás no es
+   «cancelar» —eso suena a deshacer el gesto—, es quedarse con lo que
+   hay. Lo que no borra nada se responde sí o no, y ahí «Cancelar» es
+   la palabra correcta. */
 export function confirmSheet({ title, text, ok = 'Confirmar', danger = false }) {
-  return confirmar({ titulo: title, texto: text, ok, peligro: danger });
+  return confirmar({
+    titulo: title,
+    texto: text,
+    ok,
+    icono: danger ? 'trash' : 'check',
+    conservar: danger ? 'Conservar' : 'Cancelar',
+    iconoConservar: danger ? 'corazon' : 'x',
+  });
 }
 
 /* ─── Visor a pantalla completa ───────────────────────────────── */
