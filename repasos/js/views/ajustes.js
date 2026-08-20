@@ -53,13 +53,15 @@ export async function render() {
 
       // Quién eres. La plantilla no lo trae, pero en una app con diez
       // usuarios que comparten móviles de obra, verlo evita sustos.
-      h('div', { style: { display: 'flex', alignItems: 'center', gap: '14px', margin: '18px 2px 4px' } },
-        avatar(u, { tam: 56 }),
-        h('div.grow', { style: { minWidth: 0 } },
-          h('div', { style: { fontSize: '18px', fontWeight: '500' } }, u?.nombre || 'Sin identificar'),
-          h('div', { style: { fontSize: '14px', color: 'var(--d-gris)' } },
-            u?.email || (u?.local ? 'Modo local' : '')),
-        ),
+      //
+      // Aquí no va la cara: ya está arriba, en la cabecera, a dos dedos
+      // de distancia. Dos veces la misma bolita en la misma pantalla no
+      // añade nada y ensucia el arranque de la columna, así que el
+      // nombre y el correo empiezan en el margen, como todo lo demás.
+      h('div', { style: { margin: '18px 2px 4px' } },
+        h('div', { style: { fontSize: '18px', fontWeight: '500' } }, u?.nombre || 'Sin identificar'),
+        h('div', { style: { fontSize: '14px', color: 'var(--d-gris)' } },
+          u?.email || (u?.local ? 'Modo local' : '')),
       ),
 
       h('div.d-grupo', null,
