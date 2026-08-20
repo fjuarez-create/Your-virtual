@@ -593,27 +593,77 @@ export function caraDeGremio(o, tam = 40) {
  * que no son lo mismo: uno deja las cosas como están y el otro las
  * cambia a vacío.
  */
-export function menuChips(titulo, opciones, { actual = '', quitar = '' } = {}) {
+/* Qué icono lleva cada estancia.
+
+   No es adorno: una lista de diecinueve palabras parecidas —«Baño
+   secundario», «Baño principal», «Dormitorio 1», «Dormitorio 2»— se lee
+   entera cada vez, palabra por palabra, hasta dar con la buena. Con un
+   dibujo delante se recorre con la vista y se encuentra de un golpe.
+
+   Los tres dormitorios comparten cama a propósito: son la misma clase
+   de habitación, y darles iconos distintos inventaría una diferencia
+   que no existe. Lo que los distingue es el número, que va al lado. Los
+   tres baños, en cambio, sí son cosas distintas —un aseo no tiene
+   ducha— y por eso llevan inodoro, ducha y bañera. */
+const ICONO_DE_ESTANCIA = {
+  'Salón': 'sofa',
+  'Cocina': 'cazuela',
+  'Lavadero': 'lavadora',
+  'Aseo': 'inodoro',
+  'Baño secundario': 'ducha',
+  'Baño principal': 'banera',
+  'Sótano': 'archivador',
+  'Pasillo': 'camino',
+  'Escalera': 'peldanos',
+  'Distribuidor': 'cruce',
+  'Entrada': 'puerta',
+  'Dormitorio 1': 'cama',
+  'Dormitorio 2': 'cama',
+  'Dormitorio principal': 'cama',
+  'Vestidor': 'percha',
+  'Acceso exterior': 'puertaAbierta',
+  'Jardín': 'arbol',
+  'Fachada': 'edificio',
+  'Cubierta': 'tejado',
+};
+
+/**
+ * Elegir una cosa de una lista, en la tarjeta de siempre.
+ *
+ * En una sola columna y no en pastillas envueltas. Las pastillas
+ * ahorran alto, pero cada renglón acaba donde le toca según lo larga
+ * que sea la palabra anterior, así que la vista no tiene por dónde
+ * bajar: hay que leerlas todas. Una columna se recorre de un vistazo.
+ *
+ * `opciones` son textos o {id, rotulo, icono}.
+ */
+export function menuLista(titulo, opciones, { actual = '', quitar = '', icono = null } = {}) {
   return new Promise((resolver) => {
     const cerrar = (valor) => { velo.remove(); resolver(valor); };
 
-    const chip = (valor, rotulo, clase = '') => h('button.d-menu-chip', {
+    const fila = (valor, rotulo, ico, clase = '') => h('button.d-menu-fila', {
       class: [clase, valor === actual ? 'puesta' : ''].filter(Boolean).join(' '),
       'aria-pressed': valor === actual ? 'true' : 'false',
       onclick: () => cerrar(valor),
-    }, rotulo);
+    },
+      ico ? icon(ico) : null,
+      h('span.grow', null, rotulo),
+      // El check solo en la elegida: marca dónde estás sin repetir un
+      // adorno en las otras dieciocho.
+      valor === actual ? icon('check') : null,
+    );
 
     const tarjeta = h('div.d-menu-tarjeta', { role: 'dialog', 'aria-modal': 'true' },
       h('div.d-menu-cab', null,
         h('span.d-menu-titulo', null, titulo),
         h('button.d-menu-x', { 'aria-label': 'Cerrar', onclick: () => cerrar(null) }, icon('x')),
       ),
-      h('div.d-menu-chips', null,
-        ...opciones.map((o) => (typeof o === 'string' ? chip(o, o) : chip(o.id, o.rotulo))),
-        // Quitar la elección solo aparece si hay algo que quitar: un
-        // botón que no hace nada enseña a no leer los botones.
-        actual && quitar ? chip('', quitar, 'quitar') : null,
-      ),
+      ...opciones.map((o) => (typeof o === 'string'
+        ? fila(o, o, icono ? icono(o) : null)
+        : fila(o.id, o.rotulo, o.icono))),
+      // Quitar la elección solo aparece si hay algo que quitar: un botón
+      // que no hace nada enseña a no leer los botones.
+      actual && quitar ? fila('', quitar, 'x', 'rojo') : null,
     );
 
     const velo = h('div.d-menu-velo', {
@@ -628,28 +678,16 @@ export function menuChips(titulo, opciones, { actual = '', quitar = '' } = {}) {
  *
  * Antes iba en la hoja de abajo del diseño antiguo, con su barra de
  * CANCELAR en mayúsculas: era el único sitio de la app que seguía
- * abriéndose así, y al lado del resto de modales cantaba. Ahora usa la
- * misma tarjeta que todos: título a la izquierda, aspa a la derecha y
- * las estancias dentro.
- *
- * Van en pastillas y no en filas a propósito: son diecinueve, y en
- * filas serían diecinueve renglones de scroll para elegir una palabra.
- * En pastillas caben casi todas de un vistazo, que es lo que hace falta
- * cuando estás de pie en una casa buscando «Baño principal».
+ * abriéndose así. Ahora usa la misma tarjeta que todos.
  */
 export function hojaZonas(actual) {
-  return menuChips('Estancia', ZONAS, { actual, quitar: 'Sin estancia' });
+  return menuLista('Estancia', ZONAS, {
+    actual,
+    quitar: 'Sin estancia',
+    icono: (z) => ICONO_DE_ESTANCIA[z] || 'casa',
+  });
 }
 
-/**
- * El modal de «bien hecho»: la cara de quien lo hizo, su nombre y una
- * frase. Lo comparten el cierre de un recorrido y el completar una
- * tarea, que es el mismo momento visto desde dos sitios.
- *
- * No devuelve nada ni pregunta nada: se cierra tocando fuera o con el
- * botón. Un modal de celebración que exige una decisión deja de
- * celebrar y se convierte en un trámite más.
- */
 export function hojaBienHecho({ titulo, frase, usuario, boton = 'Seguir' }) {
   // El modal de enhorabuena del Figma: velo con desenfoque, tarjeta
   // clara con su aspa, la cara en grande, el titular, la frase y el
