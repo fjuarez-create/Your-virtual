@@ -89,6 +89,12 @@ export async function render({ promoId, unidadId }) {
      en memoria mientras viva, y en un móvil de obra eso se nota. */
   const urlsSueltas = [];
 
+  /* El reproductor del paseo. Ya no se ve en ninguna pantalla —lo que se
+     usa es el chip «▷ 0:03» de cada foto, que salta a su momento—, pero
+     tiene que estar colgado del documento: en iOS, un <audio> que no
+     está en la página no suena aunque le llames a play(). */
+  let audioSuelto = null;
+
   /* Lo que el repaso deja aquí para que se ejecute antes de salir de la
      pantalla. Sin esto, lo tecleado en el último segundo se quedaba en
      el aire: el apunte va con un respiro de un segundo entre tecla y
@@ -409,9 +415,12 @@ export async function render({ promoId, unidadId }) {
     const audio = (() => {
       if (!(rec.audio instanceof Blob) || !rec.audio.size) return null;
       try {
-        const nodo = h('audio.d-audio', { controls: true, preload: 'metadata' });
+        const nodo = h('audio', { preload: 'metadata', style: { display: 'none' } });
         nodo.src = URL.createObjectURL(rec.audio);
         urlsSueltas.push(nodo.src);
+        audioSuelto?.remove();
+        audioSuelto = nodo;
+        document.body.append(nodo);
         return nodo;
       } catch {
         return null;
@@ -459,25 +468,34 @@ export async function render({ promoId, unidadId }) {
     /* ─── La antesala: el paseo y la IA ───
        Aquí se decide cómo se llenan las fichas: dejando que las escriba
        la IA, o entrando a escribirlas a mano. */
-    const pintarAntesala = () => {
+    const pintarAntesala = (motivo = '') => {
       cab.ponerTitulo(u.nombre);
       cab.ponerVuelta(() => salir());
       const cuantas = vivas().length;
-      /* Con .filter(Boolean) y no a pelo: replaceChildren() convierte
-         un null en la palabra «null» y la escribe en la pantalla, al
-         revés que h(), que se los salta. */
+
+      /* El reproductor de audio grande ya no está, y no es un descuido.
+
+         Estaba duplicado: cada foto lleva su chip «▷ 0:03», que salta al
+         momento exacto de la grabación en que la hiciste. Ése sirve
+         —estás mirando una foto, no te cuadra lo que dice y oyes qué
+         dijiste justo ahí—. La barra de arriba ofrecía oír la grabación
+         entera desde el principio, sin saber qué buscabas. Nadie hace
+         eso, y ocupaba la mejor parte de la pantalla.
+
+         Con .filter(Boolean) y no a pelo: replaceChildren() convierte un
+         null en la palabra «null» y la escribe en la pantalla, al revés
+         que h(), que se los salta. */
       lienzo.replaceChildren(...[
-        h('div.rec-resumen', null,
-          h('p.d-epigrafe', { style: { margin: '0 0 8px' } },
-            `${grabadora.reloj(rec.duracion)} y ${cuantas} ${cuantas === 1 ? 'foto' : 'fotos'}`),
-          audio || h('p.hint', null,
-            'La grabación de voz no se puede reproducir. Las fotos están todas.'),
-        ),
-        tarjetaIA(),
+        h('p.d-saludo', { style: { margin: '10px 0 4px', fontSize: '32px' } },
+          cerradas().length ? 'Sigamos' : 'Ya está grabado'),
+        h('p.sub', { style: { margin: '0 0 4px' } },
+          `${grabadora.reloj(rec.duracion)} y ${cuantas} ${cuantas === 1 ? 'foto' : 'fotos'}`
+          + (cerradas().length ? ` · ${cerradas().length} ${cerradas().length === 1 ? 'lista' : 'listas'}` : '')),
+        tarjetaIA(motivo),
         h('button.d-boton-negro.claro', { style: { marginTop: '14px' }, onclick: () => pintarFicha() },
           cerradas().length
-            ? `Seguir el repaso (${cerradas().length} de ${cuantas} listas)`
-            : `Repasar ${cuantas === 1 ? 'la foto' : `las ${cuantas} fotos`} a mano`),
+            ? `Seguir el repaso (${cerradas().length} de ${cuantas})`
+            : `Escribir ${cuantas === 1 ? 'la tarea' : 'las tareas'} yo`),
       ].filter(Boolean));
     };
 
@@ -784,7 +802,154 @@ export async function render({ promoId, unidadId }) {
     };
 
     /* ─── La tarjeta de la IA ─── */
-    const tarjetaIA = () => {
+    /* ─── Que las escriba la IA ───
+
+       Antes esto era el manejador de un botón, y por eso había que pasar
+       por una pantalla intermedia a pulsarlo. Ahora es una función que
+       se llama sola al terminar de grabar: si has elegido el recorrido
+       con IA, preguntarte si quieres IA es preguntarte lo que ya has
+       contestado.
+
+       Devuelve el motivo del fallo, o null si ha ido bien. */
+    const redactar = async ({ texto = rec.transcripcion || '' } = {}) => {
+      const conFicha = vivas();
+      if (!conFicha.length) return 'No queda ninguna foto que redactar.';
+
+      const hayQueEscuchar = !texto.trim()
+        && rec.audio instanceof Blob && rec.audio.size > 0;
+
+      const paso = pantallaTrabajando([
+        'Escuchando la grabación',
+        'Insertando fotos',
+        'Creando tareas',
+      ]);
+      let rendido = false;
+      paso.alRendirse(() => {
+        rendido = true;
+        toast('Seguimos sin la IA: escribe tú las tareas');
+        pintarFicha();
+      });
+      let nota = '';
+
+      try {
+        /* Primero se escucha, y solo si no hay ya texto: lo que hayas
+           escrito manda sobre la grabación, y lo que ya se transcribió
+           una vez no se vuelve a pagar.
+
+           El subtítulo lleva la duración porque es lo que explica la
+           espera: «son 6:12 de grabación» se entiende solo. */
+        paso.ir(0, hayQueEscuchar
+          ? `Son ${grabadora.reloj(rec.duracion)} de grabación`
+          : 'Ya estaba escrito de antes');
+        if (hayQueEscuchar) {
+          try {
+            const t = await api.oidoTranscribir(rec.audio, rec.duracion);
+            texto = t.texto || '';
+            rec.transcripcion = texto;
+            await store.guardarRecorrido(rec);
+          } catch (e) {
+            // Que falle el oído no puede dejarte sin tareas: las fotos
+            // siguen ahí y de ellas ya sale un parte.
+            nota = e?.codigo === 'sin-clave'
+              ? ''
+              : ` No se ha podido escuchar la grabación: ${e?.message || 'ha fallado'}`;
+          }
+        }
+
+        // Las fotos se encogen aquí, en el móvil: lo que sube por la
+        // línea de la obra son unos cientos de kilobytes y no ocho
+        // megas, y en la API se paga por lo que ocupa cada una.
+        const conFoto = conFicha.slice(0, TOPE_FOTOS);
+        const fotos = [];
+        for (const f of conFoto) {
+          // El único paso con cuenta de verdad, y por eso el subtítulo
+          // la lleva: un número que avanza es lo que acorta una espera.
+          paso.ir(1, `Foto ${fotos.length + 1} de ${conFoto.length}`,
+            (fotos.length + 1) / conFoto.length);
+          try {
+            fotos.push({ id: f.marca.id, b64: await paraMirar(f.marca.blob) });
+          } catch { /* si una foto no se deja leer, se manda sin ella */ }
+        }
+
+        // Aquí no hay nada que contar, así que se dice la verdad en vez
+        // de prometer «unos segundos» que luego son cuarenta.
+        paso.ir(2, 'Es lo que más tarda');
+        const r = await api.claudeRedactar(
+          texto.trim(),
+          conFicha.map((f) => ({ id: f.marca.id, ms: f.marca.ms })),
+          OFICIOS.map((o) => ({ id: o.id, nombre: o.nombre })),
+          fotos,
+          ZONAS,
+          juntaFotos(store.sesion()),
+        );
+
+        const porId = new Map(conFicha.map((f) => [String(f.marca.id), f]));
+        let dichas = 0;
+        let vistas = 0;
+        for (const ficha of r.fichas || []) {
+          const f = porId.get(String(ficha.id));
+          if (!f) continue;
+          const t = String(ficha.texto || '').trim();
+          f.confianza = ficha.confianza || null;
+          if (!t) continue;
+          f.texto = t;
+          // Lo redactado cuenta como decidido: el contagio de gremios
+          // no debe pisarlo después.
+          if (ficha.oficio && OFICIOS.some((o) => o.id === ficha.oficio)) {
+            f.oficio = ficha.oficio;
+            f.tocado = true;
+          }
+          // La estancia solo se acepta si está en la lista cerrada: un
+          // «baño de arriba» inventado rompería el filtro, que es justo
+          // para lo que existe el campo.
+          if (ficha.zona && ZONAS.includes(ficha.zona)) {
+            f.zona = ficha.zona;
+            f.zonaTocada = true;
+          }
+          /* Las otras fotos del mismo remate se meten en esta ficha y
+             dejan de tener la suya. La tarea saldrá con las dos —o las
+             tres— dentro, que es lo que se quiere ver al abrirla: el
+             sitio de lejos y el defecto de cerca. */
+          f.extras = [];
+          for (const otro of ficha.con || []) {
+            const g = porMarca.get(String(otro));
+            if (!g || g === f || g.fuera || g.absorbida) continue;
+            g.absorbida = true;
+            f.extras.push(g.marca.id);
+          }
+          if (ficha.origen === 'foto') vistas += 1; else dichas += 1;
+        }
+
+        /* Lo redactado se apunta en el acto, y también que ya se ha
+           intentado. Cuesta dinero y medio minuto: no puede depender de
+           que no entre una llamada en los diez segundos siguientes, ni
+           volver a dispararse solo cada vez que entras en la pantalla. */
+        rec.redactado = true;
+        await apuntar({ ya: true });
+        if (rendido) return null;   // se cansó de esperar; ya está en las fichas
+        paso.quitar();
+        toast(resumen(dichas, vistas, conFicha.length, conFicha.length - conFoto.length) + nota);
+        mirando = abiertas()[0] || vivas()[0];
+        pintarFicha();
+        return null;
+      } catch (e) {
+        paso.quitar();
+        if (rendido) return null;
+        // Se apunta el intento aunque falle: si no, volver a entrar
+        // dispararía otra llamada sola, y la de antes ya está pagada.
+        rec.redactado = true;
+        await apuntar({ ya: true });
+        return e?.status === 404
+          ? 'El servidor todavía no tiene esta parte instalada.'
+          : (e?.message || 'No se ha podido redactar.');
+      }
+    };
+
+    /* ─── La tarjeta de la IA ───
+       Ya no es la puerta de entrada: solo se ve desde la antesala, que
+       es a donde se cae cuando la IA falla o cuando vuelves a un
+       recorrido que se quedó sin redactar. */
+    const tarjetaIA = (motivo = '') => {
       if (!api.HAY_SERVIDOR) return null;
 
       const campo = h('textarea.d-area', {
@@ -800,130 +965,17 @@ export async function render({ promoId, unidadId }) {
         campo.value = rec.transcripcion;
         requestAnimationFrame(crecerCampo);
       }
+
       const aviso = h('p.hint');
+      if (motivo) { aviso.className = 'hint err'; aviso.textContent = motivo; }
+
       const boton = h('button.d-boton-negro', null,
-        icon('cerebro'), h('span.grow', null,
-          rec.fichas?.some((x) => x.texto) ? 'Volver a redactar' : 'Redactar las tareas'));
-      const rotulo = boton.querySelector('.grow');
+        icon('cerebro'),
+        h('span.grow', null, motivo ? 'Volver a intentarlo' : 'Que las escriba la IA'));
 
       boton.addEventListener('click', async () => {
-        const conFicha = vivas();
-        if (!conFicha.length) return;
-
-        /* Los tres pasos, siempre los tres a la vista aunque alguno se
-           salte: ver que «escuchar» ya está hecho es información, y una
-           lista que cambia de largo a mitad de la espera desorienta. */
-        const hayQueEscuchar = !campo.value.trim()
-          && rec.audio instanceof Blob && rec.audio.size > 0;
-        const paso = pantallaTrabajando([
-          'Escuchar la grabación',
-          'Preparar las fotos',
-          'Escribir las tareas',
-        ]);
-        let rendido = false;
-        paso.alRendirse(() => { rendido = true; toast('Seguimos sin la IA: escribe tú las tareas'); pintarFicha(); });
-        let nota = '';
-
-        try {
-          // Primero se escucha, y solo si no hay ya texto: lo que haya
-          // escrito la persona manda sobre la grabación, y lo que ya se
-          // transcribió una vez no se vuelve a pagar.
-          paso.ir(hayQueEscuchar ? 0 : 1, hayQueEscuchar
-            ? 'Pasando a texto lo que dijiste.'
-            : 'Ya estaba escrito: no se vuelve a escuchar.');
-          if (hayQueEscuchar) {
-            try {
-              const t = await api.oidoTranscribir(rec.audio, rec.duracion);
-              campo.value = t.texto || '';
-              crecerCampo();
-              rec.transcripcion = campo.value;
-              await store.guardarRecorrido(rec);
-            } catch (e) {
-              // Que falle el oído no puede dejarte sin tareas: las fotos
-              // siguen ahí y de ellas ya sale un parte.
-              nota = e?.codigo === 'sin-clave'
-                ? ''
-                : ` No se ha podido escuchar la grabación: ${e?.message || 'ha fallado'}`;
-            }
-          }
-
-          // Las fotos se encogen aquí, en el móvil: lo que sube por la
-          // línea de la obra son unos cientos de kilobytes y no ocho
-          // megas, y en la API se paga por lo que ocupa cada una.
-          const conFoto = conFicha.slice(0, TOPE_FOTOS);
-          const fotos = [];
-          for (const f of conFoto) {
-            paso.ir(1, `Foto ${fotos.length + 1} de ${conFoto.length}`, (fotos.length + 1) / conFoto.length);
-            try {
-              fotos.push({ id: f.marca.id, b64: await paraMirar(f.marca.blob) });
-            } catch { /* si una foto no se deja leer, se manda sin ella */ }
-          }
-
-          paso.ir(2, 'Escribiendo una tarea de cada foto.');
-          const r = await api.claudeRedactar(
-            campo.value.trim(),
-            conFicha.map((f) => ({ id: f.marca.id, ms: f.marca.ms })),
-            OFICIOS.map((o) => ({ id: o.id, nombre: o.nombre })),
-            fotos,
-            ZONAS,
-            juntaFotos(store.sesion()),
-          );
-
-          const porId = new Map(conFicha.map((f) => [String(f.marca.id), f]));
-          let dichas = 0;
-          let vistas = 0;
-          for (const ficha of r.fichas || []) {
-            const f = porId.get(String(ficha.id));
-            if (!f) continue;
-            const t = String(ficha.texto || '').trim();
-            f.confianza = ficha.confianza || null;
-            if (!t) continue;
-            f.texto = t;
-            // Lo redactado cuenta como decidido: el contagio de gremios
-            // no debe pisarlo después.
-            if (ficha.oficio && OFICIOS.some((o) => o.id === ficha.oficio)) {
-              f.oficio = ficha.oficio;
-              f.tocado = true;
-            }
-            // La estancia solo se acepta si está en la lista cerrada: un
-            // «baño de arriba» inventado rompería el filtro, que es
-            // justo para lo que existe el campo.
-            if (ficha.zona && ZONAS.includes(ficha.zona)) {
-              f.zona = ficha.zona;
-              f.zonaTocada = true;
-            }
-            /* Las otras fotos del mismo remate se meten en esta
-               ficha y dejan de tener la suya. La tarea saldrá con las
-               dos —o las tres— dentro, que es lo que se quiere ver al
-               abrirla: el sitio de lejos y el defecto de cerca. */
-            f.extras = [];
-            for (const otro of ficha.con || []) {
-              const g = porMarca.get(String(otro));
-              if (!g || g === f || g.fuera || g.absorbida) continue;
-              g.absorbida = true;
-              f.extras.push(g.marca.id);
-            }
-            if (ficha.origen === 'foto') vistas += 1; else dichas += 1;
-          }
-
-          /* Lo redactado se apunta en el acto. Cuesta dinero y medio
-             minuto de espera: no puede depender de que no entre una
-             llamada en los diez segundos siguientes. */
-          await apuntar({ ya: true });
-          if (rendido) return;   // se cansó de esperar y ya está en las fichas
-          paso.quitar();
-          toast(resumen(dichas, vistas, conFicha.length, conFicha.length - conFoto.length) + nota);
-          mirando = abiertas()[0] || vivas()[0];
-          pintarFicha();
-        } catch (e) {
-          paso.quitar();
-          if (rendido) return;
-          aviso.className = 'hint err';
-          aviso.textContent = e?.status === 404
-            ? 'El servidor todavía no tiene esta parte instalada.'
-            : (e?.message || 'No se ha podido redactar.');
-          rotulo.textContent = 'Volver a intentarlo';
-        }
+        const fallo = await redactar({ texto: campo.value });
+        if (fallo) pintarAntesala(fallo);
       });
 
       return h('div.rec-dictado', null,
@@ -937,7 +989,30 @@ export async function render({ promoId, unidadId }) {
       );
     };
 
-    pintarAntesala();
+    /* ─── Por dónde se entra ───
+
+       El recorrido tiene que terminar en las tareas, no en una sala de
+       espera con un botón. Así que aquí no se pregunta nada que ya esté
+       contestado:
+
+         · si ya hay algo escrito, a las fichas;
+         · si no, y la IA está disponible y no se ha intentado aún, se
+           dispara sola y de ahí a las fichas;
+         · y solo si falla —o si no hay IA, o si vuelves a un recorrido
+           que se quedó a medias— aparece la antesala, que pasa a ser lo
+           que debía: el plan B, no el peaje. */
+    const arranque = async () => {
+      const algoEscrito = fichas.some((f) => f.texto);
+      if (algoEscrito) { pintarFicha(); return; }
+      if (!api.HAY_SERVIDOR || rec.redactado) {
+        pintarAntesala();
+        return;
+      }
+      const fallo = await redactar();
+      if (fallo) pintarAntesala(fallo);
+    };
+
+    arranque();
   };
 
   pintarPreparado();
@@ -961,6 +1036,8 @@ export async function render({ promoId, unidadId }) {
       // a hacer solo. La cámara se suelta igual justo después.
       guardarAlSalir?.();
       guardarAlSalir = null;
+      audioSuelto?.remove();
+      audioSuelto = null;
       document.removeEventListener('visibilitychange', alTapar);
       visorActual?.remove();
       visorActual = null;

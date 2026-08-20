@@ -2859,73 +2859,17 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
    por eso tiene que ganárselo: se ven los tres pasos, cuál va, la
    cuenta de fotos y una barra que avanza. Un aro girando y nada más
    haría que un minuto se sintiera como tres.  ═══ */
-.d-trabajando {
-  position: fixed; inset: 0; z-index: 90;
-  background: var(--d-fondo);
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center; gap: 26px;
-  padding: 32px 26px calc(env(safe-area-inset-bottom) + 26px);
-  animation: rise 0.3s cubic-bezier(0.22, 0.8, 0.25, 1) both;
-}
-.d-trabajando-centro {
-  display: flex; flex-direction: column; align-items: center;
-  width: min(100%, 420px);
-}
 
 /* El cerebro dentro de un aro que da vueltas: el mismo icono que el
    botón que se acaba de pulsar, para que se vea que es lo suyo lo que
    está pasando. */
-.d-trabajando-aro {
-  position: relative; width: 96px; height: 96px; flex: none;
-  display: grid; place-items: center; color: var(--d-tinta);
-}
-.d-trabajando-aro::before {
-  content: ''; position: absolute; inset: 0; border-radius: 50%;
-  border: 3px solid #e4e2df; border-top-color: var(--d-tinta);
-  animation: gira 900ms linear infinite;
-}
 @keyframes gira { to { transform: rotate(360deg); } }
 
-.d-trabajando-pasos { list-style: none; margin: 26px 0 0; padding: 0; width: 100%; }
-.d-trabajando-paso {
-  display: flex; align-items: center; gap: 12px;
-  padding: 9px 0; font-size: 17px; color: #b9b4ad;
-  transition: color var(--mov-medio) var(--sal-estandar);
-}
-.d-trabajando-paso .marca {
-  width: 24px; height: 24px; flex: none; border-radius: 50%;
-  display: grid; place-items: center;
-  background: #e4e2df; color: transparent;
-  transition: background var(--mov-medio) var(--sal-estandar),
-              color var(--mov-medio) var(--sal-estandar);
-}
-.d-trabajando-paso .marca svg { width: 15px; height: 15px; }
-.d-trabajando-paso.ahora { color: var(--d-tinta); font-weight: 500; }
-.d-trabajando-paso.ahora .marca { background: var(--d-tinta); }
-.d-trabajando-paso.hecho { color: var(--d-beige-tinta); }
-.d-trabajando-paso.hecho .marca { background: var(--d-beige-tinta); color: #fff; }
 
-.d-trabajando-detalle {
-  margin: 14px 0 0; min-height: 22px; width: 100%;
-  font-size: 15px; line-height: 22px; color: var(--d-gris);
-}
-.d-trabajando-barra {
-  width: 100%; height: 6px; margin-top: 16px;
-  border-radius: 999px; background: #e4e2df; overflow: hidden;
-}
-.d-trabajando-barra .tira {
-  display: block; width: 0; height: 100%; border-radius: 999px;
-  background: var(--d-tinta);
-  transition: width var(--mov-largo) var(--sal-estandar);
-}
 
 /* La salida, que aparece a los 75 segundos. Tarda a propósito: si
    saliera enseguida, media obra la pulsaría por impaciencia y se
    quedaría sin lo que ya está pagado. */
-.d-trabajando-salida {
-  height: 48px; padding: 0 22px; border-radius: 999px;
-  background: transparent; color: var(--d-gris); font-size: 15px;
-}
 
 /* Las otras fotos del mismo remate, cuando la IA ha agrupado varias.
    Van pequeñas y debajo de la principal: son «esto también es esto»,
@@ -2943,4 +2887,69 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
   width: 22px; height: 22px; border-radius: 999px;
   display: grid; place-items: center;
   background: rgba(0, 0, 0, .55); color: #fff;
+}
+
+
+/* ═══ LA PANTALLA DE LA MAGIA ════════════════════════════════════
+
+   Mientras la IA escucha y redacta. Es la única pantalla negra de toda
+   la app, y es a propósito: con lo demás apagado, el minuto se lee como
+   «está pasando algo» y no como «se ha colgado».
+
+   La nebulosa es un WebP animado de 887 KB —el GIF original pesaba 5,1
+   MB, y para blanco sobre negro el GIF además hace bandas—. Va a tamaño
+   fijo y centrada; el pie se queda abajo, donde el pulgar no lo tapa. */
+.d-magia {
+  position: fixed; inset: 0; z-index: 90;
+  background: #000; color: #fff;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: space-between;
+  padding: 12vh 24px calc(env(safe-area-inset-bottom) + 42px);
+  animation: magia-entra 320ms var(--sal-estandar) both;
+}
+@keyframes magia-entra { from { opacity: 0; } }
+
+.d-magia-nebulosa {
+  flex: 1; display: grid; place-items: center; width: 100%; min-height: 0;
+}
+.d-magia-nebulosa img {
+  width: min(78vw, 320px); height: auto; display: block;
+  /* El WebP viene con el negro dentro, así que se funde con el fondo en
+     lugar de recortarse en un cuadrado que se vería en los bordes. */
+  mix-blend-mode: screen;
+}
+
+.d-magia-pie { width: 100%; max-width: 420px; text-align: center; }
+.d-magia-titulo {
+  font-size: 26px; line-height: 34px; font-weight: 500;
+  letter-spacing: -0.02em; margin: 0;
+}
+.d-magia-sub {
+  margin: 8px 0 0; font-size: 15px; line-height: 22px;
+  color: rgba(255, 255, 255, .45);
+  /* Alto reservado: el subtítulo cambia en cada paso y sin esto el
+     título daría un salto cada vez que pasa de una línea a ninguna. */
+  min-height: 22px;
+}
+.d-magia-barra {
+  margin-top: 26px; height: 4px; border-radius: 999px;
+  background: rgba(255, 255, 255, .16); overflow: hidden;
+}
+.d-magia-barra .tira {
+  display: block; height: 100%; width: 0; border-radius: 999px;
+  background: #fff;
+  transition: width var(--mov-largo) var(--sal-estandar);
+}
+.d-magia-salida {
+  margin-top: 22px; min-height: 44px; padding: 0 18px;
+  font-size: 15px; color: rgba(255, 255, 255, .5);
+  background: none; border-radius: 999px;
+}
+.d-magia-salida:active { color: #fff; }
+
+/* Con el movimiento reducido, la nebulosa se queda quieta en su primer
+   fotograma: la pantalla sigue contando lo mismo con el título, el
+   subtítulo y la barra. */
+@media (prefers-reduced-motion: reduce) {
+  .d-magia-nebulosa img { animation-play-state: paused; }
 }

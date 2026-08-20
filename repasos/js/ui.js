@@ -624,48 +624,51 @@ export function trasLaOnda(fn) {
 
 
 /* ═══════════════════════════════════════════════════════════════
-   LA PANTALLA DE «ESTOY TRABAJANDO»
+   LA PANTALLA DE LA MAGIA
    ═══════════════════════════════════════════════════════════════ */
 
 /**
- * Para las esperas largas de verdad: la IA escuchando la grabación y
- * redactando las tareas, que son treinta o sesenta segundos.
+ * La espera larga de la IA: negro, la nebulosa girando en el centro, el
+ * paso en el que va y la barra abajo.
  *
- * Un aro girando no basta a partir de diez segundos: sin nada que
- * avance, un minuto se siente como tres y da la impresión de que la app
- * se ha colgado. Aquí se ven los pasos, cuál va por dónde y la cuenta de
- * fotos, que ya la sabe la app y antes solo salía en gris pequeño debajo
- * de un botón apagado —que en esta app significa «no puedes pulsar
- * esto», no «estoy trabajando»—.
+ * Es la única pantalla negra de toda la app, y es a propósito: mientras
+ * la máquina trabaja, tú no pintas nada ahí. Al apagar todo lo demás, el
+ * minuto se lee como «está pasando algo» en vez de como «se ha colgado».
  *
- * `pasos` son los rótulos, en orden. Se maneja con:
- *   ir(n, detalle, fraccion)  pone el paso n en marcha y los de antes
- *                             como hechos; `fraccion` (0…1) mueve la
- *                             barra dentro del paso.
- *   quitar()                  la retira.
+ * Cada paso trae su propio subtítulo, y eso importa más de lo que
+ * parece. Un subtítulo fijo —«dame unos segundos»— deja de leerse a los
+ * dos segundos y se vuelve decoración; peor aún, si el rótulo de arriba
+ * cambia y el de abajo no, el ojo lee el bloque entero como quieto y la
+ * espera se hace más larga. Así que abajo va lo que el de arriba no
+ * puede decir: cuánto dura la grabación, por qué foto va. Un número que
+ * avanza es lo único que acorta una espera de verdad.
  *
- * A los 75 segundos aparece una salida. No antes: si sale enseguida,
- * la mitad de la gente la pulsa por impaciencia y se queda sin lo que
- * ya estaba pagado. Y si nunca sale, una llamada que no responde te
+ * Se maneja con:
+ *   ir(n, subtitulo, fraccion)   pone en marcha el paso n; `fraccion`
+ *                                (0…1) mueve la barra dentro del paso.
+ *   quitar()                     la retira.
+ *   alRendirse(fn)               qué hacer si se pulsa la salida.
+ *
+ * La salida aparece a los 75 segundos. No antes: si sale enseguida, la
+ * mitad de la gente la pulsa por impaciencia y se queda sin lo que ya
+ * está pagado. Y si no saliera nunca, una llamada que no contesta te
  * deja la pantalla secuestrada.
  */
 export function pantallaTrabajando(pasos, { salida = 'Seguir sin la IA' } = {}) {
-  const filas = pasos.map((rotulo) => h('li.d-trabajando-paso', null,
-    h('span.marca', null, icon('check', 16)),
-    h('span.rotulo', null, rotulo),
-  ));
-  const detalle = h('p.d-trabajando-detalle');
-  const barra = h('span.tira');
-  const escape = h('button.d-trabajando-salida', { style: { visibility: 'hidden' } }, salida);
+  const titulo = h('h2.d-magia-titulo');
+  const sub = h('p.d-magia-sub');
+  const tira = h('span.tira');
+  const escape = h('button.d-magia-salida', { style: { visibility: 'hidden' } }, salida);
 
-  const capa = h('div.d-trabajando', { role: 'status', 'aria-live': 'polite' },
-    h('div.d-trabajando-centro', null,
-      h('div.d-trabajando-aro', null, icon('cerebro', 34)),
-      h('ol.d-trabajando-pasos', null, ...filas),
-      detalle,
-      h('div.d-trabajando-barra', null, barra),
+  const capa = h('div.d-magia', { role: 'status', 'aria-live': 'polite' },
+    h('div.d-magia-nebulosa', null,
+      h('img', { src: 'assets/magia.webp', alt: '', width: 500, height: 500 })),
+    h('div.d-magia-pie', null,
+      titulo,
+      sub,
+      h('div.d-magia-barra', null, tira),
+      escape,
     ),
-    escape,
   );
 
   let rendido = null;
@@ -676,16 +679,13 @@ export function pantallaTrabajando(pasos, { salida = 'Seguir sin la IA' } = {}) 
   document.body.append(capa);
 
   return {
-    ir(n, texto = '', fraccion = 0) {
-      filas.forEach((fila, i) => {
-        fila.classList.toggle('hecho', i < n);
-        fila.classList.toggle('ahora', i === n);
-      });
-      detalle.textContent = texto;
-      // La barra avanza por pasos, y dentro de cada paso por lo que se
-      // sepa: las fotos se cuentan, escuchar y redactar no.
+    ir(n, subtitulo = '', fraccion = 0) {
+      titulo.textContent = pasos[n] || '';
+      sub.textContent = subtitulo;
+      // La barra avanza por pasos y, dentro de cada uno, por lo que se
+      // sepa: las fotos se cuentan; escuchar y redactar, no.
       const pct = ((n + Math.min(1, Math.max(0, fraccion))) / pasos.length) * 100;
-      barra.style.width = pct.toFixed(1) + '%';
+      tira.style.width = pct.toFixed(1) + '%';
     },
     alRendirse(fn) { rendido = fn; },
     quitar,
