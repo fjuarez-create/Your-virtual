@@ -933,6 +933,12 @@ export function bannerAvance(pct, { total = 0 } = {}) {
   const t = tramoAvance(pct);
   const valor = Math.max(0, Math.min(100, Math.round(pct || 0)));
   return h(`div.d-avance-banda.tramo-${t.clase}`, null,
+    // El mordisco se dibuja con las mismas piezas que el banner de la
+    // portada. Antes se recortaba con una máscara circular, y no era lo
+    // mismo: la máscara agujerea, y donde el agujero llegaba al borde
+    // dejaba una punta. El mordisco de verdad remata en curva.
+    h('span.d-mordida'),
+    h('span.d-mordida-esquina'),
     h('span.d-avance-texto', null,
       h('span.d-avance-rotulo', null, total ? t.frase : 'Sin repasos todavía'),
       h('span.d-avance-cifra', null, `${valor}%`),

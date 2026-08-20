@@ -1631,8 +1631,9 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
   mask: radial-gradient(circle 35.5px at 100% 100%, transparent 99%, #000 101%);
 }
 .d-banner { --mordida: var(--banner, var(--d-beige)); }
-/* En el banner, bajito, la franja acaba en media pastilla. */
-.d-banner .d-mordida::before { border-radius: 20px 16.5px 16.5px 0; }
+/* En los banners, bajitos, la franja acaba en media pastilla. */
+.d-banner .d-mordida::before,
+.d-avance-banda .d-mordida::before { border-radius: 20px 16.5px 16.5px 0; }
 .d-banner-texto { position: relative; display: block; padding: 13px 76px 13px 16px; }
 .d-banner-rotulo { display: block; font-size: 16px; line-height: 24px; font-weight: 500; }
 .d-banner-cifra { display: block; font-size: 32px; font-weight: 500; line-height: 40px; margin-top: 4px; }
@@ -1641,17 +1642,13 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
    Beige siempre, la frase arriba y el porcentaje grande debajo, con
    el anillo asomando por la esquina de abajo a la derecha.
 
-   El hueco del anillo se recorta con una máscara y no con el mordisco
-   de las tarjetas: aquel está cortado a mano para los 177 px de una
-   tarjeta de vivienda y en una banda de 94 deja un escalón. La
-   máscara da la curva exacta sea cual sea el alto. */
-.d-avance-banda { position: relative; }
-.d-avance-banda::before {
-  content: ''; position: absolute; inset: 0;
-  background: var(--d-beige); border-radius: 20px;
-  -webkit-mask: radial-gradient(circle 33.5px at calc(100% - 26.5px) calc(100% - 27.5px), transparent 98%, #000 100%);
-  mask: radial-gradient(circle 33.5px at calc(100% - 26.5px) calc(100% - 27.5px), transparent 98%, #000 100%);
-}
+   El mordisco es el mismo que el del banner de la portada, pieza por
+   pieza. Antes se recortaba con una máscara circular y no quedaba
+   igual: una máscara agujerea, y donde el agujero se comía el borde
+   dejaba una punta en vez de rematar en curva. Como la banda mide lo
+   mismo que aquel banner —95 px— las medidas del mordisco valen tal
+   cual y no hay nada que recalcular. */
+.d-avance-banda { position: relative; --mordida: var(--d-beige); }
 .d-avance-texto { position: relative; display: block; padding: 13px 76px 13px 16px; }
 .d-avance-rotulo { display: block; font-size: 16px; line-height: 24px; font-weight: 500; color: var(--d-tinta); }
 .d-avance-cifra {

@@ -1065,19 +1065,25 @@ export async function datosHome(promoId) {
 
   const muro = [];
   for (const t of tareas) {
-    const cuando = t.estadoEn || t.actualizado || t.creado;
     const ult = ultimoComentario.get(t.id);
+    const movida = t.estadoEn || t.actualizado || t.creado;
+    // Lo último que le ha pasado a la tarea puede ser un cambio de
+    // estado o una nota escrita después. Si mandara siempre el cambio
+    // de estado, una nota de hoy en una tarea verificada la semana
+    // pasada saldría con la fecha de entonces —y con el nombre de
+    // quien verificó—, así que aparecería enterrada al final o no
+    // aparecería siquiera. En una actividad reciente eso es mentir.
+    const porNota = !!ult?.creado && ult.creado > movida;
     muro.push({
       tipo: 'tarea',
       tareaId: t.id,
       listaId: t.listaId,
       unidadId: casaDe.get(t.listaId),
       estado: t.estado,
-      cuando,
-      quien: t.estado !== 'pendiente' && t.estadoPor
-        ? t.estadoPor
-        : t.creadoPorNombre,
-      quienId: t.estado !== 'pendiente' ? null : t.creadoPor,
+      cuando: porNota ? ult.creado : movida,
+      quien: porNota ? ult.creadoPorNombre
+        : (t.estado !== 'pendiente' && t.estadoPor ? t.estadoPor : t.creadoPorNombre),
+      quienId: porNota ? ult.creadoPor : (t.estado !== 'pendiente' ? null : t.creadoPor),
       texto: ult?.texto || t.texto,
     });
   }
@@ -1101,7 +1107,11 @@ export async function datosHome(promoId) {
     ultimaSinVerificar,
     caras,
     sinVerificar: sinVerificar.length,
-    muro: muro.slice(0, 14),
+    // Se devuelven de sobra —60— porque la portada junta las ráfagas
+    // antes de enseñarlas: verificar veinte repasos seguidos es UNA
+    // línea, y si aquí se cortara en catorce, esa ráfaga se comería la
+    // actividad de los días anteriores.
+    muro: muro.slice(0, 60),
   };
 }
 

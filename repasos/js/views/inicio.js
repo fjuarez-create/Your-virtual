@@ -47,6 +47,44 @@ function banner({ clase, rotulo, cifra, adonde, alPinchar }) {
   );
 }
 
+/* Cuántos minutos seguidos cuentan como la misma tanda de trabajo. */
+const RAFAGA = 10 * 60 * 1000;
+
+/**
+ * Junta las ráfagas. Verificar veinte repasos de una vivienda es una
+ * sola cosa que ha pasado, y contarla veinte veces tapa todo lo demás:
+ * los rechazos del día anterior, lo que escribió alguien, la tarea que
+ * acaba de entrar. Se juntan las entradas seguidas que comparten
+ * persona, vivienda y estado y caen en el mismo rato.
+ */
+function juntarRafagas(muro) {
+  const salida = [];
+  for (const n of muro) {
+    const previa = salida[salida.length - 1];
+    const misma = previa && previa.tipo === 'tarea' && n.tipo === 'tarea'
+      && previa.estado === n.estado && previa.quien === n.quien
+      && previa.unidadId === n.unidadId
+      && Math.abs(new Date(previa.cuando) - new Date(n.cuando)) <= RAFAGA;
+    if (misma) {
+      previa.cuantas += 1;
+      // Si los textos no coinciden no se enseña ninguno: poner el de
+      // uno solo haría creer que ese es el motivo de los demás.
+      if (previa.texto !== n.texto) previa.mismoTexto = false;
+      continue;
+    }
+    salida.push({ ...n, cuantas: 1, mismoTexto: true });
+  }
+  return salida;
+}
+
+/* Cómo se lee una tanda: «6 repasos rechazados». */
+const PARTICIPIO = {
+  rechazada: 'rechazados',
+  verificada: 'verificados',
+  resuelta: 'completados',
+  pendiente: 'nuevos',
+};
+
 /** En el muro: «Andrea, ayer a las 11:40 h». */
 function cuandoMuro(nombre, iso) {
   const pila = String(nombre || '').trim().split(/\s+/)[0] || 'Alguien';
@@ -73,16 +111,20 @@ export async function render() {
 
   const pct = c.total ? Math.round((100 * c.hechas) / c.total) : 0;
 
-  /* ─── El muro ─── */
-  const muro = h('div.d-muro', null, d.muro.map((n) => {
+  /* ─── La actividad reciente ─── */
+  const actividad = juntarRafagas(d.muro).slice(0, 14);
+  const muro = h('div.d-muro', null, actividad.length ? actividad.map((n) => {
     const e = n.estado ? estado(n.estado) : null;
     const clase = n.estado === 'rechazada' ? 'rechazada'
       : n.estado === 'verificada' ? 'verificada'
       : n.estado === 'resuelta' ? 'completada' : 'pendiente';
     const villa = n.unidadId ? (unidad(n.unidadId)?.nombre || '') : 'Brassie';
-    const abre = n.tipo === 'tarea'
-      ? () => ir(`#/l/${n.listaId}/t/${n.tareaId}`)
-      : null;
+    const tanda = n.cuantas > 1;
+    // Una tanda no puede abrir «la» tarea, porque son varias: lleva a
+    // la lista de ese estado, que es donde están todas.
+    const abre = n.tipo !== 'tarea' ? null
+      : tanda ? () => ir(`#/tareas/${n.estado}`)
+        : () => ir(`#/l/${n.listaId}/t/${n.tareaId}`);
     return h(abre ? 'button.d-nota' : 'div.d-nota', { class: clase, onclick: abre },
       h('div.d-nota-cab', null,
         avatar(store.persona(n.quienId, n.quien), { tam: 36 }),
@@ -92,9 +134,16 @@ export async function render() {
         ),
         e && n.tipo === 'tarea' ? h('span.d-nota-estado', null, e.nombre) : null,
       ),
-      h('p.d-nota-texto', null, n.texto || 'Sin texto.'),
+      tanda
+        ? h('p.d-nota-texto', null,
+            h('strong', null, `${n.cuantas} repasos ${PARTICIPIO[n.estado] || 'movidos'}`),
+            n.mismoTexto && n.texto ? ` · ${n.texto}` : '')
+        : h('p.d-nota-texto', null, n.texto || 'Sin texto.'),
     );
-  }));
+  }) : h('p.d-nota', null,
+    h('p.d-nota-texto', { style: { margin: '0', color: 'var(--d-gris)' } },
+      'Aquí va apareciendo lo que pasa en la obra: repasos nuevos, '
+      + 'completados, verificados y rechazados, y lo que se escriba aquí abajo.')));
 
   /* ─── Escribir en el muro ─── */
   const caja = h('input', { type: 'text', placeholder: 'Escribe lo que quieras contar…', autocapitalize: 'sentences' });
@@ -156,7 +205,7 @@ export async function render() {
         alPinchar: () => ir('#/tareas/pendiente'),
       }),
 
-      h('p.d-epigrafe', null, 'Comentarios y feedback'),
+      h('p.d-epigrafe', null, 'Actividad reciente'),
       muro,
       h('div.d-escribir', null,
         caja,
