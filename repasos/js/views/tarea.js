@@ -131,9 +131,15 @@ export async function render({ listaId, tareaId }) {
   if (!fotosPendientes.has(t.id)) fotosPendientes.set(t.id, []);
   const fotosNuevas = fotosPendientes.get(t.id);
   const carrete = h('div.d-carrusel', { style: { display: 'none' } });
-  const botonFoto = h('button.d-fantasma', {
+  // El rótulo de este botón cambia según haya fotos puestas o no, así
+  // que vive en su propio hueco y solo se le cambia el texto: se
+  // rehacía el botón entero —icono incluido— cada vez, y en el iPhone
+  // se quedaba el rótulo anterior pintado debajo del nuevo. La clase
+  // «opaco» es la otra mitad del arreglo (ver app.css).
+  const rotuloFoto = h('span');
+  const botonFoto = h('button.d-fantasma.opaco', {
     onclick: () => hojaFotoAcciones(meterFotos),
-  }, icon('plus'), 'Añadir foto para completar tarea');
+  }, icon('plus'), rotuloFoto);
   const accion = h('button.d-boton-negro', { disabled: true },
     puedeVerificarla ? 'Verificar tarea' : 'Dar por completada');
   if (puedeVerificarla) accion.classList.add('verde');
@@ -156,10 +162,9 @@ export async function render({ listaId, tareaId }) {
     // sentido cuando hay más de una: es lo que enseña que hay otra
     // esperando a la derecha.
     carrete.classList.toggle('una', fotosNuevas.length === 1);
-    botonFoto.replaceChildren(icon('plus'), document.createTextNode(
-      fotosNuevas.length ? 'Añadir más fotos (opcional)' : (puedeVerificarla
-        ? 'Añadir foto para verificar tarea'
-        : 'Añadir foto para completar tarea')));
+    rotuloFoto.textContent = fotosNuevas.length
+      ? 'Añadir más fotos (opcional)'
+      : (puedeVerificarla ? 'Añadir foto para verificar tarea' : 'Añadir foto para completar tarea');
     // Sin foto no se completa ni se verifica: es la prueba, no un adorno.
     accion.disabled = !fotosNuevas.length;
   };

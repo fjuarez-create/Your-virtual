@@ -2077,6 +2077,15 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
   display: flex; align-items: center; justify-content: center; gap: 10px;
 }
 .d-fantasma svg { width: 24px; height: 24px; }
+/* El botón que cambia de rótulo —el de añadir foto— necesita fondo
+   propio.
+
+   Con `background: none` no hay nada que pintar dentro de su caja, y
+   el Safari del iPhone da por bueno lo que ya había: el rótulo viejo
+   se queda debajo del nuevo y se leen los dos encima. Con un fondo
+   —del mismo color que la pantalla, así que no se nota— y el pintado
+   contenido en su caja, la repinta entera y no queda rastro. */
+.d-fantasma.opaco { background: var(--d-fondo); contain: paint; }
 .d-boton-negro:disabled { background: #d9d9d9; color: #fff; }
 .d-escribir-mandar:disabled { background: #d9d9d9; }
 
