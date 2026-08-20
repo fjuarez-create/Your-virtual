@@ -377,13 +377,19 @@ export function confirmar({
   conservar = 'Conservar',
   iconoConservar = 'corazon',
   mini = null,
+  rojo = false,
 } = {}) {
   return new Promise((resolver) => {
     const cerrar = (valor) => { velo.remove(); resolver(valor); };
 
-    const fila = (rotulo, ico, valor) => h('button.d-confirmar-fila', {
-      onclick: () => cerrar(valor),
-    }, icon(ico), h('span', null, rotulo));
+    /* En rojo va solo la fila que destruye, nunca las dos: el color
+       marca cuál de las dos es la que no tiene vuelta atrás. Si se
+       pintaran las dos, dejaría de señalar nada. */
+    const fila = (rotulo, ico, valor) => h(
+      `button.d-confirmar-fila${valor && rojo ? '.roja' : ''}`,
+      { onclick: () => cerrar(valor) },
+      icon(ico), h('span', null, rotulo),
+    );
 
     const tarjeta = h('div.d-confirmar-tarjeta', { role: 'dialog', 'aria-modal': 'true' },
       /* Título y explicación solo cuando hacen falta. Para «Eliminar

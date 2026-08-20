@@ -785,9 +785,14 @@ export function menuTarjeta(titulo, filas, { extra = null } = {}) {
   });
 }
 
-export function filaMenu(icono, rotulo, accion) {
-  if (!icono) return h('button.d-hoja-fila.suelta', { onclick: accion }, rotulo);
-  return h('button.d-hoja-fila', { onclick: accion }, icon(icono), rotulo);
+/* `rojo` es para las filas que destruyen algo. El menú de los tres
+   puntos mezcla salidas inofensivas —«salir y seguir luego»— con
+   borrados definitivos, y a 55 px de altura y con el pulgar en marcha
+   la única forma de distinguirlas de un vistazo es el color. */
+export function filaMenu(icono, rotulo, accion, { rojo = false } = {}) {
+  const rojaVa = rojo ? '.roja' : '';
+  if (!icono) return h(`button.d-hoja-fila.suelta${rojaVa}`, { onclick: accion }, rotulo);
+  return h(`button.d-hoja-fila${rojaVa}`, { onclick: accion }, icon(icono), rotulo);
 }
 
 /** Una fila que abre el selector de ficheros del sistema. */

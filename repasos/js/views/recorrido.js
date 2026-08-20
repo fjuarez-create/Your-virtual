@@ -101,6 +101,32 @@ export async function render({ promoId, unidadId }) {
      tecla, y salir corriendo lo pillaba a medias. */
   let guardarAlSalir = null;
 
+  /* El menú de los tres puntos cambia según dónde estés: grabando no
+     hay tareas que borrar, y repasando sí. Lo rellena el repaso cuando
+     se monta. */
+  let menuDelRepaso = null;
+
+  /* Salirse mientras se graba tira el paseo: la grabación todavía no
+     está guardada en ningún sitio. Antes se iba sin decir nada, que es
+     justo lo que se llevó por delante un recorrido entero. Ahora
+     pregunta —y solo pregunta cuando hay algo que perder, porque en la
+     pantalla de antes de empezar no hay grabación ninguna—. */
+  const salirDeLaGrabacion = async () => {
+    const seg = mando?.segundos || 0;
+    const fotos = mando?.marcas?.length || 0;
+    if (!seg && !fotos) return true;
+    return confirmar({
+      titulo: '¿Descartar el recorrido?',
+      texto: `Se pierde lo grabado hasta ahora: ${grabadora.reloj(seg)}`
+        + `${fotos ? ` y ${fotos} ${fotos === 1 ? 'foto' : 'fotos'}` : ''}. `
+        + 'No se puede recuperar.',
+      ok: 'Descartar el recorrido',
+      rojo: true,
+      conservar: 'Seguir grabando',
+      iconoConservar: 'play',
+    });
+  };
+
   // La cabecera se guarda para poder tocarla desde el repaso: allí la
   // flecha de volver deja de navegar (irse dejaría el recorrido a
   // medias sin decirlo) y el título pasa a «Nueva lista - Villa N».
@@ -109,13 +135,14 @@ export async function render({ promoId, unidadId }) {
   const cab = cabecera({
     volver,
     titulo: u.nombre,
-    menu: () => menuFlotante((cerrar) => [
-      filaMenu('x', 'Salir del recorrido', async () => {
+    menu: () => (menuDelRepaso ? menuDelRepaso() : menuFlotante((cerrar) => [
+      filaMenu('trash', 'Descartar el recorrido', async () => {
         cerrar();
+        if (!await salirDeLaGrabacion()) return;
         await guardarAlSalir?.();
         ir(volver);
-      }),
-    ]),
+      }, { rojo: true }),
+    ])),
   });
 
   // Los gremios que más salen aquí, para tenerlos a un toque al repasar.
@@ -457,6 +484,10 @@ export async function render({ promoId, unidadId }) {
     const cerradas = () => vivas().filter((f) => f.guardada);
     const abiertas = () => vivas().filter((f) => !f.guardada);
     let mirando = abiertas()[0] || vivas()[0] || null;
+    /* La foto que se está viendo ahora mismo, para poder enseñarla en la
+       pregunta cuando el borrado se pide desde el menú de los tres
+       puntos y no desde la propia ficha. Vale null en la antesala. */
+    let fotoMirando = null;
 
     const irAFicha = (f) => { mirando = f; pintarFicha(); };
     const vecina = (paso) => {
@@ -469,6 +500,7 @@ export async function render({ promoId, unidadId }) {
        Aquí se decide cómo se llenan las fichas: dejando que las escriba
        la IA, o entrando a escribirlas a mano. */
     const pintarAntesala = (motivo = '') => {
+      fotoMirando = null;
       cab.ponerTitulo(u.nombre);
       cab.ponerVuelta(() => salir());
       const cuantas = vivas().length;
@@ -514,6 +546,7 @@ export async function render({ promoId, unidadId }) {
 
       const url = f.sinFoto ? null : URL.createObjectURL(f.marca.blob);
       if (url) urlsSueltas.push(url);
+      fotoMirando = url;
 
       /* La foto. La papelera de la esquina cambia la imagen —no borra la
          ficha—, y por eso pregunta con las palabras exactas de lo que
@@ -627,20 +660,7 @@ export async function render({ promoId, unidadId }) {
 
       const borrarBtn = h('button.d-fantasma.estrecho', {
         'aria-label': 'Eliminar este repaso',
-        onclick: async () => {
-          if (!await confirmar({
-            texto: 'Se quita esta foto del recorrido y no se creará ninguna tarea con ella. '
-              + 'Las demás siguen como están.',
-            ok: 'Eliminar este repaso',
-            mini: url,
-          })) return;
-          f.fuera = true;
-          await apuntar({ ya: true });
-          const sig = vecina(1) || vecina(-1);
-          if (sig) { irAFicha(sig); return; }
-          if (!vivas().length) { await tirarElRecorrido(); return; }
-          pintarFicha();
-        },
+        onclick: () => quitarFicha(f, url),
       }, icon('trash'));
 
       const validar = () => { guardarBtn.disabled = !(f.texto.trim() && f.oficio && f.zona); };
@@ -706,6 +726,51 @@ export async function render({ promoId, unidadId }) {
       requestAnimationFrame(() => { if (f.texto) crecer(); });
       lienzo.closest('.screen')?.scrollTo?.({ top: 0 });
       document.getElementById('app')?.scrollTo?.({ top: 0 });
+    };
+
+    /* Quitar una ficha. La usan el botón del pie de la ficha y el menú
+       de los tres puntos, para que las dos puertas hagan lo mismo y
+       pregunten lo mismo. */
+    const quitarFicha = async (f, url = null) => {
+      if (!f) return;
+      if (!await confirmar({
+        titulo: '¿Eliminar esta tarea?',
+        texto: 'Se quita esta foto del recorrido y no se creará ninguna tarea con ella. '
+          + 'Las demás siguen como están.',
+        ok: 'Eliminar esta tarea',
+        rojo: true,
+        mini: url,
+      })) return;
+      f.fuera = true;
+      await apuntar({ ya: true });
+      const sig = vecina(1) || vecina(-1);
+      if (sig) { irAFicha(sig); return; }
+      if (!vivas().length) { await tirarElRecorrido(); return; }
+      pintarFicha();
+    };
+
+    /* Tirar el paseo entero, desde el menú y en cualquier momento.
+
+       Distinto de tirarElRecorrido(), que salta solo cuando ya no queda
+       ninguna ficha: aquí se decide a propósito y hay que decir todo lo
+       que se lleva por delante, incluido lo repasado hasta ahora. */
+    const descartarTodo = async () => {
+      const listas = cerradas().length;
+      const seguro = await confirmar({
+        titulo: '¿Descartar el recorrido?',
+        texto: `Se borra el paseo entero: ${rec.marcas.length} `
+          + `${rec.marcas.length === 1 ? 'foto' : 'fotos'} y ${grabadora.reloj(rec.duracion)} `
+          + `de grabación${listas ? `, con ${listas} ${listas === 1 ? 'tarea ya lista' : 'tareas ya listas'}` : ''}. `
+          + 'No se puede recuperar.',
+        ok: 'Descartar el recorrido',
+        rojo: true,
+        conservar: 'Conservar el recorrido',
+      });
+      if (!seguro) return;
+      guardarAlSalir = null;
+      await store.borrarRecorrido(rec.id);
+      toast('Recorrido descartado');
+      ir(volver);
     };
 
     /* ─── El remate ─── */
@@ -1011,6 +1076,27 @@ export async function render({ promoId, unidadId }) {
       const fallo = await redactar();
       if (fallo) pintarAntesala(fallo);
     };
+
+    /* El menú de los tres puntos, ya con el repaso montado.
+
+       Antes solo tenía «Salir del recorrido», que además de no preguntar
+       nada sonaba a abandonar el paseo —y por eso asustaba—. Ahora se
+       llama por lo que hace: salir no cuesta nada, porque todo lo
+       repasado se apunta según se hace. Lo que sí cuesta son las otras
+       dos, y ésas preguntan. */
+    menuDelRepaso = () => menuFlotante((cerrar) => [
+      filaMenu('arrowLeft', 'Salir y seguir luego', () => { cerrar(); salir(); }),
+      /* «Eliminar esta tarea» solo cuando hay una ficha delante. En la
+         antesala no hay ninguna «esta», y una fila que no sabe a qué se
+         refiere es peor que no estar. */
+      mirando && vivas().includes(mirando) ? filaMenu('trash', 'Eliminar esta tarea', () => {
+        const f = mirando;
+        const foto = fotoMirando;
+        cerrar();
+        quitarFicha(f, foto);
+      }, { rojo: true }) : null,
+      filaMenu('trash', 'Descartar el recorrido', () => { cerrar(); descartarTodo(); }, { rojo: true }),
+    ].filter(Boolean));
 
     arranque();
   };

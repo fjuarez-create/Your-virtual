@@ -2296,6 +2296,10 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
    viviendas todas llevarían la misma casita y no distingue nada. */
 .d-hoja-fila.suelta { justify-content: flex-start; padding: 0 16px; }
 .d-hoja-fila svg { width: 24px; height: 24px; color: var(--d-beige-tinta); }
+/* Rojo el rótulo y el icono: lo que se va a perder se ve antes de
+   leerlo. La fila sigue siendo blanca, que un bloque rojo entero
+   grita más de lo que hace falta. */
+.d-hoja-fila.roja, .d-hoja-fila.roja svg { color: var(--d-rojo); }
 .d-hoja-acciones-x {
   width: 66px; height: 66px; border-radius: 999px; background: #fcfcfc;
   box-shadow: 0 12px 34px rgba(0, 0, 0, .28);
@@ -2406,6 +2410,10 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 .d-confirmar-titulo + .d-confirmar-fila { border-top: 1px solid rgba(0, 0, 0, .08); }
 .d-confirmar-fila svg { width: 24px; height: 24px; flex: none; color: var(--d-beige-tinta); }
 .d-confirmar-fila:active { background: var(--d-gris-suave); }
+/* La misma marca roja que en el menú de los tres puntos, para que la
+   pregunta se lea como continuación de la fila que se acaba de pulsar
+   y no como otra pantalla distinta. */
+.d-confirmar-fila.roja, .d-confirmar-fila.roja svg { color: var(--d-rojo); }
 .d-confirmar-x {
   width: var(--cab-bola); height: var(--cab-bola); flex: none;
   border-radius: 999px; display: grid; place-items: center;
