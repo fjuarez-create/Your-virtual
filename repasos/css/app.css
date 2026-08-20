@@ -1963,17 +1963,6 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
   font-size: 14px; line-height: 20px; color: #595959; text-align: center;
 }
 
-/* Los dos enlaces del pie —privacidad y soporte— parecen texto, no
-   botones: no compiten con el botón negro de entrar, que es lo único
-   que hay que pulsar ahí. */
-.d-entrar-enlace {
-  border: 0; background: none; padding: 0;
-  font: inherit; color: #595959; text-decoration: underline;
-  text-underline-offset: 3px; cursor: pointer;
-}
-.d-entrar-enlace:active { opacity: .6; }
-.d-entrar-firma { display: block; margin-top: 6px; }
-
 /* ─── La ficha de la vivienda ───────────────────────────────────
    La banda de avance está más arriba, con el anillo. Aquí quedan el
    botón negro de nueva inspección, los repasos verificados en

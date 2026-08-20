@@ -30,6 +30,26 @@
     apiBase: 'api/',
     build: '__BUILD__',
   };
+
+  /* El seguro de la pantalla de arranque de la app de iPhone.
+
+     Dentro del envoltorio, iOS enseña el logotipo sobre el fondo topo y
+     lo deja puesto hasta que alguien le dice que ya está. Si nadie se
+     lo dice, la aplicación se queda con el logo quieto y parece
+     colgada.
+
+     Esto vive aquí, en el propio index, y no dentro del código de la
+     app, porque el index se pide siempre a la red: aunque el resto del
+     código se quedara viejo en la caché del móvil, este seguro llega
+     igual. La app lo llama antes, en cuanto pinta la primera pantalla;
+     esto es solo la red por si acaso. */
+  window.retirarArranqueNativo = function () {
+    try {
+      var s = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.SplashScreen;
+      if (s && s.hide) s.hide({ fadeOutDuration: 200 });
+    } catch (e) { /* fuera de la app de iPhone no hay nada que quitar */ }
+  };
+  setTimeout(window.retirarArranqueNativo, 6000);
 </script>
 </head>
 <body>

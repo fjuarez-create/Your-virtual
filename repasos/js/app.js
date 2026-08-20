@@ -270,10 +270,36 @@ async function arrancar() {
   await store.cargarPersonas();
   window.addEventListener('hashchange', enrutar);
   await enrutar();
+  quitarPantallaDeArranque();
   vigilarDatosNuevos();
   store.arrancarSync();
   registrarServiceWorker();
 }
+
+/**
+ * Retira la pantalla de arranque de la app de iPhone en cuanto hay algo
+ * que enseñar. Quien sabe hacerlo es la función que deja puesta el
+ * index; aquí solo se decide CUÁNDO: al pintar la primera pantalla, o
+ * al pintar el error si el arranque se cae. Una pantalla de error se
+ * puede leer; un logotipo parado no dice nada.
+ *
+ * En el navegador no hay pantalla de arranque y esto no hace nada.
+ */
+let arranqueRetirado = false;
+function quitarPantallaDeArranque() {
+  if (arranqueRetirado) return;
+  arranqueRetirado = true;
+  try {
+    if (window.retirarArranqueNativo) window.retirarArranqueNativo();
+    else window.Capacitor?.Plugins?.SplashScreen?.hide?.({ fadeOutDuration: 200 });
+  } catch { /* fuera de la app de iPhone no hay nada que quitar */ }
+}
+
+/* La red de seguridad, por si el arranque se quedara esperando al
+   servidor: una obra sin cobertura, el hosting caído. A los seis
+   segundos se enseña lo que haya debajo, aunque sea la ruedecita, en
+   vez de dejar el logotipo congelado sin explicación. */
+setTimeout(quitarPantallaDeArranque, 6000);
 
 /**
  * Cuando la sincronización trae datos de otro dispositivo, la pantalla
@@ -327,6 +353,7 @@ window.addEventListener('unhandledrejection', (e) => {
 
 arrancar().catch((e) => {
   console.error(e);
+  quitarPantallaDeArranque();
   app.replaceChildren(h('div.screen.no-tabs', null,
     h('h1.display', null, 'No arranca'),
     h('p.sub', null, e?.message || 'Error desconocido al iniciar la aplicación.'),

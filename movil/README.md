@@ -265,3 +265,24 @@ la app. La app apunta a `repasos.unikdi.com` a propósito, y ahí está
 todo el valor de este montaje. Si algún día se empaqueta la web dentro,
 cada cambio de un botón vuelve a ser una versión en la tienda y una
 espera de días.
+
+### La pantalla de arranque, y cómo dejó colgada la app
+
+La primera compilación salió con `launchAutoHide` en `false`: iOS
+enseñaba el logotipo y esperaba a que la web dijera «ya está». La web
+no lo decía, así que el logotipo se quedaba puesto para siempre y la
+aplicación parecía colgada. No lo era: por debajo estaba cargada.
+
+Ahora hay tres cierres, y hacen falta los tres:
+
+1. La web la retira en cuanto pinta la primera pantalla —también si esa
+   pantalla es un error—, en `repasos/js/app.js`.
+2. Un temporizador de seis segundos en el propio `index.html`, que se
+   pide siempre a la red: aunque el código de la app se quedara viejo
+   en la caché de un móvil, ese seguro llega igual.
+3. `launchAutoHide` en `true` con cinco segundos, aquí en
+   `capacitor.config.json`: si algún día el puente de Capacitor no
+   estuviera, iOS la retira solo.
+
+Si se vuelve a tocar esto, la regla es sencilla: **nunca dejar la
+retirada en manos de una sola de las tres.**

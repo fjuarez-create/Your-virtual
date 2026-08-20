@@ -117,19 +117,21 @@ export async function render() {
           () => hojaClaveOido(oido)),
       ) : null,
 
-      // Estas dos filas no son adorno: Apple exige que la política de
-      // privacidad se pueda leer desde dentro de la aplicación, y la
-      // página de soporte es la que enseña a quién escribir.
       h('div.d-grupo', null,
-        h('p.d-grupo-titulo', null, 'Legal'),
-        item('periodico', 'Privacidad', 'Qué se guarda, quién lo ve y cuánto tiempo',
+        item('logout', 'Cerrar sesión', null, () => cerrarSesion(), { rojo: true, derecha: h('span') }),
+      ),
+
+      // Lo último de la pantalla, después de cerrar sesión: las
+      // condiciones se consultan de vez en cuando y no tienen que
+      // estorbar a lo que se usa a diario. Apple exige además que la
+      // política de privacidad se pueda leer desde dentro de la propia
+      // aplicación, no solo en la ficha de la tienda.
+      h('div.d-grupo', null,
+        h('p.d-grupo-titulo', null, 'Condiciones'),
+        item('periodico', 'Política de privacidad', 'Qué se guarda, quién lo ve y cuánto tiempo',
           () => abrirPagina('privacidad.html')),
         item('hilo', 'Soporte', 'Cómo pedir ayuda o dar de alta a alguien',
           () => abrirPagina('soporte.html')),
-      ),
-
-      h('div.d-grupo', null,
-        item('logout', 'Cerrar sesión', null, () => cerrarSesion(), { rojo: true, derecha: h('span') }),
       ),
 
       h('p', { style: { margin: '24px 0 8px', textAlign: 'center', fontSize: '13px', color: 'var(--d-gris)' } },
