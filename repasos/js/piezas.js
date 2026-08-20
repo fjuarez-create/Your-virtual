@@ -593,18 +593,52 @@ export function caraDeGremio(o, tam = 40) {
  * que no son lo mismo: uno deja las cosas como están y el otro las
  * cambia a vacío.
  */
+export function menuChips(titulo, opciones, { actual = '', quitar = '' } = {}) {
+  return new Promise((resolver) => {
+    const cerrar = (valor) => { velo.remove(); resolver(valor); };
+
+    const chip = (valor, rotulo, clase = '') => h('button.d-menu-chip', {
+      class: [clase, valor === actual ? 'puesta' : ''].filter(Boolean).join(' '),
+      'aria-pressed': valor === actual ? 'true' : 'false',
+      onclick: () => cerrar(valor),
+    }, rotulo);
+
+    const tarjeta = h('div.d-menu-tarjeta', { role: 'dialog', 'aria-modal': 'true' },
+      h('div.d-menu-cab', null,
+        h('span.d-menu-titulo', null, titulo),
+        h('button.d-menu-x', { 'aria-label': 'Cerrar', onclick: () => cerrar(null) }, icon('x')),
+      ),
+      h('div.d-menu-chips', null,
+        ...opciones.map((o) => (typeof o === 'string' ? chip(o, o) : chip(o.id, o.rotulo))),
+        // Quitar la elección solo aparece si hay algo que quitar: un
+        // botón que no hace nada enseña a no leer los botones.
+        actual && quitar ? chip('', quitar, 'quitar') : null,
+      ),
+    );
+
+    const velo = h('div.d-menu-velo', {
+      onclick: (e) => { if (e.target === velo) cerrar(null); },
+    }, tarjeta);
+    document.body.append(velo);
+  });
+}
+
+/**
+ * La estancia de un repaso.
+ *
+ * Antes iba en la hoja de abajo del diseño antiguo, con su barra de
+ * CANCELAR en mayúsculas: era el único sitio de la app que seguía
+ * abriéndose así, y al lado del resto de modales cantaba. Ahora usa la
+ * misma tarjeta que todos: título a la izquierda, aspa a la derecha y
+ * las estancias dentro.
+ *
+ * Van en pastillas y no en filas a propósito: son diecinueve, y en
+ * filas serían diecinueve renglones de scroll para elegir una palabra.
+ * En pastillas caben casi todas de un vistazo, que es lo que hace falta
+ * cuando estás de pie en una casa buscando «Baño principal».
+ */
 export function hojaZonas(actual) {
-  return sheet((cerrar) => [
-    h('h2.title', null, 'Estancia'),
-    h('div.chips.filtro.envuelve', { style: { marginTop: '12px' } },
-      ...ZONAS.map((z) => h('button.chip.accent', {
-        'aria-pressed': actual === z ? 'true' : 'false',
-        onclick: () => cerrar(z),
-      }, z)),
-      actual ? h('button.chip.quitar', { onclick: () => cerrar('') }, 'Sin estancia') : null,
-    ),
-    ctaCancelar(() => cerrar(null)),
-  ]);
+  return menuChips('Estancia', ZONAS, { actual, quitar: 'Sin estancia' });
 }
 
 /**

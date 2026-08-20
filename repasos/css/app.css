@@ -1656,7 +1656,7 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
    aclaran y llevan su color puesto a mano.   ═══ */
 :root { --pulsa-sale: 190ms; }
 
-.d-bola, .d-cab .avatar, .d-confirmar-x, .d-boton-negro, .d-selector-estado,
+.d-bola, .d-cab .avatar, .d-confirmar-x, .d-menu-chip, .d-boton-negro, .d-selector-estado,
 .d-bola-embudo, .d-bola-filtros, .d-desplegable, .d-tarjeta, .d-acta-dia,
 .d-acta-linea, .d-repaso, .d-mensaje, .d-item {
   transition: filter var(--pulsa-sale) var(--sal-estandar),
@@ -1665,7 +1665,7 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 }
 
 /* Al apoyar el dedo, sin transición ninguna: instantáneo. */
-.d-bola:active, .d-cab .avatar:active, .d-confirmar-x:active,
+.d-bola:active, .d-cab .avatar:active, .d-confirmar-x:active, .d-menu-chip:active,
 .d-boton-negro:active, .d-selector-estado:active, .d-bola-embudo:active,
 .d-bola-filtros:active, .d-desplegable:active, .d-tarjeta:active,
 .d-acta-dia:active, .d-acta-linea:active, .d-repaso:active,
@@ -1678,7 +1678,7 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
    La cara entra aquí con nombre y apellidos porque trae de serie su
    propio :active del diseño de antes, que la encogía a 0,92 y no le
    cambiaba el tono: al lado de las bolas se notaba que iban por libre. */
-.d-bola:active, .d-cab .avatar:active, .d-confirmar-x:active,
+.d-bola:active, .d-cab .avatar:active, .d-confirmar-x:active, .d-menu-chip:active,
 .d-selector-estado:active, .d-bola-embudo:active, .d-bola-filtros:active,
 .d-desplegable:active {
   filter: brightness(0.93); transform: scale(0.96);
@@ -2382,6 +2382,29 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
   background: #fff; color: var(--d-tinta);
 }
 .d-confirmar-x svg { width: 24px; height: 24px; }
+
+/* Las pastillas de elegir dentro de la tarjeta: la estancia de un
+   repaso son diecinueve opciones, y en filas serían diecinueve
+   renglones de scroll para elegir una palabra. Así caben casi todas de
+   un vistazo, que es lo que hace falta de pie en una casa. */
+.d-menu-chips {
+  display: flex; flex-wrap: wrap; gap: 10px;
+  padding: 10px 8px 4px;
+}
+.d-menu-chip {
+  min-height: 48px; padding: 0 18px; border-radius: 14px;
+  background: #fff; border: 1px solid #e7e4e0;
+  font: 400 16px/1.2 var(--d-font); color: var(--d-tinta);
+  display: inline-flex; align-items: center;
+}
+.d-menu-chip.puesta {
+  background: var(--d-tinta); color: #fff; border-color: var(--d-tinta);
+}
+/* Quitar la estancia no es una estancia más: va en rojo y separada. */
+.d-menu-chip.quitar {
+  color: var(--d-rojo); border-color: rgba(219, 62, 50, .28);
+  margin-left: auto;
+}
 
 /* Lo que se cuelgue debajo de las filas —las actas de la vivienda—
    respira lo mismo que ellas. */
