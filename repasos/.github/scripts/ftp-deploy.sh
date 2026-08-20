@@ -47,9 +47,17 @@ AJUSTES='
 # TLS en cada fichero, y por ahí solo pasan los ficheros públicos de la
 # app. Esa distinción es deliberada; lo que no se admite es mandar las
 # credenciales en claro.
-CIFRADO="set ftp:ssl-allow true; set ftp:ssl-force true; set ftp:ssl-protect-data false;"
-TLS_VERIFICADO="$AJUSTES set ssl:verify-certificate yes; $CIFRADO"
-TLS_SIN_VERIFICAR="$AJUSTES set ssl:verify-certificate no; $CIFRADO"
+CIFRADO="set ftp:ssl-allow true; set ftp:ssl-force true;"
+# Con el canal de datos cifrado se renegocia TLS en cada fichero, y eso es
+# lo que en su día hacía que Plesk cortara la conexión; por eso van menos
+# ficheros a la vez en este modo. Más lento, pero entero.
+DATOS_CIFRADOS="set ftp:ssl-protect-data true; set mirror:parallel-transfer-count 2;"
+DATOS_EN_CLARO="set ftp:ssl-protect-data false;"
+
+TLS_VERIFICADO="$AJUSTES set ssl:verify-certificate yes; $CIFRADO $DATOS_CIFRADOS"
+TLS_VERIFICADO_CLARO="$AJUSTES set ssl:verify-certificate yes; $CIFRADO $DATOS_EN_CLARO"
+TLS_SIN_VERIFICAR="$AJUSTES set ssl:verify-certificate no; $CIFRADO $DATOS_CIFRADOS"
+TLS_SIN_VERIFICAR_CLARO="$AJUSTES set ssl:verify-certificate no; $CIFRADO $DATOS_EN_CLARO"
 PLANO="$AJUSTES set ssl:verify-certificate no; set ftp:ssl-allow false;"
 
 lanzar() {
@@ -61,26 +69,65 @@ bye
 FIN
 }
 
+# ¿Sirve este modo de conexión de verdad?
+#
+# La sonda LISTA una carpeta, y no es un capricho: entrar solo usa el
+# canal de control, pero listar y subir ficheros van por el canal de
+# DATOS, que es otro y puede estar cortado estando el primero perfecto.
+# Antes se sondeaba con «pwd», que solo toca el control, y por eso el
+# despliegue elegía un modo con el que se podía entrar pero no mover ni
+# un byte: el hosting apretó las tuercas de la cuenta, el canal de datos
+# dejó de pasar, y en el log salía «la carpeta está vacía» —que es lo que
+# parece una carpeta que no se deja listar—.
+#
+# Se sonda con poca paciencia (un intento, diez segundos) para que
+# descartar cuatro modos cueste segundos y no cinco minutos.
+sirve() {
+  salida=$(lanzar "$1 set net:max-retries 1; set net:timeout 10;" "cls -1" 2>&1) || return 1
+  case "$salida" in *"Fatal error"* | *"Login failed"* | *"not allowed"*) return 1 ;; esac
+  return 0
+}
+
 # Nunca se baja a FTP en claro por su cuenta: una sonda fallida por un
 # corte de red bastaría para mandar la contraseña del hosting por
 # Internet en texto plano, y con ella se lee api/config.php, que trae las
 # credenciales de la base de datos.
-if lanzar "$TLS_VERIFICADO" "pwd" >/dev/null 2>&1; then
+#
+# El orden va de más protegido a menos, y el canal de datos cifrado se
+# prueba PRIMERO: si el hosting endurece la cuenta —lo típico después de
+# un aviso de seguridad—, lo que empieza a exigir es justo eso.
+if sirve "$TLS_VERIFICADO"; then
   OPC="$TLS_VERIFICADO"
-  echo "Conexión cifrada, con el certificado del servidor verificado."
-elif lanzar "$TLS_SIN_VERIFICAR" "pwd" >/dev/null 2>&1; then
+  echo "Conexión cifrada de punta a punta, con el certificado verificado."
+elif sirve "$TLS_VERIFICADO_CLARO"; then
+  OPC="$TLS_VERIFICADO_CLARO"
+  echo "Conexión cifrada con el certificado verificado; los ficheros viajan en claro."
+elif sirve "$TLS_SIN_VERIFICAR"; then
   OPC="$TLS_SIN_VERIFICAR"
   echo "AVISO: no se ha podido verificar el certificado del servidor FTP."
-  echo "       La contraseña sigue viajando cifrada, pero conviene revisar"
-  echo "       el certificado del hosting."
-elif [ "${FTP_PERMITIR_PLANO:-}" = "1" ]; then
+  echo "       La contraseña y los ficheros siguen cifrados."
+elif sirve "$TLS_SIN_VERIFICAR_CLARO"; then
+  OPC="$TLS_SIN_VERIFICAR_CLARO"
+  echo "AVISO: no se ha podido verificar el certificado del servidor FTP."
+  echo "       La contraseña sigue cifrada; los ficheros viajan en claro."
+elif [ "${FTP_PERMITIR_PLANO:-}" = "1" ] && sirve "$PLANO"; then
   OPC="$PLANO"
   echo "AVISO: FTP SIN CIFRAR. Permitido a propósito con FTP_PERMITIR_PLANO=1."
 else
-  echo "El servidor no acepta FTPS y la contraseña viajaría en claro. Paro." >&2
-  echo "Plesk ofrece FTPS y SFTP: revisa que estén activados para esta cuenta." >&2
-  echo "Si no hubiera alternativa, hay que ponerlo por escrito en el workflow" >&2
-  echo "con FTP_PERMITIR_PLANO=1; a propósito no se hace solo." >&2
+  echo "Ningún modo de conexión sirve para listar el servidor." >&2
+  echo "" >&2
+  echo "Se puede entrar o no —eso lo dice el detalle de abajo—, pero por el" >&2
+  echo "canal de datos no pasa nada, que es por donde van los ficheros." >&2
+  echo "Suele ser el cortafuegos del hosting: puertos de modo pasivo" >&2
+  echo "cerrados, o la IP del robot bloqueada tras un aviso de seguridad." >&2
+  echo "" >&2
+  echo "Esto es lo que contesta el servidor en cada modo:" >&2
+  for modo in "TLS_VERIFICADO" "TLS_VERIFICADO_CLARO" "TLS_SIN_VERIFICAR" "TLS_SIN_VERIFICAR_CLARO"; do
+    eval "ajustes=\$$modo"
+    echo "  ── $modo" >&2
+    lanzar "$ajustes set net:max-retries 1; set net:timeout 10;" "cls -1" 2>&1 \
+      | head -6 | sed 's/^/       /' >&2 || true
+  done
   exit 1
 fi
 
@@ -212,7 +259,18 @@ case "$QUE" in
       lanzar "$OPC" "pwd" 2>&1 | sed 's/^/    /' >&2
       echo "Raíz de la sesión:" >&2
       RAIZ_VISTA=$(lanzar "$OPC" "cls -1" 2>&1 | tr -d '\r' | sed 's#/$##' | grep . || true)
-      if [ -n "$RAIZ_VISTA" ]; then
+      if [ -z "$RAIZ_VISTA" ]; then
+        echo "    (no se ve nada, ni siquiera un error)" >&2
+      elif printf '%s' "$RAIZ_VISTA" | grep -q "Fatal error\|Access failed\|not allowed"; then
+        # Lo que ha vuelto no es una lista de carpetas, es una queja del
+        # servidor. Se enseña tal cual y no se entra en nada: recorrerla
+        # como si fueran nombres llevaba a pedir «cd Fatal», «cd error:»…
+        # y cada uno de esos intentos se comía su minuto de reintentos
+        # hasta agotar el tiempo del paso. Cinco minutos para no decir
+        # nada.
+        echo "    El servidor no deja listar. Contesta esto:" >&2
+        printf '%s\n' "$RAIZ_VISTA" | head -6 | sed 's/^/      /' >&2
+      else
         printf '%s\n' "$RAIZ_VISTA" | sed 's/^/    /' >&2
         for sub in $RAIZ_VISTA; do
           case "$sub" in logs | tmp | anon_ftp | error_docs | cgi-bin) continue ;; esac
@@ -220,8 +278,6 @@ case "$QUE" in
           lanzar "$OPC" "cd \"$sub\"; cls -1" 2>&1 | tr -d '\r' | sed 's#/$##' \
             | grep . | head -25 | sed 's/^/        /' >&2 || true
         done
-      else
-        echo "    (no se ve nada, ni siquiera un error)" >&2
       fi
       exit 1
     fi
