@@ -219,6 +219,12 @@ async function enrutar() {
   if (!hayUsuario && ruta !== '/entrar') return ir('#/entrar', { reemplazar: true });
   if (hayUsuario && ruta === '/entrar') return ir('#/', { reemplazar: true });
 
+  /* Cambiar de pantalla es EL momento de poner la versión que espere:
+     lo de antes ya se cerró, lo de después aún no existe, y la recarga
+     cae donde iba a pintarse una pantalla de todas formas. La pantalla
+     se pinta abajo igual, por si el relevo no llegara a recargar. */
+  relevoSilencioso();
+
   if (!encontrada) {
     pintar({
       contenido: [
@@ -426,24 +432,70 @@ async function registrarServiceWorker() {
     // recarga solo al fallar (ver esFalloDeCodigo).
   });
 
-  // La versión nueva no entra en caliente: espera a que se cierre la
-  // aplicación (ver sw.js). Como el que está usándola no tiene manera
-  // de saberlo, se avisa (ver avisarDeVersion, que no repite el aviso
-  // más de una vez por hora).
-  const avisar = () => avisarDeVersion();
-  if (registro.waiting && navigator.serviceWorker.controller) avisar();
-  registro.addEventListener('updatefound', () => {
-    const nueva = registro.installing;
-    if (!nueva) return;
-    nueva.addEventListener('statechange', () => {
-      // «installed» con alguien ya al mando quiere decir: hay relevo
-      // esperando. Sin nadie al mando es la primera instalación, y esa
-      // no hay que anunciarla.
-      if (nueva.state === 'installed' && navigator.serviceWorker.controller) avisar();
-    });
-  });
+  /* La versión nueva no se anuncia: se pone sola.
 
-  aplicarAlVolver(registro);
+     Antes salía un rótulo —«Hay una versión nueva. Se pone al cerrar y
+     abrir la app»— cada vez que se desplegaba un cambio, y no le servía
+     a nadie: el que lo leía creía que tenía que hacer algo, y no había
+     nada que hacer. Ahora el relevo entra solo en el primer momento en
+     que no rompe nada: al cambiar de pantalla, al volver a la app tras
+     un rato fuera, o aquí mismo si ya estaba esperando al arrancar.
+     Entre pantalla y pantalla la recarga ni se ve: la pantalla nueva
+     iba a pintarse igual. */
+  /* Recién arrancados es EL momento de poner la versión que espere: la
+     página está limpia —sin fetches colgados que bloqueen la activación
+     (ver relevoSilencioso)— y el salto entra a la primera. La recarga
+     que lo remata cae dentro del propio arranque y no se distingue de
+     una carga algo más lenta. */
+  if (registro.waiting && navigator.serviceWorker.controller && !hayAlgoAMedias()) {
+    aplicarVersionEsperando(registro);
+  } else if (!registro.waiting) {
+    // Ciclo completado (o nada que poner): la próxima versión que
+    // llegue puede volver a empezar el suyo.
+    sessionStorage.removeItem('relevo-ciclo');
+  }
+  // Al descubrirse una versión a mitad de sesión no se hace nada: le
+  // quitaría la pantalla de delante a quien está leyendo. El siguiente
+  // cambio de pantalla, que es cuestión de segundos, la pone.
+
+  aplicarAlVolver();
+}
+
+/* Cada versión tiene UN intento de ciclo por sesión y tramo de diez
+   minutos: si algo saliera mal no se puede entrar en un bucle de
+   recargas, que es lo único peor que quedarse con la versión vieja. */
+const RATO_ENTRE_CICLOS = 10 * 60 * 1000;
+
+/**
+ * Pone la versión que espera, si la hay y no rompe nada. Sin avisos.
+ *
+ * No la pone en caliente, y no por gusto: el salto en caliente se
+ * probó y es traicionero. La activación del relevo espera a que el
+ * worker viejo termine TODO lo que tenga entre manos, y basta un fetch
+ * colgado de la sesión —una foto a medio traer, una petición que no
+ * contesta— para que el salto se quede bloqueado sin error ninguno:
+ * en las pruebas el mismo mensaje entraba con la página recién
+ * cargada y se perdía tras pasear por dos pantallas.
+ *
+ * Así que se hace al revés, determinista: aquí solo se RECARGA. La
+ * recarga mata cualquier fetch colgado, y nada más arrancar —página
+ * limpia— el arranque pone el relevo y remata con su propia recarga
+ * (ver registrarServiceWorker). Dos cargas seguidas en una frontera
+ * donde iba a pintarse una pantalla nueva de todas formas: se siente
+ * como una carga algo más lenta, no como un salto.
+ */
+async function relevoSilencioso() {
+  if (!navigator.serviceWorker?.controller) return false;
+  // Lo que haya a medias se mira ANTES del hueco asíncrono: es el
+  // estado del momento en que se decidió saltar, no el de después.
+  if (hayAlgoAMedias()) return false;
+  const registro = await versionEsperando();
+  if (!registro) return false;
+  const ultimo = Number(sessionStorage.getItem('relevo-ciclo') || 0);
+  if (Date.now() - ultimo < RATO_ENTRE_CICLOS) return false;
+  sessionStorage.setItem('relevo-ciclo', String(Date.now()));
+  location.reload();
+  return true;
 }
 
 /* Cuánto tiene que estar guardada la aplicación para que al volver se
@@ -463,7 +515,7 @@ const RATO_FUERA = 5 * 60 * 1000;
  * cero: si hay una hoja abierta, un texto a medio escribir, una foto
  * hecha y sin mandar o un recorrido grabando, se deja para la próxima.
  */
-function aplicarAlVolver(registro) {
+function aplicarAlVolver() {
   let escondidaDesde = 0;
   document.addEventListener('visibilitychange', async () => {
     if (document.hidden) { escondidaDesde = Date.now(); return; }
@@ -474,10 +526,12 @@ function aplicarAlVolver(registro) {
     // iPhone solo hay UNA: la del arranque. Sin esto, una app que se
     // queda cinco días en segundo plano no se enteraría de tres
     // despliegues seguidos.
-    try { await registro.update(); } catch { /* sin red: otra vez será */ }
-    if (!registro.waiting) return;
-    if (hayAlgoAMedias()) { avisarDeVersion(); return; }
-    aplicarVersionEsperando(registro);
+    try {
+      await (await navigator.serviceWorker.getRegistration())?.update();
+    } catch { /* sin red: otra vez será */ }
+    // Con algo a medias, relevoSilencioso no hace nada ni avisa: el
+    // siguiente cambio de pantalla la pondrá sin que se note.
+    relevoSilencioso();
   });
 }
 
@@ -485,12 +539,29 @@ function aplicarAlVolver(registro) {
    que lo ha pedido. */
 let saltandoVersion = false;
 
-/** Le dice al relevo que tome el mando. La recarga viene después. */
-export function aplicarVersionEsperando(registro) {
+/**
+ * Le dice al relevo que tome el mando. La recarga viene después.
+ *
+ * Con reintentos, y no por gusto: el navegador PARA el service worker
+ * que espera al poco de instalarlo, y un mensaje mandado a un worker
+ * parado puede perderse sin error ninguno. Se vio en las pruebas:
+ * mandado a los cuatro segundos de instalarse funcionaba siempre, y a
+ * los quince ya no llegaba nunca. Así que se manda, se espera un
+ * momento, y se comprueba que el salto ha prendido —que ya no hay
+ * nadie esperando—; si no, otra vez. Resuelve dice más que promete.
+ */
+export async function aplicarVersionEsperando(registro) {
   if (!registro?.waiting) return false;
   saltandoVersion = true;
-  registro.waiting.postMessage({ tipo: 'saltar-espera' });
-  return true;
+  for (let intento = 0; intento < 6; intento++) {
+    registro.waiting?.postMessage({ tipo: 'saltar-espera' });
+    await new Promise((r) => setTimeout(r, 700));
+    const fresco = await navigator.serviceWorker.getRegistration().catch(() => null);
+    if (!fresco?.waiting) return true;   // ya está tomando el mando
+    registro = fresco;
+  }
+  saltandoVersion = false;
+  return false;
 }
 
 /**
@@ -505,21 +576,15 @@ export async function versionEsperando() {
   } catch { return null; }
 }
 
-/* El aviso de que hay versión nueva, para poder repetirlo desde otro
-   sitio que no sea el registro. */
-function avisarDeVersion() {
-  const ultimo = Number(sessionStorage.getItem('aviso-version') || 0);
-  if (Date.now() - ultimo < 60 * 60 * 1000) return;
-  sessionStorage.setItem('aviso-version', String(Date.now()));
-  toast('Hay una versión nueva. Se pone al cerrar y abrir la app.');
-}
-
 /** ¿Hay algo empezado que una recarga se llevaría por delante? */
 function hayAlgoAMedias() {
   if (hayFotosSinMandar()) return true;
   if (document.querySelector('.sheet, .viewer.on, .informe, .pantalla-recorrido, .d-visor, .d-menu-velo, .d-velo, .d-hoja-acciones')) return true;
   if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return true;
   if (location.hash.includes('/recorrido')) return true;
+  // La pantalla de nueva tarea lleva fotos en memoria —las de la
+  // bandeja, recién hechas y sin guardar aún— que una recarga tiraría.
+  if (location.hash.includes('/nueva')) return true;
   return false;
 }
 

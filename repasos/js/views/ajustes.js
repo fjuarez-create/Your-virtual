@@ -580,8 +580,11 @@ async function ponerVersionNueva(registro) {
     ok: 'Poner la versión nueva',
   });
   if (!seguir) return;
-  if (!aplicarVersionEsperando(registro)) { toast('Ya no hay ninguna esperando'); return; }
   toast('Poniendo la versión nueva…');
+  // Resuelve cuando el salto ha prendido de verdad. Si no prende —un
+  // fetch colgado puede bloquear la activación, ver app.js—, la
+  // recarga limpia la sesión y el arranque lo pone él solo.
+  if (!await aplicarVersionEsperando(registro)) location.reload();
 }
 
 async function quitarEjemplos() {
