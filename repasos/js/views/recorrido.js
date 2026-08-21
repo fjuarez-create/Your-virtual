@@ -71,7 +71,7 @@ function resumen(dichas, vistas, total, sinMirar) {
   return `${escritas} redactadas: ${dichas} de lo que dijiste y ${vistas} ${vistas === 1 ? 'leída' : 'leídas'} de la foto. Repasa sobre todo ${vistas === 1 ? 'esa' : 'esas'}.${cola}${largo}`;
 }
 
-export async function render({ promoId, unidadId }) {
+export async function render({ promoId, unidadId, seguir = false }) {
   const p = promocion(promoId);
   const u = unidad(unidadId);
   if (!p || !u) { toast('Vivienda desconocida', 'err'); ir('#/viviendas', { reemplazar: true }); return { contenido: [] }; }
@@ -151,9 +151,7 @@ export async function render({ promoId, unidadId }) {
   // Un recorrido grabado y no repasado todavía. Pasa cuando se sale de
   // la pantalla a media faena —una llamada, un resbalón hacia atrás— y
   // es justo el trabajo que más duele perder: el paseo ya está dado.
-  let pendiente = (await store.recorridosDeUnidad(unidadId))
-    .filter((r) => !r.usado)
-    .sort((a, b) => (a.creado < b.creado ? 1 : -1))[0] || null;
+  let pendiente = await store.recorridoPendiente(unidadId);
 
   /** El recorrido tal y como se guarda: el audio entero y las marcas. */
   const paquete = (capturado) => ({
@@ -484,9 +482,13 @@ export async function render({ promoId, unidadId }) {
     const cerradas = () => vivas().filter((f) => f.guardada);
     const abiertas = () => vivas().filter((f) => !f.guardada);
     let mirando = abiertas()[0] || vivas()[0] || null;
-    /* La foto que se está viendo ahora mismo, para poder enseñarla en la
-       pregunta cuando el borrado se pide desde el menú de los tres
-       puntos y no desde la propia ficha. Vale null en la antesala. */
+    /* Si ahora mismo hay una ficha en pantalla, y cuál es su foto.
+
+       Las dos hacen falta para el menú de los tres puntos: «eliminar
+       esta tarea» solo tiene sentido con una ficha delante, y la
+       pregunta enseña la foto para que se vea cuál se va. No vale
+       mirar solo la foto: una ficha puede no tenerla. */
+    let enFicha = false;
     let fotoMirando = null;
 
     const irAFicha = (f) => { mirando = f; pintarFicha(); };
@@ -500,6 +502,7 @@ export async function render({ promoId, unidadId }) {
        Aquí se decide cómo se llenan las fichas: dejando que las escriba
        la IA, o entrando a escribirlas a mano. */
     const pintarAntesala = (motivo = '') => {
+      enFicha = false;
       fotoMirando = null;
       cab.ponerTitulo(u.nombre);
       cab.ponerVuelta(() => salir());
@@ -546,6 +549,7 @@ export async function render({ promoId, unidadId }) {
 
       const url = f.sinFoto ? null : URL.createObjectURL(f.marca.blob);
       if (url) urlsSueltas.push(url);
+      enFicha = true;
       fotoMirando = url;
 
       /* La foto. La papelera de la esquina cambia la imagen —no borra la
@@ -1089,7 +1093,7 @@ export async function render({ promoId, unidadId }) {
       /* «Eliminar esta tarea» solo cuando hay una ficha delante. En la
          antesala no hay ninguna «esta», y una fila que no sabe a qué se
          refiere es peor que no estar. */
-      mirando && vivas().includes(mirando) ? filaMenu('trash', 'Eliminar esta tarea', () => {
+      enFicha && mirando && vivas().includes(mirando) ? filaMenu('trash', 'Eliminar esta tarea', () => {
         const f = mirando;
         const foto = fotoMirando;
         cerrar();
@@ -1101,7 +1105,20 @@ export async function render({ promoId, unidadId }) {
     arranque();
   };
 
-  pintarPreparado();
+  /* Con `seguir` se entra directo al repaso: ni cámara, ni micrófono,
+     ni pop up de arranque. Viene del aviso de la ficha de la vivienda,
+     donde ya se ha decidido que lo que toca es terminar lo de antes.
+
+     Si el paseo ya no está —se terminó desde otra pestaña, o el aviso
+     venía de un enlace viejo— se vuelve a la vivienda diciéndolo. Abrir
+     la cámara aquí sería empezar un recorrido nuevo sin que nadie lo
+     haya pedido. */
+  if (seguir) {
+    if (pendiente) pintarRepaso(pendiente);
+    else { toast('Ese recorrido ya no está'); ir(volver, { reemplazar: true }); }
+  } else {
+    pintarPreparado();
+  }
 
   return {
     sinTabs: true,

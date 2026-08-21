@@ -17,7 +17,7 @@
 import { h, icon, avatar, toast, fechaCorta, hora } from '../ui.js';
 import * as store from '../store.js';
 import { PROMOCIONES, unidad, estado, puedeVerificar } from '../catalog.js';
-import { avisoLocal, barraSync, cabecera, tarjetaVilla, cuandoVilla } from '../piezas.js';
+import { avisoLocal, barraSync, bannerMordido as banner, cabecera, tarjetaVilla, cuandoVilla } from '../piezas.js';
 import { ir, conFiltros, refrescar } from '../app.js';
 
 /**
@@ -34,18 +34,9 @@ function saludo(usuario) {
   return 'Hoy vamos a cazar cada repaso! 👋🏻';
 }
 
-/** El banner con el mordisco: rótulo, cifra y botón redondo. */
-function banner({ clase, rotulo, cifra, adonde, alPinchar }) {
-  return h('button.d-banner', { class: clase, onclick: () => { alPinchar?.(); ir(adonde); } },
-    h('span.d-mordida'),
-    h('span.d-mordida-esquina'),
-    h('span.d-banner-texto', null,
-      h('span.d-banner-rotulo', null, rotulo),
-      h('span.d-banner-cifra', null, String(cifra)),
-    ),
-    h('span.d-banner-boton', null, icon('flechaSubir')),
-  );
-}
+/* El banner con el mordisco se mudó a piezas.js: lo comparte con el
+   aviso de recorrido a medias de la ficha de la vivienda. Aquí llega
+   con el nombre de siempre. */
 
 /* Cuántos minutos seguidos cuentan como la misma tanda de trabajo. */
 const RAFAGA = 10 * 60 * 1000;

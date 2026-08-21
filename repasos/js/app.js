@@ -21,6 +21,11 @@ const RUTAS = [
   { patron: /^\/p\/([^/]+)\/v\/([^/]+)$/,     vista: () => import('./views/listas.js'),       params: (m) => ({ promoId: m[1], unidadId: `${m[1]}:${m[2]}` }) },
   { patron: /^\/p\/([^/]+)\/v\/([^/]+)\/nueva$/, vista: () => import('./views/nuevaTarea.js'), params: (m) => ({ promoId: m[1], unidadId: `${m[1]}:${m[2]}` }) },
   { patron: /^\/p\/([^/]+)\/v\/([^/]+)\/recorrido$/, vista: () => import('./views/recorrido.js'), params: (m) => ({ promoId: m[1], unidadId: `${m[1]}:${m[2]}` }) },
+  /* La misma pantalla, entrando por la puerta de atrás: al repaso de un
+     paseo ya grabado, sin abrir la cámara. Es lo que hace el aviso de
+     «recorrido a medias» de la ficha de la vivienda, donde ya se ha
+     decidido que lo que toca es terminar lo de antes y no grabar más. */
+  { patron: /^\/p\/([^/]+)\/v\/([^/]+)\/recorrido\/seguir$/, vista: () => import('./views/recorrido.js'), params: (m) => ({ promoId: m[1], unidadId: `${m[1]}:${m[2]}`, seguir: true }) },
   { patron: /^\/l\/([^/]+)$/,                 vista: () => import('./views/tareas.js'),       params: (m) => ({ listaId: m[1] }) },
   { patron: /^\/l\/([^/]+)\/t\/([^/]+)$/,     vista: () => import('./views/tarea.js'),        params: (m) => ({ listaId: m[1], tareaId: m[2] }) },
   { patron: /^\/tareas\/([^/]+)$/,           vista: () => import('./views/tareasEstado.js'), params: (m) => ({ estadoId: m[1] }) },

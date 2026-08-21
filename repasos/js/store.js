@@ -730,6 +730,39 @@ export async function recorridosDeUnidad(unidadId) {
 }
 
 /**
+ * El recorrido grabado y todavía sin convertir en tareas, si lo hay.
+ *
+ * Vive aquí y no en cada pantalla porque lo preguntan dos: el aviso de
+ * la ficha de la vivienda y la propia pantalla del recorrido. Si cada
+ * una lo buscara a su manera acabarían diciendo cosas distintas del
+ * mismo paseo, que es la peor forma de perder la confianza en un
+ * aviso. El más reciente, que es el que se estaba haciendo.
+ */
+export async function recorridoPendiente(unidadId) {
+  return (await recorridosDeUnidad(unidadId))
+    .filter((r) => !r.usado)
+    .sort((a, b) => (a.creado < b.creado ? 1 : -1))[0] || null;
+}
+
+/**
+ * Lo que queda de un recorrido a medias, en números.
+ *
+ * Las fotos que siguen en pie —sin las quitadas y sin las que se
+ * absorbieron en otra ficha— y cuántas de ellas están ya escritas y
+ * guardadas. Con esto el aviso puede decir «2 de 6 listas» en vez del
+ * «tienes algo pendiente» de siempre, que no dice si queda un minuto
+ * o media hora.
+ */
+export function resumenRecorrido(rec) {
+  if (!rec) return null;
+  const fichas = rec.fichas || [];
+  const retiradas = new Set(fichas.filter((f) => f.fuera || f.absorbida).map((f) => String(f.id)));
+  const fotos = (rec.marcas || []).filter((m) => !retiradas.has(String(m.id))).length;
+  const listas = fichas.filter((f) => f.guardada && !f.fuera && !f.absorbida).length;
+  return { fotos, listas, duracion: rec.duracion || 0, creado: rec.creado };
+}
+
+/**
  * El recorrido ya es un acta con sus tareas. Se sueltan las fotos —cada
  * una está ya copiada dentro de su tarea, y guardarlas dos veces llena
  * el móvil— y se conserva el audio, que es lo único que no está en

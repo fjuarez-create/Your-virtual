@@ -15,8 +15,8 @@ import { h, icon, toast, avatar, fechaCorta, hora } from '../ui.js';
 import { promocion, unidad, oficio, estado as estadoDe, puedeCrearLista } from '../catalog.js';
 import * as store from '../store.js';
 import {
-  cabecera, tarjetaActa, tarjetaTarea, cuandoTarea, bannerAvance, hojaZonas, hojaFiltroTareas,
-  caraDeGremio,
+  cabecera, tarjetaActa, tarjetaTarea, cuandoTarea, cuandoCorto, bannerAvance, bannerMordido,
+  hojaZonas, hojaFiltroTareas, caraDeGremio,
   avisoLocal, barraSync, menuFlotante, menuTarjeta, filaMenu, filaMenuFichero, bandeja,
 } from '../piezas.js';
 import { hojaDePuerta, nombreDeFichero } from '../pdf.js';
@@ -32,6 +32,10 @@ export async function render({ promoId, unidadId }) {
   if (!p || !u) { toast('Vivienda desconocida', 'err'); ir('#/viviendas', { reemplazar: true }); return { contenido: [] }; }
 
   const { actas, tareas } = await store.tareasDeUnidad(unidadId);
+
+  // El paseo grabado y todavía sin convertir en tareas, si lo hay: es
+  // trabajo ya hecho que hasta ahora no se veía desde ninguna pantalla.
+  const pendiente = await store.recorridoPendiente(unidadId);
 
   // La foto de cada tarea, para las tarjetas grandes de la lista.
   const portadas = new Map();
@@ -236,6 +240,32 @@ export async function render({ promoId, unidadId }) {
     filaMenu('destello', 'Recorrido IA', () => { cerrar(); ir(`#/p/${promoId}/v/${nn}/recorrido`); }),
   ]);
 
+  /* ─── El aviso de recorrido a medias ───
+     Un paseo grabado y sin terminar de repasar no se veía por ninguna
+     parte: había que entrar en «Nueva inspección», dejar que se abriera
+     la cámara y ver la fila «Repasar el recorrido a medias» en el pop
+     up. Trabajo hecho, escondido detrás de una cámara encendida.
+
+     Ahora se dice arriba del todo y con números, que es lo que decide
+     si lo retomas ahora o después: cuándo se grabó y cuánto queda. Y
+     lleva directo al repaso, sin encender nada. */
+  const bannerPendiente = () => {
+    const r = store.resumenRecorrido(pendiente);
+    if (!r || !r.fotos) return null;
+    return bannerMordido({
+      clase: 'verde',
+      rotulo: `Recorrido a medias · ${cuandoCorto(r.creado)}`,
+      // Lo que queda por hacer, no lo que se grabó: con dos ya escritas
+      // de seis, «6 fotos» miente sobre el rato que falta.
+      // El plural va con el total, no con lo hecho: «1 de 4 listas».
+      cifra: r.listas
+        ? `${r.listas} de ${r.fotos} ${r.fotos === 1 ? 'lista' : 'listas'}`
+        : `${r.fotos} ${r.fotos === 1 ? 'foto' : 'fotos'}`,
+      icono: 'destello',
+      adonde: `#/p/${promoId}/v/${nn}/recorrido/seguir`,
+    });
+  };
+
   pintar();
 
   return {
@@ -248,6 +278,11 @@ export async function render({ promoId, unidadId }) {
         menu,
       }),
       avisoLocal() || barraSync(),
+
+      /* Lo primero de todo, por encima del avance: un recorrido a
+         medias es lo único de esta pantalla que está esperando a que
+         alguien vuelva. El avance de la casa seguirá ahí mañana. */
+      bannerPendiente(),
 
       // El PDF ya no vive aquí: se baja desde los tres puntos de
       // arriba. Esta banda solo informa, y el color lo lleva el anillo.

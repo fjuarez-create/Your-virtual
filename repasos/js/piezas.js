@@ -1146,6 +1146,34 @@ export function tramoAvance(pct) {
 }
 
 /**
+ * El banner mordido del diseño: rótulo arriba, cifra grande debajo y la
+ * bola redonda asomando por la esquina de abajo a la derecha.
+ *
+ * Vivía metido en la portada, que era donde nació. Ahora lo usa también
+ * el aviso de recorrido a medias de la ficha de la vivienda, y dos
+ * copias de la misma forma se separan a la primera: basta que alguien
+ * toque un relleno en un sitio y no en el otro.
+ *
+ * `icono` es el de la bola. De serie la flecha, que es lo que hacen los
+ * tres de la portada: llevarte a una lista. Cuando el banner hace otra
+ * cosa —seguir un recorrido, por ejemplo— el icono lo dice.
+ */
+export function bannerMordido({ clase, rotulo, cifra, icono = 'flechaSubir', adonde, alPinchar }) {
+  return h('button.d-banner', {
+    class: clase,
+    onclick: () => { alPinchar?.(); if (adonde) ir(adonde); },
+  },
+    h('span.d-mordida'),
+    h('span.d-mordida-esquina'),
+    h('span.d-banner-texto', null,
+      h('span.d-banner-rotulo', null, rotulo),
+      h('span.d-banner-cifra', null, String(cifra)),
+    ),
+    h('span.d-banner-boton', null, icon(icono)),
+  );
+}
+
+/**
  * La banda beige del avance de una vivienda: la frase arriba, el
  * porcentaje grande debajo y el anillo asomando por la esquina, con el
  * mordisco del diseño alrededor.
@@ -1215,6 +1243,25 @@ export function cuandoTarea(iso) {
   if (d.toDateString() === ayer.toDateString()) return `Ayer, ${hora(iso)}`;
   if (d.getFullYear() === hoy.getFullYear()) return `${d.getDate()} ${MESES_CORTOS[d.getMonth()]}, ${hora(iso)}`;
   return `${d.getDate()} ${MESES_CORTOS[d.getMonth()]}, ${d.getFullYear()}`;
+}
+
+/**
+ * El mismo cuándo, sin hora: «hoy», «ayer», «12 ago», «12 ago 2025».
+ *
+ * Para los sitios donde la fecha va pegada a otra cosa dentro de una
+ * línea que no puede partirse —el rótulo de un banner, por ejemplo—.
+ * Ahí la hora no decide nada y sí llega a echar el texto fuera del
+ * ancho en un móvil estrecho.
+ */
+export function cuandoCorto(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const hoy = new Date();
+  const ayer = new Date(hoy); ayer.setDate(hoy.getDate() - 1);
+  if (d.toDateString() === hoy.toDateString()) return 'hoy';
+  if (d.toDateString() === ayer.toDateString()) return 'ayer';
+  const corto = `${d.getDate()} ${MESES_CORTOS[d.getMonth()]}`;
+  return d.getFullYear() === hoy.getFullYear() ? corto : `${corto} ${d.getFullYear()}`;
 }
 
 /**
