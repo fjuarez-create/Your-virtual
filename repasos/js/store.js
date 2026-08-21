@@ -719,14 +719,63 @@ export async function oficiosMasUsados(unidadId, cuantos = 5) {
    Un recorrido es material de trabajo, no el repaso: vive solo en este
    dispositivo y no viaja al servidor. Cuando se convierte en tareas,
    son las tareas las que se suben; el recorrido se queda de respaldo
-   —con el audio dentro— hasta que alguien lo retire. */
+   —con el audio dentro— hasta que alguien lo retire.
+
+   AL DISCO NO VAN BLOBS. VAN BYTES. Y no es un capricho: Safari guarda
+   los Blobs de IndexedDB como ficheros aparte, y cuando la app lleva
+   días cerrada esos ficheros se le pierden. El registro vuelve con la
+   ficha del Blob —tamaño, tipo— pero sin los datos: la foto sale rota
+   y leerla revienta. Nos pasó con el audio de un recorrido y volvió a
+   pasar con las fotos de un paseo retomado días después. Un
+   ArrayBuffer, en cambio, viaja DENTRO del registro: o está entero o
+   no está, sin medias tintas.
+
+   El truco es de ida y vuelta: al guardar, cada Blob se vuelca una vez
+   a bytes (y se recuerda en el propio objeto, para que los reguardados
+   del apunte continuo no lo vuelquen otra vez); al leer, los bytes se
+   envuelven en un Blob nuevo, que es lo que las pantallas esperan.
+   Los recorridos viejos, guardados con Blobs, pasan tal cual: si su
+   Blob sigue vivo, el primer guardado los convierte; si ya murió, no
+   hay bytes que rescatar. */
+
+/** Vuelca a bytes lo que aún sea Blob. Ilegible = se queda como está. */
+async function dormirRecorrido(rec) {
+  if (!rec.audioBytes && rec.audio instanceof Blob) {
+    try { rec.audioBytes = await rec.audio.arrayBuffer(); } catch { /* muerto: no hay nada que volcar */ }
+  }
+  for (const m of rec.marcas || []) {
+    if (!m.bytes && m.blob instanceof Blob) {
+      try { m.bytes = await m.blob.arrayBuffer(); } catch { /* ídem */ }
+    }
+  }
+  return {
+    ...rec,
+    audio: rec.audioBytes ? null : rec.audio,
+    marcas: (rec.marcas || []).map((m) => ({ ...m, blob: m.bytes ? null : m.blob })),
+  };
+}
+
+/** Envuelve los bytes en Blobs, que es lo que esperan las pantallas. */
+function despertarRecorrido(rec) {
+  if (!rec) return rec;
+  if (rec.audioBytes && !(rec.audio instanceof Blob)) {
+    rec.audio = new Blob([rec.audioBytes], { type: rec.mime || 'audio/webm' });
+  }
+  for (const m of rec.marcas || []) {
+    if (m.bytes && !(m.blob instanceof Blob)) {
+      m.blob = new Blob([m.bytes], { type: 'image/jpeg' });
+    }
+  }
+  return rec;
+}
+
 export async function guardarRecorrido(rec) {
-  await db.put('recorridos', rec);
+  await db.put('recorridos', await dormirRecorrido(rec));
   return rec;
 }
 
 export async function recorridosDeUnidad(unidadId) {
-  return db.porIndice('recorridos', 'unidadId', unidadId);
+  return (await db.porIndice('recorridos', 'unidadId', unidadId)).map(despertarRecorrido);
 }
 
 /**
@@ -773,7 +822,8 @@ export async function marcarRecorridoUsado(id, listaId) {
   if (!r) return null;
   const nuevo = {
     ...r, usado: true, listaId, usadoEn: ahora(),
-    marcas: (r.marcas || []).map(({ blob, ...resto }) => resto),
+    // Fuera el Blob y fuera los bytes: la foto ya vive en su tarea.
+    marcas: (r.marcas || []).map(({ blob, bytes, ...resto }) => resto),
   };
   await db.put('recorridos', nuevo);
   await barrerRecorridos();

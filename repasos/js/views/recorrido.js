@@ -547,7 +547,10 @@ export async function render({ promoId, unidadId, seguir = false }) {
       // la pantalla. Salir ya no cuesta nada: está todo apuntado.
       cab.ponerVuelta(() => (vecina(-1) ? irAFicha(vecina(-1)) : salir()));
 
-      const url = f.sinFoto ? null : URL.createObjectURL(f.marca.blob);
+      // Sin Blob no hay dirección que crear: pasa en fichas viejas cuya
+      // foto se perdió en el disco, y antes tiraba la pantalla entera.
+      const url = f.sinFoto || !(f.marca.blob instanceof Blob) ? null
+        : URL.createObjectURL(f.marca.blob);
       if (url) urlsSueltas.push(url);
       enFicha = true;
       fotoMirando = url;
@@ -555,14 +558,34 @@ export async function render({ promoId, unidadId, seguir = false }) {
       /* La foto. La papelera de la esquina cambia la imagen —no borra la
          ficha—, y por eso pregunta con las palabras exactas de lo que
          hace. Borrar la ficha entera es el botón de abajo. */
+      /* Si el Blob volvió muerto del disco —Safari pierde los que
+         guarda, ver store.js; los recorridos nuevos van en bytes y ya
+         no les pasa—, el navegador pintaba su icono de imagen rota,
+         que parece un fallo y no dice qué hacer. Se cambia por la
+         verdad y por la salida: la papelera hace otra foto. */
+      const imagen = url ? h('img', { src: url, alt: 'Foto del repaso' }) : null;
+      if (imagen) {
+        imagen.addEventListener('error', () => {
+          foto.dataset.rota = '1';
+          fotoMirando = null;
+          imagen.replaceWith(h('div', {
+            style: { display: 'grid', placeItems: 'center', gap: '6px', height: '100%', color: 'var(--d-gris)', textAlign: 'center', padding: '20px' },
+          },
+            icon('camera', 30),
+            h('p', { style: { margin: 0, fontSize: '15px' } }, 'La foto no se pudo recuperar'),
+            h('p', { style: { margin: 0, fontSize: '13px' } }, 'Con la papelera puedes hacer otra'),
+          ));
+        });
+      }
+
       const foto = h('div.d-foto.repaso', {
         style: url ? {} : { display: 'grid', placeItems: 'center', color: 'var(--d-gris)' },
         onclick: (ev) => {
-          if (ev.target.closest('.d-foto-papelera') || ev.target.closest('.tag') || !url) return;
+          if (ev.target.closest('.d-foto-papelera') || ev.target.closest('.tag') || !url || foto.dataset.rota) return;
           openViewer(h('img', { src: url, alt: '' }));
         },
       },
-        url ? h('img', { src: url, alt: 'Foto del repaso' }) : icon('image', 30),
+        imagen || icon('image', 30),
         // El trocito de grabación de este momento, solo si hay audio.
         audio ? h('span.tag', {
           style: { position: 'absolute', left: '10px', top: '10px', background: 'rgba(0,0,0,.45)', color: '#fff' },
@@ -594,6 +617,9 @@ export async function render({ promoId, unidadId, seguir = false }) {
         try {
           const img = await prepararImagen(ficheros[0]);
           f.marca.blob = img.blob; f.marca.ancho = img.ancho; f.marca.alto = img.alto;
+          // Los bytes viejos, fuera: son la foto anterior y el guardado
+          // los reutilizaría creyendo que el Blob nuevo ya está volcado.
+          f.marca.bytes = null;
           f.sinFoto = false;
           await apuntar({ ya: true });
           pintarFicha();
@@ -677,13 +703,15 @@ export async function render({ promoId, unidadId, seguir = false }) {
         ...f.extras.map((id) => {
           const g = porMarca.get(String(id));
           if (!g) return null;
-          const u2 = URL.createObjectURL(g.marca.blob);
-          urlsSueltas.push(u2);
+          // La miniatura solo si su foto sigue viva; si se perdió, el
+          // hueco con el aspa sigue ahí para poder separarla igual.
+          const u2 = g.marca.blob instanceof Blob ? URL.createObjectURL(g.marca.blob) : null;
+          if (u2) urlsSueltas.push(u2);
           return h('button.d-rec-extra', {
             'aria-label': 'Otra foto de este mismo repaso',
-            onclick: () => openViewer(h('img', { src: u2, alt: '' })),
+            onclick: () => { if (u2) openViewer(h('img', { src: u2, alt: '' })); },
           },
-            h('img', { src: u2, alt: '' }),
+            u2 ? h('img', { src: u2, alt: '' }) : icon('image', 18),
             h('span.quitar', {
               'aria-label': 'Sacarla de este repaso',
               onclick: async (ev) => {
@@ -801,27 +829,60 @@ export async function render({ promoId, unidadId, seguir = false }) {
       const buenas = cerradas();
       if (!buenas.length) return;
       toast('Creando las tareas…');
-      const lista = await store.crearLista({ unidadId, promoId, fase: FASE_UNICA });
-      for (const f of buenas) {
-        const t = await store.crearTarea({
-          listaId: lista.id, texto: f.texto.trim(), oficio: f.oficio, zona: f.zona,
-        });
-        if (!f.sinFoto) {
-          // Todas las fotos del remate, no solo la principal.
-          for (const m of fotosDe(f)) {
-            await store.añadirMedio(t.id, {
-              tipo: 'imagen', blob: m.blob, mime: 'image/jpeg',
-              ancho: m.ancho, alto: m.alto,
-            });
+
+      /* Todo el tramo va vigilado, y no por manía. Aquí antes no había
+         try/catch, y el día que una foto llegó muerta del disco —Safari
+         pierde los Blobs guardados, ver store.js— esto reventaba justo
+         después del «Creando las tareas…» y se quedaba clavado en la
+         ficha: ni tareas, ni aviso, ni salida. Lo peor de lo peor,
+         porque parecía que algo se estaba creando y no.
+
+         Ahora cada foto se comprueba leyéndola ANTES de meterla: una
+         ilegible se apunta como perdida y la tarea sale igual, con su
+         texto, su gremio y su estancia, que es trabajo escrito a mano y
+         no se tira porque a Safari se le haya caído un fichero. Y si
+         aun así algo revienta, se dice y te quedas donde estás, con
+         todo lo repasado intacto. */
+      let lista;
+      let perdidas = 0;
+      try {
+        lista = await store.crearLista({ unidadId, promoId, fase: FASE_UNICA });
+        for (const f of buenas) {
+          const t = await store.crearTarea({
+            listaId: lista.id, texto: f.texto.trim(), oficio: f.oficio, zona: f.zona,
+          });
+          if (!f.sinFoto) {
+            // Todas las fotos del remate, no solo la principal.
+            for (const m of fotosDe(f)) {
+              try {
+                if (!(m.blob instanceof Blob) || !m.blob.size) throw new Error('sin foto');
+                // La lectura completa es la única prueba de vida real:
+                // un Blob perdido conserva el tamaño y solo falla al leer.
+                await m.blob.arrayBuffer();
+                await store.añadirMedio(t.id, {
+                  tipo: 'imagen', blob: m.blob, mime: 'image/jpeg',
+                  ancho: m.ancho, alto: m.alto,
+                });
+              } catch {
+                perdidas += 1;
+              }
+            }
           }
         }
+        await store.marcarRecorridoUsado(rec.id, lista.id);
+      } catch (e) {
+        console.error(e);
+        toast('No se han podido crear las tareas. Nada se ha perdido: vuelve a intentarlo.', 'err');
+        return;
       }
-      await store.marcarRecorridoUsado(rec.id, lista.id);
       guardarAlSalir = null;
       const yo = store.sesion();
       await hojaBienHecho({
         titulo: `Excelente${nombreCorto(yo) ? ', ' + nombreCorto(yo) : ''}`,
-        frase: `${buenas.length} ${buenas.length === 1 ? 'tarea creada' : 'tareas creadas'}. Que empiecen los remates.`,
+        frase: `${buenas.length} ${buenas.length === 1 ? 'tarea creada' : 'tareas creadas'}. `
+          + (perdidas
+            ? `${perdidas === 1 ? 'Una foto no se pudo recuperar' : `${perdidas} fotos no se pudieron recuperar`} y ${perdidas === 1 ? 'su tarea sale' : 'sus tareas salen'} sin imagen.`
+            : 'Que empiecen los remates.'),
         usuario: yo,
         boton: `Volver a ${u.nombre}`,
       });
