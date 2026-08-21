@@ -2211,6 +2211,9 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
   position: absolute; right: 0; bottom: 0; width: 55px; height: 55px;
   display: grid; place-items: center; color: #fff;
   filter: drop-shadow(0 1px 4px rgba(0, 0, 0, .55));
+  /* Al 50%, como en el Figma: está encima de la foto y no debe
+     comérsela. Vale para todas las papeleras sobre imágenes. */
+  opacity: .5;
 }
 .d-foto-papelera svg { width: 20px; height: 20px; }
 .d-minis { display: flex; gap: 11px; overflow-x: auto; scrollbar-width: none; }
@@ -2560,8 +2563,13 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
    horizontales donde viven normalmente, y aquí, en columna, ese flex
    los hincharía a lo alto. */
 .recorrido.ficha > * { flex: 0 0 auto; }
-.recorrido.ficha .d-rec-avance { margin: 2px 0 0; }
-.d-rec-villa { margin: -6px 0 0; font: 500 13px/18px var(--d-font); color: var(--d-gris); }
+/* La villa, en su pastilla blanca como los desplegables pero quieta:
+   ni flecha ni nada que tocar. Solo dice desde dónde se hizo. */
+.d-rec-villa {
+  height: 48px; padding: 12px 16px; border-radius: 999px; background: #fff;
+  display: flex; align-items: center;
+  font-size: 16px; font-weight: 500; color: var(--d-tinta);
+}
 .recorrido.ficha .d-foto.repaso {
   aspect-ratio: auto; height: auto; flex: 1 1 auto; min-height: 132px;
 }
@@ -2573,6 +2581,22 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 }
 .recorrido.ficha .d-area { resize: none; }
 .recorrido.ficha .d-rec-pie { margin-top: 0; }
+/* El pie del Figma: los dos botones a todo lo ancho, apilados. El
+   flex:1 de la versión en fila, fuera: en columna aplastaba el botón
+   (y con nombre y apellidos, que la regla vieja va después en el
+   fichero y a igual peso ganaría ella). */
+.d-rec-pie.apilado { flex-direction: column; gap: 10px; }
+.d-rec-pie.apilado .d-boton-negro,
+.d-rec-pie.apilado .d-boton-hueco {
+  width: 100%; flex: 0 0 auto; height: 48px;
+}
+/* «Descartar tarea»: blanco hueco, con la voz baja. */
+.d-boton-hueco {
+  height: 48px; border-radius: 999px; background: #fff;
+  border: 1px solid #e4e0db; color: var(--d-gris);
+  font-size: 16px; font-weight: 500;
+  display: flex; align-items: center; justify-content: center;
+}
 /* Lo que la IA no pilló se pide con la voz baja: el texto de espera de
    los desplegables y de la descripción, en un gris más claro. */
 .recorrido.ficha .d-desplegable:not(.puesto) span { color: #b7b3ae; }

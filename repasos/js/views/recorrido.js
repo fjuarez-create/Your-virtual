@@ -668,12 +668,9 @@ export async function render({ promoId, unidadId, seguir = false }) {
       };
       texto.addEventListener('input', () => { f.texto = texto.value; crecer(); apuntar(); validar(); });
 
-      /* El pie: guardar manda y eliminar se aparta.
-
-         Antes los dos ocupaban la mitad justa cada uno, del mismo
-         tamaño y pegados: uno no tiene vuelta atrás y el otro es lo que
-         se hace nueve de cada diez veces. Ahora eliminar es un botón
-         estrecho y callado, y guardar se lleva el ancho. */
+      /* El pie del Figma: dos botones a todo lo ancho, uno debajo del
+         otro. «Crear tarea» en negro manda; «Descartar tarea» en
+         blanco hueco, debajo, sin pelear por la vista. */
       const guardarBtn = h('button.d-boton-negro', {
         onclick: async () => {
           f.guardada = true;
@@ -682,12 +679,11 @@ export async function render({ promoId, unidadId, seguir = false }) {
           if (sig) { irAFicha(sig); return; }
           await cerrarElRepaso();
         },
-      }, f.guardada ? 'Guardada · seguir' : 'Guardar');
+      }, f.guardada ? 'Creada · seguir' : 'Crear tarea');
 
-      const borrarBtn = h('button.d-fantasma.estrecho', {
-        'aria-label': 'Descartar esta tarea',
+      const descartarBtn = h('button.d-boton-hueco', {
         onclick: () => quitarFicha(f),
-      }, icon('trash'));
+      }, 'Descartar tarea');
 
       const validar = () => { guardarBtn.disabled = !(f.texto.trim() && f.oficio && f.zona); };
       validar();
@@ -730,27 +726,24 @@ export async function render({ promoId, unidadId, seguir = false }) {
         }).filter(Boolean),
       ) : null;
 
-      /* El orden del Figma («Tarea 2 de 4», A y B): la barra de avance,
-         la villa de señalización, los dos desplegables, la descripción,
-         la foto estirando con lo que quede, y los botones abajo, a la
-         vista SIEMPRE. La clase `ficha` hace del lienzo una columna que
-         mide la pantalla: la foto absorbe el sobrante —recorta, nunca
-         deforma— y el pie no se va del ojo. */
+      /* El orden del Figma («TAREA 2 DE 4», pantallas A y B): la FOTO
+         arriba, estirando con todo lo que sobre —en la A, pantalla
+         corta, queda más baja; en la B, más alta: recorta, nunca
+         deforma—; la villa en su pastilla, solo como señalización; los
+         dos desplegables; la descripción con su alto justo; y el pie
+         con los dos botones, SIEMPRE a la vista. La clase `ficha` hace
+         del lienzo una columna que mide la pantalla. */
       lienzo.classList.add('ficha');
       lienzo.replaceChildren(...[
-        // La barra de por dónde vas, pegada bajo la cabecera.
-        h('div.d-rec-avance', null,
-          ...l.map((x) => h('span', { class: x === f ? 'aqui' : (x.guardada ? 'hecha' : '') })),
-        ),
-        // La villa, solo como señalización: el recorrido ya se hizo
-        // desde ella y no hay nada que pedir ni que explicar.
-        h('p.d-rec-villa', null, u.nombre),
+        foto,
+        extras,
+        // La villa: el recorrido ya se hizo desde ella y no hay nada
+        // que pedir ni que explicar, solo decir cuál es.
+        h('div.d-rec-villa', null, u.nombre),
         selZona,
         selGremio,
         texto,
-        foto,
-        extras,
-        h('div.d-rec-pie', null, borrarBtn, guardarBtn),
+        h('div.d-rec-pie.apilado', null, guardarBtn, descartarBtn),
         // Cuando ya está todo cerrado, el remate se puede dar desde
         // cualquier ficha sin tener que llegar hasta la última.
         abiertas().length ? null : h('button.d-boton-negro.claro', {
