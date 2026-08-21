@@ -255,6 +255,7 @@ export async function render({ promoId, unidadId, seguir = false }) {
       tira.scrollLeft = tira.scrollWidth;
     });
 
+    lienzo.classList.remove('ficha');
     lienzo.replaceChildren();
     document.body.append(visor);
     visorActual = visor;
@@ -482,14 +483,9 @@ export async function render({ promoId, unidadId, seguir = false }) {
     const cerradas = () => vivas().filter((f) => f.guardada);
     const abiertas = () => vivas().filter((f) => !f.guardada);
     let mirando = abiertas()[0] || vivas()[0] || null;
-    /* Si ahora mismo hay una ficha en pantalla, y cuál es su foto.
-
-       Las dos hacen falta para el menú de los tres puntos: «eliminar
-       esta tarea» solo tiene sentido con una ficha delante, y la
-       pregunta enseña la foto para que se vea cuál se va. No vale
-       mirar solo la foto: una ficha puede no tenerla. */
+    /* Si ahora mismo hay una ficha en pantalla: el menú de los tres
+       puntos solo ofrece «descartar esta tarea» cuando hay una delante. */
     let enFicha = false;
-    let fotoMirando = null;
 
     const irAFicha = (f) => { mirando = f; pintarFicha(); };
     const vecina = (paso) => {
@@ -503,7 +499,7 @@ export async function render({ promoId, unidadId, seguir = false }) {
        la IA, o entrando a escribirlas a mano. */
     const pintarAntesala = (motivo = '') => {
       enFicha = false;
-      fotoMirando = null;
+      lienzo.classList.remove('ficha');
       cab.ponerTitulo(u.nombre);
       cab.ponerVuelta(() => salir());
       const cuantas = vivas().length;
@@ -542,7 +538,9 @@ export async function render({ promoId, unidadId, seguir = false }) {
       const l = vivas();
       const n = l.indexOf(f) + 1;
 
-      cab.ponerTitulo(`Repaso ${n} de ${l.length}`);
+      // «Tarea», no «repaso»: lo que se está haciendo aquí es crear
+      // tareas, una por foto.
+      cab.ponerTitulo(`Tarea ${n} de ${l.length}`);
       // La flecha vuelve a la ficha anterior, y desde la primera sale de
       // la pantalla. Salir ya no cuesta nada: está todo apuntado.
       cab.ponerVuelta(() => (vecina(-1) ? irAFicha(vecina(-1)) : salir()));
@@ -553,7 +551,6 @@ export async function render({ promoId, unidadId, seguir = false }) {
         : URL.createObjectURL(f.marca.blob);
       if (url) urlsSueltas.push(url);
       enFicha = true;
-      fotoMirando = url;
 
       /* La foto. La papelera de la esquina cambia la imagen —no borra la
          ficha—, y por eso pregunta con las palabras exactas de lo que
@@ -567,7 +564,6 @@ export async function render({ promoId, unidadId, seguir = false }) {
       if (imagen) {
         imagen.addEventListener('error', () => {
           foto.dataset.rota = '1';
-          fotoMirando = null;
           imagen.replaceWith(h('div', {
             style: { display: 'grid', placeItems: 'center', gap: '6px', height: '100%', color: 'var(--d-gris)', textAlign: 'center', padding: '20px' },
           },
@@ -626,13 +622,9 @@ export async function render({ promoId, unidadId, seguir = false }) {
         } catch { toast('No se pudo leer la foto', 'err'); }
       };
 
-      /* Los campos: estancia y oficio en pastilla, y la descripción en
-         su caja. */
-      const campo = (rotulo, dentro) => h('div.d-campo', null,
-        h('label.d-campo-rotulo', null, rotulo, h('span.req', null, '*')),
-        dentro,
-      );
-
+      /* Los campos, sin rótulos encima: los propios desplegables dicen
+         qué son con su texto de espera, y el sitio que se ahorra se lo
+         lleva la foto. */
       const selZona = h('button.d-desplegable', { style: { width: '100%' }, onclick: async () => {
         const elegida = await hojaZonas(f.zona);
         if (elegida === null) return;
@@ -656,19 +648,23 @@ export async function render({ promoId, unidadId, seguir = false }) {
         pintarGremio(); validar();
       } }, h('span'), icon('caretAbajo'));
       const pintarGremio = () => {
-        selGremio.querySelector('span').textContent = f.oficio ? oficio(f.oficio).nombre : 'Seleccionar oficio';
+        selGremio.querySelector('span').textContent = f.oficio ? oficio(f.oficio).nombre : 'Seleccionar gremio';
         selGremio.classList.toggle('puesto', !!f.oficio);
       };
       pintarGremio();
 
+      /* La descripción: 400 caracteres como mucho, y la caja mide lo
+         que mide el texto —ni sobra blanco ni se corta—. Lo que la caja
+         no ocupa se lo queda la foto de abajo. */
       const texto = h('textarea.d-area', {
-        rows: 3, placeholder: 'Qué hay que hacer aquí…', autocapitalize: 'sentences',
-        style: { minHeight: '96px' },
+        rows: 1, maxlength: 400, placeholder: 'Qué hay que hacer aquí…',
+        autocapitalize: 'sentences',
+        style: { minHeight: '56px' },
       });
       texto.value = f.texto;
       const crecer = () => {
         texto.style.height = 'auto';
-        texto.style.height = Math.max(96, texto.scrollHeight) + 'px';
+        texto.style.height = Math.max(56, texto.scrollHeight) + 'px';
       };
       texto.addEventListener('input', () => { f.texto = texto.value; crecer(); apuntar(); validar(); });
 
@@ -689,8 +685,8 @@ export async function render({ promoId, unidadId, seguir = false }) {
       }, f.guardada ? 'Guardada · seguir' : 'Guardar');
 
       const borrarBtn = h('button.d-fantasma.estrecho', {
-        'aria-label': 'Eliminar este repaso',
-        onclick: () => quitarFicha(f, url),
+        'aria-label': 'Descartar esta tarea',
+        onclick: () => quitarFicha(f),
       }, icon('trash'));
 
       const validar = () => { guardarBtn.disabled = !(f.texto.trim() && f.oficio && f.zona); };
@@ -734,24 +730,30 @@ export async function render({ promoId, unidadId, seguir = false }) {
         }).filter(Boolean),
       ) : null;
 
+      /* El orden del Figma («Tarea 2 de 4», A y B): la barra de avance,
+         la villa de señalización, los dos desplegables, la descripción,
+         la foto estirando con lo que quede, y los botones abajo, a la
+         vista SIEMPRE. La clase `ficha` hace del lienzo una columna que
+         mide la pantalla: la foto absorbe el sobrante —recorta, nunca
+         deforma— y el pie no se va del ojo. */
+      lienzo.classList.add('ficha');
       lienzo.replaceChildren(...[
         // La barra de por dónde vas, pegada bajo la cabecera.
         h('div.d-rec-avance', null,
           ...l.map((x) => h('span', { class: x === f ? 'aqui' : (x.guardada ? 'hecha' : '') })),
         ),
+        // La villa, solo como señalización: el recorrido ya se hizo
+        // desde ella y no hay nada que pedir ni que explicar.
+        h('p.d-rec-villa', null, u.nombre),
+        selZona,
+        selGremio,
+        texto,
         foto,
         extras,
-        campo('Zona o estancia', selZona),
-        campo('Oficio o subcontrata', selGremio),
-        h('div.d-campo', null,
-          h('label.d-campo-rotulo', null, 'Descripción', h('span.req', null, '*')),
-          texto,
-        ),
         h('div.d-rec-pie', null, borrarBtn, guardarBtn),
         // Cuando ya está todo cerrado, el remate se puede dar desde
         // cualquier ficha sin tener que llegar hasta la última.
         abiertas().length ? null : h('button.d-boton-negro.claro', {
-          style: { marginTop: '10px' },
           onclick: () => crearLasTareas(),
         }, `Crear ${cerradas().length === 1 ? 'la tarea' : `las ${cerradas().length} tareas`}`),
       ].filter(Boolean));
@@ -760,18 +762,20 @@ export async function render({ promoId, unidadId, seguir = false }) {
       document.getElementById('app')?.scrollTo?.({ top: 0 });
     };
 
-    /* Quitar una ficha. La usan el botón del pie de la ficha y el menú
-       de los tres puntos, para que las dos puertas hagan lo mismo y
-       pregunten lo mismo. */
-    const quitarFicha = async (f, url = null) => {
+    /* Descartar una ficha. La usan el botón del pie de la ficha y el
+       menú de los tres puntos, para que las dos puertas hagan lo mismo
+       y pregunten lo mismo.
+
+       «Descartar», no «eliminar»: la tarea todavía no existe —se está
+       creando— y eliminar es lo que se hace con una ya creada. Y la
+       pregunta va pelada, sin miniatura ni explicación: dos opciones y
+       ya, como pidió Fran. */
+    const quitarFicha = async (f) => {
       if (!f) return;
       if (!await confirmar({
-        titulo: '¿Eliminar esta tarea?',
-        texto: 'Se quita esta foto del recorrido y no se creará ninguna tarea con ella. '
-          + 'Las demás siguen como están.',
-        ok: 'Eliminar esta tarea',
+        ok: 'Descartar tarea',
         rojo: true,
-        mini: url,
+        conservar: 'Conservar tarea',
       })) return;
       f.fuera = true;
       await apuntar({ ya: true });
@@ -1151,14 +1155,13 @@ export async function render({ promoId, unidadId, seguir = false }) {
        dos, y ésas preguntan. */
     menuDelRepaso = () => menuFlotante((cerrar) => [
       filaMenu('arrowLeft', 'Salir y seguir luego', () => { cerrar(); salir(); }),
-      /* «Eliminar esta tarea» solo cuando hay una ficha delante. En la
+      /* «Descartar esta tarea» solo cuando hay una ficha delante. En la
          antesala no hay ninguna «esta», y una fila que no sabe a qué se
          refiere es peor que no estar. */
-      enFicha && mirando && vivas().includes(mirando) ? filaMenu('trash', 'Eliminar esta tarea', () => {
+      enFicha && mirando && vivas().includes(mirando) ? filaMenu('trash', 'Descartar esta tarea', () => {
         const f = mirando;
-        const foto = fotoMirando;
         cerrar();
-        quitarFicha(f, foto);
+        quitarFicha(f);
       }, { rojo: true }) : null,
       filaMenu('trash', 'Descartar el recorrido', () => { cerrar(); descartarTodo(); }, { rojo: true }),
     ].filter(Boolean));

@@ -1836,6 +1836,11 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 .d-banner.verde .d-banner-boton { color: #fff; }
 .d-banner.rojo { --banner: var(--d-rojo); color: #f0f0fe; }
 .d-banner.rojo .d-banner-boton { color: #fff; }
+/* Negro: el color de lo que hace la IA en toda la app. Lo lleva el
+   aviso de recorrido a medias, que en verde se confundía con el banner
+   de tareas verificadas. */
+.d-banner.negro { --banner: var(--d-tinta); color: #f5f5f5; }
+.d-banner.negro .d-banner-boton { color: #fff; }
 
 /* ─── La tarjeta de vivienda (y el módulo de Brassie de la home):
    blanca, con mordisco y el anillo de avance en la esquina ── */
@@ -2530,6 +2535,48 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
    coma la pantalla entera. Lo que importa de la foto se reconoce igual,
    y así los campos entran sin desplazarse. */
 .d-foto.repaso { aspect-ratio: 4 / 3; border-radius: var(--d-radio); }
+
+/* ─── La ficha de una tarea del recorrido, a pantalla completa ───
+   El lienzo se vuelve una columna que mide justo lo que se ve: barra
+   de avance, la villa de señalización, los dos desplegables, la
+   descripción con su alto justo, la FOTO estirando con todo lo que
+   sobre, y los botones abajo, siempre a la vista sin desplazarse.
+
+   La foto no se deforma nunca: con `cover` recorta un poco de los
+   lados en pantallas altas y un poco de arriba y abajo en las bajas.
+   Y nada de `position: fixed` para el pie: dentro de una pantalla
+   animada el fijo se queda atrapado y aterriza donde no es (ya nos
+   pasó con las pantallas vacías de Tareas). El alto de la columna hace
+   el mismo trabajo sin trucos.
+
+   El 135 es lo que ocupan la cabecera y los aires de la pantalla; los
+   safe-area son el notch y la barra de abajo del iPhone. */
+.recorrido.ficha {
+  display: flex; flex-direction: column; gap: 12px;
+  min-height: calc(100vh - 135px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  min-height: calc(100dvh - 135px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+}
+/* Solo la foto crece. Los desplegables traen un flex de las filas
+   horizontales donde viven normalmente, y aquí, en columna, ese flex
+   los hincharía a lo alto. */
+.recorrido.ficha > * { flex: 0 0 auto; }
+.recorrido.ficha .d-rec-avance { margin: 2px 0 0; }
+.d-rec-villa { margin: -6px 0 0; font: 500 13px/18px var(--d-font); color: var(--d-gris); }
+.recorrido.ficha .d-foto.repaso {
+  aspect-ratio: auto; height: auto; flex: 1 1 auto; min-height: 132px;
+}
+/* A relleno absoluto: el alto en porcentaje dentro de una caja cuya
+   altura la decide el flex se queda corto en algunos navegadores, y la
+   foto dejaba una franja de fondo sin cubrir. */
+.recorrido.ficha .d-foto.repaso img {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+}
+.recorrido.ficha .d-area { resize: none; }
+.recorrido.ficha .d-rec-pie { margin-top: 0; }
+/* Lo que la IA no pilló se pide con la voz baja: el texto de espera de
+   los desplegables y de la descripción, en un gris más claro. */
+.recorrido.ficha .d-desplegable:not(.puesto) span { color: #b7b3ae; }
+.recorrido.ficha .d-area::placeholder { color: #b7b3ae; }
 
 /* El pie: guardar manda y eliminar se aparta.
    Antes ocupaban la mitad justa cada uno, del mismo tamaño y pegados.

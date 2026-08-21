@@ -254,7 +254,9 @@ export async function render({ promoId, unidadId }) {
     const r = store.resumenRecorrido(pendiente);
     if (!r || !r.fotos) return null;
     return bannerMordido({
-      clase: 'verde',
+      // Negro, como todo lo de la IA. El verde se confundía con el
+      // banner de tareas verificadas de la portada.
+      clase: 'negro',
       rotulo: `Recorrido a medias · ${cuandoCorto(r.creado)}`,
       // Lo que queda por hacer, no lo que se grabó: con dos ya escritas
       // de seis, «6 fotos» miente sobre el rato que falta.
