@@ -67,7 +67,6 @@ const EXTRAS = [
   'assets/icons/icon-192.png',
   'assets/logo/marca-unik.png',
   'assets/logo/marca-check.png',
-  'assets/vacio/carpetas.webp',
   // La nebulosa de la pantalla de la IA. Pesa 887 KB, que es mucho para
   // esta lista, pero se ve justo cuando peor viene esperar y en una obra
   // no siempre hay línea. Se baja una vez y ya está para siempre.

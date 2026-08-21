@@ -205,29 +205,26 @@ export async function render({ promoId, estadoId = 'resuelta' }) {
     }));
   };
 
-  /** Sin ninguna: la ilustración, el porqué y una salida útil. */
+  /** Sin ninguna: el porqué y, al final de la página, una salida útil.
+
+      Sin ilustración y sin trucos de posicionamiento: el botón iba
+      antes clavado con `position: fixed`, y dentro de una pantalla
+      animada el «fixed» se queda atrapado por el ancestro y aterriza
+      en mitad de la página, pisando el texto —así se vio en el móvil—.
+      Ahora todo va en el flujo: título, subtítulo y el botón abajo,
+      empujado por el propio alto de la caja. */
   const pantallaVacia = () => {
     const hayFiltros = !!filtroVivienda || filtroOficios.length > 0;
     const v = VACIO[estadoId];
-    if (hayFiltros) {
-      return [
-        h('div.d-vacio', null,
-          h('img', { src: 'assets/vacio/carpetas.webp', alt: '' }),
-          h('h2', null, 'Ninguna tarea con estos filtros'),
-          h('p', null, 'Prueba a quitar alguno para ver el resto.')),
-        h('div.d-vacio-pie', null,
-          h('button.d-boton-topo', {
-            onclick: () => { filtroVivienda = ''; filtroOficios = []; pintar(); },
-          }, 'Quitar los filtros')),
-      ];
-    }
+    const [titulo, frase, rotulo, accion] = hayFiltros
+      ? ['Ninguna tarea con estos filtros', 'Prueba a quitar alguno para ver el resto.',
+        'Quitar los filtros', () => { filtroVivienda = ''; filtroOficios = []; pintar(); }]
+      : [v.titulo, v.frase, v.salida.rotulo, () => cambiarEstado(v.salida.estado)];
     return [
       h('div.d-vacio', null,
-        h('img', { src: 'assets/vacio/carpetas.webp', alt: '' }),
-        h('h2', null, v.titulo),
-        h('p', null, v.frase)),
-      h('div.d-vacio-pie', null,
-        h('button.d-boton-topo', { onclick: () => cambiarEstado(v.salida.estado) }, v.salida.rotulo)),
+        h('h2', null, titulo),
+        h('p', null, frase),
+        h('button.d-boton-topo', { onclick: accion }, rotulo)),
     ];
   };
 
