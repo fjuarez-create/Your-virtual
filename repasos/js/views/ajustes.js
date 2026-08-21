@@ -4,10 +4,16 @@ import { h, icon, sheet, toast, confirmSheet, avatar, pesoLegible } from '../ui.
 import * as store from '../store.js';
 import * as api from '../api.js';
 import * as db from '../db.js';
-import { barraSync, chevron, cabecera, CAB_BOLA, hojaFoto, ctaAccion, ctaCancelar, abrirPagina } from '../piezas.js';
+import {
+  barraSync, chevron, cabecera, CAB_BOLA, hojaFoto, menuTarjeta,
+  ctaAccion, ctaCancelar, abrirPagina,
+} from '../piezas.js';
 import * as ejemplos from '../ejemplos.js';
 import { PROMOCIONES } from '../catalog.js';
-import { usaIA, ponerUsaIA, juntaFotos, ponerJuntaFotos } from '../ajustesLocales.js';
+import {
+  usaIA, ponerUsaIA, juntaFotos, ponerJuntaFotos,
+  ordenPdf, ponerOrdenPdf, ORDENES_PDF,
+} from '../ajustesLocales.js';
 import { ir, refrescar, versionEsperando, aplicarVersionEsperando } from '../app.js';
 
 export async function render() {
@@ -41,6 +47,24 @@ export async function render() {
 
   const casillaJuntar = h('input', { type: 'checkbox', role: 'switch', checked: juntaFotos(u) || null });
   casillaJuntar.addEventListener('change', () => ponerJuntaFotos(u, casillaJuntar.checked));
+
+  /* Cómo se agrupa el PDF de una vivienda. Dos opciones, así que no es
+     un interruptor —¿encendido sería cuál?—: es una fila con flechita
+     que abre la tarjeta de elegir de siempre y enseña debajo lo que hay
+     puesto ahora, para no tener que abrirla solo por mirar. */
+  const elegirOrdenPdf = async () => {
+    const actual = ordenPdf(u);
+    const elegido = await menuTarjeta('Orden del PDF', ORDENES_PDF.map((o) => ({
+      id: o.id,
+      icono: o.id === actual ? 'check' : (o.id === 'oficio' ? 'users' : 'casa'),
+      rotulo: o.rotulo,
+      sub: o.sub,
+    })));
+    if (!elegido || elegido === actual) return;
+    ponerOrdenPdf(u, elegido);
+    refrescar();
+    toast(`Los PDF saldrán ${ORDENES_PDF.find((o) => o.id === elegido).rotulo.toLowerCase()}`);
+  };
 
   return {
     sinTabs: true,
@@ -79,17 +103,24 @@ export async function render() {
           : null,
       ),
 
-      api.HAY_SERVIDOR ? h('div.d-grupo', null,
+      /* El grupo sale siempre. Antes colgaba entero de que hubiera
+         servidor porque todo lo de dentro era de la IA; el orden del
+         PDF se genera en el propio móvil y no depende de nada. */
+      h('div.d-grupo', null,
         h('p.d-grupo-titulo', null, 'Preferencias'),
-        item('edit', 'Que la IA proponga el texto',
-          'Al crear una tarea desde una foto o la galería', null, { derecha: casillaIA }),
+        api.HAY_SERVIDOR ? item('edit', 'Que la IA proponga el texto',
+          'Al crear una tarea desde una foto o la galería', null, { derecha: casillaIA }) : null,
         // En un recorrido es normal sacar dos fotos de lo mismo: una de
         // lejos para situarlo y otra de cerca. Encendido, eso es una
         // tarea con dos fotos; apagado, dos tareas.
-        item('image', 'Juntar las fotos de un mismo repaso',
+        api.HAY_SERVIDOR ? item('image', 'Juntar las fotos de un mismo repaso',
           'En un recorrido, varias fotos de la misma cosa salen como una sola tarea',
-          null, { derecha: casillaJuntar }),
-      ) : null,
+          null, { derecha: casillaJuntar }) : null,
+        // Cómo sale partida la hoja que se imprime o se manda por
+        // WhatsApp. El detalle dice lo que hay puesto ahora mismo.
+        item('documento', 'Orden del PDF de una vivienda',
+          ORDENES_PDF.find((o) => o.id === ordenPdf(u)).rotulo, elegirOrdenPdf),
+      ),
 
       // Solo aparece cuando de verdad hay una versión esperando. Es la
       // salida a mano para quien nunca cierra la aplicación: el iPhone

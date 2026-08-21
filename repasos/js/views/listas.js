@@ -20,6 +20,7 @@ import {
   avisoLocal, barraSync, menuFlotante, menuTarjeta, filaMenu, filaMenuFichero, bandeja,
 } from '../piezas.js';
 import { hojaDePuerta, nombreDeFichero } from '../pdf.js';
+import { ordenPdf } from '../ajustesLocales.js';
 import { abrirMensaje } from '../mensajes.js';
 import { ir, conFiltros, filtrosDeRuta, anotarFiltros } from '../app.js';
 
@@ -350,6 +351,9 @@ async function descargarVivienda(p, u, tareas) {
       fecha: fechaCorta(new Date().toISOString()),
       autor: store.sesion()?.nombre || '',
       tareas: vivas,
+      // Por gremios o por estancias, como lo tenga puesto cada uno en
+      // sus ajustes. Es su papel y su forma de repartir el trabajo.
+      orden: ordenPdf(store.sesion()),
     });
     const nombre = nombreDeFichero(u.nombre, fechaCorta(new Date().toISOString()));
     const fichero = new File([blob], nombre, { type: 'application/pdf' });

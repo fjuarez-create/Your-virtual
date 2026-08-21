@@ -10,7 +10,7 @@
    la eñe y los signos de apertura del castellano.
    ═══════════════════════════════════════════════════════════════ */
 
-import { estado } from './catalog.js';
+import { estado, oficio, OFICIOS, ZONAS } from './catalog.js';
 
 const A4 = { ancho: 595.28, alto: 841.89 };
 const MARGEN = 48;
@@ -188,15 +188,91 @@ function ensamblar(paginas) {
   return new Blob([bytes], { type: 'application/pdf' });
 }
 
+/* ─── Los grupos de la hoja ───────────────────────────────────── */
+
+/**
+ * Parte las tareas en bloques con título, según se quiera la hoja por
+ * gremios o por estancias.
+ *
+ * El orden de los bloques NO es alfabético, es el del catálogo, y en
+ * los dos casos por el mismo motivo: el catálogo ya está ordenado como
+ * se usa. Los gremios, como se reparte el trabajo; las estancias, como
+ * se anda la casa —planta baja, planta alta, y lo de fuera al final—.
+ * Alfabético pondría la cubierta antes que la entrada.
+ *
+ * Lo que no esté en el catálogo —una estancia de una obra vieja, un
+ * gremio retirado— no se pierde: va detrás, por orden alfabético. Y lo
+ * que no tenga nada puesto, al final del todo, junto y avisado.
+ *
+ * @returns {null|Array<{titulo, sub, tareas}>} null si no hay que
+ *   agrupar, y entonces la hoja sale en lista llana como siempre.
+ */
+function agrupar(tareas, orden) {
+  if (orden !== 'oficio' && orden !== 'estancia') return null;
+  const porGremio = orden === 'oficio';
+
+  /* Un gremio que ya no está en el catálogo se cuenta como «General»,
+     que es exactamente lo que hace oficio() y por tanto lo que se ve en
+     la pantalla. Si aquí se dejara el identificador crudo, el papel
+     diría una cosa y el móvil otra; y con dos claves distintas —la
+     retirada y «general»— saldrían dos bloques con el mismo título.
+
+     Las estancias no se tocan: son texto libre y la que no esté en el
+     catálogo es igual de válida, solo que más nueva o más vieja. */
+  const enCatalogo = new Set(OFICIOS.map((o) => o.id));
+  const claveDe = (t) => {
+    if (!porGremio) return String(t.zona || '');
+    const id = String(t.oficio || '');
+    if (!id) return '';
+    return enCatalogo.has(id) ? id : OFICIOS[0].id;
+  };
+
+  const cajas = new Map();
+  for (const t of tareas) {
+    const clave = claveDe(t);
+    if (!cajas.has(clave)) cajas.set(clave, []);
+    cajas.get(clave).push(t);
+  }
+
+  /* El título de cada bloque. En los gremios se cuelga debajo la
+     empresa que lo lleva: esta hoja se le manda a alguien, y saber a
+     quién es media faena. */
+  const titulo = (clave) => {
+    if (!clave) return { titulo: porGremio ? 'Sin gremio asignado' : 'Sin estancia asignada', sub: '' };
+    if (!porGremio) return { titulo: clave, sub: '' };
+    const o = oficio(clave);
+    return { titulo: o.nombre, sub: o.empresa || '' };
+  };
+
+  const grupos = [];
+  const meter = (clave) => {
+    const lista = cajas.get(clave);
+    if (!lista) return;
+    grupos.push({ ...titulo(clave), tareas: lista });
+    cajas.delete(clave);
+  };
+
+  for (const clave of porGremio ? OFICIOS.map((o) => o.id) : ZONAS) meter(clave);
+  for (const clave of [...cajas.keys()].filter(Boolean).sort((a, b) => a.localeCompare(b, 'es'))) meter(clave);
+  meter('');
+
+  return grupos;
+}
+
 /* ─── La hoja de la puerta ────────────────────────────────────── */
 /**
  * Genera el PDF de una lista de repaso: una casilla y una línea por
  * tarea, en cuerpo grande, para imprimir y pegar en la puerta de la
  * vivienda. Sin fotos: aquí manda la legibilidad a un metro de distancia.
  *
+ * `orden` parte la hoja en bloques: 'oficio' por gremios, 'estancia'
+ * por habitaciones. Sin él —o con cualquier otra cosa— sale la lista
+ * llana de siempre, que es lo que quieren las pantallas donde el orden
+ * ya lo manda un control en la propia pantalla.
+ *
  * @returns {Blob} el PDF listo para descargar o compartir
  */
-export function hojaDePuerta({ vivienda, promocion, fecha, autor, tareas }) {
+export function hojaDePuerta({ vivienda, promocion, fecha, autor, tareas, orden = null }) {
   const anchoUtil = A4.ancho - MARGEN * 2;
   const paginas = [];
   let pag = new Pagina();
@@ -226,24 +302,72 @@ export function hojaDePuerta({ vivienda, promocion, fecha, autor, tareas }) {
   const TAM = 12;
   const INTERLINEA = 15.5;
   const SANGRIA = 44;          // hueco de la casilla y el número
+  const SUELO = MARGEN + 26;   // por debajo de esto ya no cabe nada
 
-  tareas.forEach((t, i) => {
+  /* El bloque que se está pintando ahora mismo, para poder repetir su
+     título si se cambia de página en mitad. Sin esto, la hoja de al
+     lado empieza con «9. Junta abierta en...» y nadie sabe de qué
+     gremio es: la mitad de una hoja repartida por gremios se quedaría
+     sin dueño. */
+  let grupoEnCurso = null;
+
+  /* La franja del título. `seguida` la marca como continuación, y es la
+     única diferencia entre estrenar un bloque y retomarlo. */
+  const franja = (g, seguida = false) => {
+    const conSub = !!g.sub && !seguida;
+    const alto = conSub ? 34 : 24;
+    pag.pastilla(MARGEN - 6, y - alto + 13, anchoUtil + 12, alto, 4, COLOR.beigeSuave);
+    pag.texto(MARGEN, y, g.titulo, { tam: 13, negrita: true, color: COLOR.topo });
+    const dcha = seguida ? '(viene de la página anterior)' : '';
+    if (dcha) {
+      pag.texto(A4.ancho - MARGEN - anchoTexto(dcha, 9), y, dcha, { tam: 9, gris: 0.5 });
+    }
+    if (conSub) pag.texto(MARGEN, y - 12, g.sub, { tam: 9.5, gris: 0.5 });
+    y -= alto + 8;
+  };
+
+  const saltar = () => {
+    paginas.push(pag);
+    pag = new Pagina();
+    y = A4.alto - MARGEN;
+    cabecera(false);
+    if (grupoEnCurso) franja(grupoEnCurso, true);
+  };
+
+  /* Estrenar un bloque: el gremio o la estancia, y debajo la empresa
+     cuando la hay. Va con su franja beige para que se localice pasando
+     las hojas con el pulgar, que es como se usa esto en obra. */
+  const tituloDeGrupo = (g, primero) => {
+    const alto = g.sub ? 34 : 24;
+    /* Un título solo al pie de la página no es un título de nada: se
+       baja con su primera tarea. Por eso pide sitio para las dos.
+
+       El bloque anterior se da por cerrado ANTES de ese posible salto:
+       si no, la página nueva estrenaría repitiendo el título del que
+       acaba de terminar, justo encima del que empieza. */
+    grupoEnCurso = null;
+    if (!primero && y - (alto + 46) < SUELO) saltar();
+    else if (!primero) y -= 12;
+
+    franja(g);
+    grupoEnCurso = g;
+  };
+
+  /* Una tarea. `n` es el número que le toca en la hoja: corrido de
+     principio a fin aunque haya bloques, para poder decir «la 14» por
+     teléfono sin tener que decir además de qué bloque. */
+  const pintarTarea = (t, n) => {
     const lineas = partir(t.texto || 'Sin descripción', anchoUtil - SANGRIA, TAM);
     const altoBloque = Math.max(lineas.length * INTERLINEA, 24) + 14;
 
     // Salto de página cuando ya no cabe el bloque entero.
-    if (y - altoBloque < MARGEN + 26) {
-      paginas.push(pag);
-      pag = new Pagina();
-      y = A4.alto - MARGEN;
-      cabecera(false);
-    }
+    if (y - altoBloque < SUELO) saltar();
 
     // Casilla para marcar a bolígrafo en la propia obra.
     pag.recuadro(MARGEN, y - 11.5, 13, 13, 1.1, 0.25);
-    pag.texto(MARGEN + 22, y, `${i + 1}.`, { tam: TAM, negrita: true, gris: 0.35 });
-    lineas.forEach((linea, n) => {
-      pag.texto(MARGEN + SANGRIA, y - n * INTERLINEA, linea, { tam: TAM });
+    pag.texto(MARGEN + 22, y, `${n}.`, { tam: TAM, negrita: true, gris: 0.35 });
+    lineas.forEach((linea, i) => {
+      pag.texto(MARGEN + SANGRIA, y - i * INTERLINEA, linea, { tam: TAM });
     });
 
     y -= lineas.length * INTERLINEA + 4;
@@ -258,7 +382,18 @@ export function hojaDePuerta({ vivienda, promocion, fecha, autor, tareas }) {
     y -= 10;
     pag.linea(MARGEN, y, A4.ancho - MARGEN, y, 0.5, 0.82);
     y -= 16;
-  });
+  };
+
+  const grupos = agrupar(tareas, orden);
+  if (!grupos) {
+    tareas.forEach((t, i) => pintarTarea(t, i + 1));
+  } else {
+    let n = 0;
+    grupos.forEach((g, i) => {
+      tituloDeGrupo(g, i === 0);
+      for (const t of g.tareas) pintarTarea(t, ++n);
+    });
+  }
 
   paginas.push(pag);
 

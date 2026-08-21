@@ -76,3 +76,34 @@ export function juntaFotos(usuario) {
 export function ponerJuntaFotos(usuario, valor) {
   escribir(usuario?.id, 'juntar-fotos-recorrido', !!valor);
 }
+
+/* ─── Cómo se agrupa el PDF de una vivienda ───────────────────────
+
+   El mismo papel sirve para dos faenas distintas, y cada una lo quiere
+   ordenado de una manera:
+
+     · Por gremios, que es a quién se le encarga. La hoja se parte en
+       trozos y cada industrial se lleva el suyo: el fontanero no tiene
+       que leerse los remates de pintura para encontrar los tres que
+       son de él.
+     · Por estancias, que es por dónde se anda. Vale para el repaso a
+       pie de obra, entrando a cada habitación con la hoja en la mano y
+       sin volver dos veces al mismo sitio.
+
+   De serie por gremios, que es como se reparte el trabajo aquí. Es una
+   preferencia de cada uno y por eso vive en su móvil: en la misma obra
+   puede haber quien imprima para repartir y quien imprima para andar. */
+export const ORDENES_PDF = [
+  { id: 'oficio', rotulo: 'Por gremios', sub: 'Cada industrial encuentra lo suyo de un vistazo' },
+  { id: 'estancia', rotulo: 'Por estancias', sub: 'Se recorre la casa habitación por habitación' },
+];
+
+export function ordenPdf(usuario) {
+  const v = leer(usuario?.id, 'orden-pdf', 'oficio');
+  return ORDENES_PDF.some((o) => o.id === v) ? v : 'oficio';
+}
+
+export function ponerOrdenPdf(usuario, valor) {
+  if (!ORDENES_PDF.some((o) => o.id === valor)) return;
+  escribir(usuario?.id, 'orden-pdf', valor);
+}

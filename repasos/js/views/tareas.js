@@ -9,7 +9,7 @@ import * as store from '../store.js';
 import * as media from '../media.js';
 import * as api from '../api.js';
 import { cabeceraDentro, barraSync, filtroEstado, filtroOficio, ctaAccion, ctaCancelar } from '../piezas.js';
-import { usaIA } from '../ajustesLocales.js';
+import { usaIA, ordenPdf } from '../ajustesLocales.js';
 import { ir, refrescar, conFiltros, filtrosDeRuta, anotarFiltros } from '../app.js';
 import { informe } from '../informe.js';
 import { hojaDePuerta, nombreDeFichero } from '../pdf.js';
@@ -375,6 +375,9 @@ async function descargarHoja(lista, tareas) {
       fecha: fechaCorta(lista.creado),
       autor: lista.creadoPorNombre,
       tareas,
+      // El mismo orden que la hoja de la vivienda: es la misma casa y
+      // el mismo papel, solo que de una inspección concreta.
+      orden: ordenPdf(store.sesion()),
     });
     const nombre = nombreDeFichero(u?.nombre || 'vivienda', fechaCorta(lista.creado));
     const fichero = new File([blob], nombre, { type: 'application/pdf' });
