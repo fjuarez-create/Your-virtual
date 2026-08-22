@@ -119,6 +119,50 @@ export async function prepararImagen(file) {
 }
 
 /**
+ * Una foto lista para ir dentro de un PDF: recortada a la proporción
+ * pedida (como `cover`: se come un poco de los lados o de arriba y
+ * abajo, nunca deforma) y recomprimida en JPEG, que es lo único que un
+ * PDF traga tal cual, sin tener que decodificar nada.
+ *
+ * Devuelve los bytes y las medidas, que el PDF necesita las dos cosas.
+ * Si la foto no se deja leer —un Blob perdido de los de Safari—,
+ * devuelve null y la tarea sale sin foto en el papel.
+ */
+export async function jpegParaPdf(blob, { anchoMax = 1100, proporcion = 8 / 5 } = {}) {
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(blob, { imageOrientation: 'from-image' });
+  } catch {
+    try { bitmap = await bitmapDesdeElemento(blob); } catch { return null; }
+  }
+  try {
+    // El recorte centrado: la ventana más grande con la proporción
+    // pedida que cabe en la foto.
+    let rw = bitmap.width;
+    let rh = Math.round(rw / proporcion);
+    if (rh > bitmap.height) { rh = bitmap.height; rw = Math.round(rh * proporcion); }
+    const rx = Math.round((bitmap.width - rw) / 2);
+    const ry = Math.round((bitmap.height - rh) / 2);
+
+    const ancho = Math.min(anchoMax, rw);
+    const alto = Math.round(ancho / proporcion);
+    const lienzo = document.createElement('canvas');
+    lienzo.width = ancho; lienzo.height = alto;
+    const ctx = lienzo.getContext('2d');
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(bitmap, rx, ry, rw, rh, 0, 0, ancho, alto);
+
+    const jpeg = await new Promise((res) => lienzo.toBlob(res, 'image/jpeg', 0.74));
+    if (!jpeg) return null;
+    return { bytes: new Uint8Array(await jpeg.arrayBuffer()), ancho, alto };
+  } catch {
+    return null;
+  } finally {
+    bitmap.close?.();
+  }
+}
+
+/**
  * Una copia pequeña de una foto, en base64 y sin la cabecera `data:`,
  * para mandarla a que la lean.
  *

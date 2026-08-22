@@ -488,6 +488,11 @@ export async function mediosDeTarea(tareaId) {
  * una tarea rebotó dos veces, las fotos de los dos intentos anteriores
  * siguen ahí, y en una discusión de obra eso vale dinero.
  */
+/** Un medio suelto por su id. Lo usa la hoja de reparto en PDF. */
+export async function medioPorId(id) {
+  return db.get('medios', id);
+}
+
 export async function fotosDeVerificacion(tareaId) {
   const todos = await db.porIndice('medios', 'tareaId', tareaId);
   return todos.filter((m) => !m.borrada && m.comentarioId && m.tipo === 'imagen')

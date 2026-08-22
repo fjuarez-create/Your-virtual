@@ -142,50 +142,127 @@ class Pagina {
   recuadro(x, y, ancho, alto, grosor = 1, gris = 0.2) {
     this.ops.push(`${gris} G`, `${grosor} w`, `${x.toFixed(2)} ${y.toFixed(2)} ${ancho} ${alto} re S`);
   }
+  /** Pinta una imagen registrada en `ensamblar` por su nombre. */
+  imagen(nombre, x, y, ancho, alto) {
+    this.ops.push('q', `${ancho.toFixed(2)} 0 0 ${alto.toFixed(2)} ${x.toFixed(2)} ${y.toFixed(2)} cm`, `/${nombre} Do`, 'Q');
+  }
+  /**
+   * La misma imagen pero con las esquinas redondeadas: el camino de la
+   * pastilla como recorte (`W n`) en vez de como relleno. Es lo que
+   * hace que una foto pegada en el papel se vea de la misma familia
+   * que las tarjetas de la aplicación.
+   */
+  fotoRecortada(nombre, x, y, ancho, alto, radio = 10) {
+    const r = Math.min(radio, alto / 2, ancho / 2);
+    const k = r * 0.5523;
+    const x2 = x + ancho;
+    const y2 = y + alto;
+    this.ops.push(
+      'q',
+      `${(x + r).toFixed(2)} ${y.toFixed(2)} m`,
+      `${(x2 - r).toFixed(2)} ${y.toFixed(2)} l`,
+      `${(x2 - r + k).toFixed(2)} ${y.toFixed(2)} ${x2.toFixed(2)} ${(y + r - k).toFixed(2)} ${x2.toFixed(2)} ${(y + r).toFixed(2)} c`,
+      `${x2.toFixed(2)} ${(y2 - r).toFixed(2)} l`,
+      `${x2.toFixed(2)} ${(y2 - r + k).toFixed(2)} ${(x2 - r + k).toFixed(2)} ${y2.toFixed(2)} ${(x2 - r).toFixed(2)} ${y2.toFixed(2)} c`,
+      `${(x + r).toFixed(2)} ${y2.toFixed(2)} l`,
+      `${(x + r - k).toFixed(2)} ${y2.toFixed(2)} ${x.toFixed(2)} ${(y2 - r + k).toFixed(2)} ${x.toFixed(2)} ${(y2 - r).toFixed(2)} c`,
+      `${x.toFixed(2)} ${(y + r).toFixed(2)} l`,
+      `${x.toFixed(2)} ${(y + r - k).toFixed(2)} ${(x + r - k).toFixed(2)} ${y.toFixed(2)} ${(x + r).toFixed(2)} ${y.toFixed(2)} c`,
+      'W n',
+      `${ancho.toFixed(2)} 0 0 ${alto.toFixed(2)} ${x.toFixed(2)} ${y.toFixed(2)} cm`,
+      `/${nombre} Do`,
+      'Q',
+    );
+  }
   get contenido() { return this.ops.join('\n'); }
 }
 
-function ensamblar(paginas) {
-  const objetos = [];
+/**
+ * Monta el fichero. `imagenes` es un Map nombre → {bytes, ancho, alto}
+ * con JPEGs tal cual: el PDF los traga sin tocarlos (DCTDecode), así
+ * que embeber una foto cuesta exactamente lo que pesa la foto.
+ *
+ * Se ensambla por partes —texto y bytes crudos— porque un JPEG no
+ * sobrevive a un paso por string más que por casualidad.
+ */
+function ensamblar(paginas, imagenes = new Map()) {
+  const partes = [];        // trozos: string (latin-1/ascii) o Uint8Array
+  let posicion = 0;
+  const meter = (parte) => {
+    partes.push(parte);
+    posicion += typeof parte === 'string' ? parte.length : parte.length;
+  };
+
   const idPaginas = 2;
   const idFuente = 3;
   const idFuenteNegrita = 4;
-  const primeraPagina = 5;
+  const nombres = [...imagenes.keys()];
+  const idImagen = new Map(nombres.map((n, i) => [n, 5 + i]));
+  const primeraPagina = 5 + nombres.length;
+  const total = primeraPagina + paginas.length * 2;
 
-  objetos[1] = `<< /Type /Catalog /Pages ${idPaginas} 0 R >>`;
+  const recursos = '<< '
+    + `/Font << /F1 ${idFuente} 0 R /F2 ${idFuenteNegrita} 0 R >> `
+    + (nombres.length
+      ? `/XObject << ${nombres.map((n) => `/${n} ${idImagen.get(n)} 0 R`).join(' ')} >> `
+      : '')
+    + '>>';
+
+  const posiciones = [];
+  const objeto = (id, cuerpo, flujo = null) => {
+    posiciones[id] = posicion;
+    meter(`${id} 0 obj\n${cuerpo}\n`);
+    if (flujo !== null) {
+      meter('stream\n');
+      meter(flujo);
+      meter('\nendstream\n');
+    }
+    meter('endobj\n');
+  };
+
+  meter('%PDF-1.4\n');
+  objeto(1, `<< /Type /Catalog /Pages ${idPaginas} 0 R >>`);
   const kids = paginas.map((_, i) => `${primeraPagina + i * 2} 0 R`).join(' ');
-  objetos[idPaginas] = `<< /Type /Pages /Kids [${kids}] /Count ${paginas.length} >>`;
-  objetos[idFuente] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>';
-  objetos[idFuenteNegrita] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>';
+  objeto(idPaginas, `<< /Type /Pages /Kids [${kids}] /Count ${paginas.length} >>`);
+  objeto(idFuente, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>');
+  objeto(idFuenteNegrita, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
+
+  for (const n of nombres) {
+    const im = imagenes.get(n);
+    objeto(idImagen.get(n),
+      `<< /Type /XObject /Subtype /Image /Width ${im.ancho} /Height ${im.alto} `
+      + `/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${im.bytes.length} >>`,
+      im.bytes);
+  }
 
   paginas.forEach((pag, i) => {
     const idPag = primeraPagina + i * 2;
     const idContenido = idPag + 1;
-    objetos[idPag] = `<< /Type /Page /Parent ${idPaginas} 0 R /MediaBox [0 0 ${A4.ancho} ${A4.alto}] `
-      + `/Resources << /Font << /F1 ${idFuente} 0 R /F2 ${idFuenteNegrita} 0 R >> >> /Contents ${idContenido} 0 R >>`;
+    objeto(idPag, `<< /Type /Page /Parent ${idPaginas} 0 R /MediaBox [0 0 ${A4.ancho} ${A4.alto}] `
+      + `/Resources ${recursos} /Contents ${idContenido} 0 R >>`);
     const flujo = pag.contenido;
-    objetos[idContenido] = `<< /Length ${flujo.length} >>\nstream\n${flujo}\nendstream`;
+    objeto(idContenido, `<< /Length ${flujo.length} >>`, flujo);
   });
 
-  let pdf = '%PDF-1.4\n';
-  const posiciones = [];
-  for (let i = 1; i < objetos.length; i++) {
-    if (!objetos[i]) continue;
-    posiciones[i] = pdf.length;
-    pdf += `${i} 0 obj\n${objetos[i]}\nendobj\n`;
-  }
-  const inicioXref = pdf.length;
-  const total = objetos.length;
-  pdf += `xref\n0 ${total}\n0000000000 65535 f \n`;
+  const inicioXref = posicion;
+  meter(`xref\n0 ${total}\n0000000000 65535 f \n`);
   for (let i = 1; i < total; i++) {
-    pdf += `${String(posiciones[i] ?? 0).padStart(10, '0')} 00000 n \n`;
+    meter(`${String(posiciones[i] ?? 0).padStart(10, '0')} 00000 n \n`);
   }
-  pdf += `trailer\n<< /Size ${total} /Root 1 0 R >>\nstartxref\n${inicioXref}\n%%EOF`;
+  meter(`trailer\n<< /Size ${total} /Root 1 0 R >>\nstartxref\n${inicioXref}\n%%EOF`);
 
-  // Cada carácter es un byte: el texto ya está en Latin-1 y el resto es ASCII.
-  const bytes = new Uint8Array(pdf.length);
-  for (let i = 0; i < pdf.length; i++) bytes[i] = pdf.charCodeAt(i) & 0xff;
-  return new Blob([bytes], { type: 'application/pdf' });
+  // Los strings van carácter a byte (ya están en Latin-1); los bytes, tal cual.
+  const salida = new Uint8Array(posicion);
+  let d = 0;
+  for (const parte of partes) {
+    if (typeof parte === 'string') {
+      for (let i = 0; i < parte.length; i++) salida[d++] = parte.charCodeAt(i) & 0xff;
+    } else {
+      salida.set(parte, d);
+      d += parte.length;
+    }
+  }
+  return new Blob([salida], { type: 'application/pdf' });
 }
 
 /* ─── Los grupos de la hoja ───────────────────────────────────── */
@@ -570,6 +647,210 @@ export function actaDelDia({ titulo, diaSemana, promocion, gente, conteo, villas
 }
 
 /** Nombre de fichero legible y sin caracteres problemáticos. */
+/* ─── La hoja de reparto ──────────────────────────────────────────
+   El PDF que se le pone al encargado de obra en la mano y que él corta
+   y reparte a los gremios. Cada tarea con su foto GRANDE —a todo lo
+   ancho del papel, que desde una lista de texto nadie encuentra el
+   rodapié—, su casilla para tachar a bolígrafo, su estancia y su
+   gremio. Y si se pide el histórico, las ejecutadas al final, en lista
+   apretada y sin fotos: son constancia, no trabajo por hacer. */
+
+/**
+ * Ordena las tareas de un grupo por cómo se anda la casa (el orden de
+ * las estancias en el catálogo), y a igual estancia la más antigua
+ * primero: es la que más tiempo lleva esperando.
+ */
+function ordenDePaseo(tareas, porGremio) {
+  const indiceZona = new Map(ZONAS.map((z, i) => [z, i]));
+  const indiceOficio = new Map(OFICIOS.map((o, i) => [o.id, i]));
+  return [...tareas].sort((a, b) => {
+    const ia = porGremio ? (indiceZona.get(a.zona) ?? 999) : (indiceOficio.get(a.oficio) ?? 999);
+    const ib = porGremio ? (indiceZona.get(b.zona) ?? 999) : (indiceOficio.get(b.oficio) ?? 999);
+    if (ia !== ib) return ia - ib;
+    return String(a.creado || '').localeCompare(String(b.creado || ''));
+  });
+}
+
+/**
+ * Genera la hoja de reparto de una vivienda.
+ *
+ * `fotos` es un Map tareaId → { bytes, ancho, alto } con los JPEG ya
+ * recortados (ver media.jpegParaPdf): aquí solo se pegan. `filtros` es
+ * la frase de qué se filtró («Aluminio · Salón»), para que el papel
+ * diga qué es y qué no es. `ejecutadas` van SIEMPRE al final.
+ *
+ * @returns {Blob} el PDF listo para bajar o compartir
+ */
+export function hojaDeReparto({
+  vivienda, promocion, fecha, autor,
+  tareas, ejecutadas = [], fotos = new Map(),
+  orden = 'oficio', filtros = '',
+}) {
+  const anchoUtil = A4.ancho - MARGEN * 2;
+  const paginas = [];
+  const imagenes = new Map();
+  let pag = new Pagina();
+  let y = 0;
+
+  /* Los grupos, con el mismo criterio que la hoja de siempre; dentro,
+     en orden de paseo. Con un único gremio en juego —porque se filtró—
+     agrupar por gremio sería un solo bloque que no dice nada: se
+     agrupa por estancia directamente. */
+  let comoAgrupar = orden;
+  if (orden === 'oficio' && new Set(tareas.map((t) => t.oficio || '')).size === 1 && tareas.length > 2) {
+    comoAgrupar = 'estancia';
+  }
+  const grupos = (agrupar(tareas, comoAgrupar) || [{ titulo: '', sub: '', tareas }])
+    .map((g) => ({ ...g, tareas: ordenDePaseo(g.tareas, comoAgrupar === 'oficio') }));
+
+  const SUELO = MARGEN + 18;
+
+  /* La cabecera grande de la primera hoja: la banda negra con el
+     nombre, como la app. En las siguientes, una línea que recuerda
+     dónde estás. */
+  const cabecera = (primera) => {
+    if (primera) {
+      const altoBanda = 118;
+      pag.pastilla(MARGEN - 14, A4.alto - MARGEN - altoBanda + 14, anchoUtil + 28, altoBanda, 16, COLOR.tinta);
+      let yy = A4.alto - MARGEN - 12;
+      pag.texto(MARGEN + 6, yy, 'UNIK WORKS', { tam: 9, negrita: true, color: [0.72, 0.7, 0.67], espaciado: 1.2 });
+      yy -= 34;
+      pag.texto(MARGEN + 6, yy, vivienda, { tam: 27, negrita: true, color: [1, 1, 1] });
+      yy -= 19;
+      pag.texto(MARGEN + 6, yy, `${promocion} · Hoja de repasos`, { tam: 11.5, color: [0.78, 0.76, 0.73] });
+      yy -= 18;
+      pag.texto(MARGEN + 6, yy, `${fecha}  ·  ${autor}`, { tam: 9.5, color: [0.62, 0.6, 0.57] });
+      y = A4.alto - MARGEN - altoBanda - 12;
+
+      const resumen = `${tareas.length} ${tareas.length === 1 ? 'repaso pendiente' : 'repasos pendientes'}`
+        + (ejecutadas.length ? `  ·  ${ejecutadas.length} ${ejecutadas.length === 1 ? 'ejecutado' : 'ejecutados'}` : '')
+        + (filtros ? `  ·  Filtrado: ${filtros}` : '');
+      pag.texto(MARGEN, y - 4, resumen, { tam: 10, negrita: true, gris: 0.4 });
+      y -= 26;
+    } else {
+      y = A4.alto - MARGEN;
+      pag.texto(MARGEN, y, `${vivienda}  ·  ${promocion}  ·  ${fecha}`, { tam: 9.5, negrita: true, gris: 0.45 });
+      y -= 10;
+      pag.linea(MARGEN, y, A4.ancho - MARGEN, y, 0.8, 0.65);
+      y -= 22;
+    }
+  };
+  cabecera(true);
+
+  const saltar = () => {
+    paginas.push(pag);
+    pag = new Pagina();
+    cabecera(false);
+    if (grupoEnCurso) franja(grupoEnCurso, true);
+  };
+
+  let grupoEnCurso = null;
+  const franja = (g, seguida = false) => {
+    if (!g.titulo) return;
+    const conSub = !!g.sub && !seguida;
+    const alto = conSub ? 34 : 24;
+    pag.pastilla(MARGEN - 8, y - alto + 13, anchoUtil + 16, alto, 6, COLOR.beige);
+    pag.texto(MARGEN + 2, y, g.titulo, { tam: 13, negrita: true, color: [0.2, 0.18, 0.15] });
+    if (seguida) {
+      const nota = '(sigue)';
+      pag.texto(A4.ancho - MARGEN - anchoTexto(nota, 9) - 2, y, nota, { tam: 9, gris: 0.45 });
+    }
+    if (conSub) pag.texto(MARGEN + 2, y - 12, g.sub, { tam: 9.5, color: [0.42, 0.38, 0.32] });
+    y -= alto + 10;
+  };
+
+  /* Una tarea: la foto grande —13,5 × 8,5 cm en papel, centrada— y
+     debajo la casilla, el número, dónde, y el texto. Con este tamaño
+     caben dos tareas por página: grande para verse desde el andamio,
+     sin convertir la hoja de una villa en un tomo. */
+  const ALTO_FOTO = 240;
+  const ANCHO_FOTO = ALTO_FOTO * (8 / 5);  // el recorte de jpegParaPdf
+  const TAM = 11.5;
+  const INTERLINEA = 15;
+
+  const pintarTarea = (t, n) => {
+    const conFoto = fotos.has(t.id);
+    const lineas = partir(t.texto || 'Sin descripción', anchoUtil - 44, TAM);
+    const altoTexto = 22 + lineas.length * INTERLINEA + 14;
+    const altoTarjeta = (conFoto ? ALTO_FOTO + 10 : 0) + altoTexto;
+
+    if (y - altoTarjeta < SUELO) saltar();
+
+    if (conFoto) {
+      const nombre = `Im${imagenes.size + 1}`;
+      imagenes.set(nombre, fotos.get(t.id));
+      pag.fotoRecortada(nombre, MARGEN + (anchoUtil - ANCHO_FOTO) / 2, y - ALTO_FOTO, ANCHO_FOTO, ALTO_FOTO, 10);
+      y -= ALTO_FOTO + 14;
+    }
+
+    // La casilla y el número, y a la derecha el dónde y el quién.
+    pag.recuadro(MARGEN, y - 11, 12, 12, 1.1, 0.25);
+    pag.texto(MARGEN + 20, y - 9, `${n}.`, { tam: 13, negrita: true });
+    const sitio = [t.zona, oficio(t.oficio)?.nombre].filter(Boolean).join('  ·  ');
+    if (sitio) {
+      pag.texto(A4.ancho - MARGEN - anchoTexto(sitio, 9.5, true), y - 9, sitio,
+        { tam: 9.5, negrita: true, color: [0.42, 0.38, 0.32] });
+    }
+    y -= 26;
+    lineas.forEach((linea, i) => {
+      pag.texto(MARGEN + 20, y - i * INTERLINEA, linea, { tam: TAM });
+    });
+    y -= (lineas.length - 1) * INTERLINEA + 12;
+    if (t.estado && t.estado !== 'pendiente' && t.estado !== 'verificada') {
+      pag.texto(MARGEN + 20, y, estado(t.estado).nombre.toUpperCase(), { tam: 8, negrita: true, gris: 0.5 });
+      y -= 12;
+    }
+    pag.linea(MARGEN, y, A4.ancho - MARGEN, y, 0.5, 0.85);
+    y -= 16;
+  };
+
+  let n = 0;
+  grupos.forEach((g, i) => {
+    grupoEnCurso = null;
+    if (i > 0) y -= 4;
+    if (y - 90 < SUELO) saltar();
+    franja(g);
+    grupoEnCurso = g;
+    for (const t of g.tareas) pintarTarea(t, ++n);
+  });
+  grupoEnCurso = null;
+
+  /* Las ejecutadas, SIEMPRE al final y en lista apretada: constancia
+     de lo hecho, no trabajo que repartir. Lo último ejecutado arriba. */
+  if (ejecutadas.length) {
+    const hechas = [...ejecutadas].sort((a, b) =>
+      String(b.estadoEn || b.actualizado || '').localeCompare(String(a.estadoEn || a.actualizado || '')));
+    if (y - 80 < SUELO) saltar();
+    y -= 6;
+    pag.pastilla(MARGEN - 8, y - 24 + 13, anchoUtil + 16, 24, 6, COLOR.verdeSuave);
+    pag.texto(MARGEN + 2, y, 'Ejecutadas', { tam: 13, negrita: true, color: COLOR.verde });
+    y -= 34;
+    for (const t of hechas) {
+      const lineas = partir(t.texto || 'Sin descripción', anchoUtil - 130, 9.5);
+      const altoFila = Math.max(lineas.length * 12, 12) + 9;
+      if (y - altoFila < SUELO) saltar();
+      // El puntito verde de «hecho»: Helvetica no trae la marca de
+      // visto, y una X delante de algo terminado se lee al revés.
+      pag.pastilla(MARGEN, y - 1.5, 8, 8, 2.5, COLOR.verde);
+      lineas.forEach((linea, i) => pag.texto(MARGEN + 16, y - i * 12, linea, { tam: 9.5, gris: 0.25 }));
+      const sitio = [t.zona, oficio(t.oficio)?.corto].filter(Boolean).join(' · ');
+      if (sitio) pag.texto(A4.ancho - MARGEN - anchoTexto(sitio, 8.5), y, sitio, { tam: 8.5, gris: 0.55 });
+      y -= altoFila;
+    }
+  }
+
+  paginas.push(pag);
+  paginas.forEach((p, i) => {
+    p.texto(MARGEN, MARGEN - 16,
+      `UNIK Works  ·  ${vivienda}  ·  ${tareas.length} ${tareas.length === 1 ? 'pendiente' : 'pendientes'}`,
+      { tam: 8.5, gris: 0.55 });
+    const num = `Página ${i + 1} de ${paginas.length}`;
+    p.texto(A4.ancho - MARGEN - anchoTexto(num, 8.5), MARGEN - 16, num, { tam: 8.5, gris: 0.55 });
+  });
+
+  return ensamblar(paginas, imagenes);
+}
+
 export function nombreDeFichero(vivienda, fecha) {
   const limpio = (s) => String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '');

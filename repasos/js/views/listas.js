@@ -19,8 +19,10 @@ import {
   hojaZonas, hojaFiltroTareas, caraDeGremio,
   avisoLocal, barraSync, menuFlotante, menuTarjeta, filaMenu, filaMenuFichero, bandeja,
 } from '../piezas.js';
-import { hojaDePuerta, nombreDeFichero } from '../pdf.js';
+import { hojaDeReparto, nombreDeFichero } from '../pdf.js';
 import { ordenPdf } from '../ajustesLocales.js';
+import { jpegParaPdf } from '../media.js';
+import * as api from '../api.js';
 import { abrirMensaje } from '../mensajes.js';
 import { ir, conFiltros, filtrosDeRuta, anotarFiltros } from '../app.js';
 
@@ -221,10 +223,32 @@ export async function render({ promoId, unidadId }) {
       h('div.stack', { style: { gap: '8px' } },
         ...actas.map((a) => tarjetaActa(a, { dentroDeVivienda: true, filtros: { estado, oficio: oficioId } }))),
     ) : null;
+    /* Las tres hojas posibles, cada una con su cuenta delante para
+       saber qué te llevas antes de tocar. La de los filtros solo sale
+       cuando hay filtros puestos: sin ellos sería la misma que la
+       primera con otro nombre. */
+    const vivas = tareas.filter((t) => t.estado !== 'verificada');
+    const hechas9 = tareas.filter((t) => t.estado === 'verificada');
+    const conFiltro = vivas.filter((t) => encaja(t, estado, oficioId, estancia));
+    const hayFiltros = (estado && estado !== 'todas') || oficiosElegidos(oficioId).length > 0 || !!estancia;
+    const fraseFiltros = [
+      estancia,
+      ...oficiosElegidos(oficioId).map((id) => oficio(id).nombre),
+      estado && estado !== 'todas' ? estadoDe(estado)?.plural : '',
+    ].filter(Boolean).join(' · ');
+
     const elegido = await menuTarjeta(u.nombre, [
-      { id: 'pdf', icono: 'documento', rotulo: 'PDF con lo que queda aquí' },
-    ], { extra });
-    if (elegido === 'pdf') descargarVivienda(p, u, tareas);
+      { id: 'pdf', icono: 'documento', rotulo: 'PDF de tareas pendientes',
+        sub: `${vivas.length} ${vivas.length === 1 ? 'tarea por hacer' : 'tareas por hacer'}, con sus fotos` },
+      hayFiltros ? { id: 'pdf-filtrado', icono: 'cursores', rotulo: 'PDF con los filtros puestos',
+        sub: `${fraseFiltros} · ${conFiltro.length} ${conFiltro.length === 1 ? 'tarea' : 'tareas'}` } : null,
+      { id: 'pdf-historico', icono: 'listaChecks', rotulo: 'PDF con todo el histórico',
+        sub: `Pendientes primero y las ${hechas9.length} ejecutadas al final` },
+    ].filter(Boolean), { extra });
+
+    if (elegido === 'pdf') descargarVivienda(p, u, { tareas: vivas });
+    if (elegido === 'pdf-filtrado') descargarVivienda(p, u, { tareas: conFiltro, filtros: fraseFiltros });
+    if (elegido === 'pdf-historico') descargarVivienda(p, u, { tareas: vivas, ejecutadas: hechas9, apellido: 'historico' });
   };
 
   /* ─── Nueva inspección: el menú de tres opciones del diseño ───
@@ -343,21 +367,58 @@ function oficiosElegidos(oficioId) {
   return oficioId && oficioId !== 'todos' ? String(oficioId).split(',').filter(Boolean) : [];
 }
 
-async function descargarVivienda(p, u, tareas) {
-  const vivas = tareas.filter((t) => t.estado !== 'verificada');
-  if (!vivas.length) { toast('Aquí no queda nada por hacer', 'err'); return; }
+/**
+ * La foto de portada de una tarea, en bytes listos para el PDF.
+ *
+ * Primero el Blob local; si no está —otro móvil la hizo y aquí solo
+ * llegó la referencia— se pide al servidor. Y si tampoco, la tarea
+ * sale sin foto: una hoja sin una foto vale; una hoja que no llega a
+ * generarse, no.
+ */
+async function fotoParaPdf(t) {
   try {
-    const blob = hojaDePuerta({
+    let blob = null;
+    if (t.portadaId) {
+      const m = await store.medioPorId(t.portadaId);
+      if (m && !m.borrada) {
+        if (m.blob instanceof Blob) blob = m.blob;
+        else if (m.subido && api.HAY_SERVIDOR) blob = await (await fetch(api.urlMedio(m.id))).blob();
+      }
+    }
+    if (!blob) {
+      const [primera] = (await store.mediosDeTarea(t.id)).filter((m) => m.tipo === 'imagen' && !m.borrada);
+      if (primera?.blob instanceof Blob) blob = primera.blob;
+      else if (primera?.subido && api.HAY_SERVIDOR) blob = await (await fetch(api.urlMedio(primera.id))).blob();
+    }
+    if (!blob) return null;
+    return await jpegParaPdf(blob);
+  } catch { return null; }
+}
+
+async function descargarVivienda(p, u, { tareas, ejecutadas = [], filtros = '', apellido = '' }) {
+  if (!tareas.length && !ejecutadas.length) { toast('Aquí no hay nada que llevarse', 'err'); return; }
+  toast('Preparando el PDF con sus fotos…');
+  try {
+    // Las fotos, una a una y sin prisa: en un móvil de obra treinta
+    // recortes JPEG son un par de segundos.
+    const fotos = new Map();
+    for (const t of tareas) {
+      const f = await fotoParaPdf(t);
+      if (f) fotos.set(t.id, f);
+    }
+    const blob = hojaDeReparto({
       vivienda: u.nombre,
       promocion: p.nombre,
       fecha: fechaCorta(new Date().toISOString()),
       autor: store.sesion()?.nombre || '',
-      tareas: vivas,
+      tareas, ejecutadas, fotos, filtros,
       // Por gremios o por estancias, como lo tenga puesto cada uno en
       // sus ajustes. Es su papel y su forma de repartir el trabajo.
       orden: ordenPdf(store.sesion()),
     });
-    const nombre = nombreDeFichero(u.nombre, fechaCorta(new Date().toISOString()));
+    const nombre = nombreDeFichero(
+      [u.nombre, apellido || (filtros ? 'filtrado' : '')].filter(Boolean).join('-'),
+      fechaCorta(new Date().toISOString()));
     const fichero = new File([blob], nombre, { type: 'application/pdf' });
     if (navigator.canShare?.({ files: [fichero] })) {
       await navigator.share({ files: [fichero], title: nombre });
@@ -370,6 +431,8 @@ async function descargarVivienda(p, u, tareas) {
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 4000);
   } catch (e) {
+    if (e?.name === 'AbortError') return;
+    console.error(e);
     toast('No se ha podido generar el PDF', 'err');
   }
 }
