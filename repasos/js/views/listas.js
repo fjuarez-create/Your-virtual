@@ -19,7 +19,7 @@ import {
   hojaZonas, hojaFiltroTareas, caraDeGremio,
   avisoLocal, barraSync, menuFlotante, menuTarjeta, filaMenu, filaMenuFichero, bandeja,
 } from '../piezas.js';
-import { hojaDeReparto, nombreDeFichero } from '../pdf.js';
+import { hojaDeReparto, nombreDeFichero, PROPORCION_FOTO_REPARTO } from '../pdf.js';
 import { ordenPdf } from '../ajustesLocales.js';
 import { jpegParaPdf } from '../media.js';
 import * as api from '../api.js';
@@ -391,8 +391,9 @@ async function fotoParaPdf(t) {
       else if (primera?.subido && api.HAY_SERVIDOR) blob = await (await fetch(api.urlMedio(primera.id))).blob();
     }
     if (!blob) return null;
-    // Recorte 4:3, que es como van las fotos en la tarjeta del papel.
-    return await jpegParaPdf(blob, { anchoMax: 1000, proporcion: 4 / 3 });
+    // El recorte con la misma proporción exacta que la caja del papel,
+    // casi cuadrada: si no coincidieran, la foto saldría estirada.
+    return await jpegParaPdf(blob, { anchoMax: 1000, proporcion: PROPORCION_FOTO_REPARTO });
   } catch { return null; }
 }
 

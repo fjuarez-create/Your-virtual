@@ -23,6 +23,15 @@ import { TIPOGRAFIAS_PDF } from './tipografiaPdf.js';
 const A4 = { ancho: 595.28, alto: 841.89 };
 const MARGEN = 48;
 
+/* Las medidas de la tarjeta de la hoja de reparto, aquí arriba porque
+   la comparte quien recorta las fotos: el recorte del móvil y la caja
+   del papel tienen que tener la misma proporción o la foto saldría
+   estirada. La foto es casi cuadrada —lo más cuadrada que deja la
+   página con cuatro tarjetas y cuatro líneas de texto—. */
+const ANCHO_COL_REPARTO = (A4.ancho - MARGEN * 2 - 16) / 2;   // 241,64
+const ALTO_FOTO_REPARTO = 210;
+export const PROPORCION_FOTO_REPARTO = ANCHO_COL_REPARTO / ALTO_FOTO_REPARTO;
+
 /* Anchos de Helvetica en milésimas de punto. Con ellos las líneas se
    parten donde toca en vez de salirse del papel. */
 const ANCHOS = {
@@ -781,9 +790,18 @@ export function hojaDeReparto({
 }) {
   const anchoUtil = A4.ancho - MARGEN * 2;
   const SEPARACION = 16;
-  const ANCHO_COL = (anchoUtil - SEPARACION) / 2;
-  const ALTO_FOTO = ANCHO_COL * (3 / 4);   // el recorte 4:3 de jpegParaPdf
-  const SUELO = MARGEN + 20;
+  const ANCHO_COL = ANCHO_COL_REPARTO;
+  const ALTO_FOTO = ALTO_FOTO_REPARTO;
+  const SUELO = MARGEN + 18;
+
+  /* La cuadrícula perfecta que pidió Fran: CUATRO tarjetas por página,
+     todas del mismo alto. El texto se corta a cuatro líneas con puntos
+     suspensivos —para el papel bastan— y a cambio la tarjeta entera se
+     fija a un alto constante: dos tareas ocupan media página, una, un
+     cuarto, y las filas casan al milímetro. */
+  const LINEA = 12.5;
+  const MAX_LINEAS = 4;
+  const ALTO_TARJETA = ALTO_FOTO + 8 + 17 + (MAX_LINEAS * LINEA + 14) + 10;
   const paginas = [];
   const imagenes = new Map();
   let pag = new Pagina();
@@ -807,17 +825,19 @@ export function hojaDeReparto({
   const cabecera = (primera) => {
     y = A4.alto - MARGEN;
     if (primera) {
-      pag.texto(MARGEN, y - 24, vivienda, { tam: 28, fuente: 'eiko' });
-      pag.texto(A4.ancho - MARGEN - anchoTexto(promocion, 13, false, 'eiko'), y - 22, promocion,
-        { tam: 13, fuente: 'eiko', color: COLOR.topo });
-      y -= 50;
+      /* Apretada a propósito: cada punto que gasta la cabecera se lo
+         quita al alto de las cuatro fotos de la primera página. */
+      pag.texto(MARGEN, y - 22, vivienda, { tam: 27, fuente: 'eiko' });
+      pag.texto(A4.ancho - MARGEN - anchoTexto(promocion, 12.5, false, 'eiko'), y - 20, promocion,
+        { tam: 12.5, fuente: 'eiko', color: COLOR.topo });
+      y -= 42;
       const resumen = `${tareas.length} ${tareas.length === 1 ? 'tarea pendiente' : 'tareas pendientes'}`
         + (ejecutadas.length ? `  ·  ${ejecutadas.length} ${ejecutadas.length === 1 ? 'ejecutada' : 'ejecutadas'}` : '')
         + (filtros ? `  ·  Filtrado: ${filtros}` : '');
-      pag.texto(MARGEN, y, resumen, { tam: 10, negrita: true, gris: 0.3, fuente: 'haas' });
-      y -= 12;
+      pag.texto(MARGEN, y, resumen, { tam: 9.5, negrita: true, gris: 0.3, fuente: 'haas' });
+      y -= 10;
       pag.linea(MARGEN, y, A4.ancho - MARGEN, y, 0.7, 0.85);
-      y -= 22;
+      y -= 12;
     } else {
       pag.texto(MARGEN, y - 8, `${vivienda}  ·  ${promocion}  ·  ${fecha}`,
         { tam: 8.5, negrita: true, gris: 0.45, fuente: 'haas' });
@@ -875,10 +895,24 @@ export function hojaDeReparto({
   const anchoChip = (c) => anchoTexto(c.texto, c.tam, false, 'haas') + 13;
 
   const medirTarea = (t) => {
-    const lineas = partir(t.texto || 'Sin descripción', ANCHO_COL - 20, 9.5, false, 'haas');
+    let lineas = partir(t.texto || 'Sin descripción', ANCHO_COL - 20, 9.5, false, 'haas');
+    if (lineas.length > MAX_LINEAS) {
+      // Cuatro líneas y puntos suspensivos: en papel basta, y el alto
+      // fijo de la tarjeta es lo que hace perfecta la cuadrícula. El
+      // texto entero sigue en la aplicación.
+      lineas = lineas.slice(0, MAX_LINEAS);
+      let ultima = lineas[MAX_LINEAS - 1];
+      while (ultima && anchoTexto(ultima + '…', 9.5, false, 'haas') > ANCHO_COL - 20) {
+        ultima = ultima.slice(0, -1).trimEnd();
+      }
+      lineas[MAX_LINEAS - 1] = ultima + '…';
+    }
     return {
       lineas,
-      alto: (fotos.has(t.id) ? ALTO_FOTO + 11 : 0) + 19 + (lineas.length * 13 + 16) + 15,
+      // Con foto, el alto es SIEMPRE el de la tarjeta entera aunque el
+      // texto sea corto: así las filas casan. Sin foto (tareas de antes
+      // del blindaje), lo justo.
+      alto: fotos.has(t.id) ? ALTO_TARJETA : 17 + (lineas.length * LINEA + 14) + 12,
     };
   };
 
@@ -888,7 +922,7 @@ export function hojaDeReparto({
       const nombre = `Im${imagenes.size + 1}`;
       imagenes.set(nombre, fotos.get(t.id));
       pag.fotoRecortada(nombre, x, yy - ALTO_FOTO, ANCHO_COL, ALTO_FOTO, 10);
-      yy -= ALTO_FOTO + 11;
+      yy -= ALTO_FOTO + 8;
     }
 
     // La fila del número: casilla para tachar, número para citarla por
@@ -907,13 +941,13 @@ export function hojaDeReparto({
       pag.texto(xChip + 6.5, yy - 7.5, c.texto, { tam: c.tam, color: [0.4, 0.37, 0.31], fuente: 'haas' });
       xChip += a + 4;
     }
-    yy -= 19;
+    yy -= 17;
 
     // La caja gris con el texto, como en la maqueta.
-    const altoCaja = lineas.length * 13 + 16;
+    const altoCaja = lineas.length * LINEA + 14;
     pag.pastilla(x, yy - altoCaja, ANCHO_COL, altoCaja, 8, COLOR.tarjeta);
     lineas.forEach((linea, i) => {
-      pag.texto(x + 10, yy - 12 - i * 13, linea, { tam: 9.5, gris: 0.12, fuente: 'haas' });
+      pag.texto(x + 10, yy - 11.5 - i * LINEA, linea, { tam: 9.5, gris: 0.12, fuente: 'haas' });
     });
   };
 
