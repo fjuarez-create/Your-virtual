@@ -391,8 +391,31 @@ async function fotoParaPdf(t) {
       else if (primera?.subido && api.HAY_SERVIDOR) blob = await (await fetch(api.urlMedio(primera.id))).blob();
     }
     if (!blob) return null;
-    return await jpegParaPdf(blob);
+    // Recorte 4:3, que es como van las fotos en la tarjeta del papel.
+    return await jpegParaPdf(blob, { anchoMax: 1000, proporcion: 4 / 3 });
   } catch { return null; }
+}
+
+/* Las tipografías corporativas para incrustar en el PDF: la Neue Haas
+   del texto y la Eiko de los titulares. Se piden una vez y se guardan;
+   el service worker las tiene en su caché, así que también llegan sin
+   cobertura. Si aun así faltaran, la hoja sale en Helvetica: un papel
+   con otra letra vale, un papel que no sale no. */
+let fuentesPdfGuardadas = null;
+async function fuentesPdf() {
+  if (fuentesPdfGuardadas) return fuentesPdfGuardadas;
+  const pedir = async (ruta) => {
+    try {
+      const r = await fetch(ruta);
+      return r.ok ? new Uint8Array(await r.arrayBuffer()) : null;
+    } catch { return null; }
+  };
+  const [haas, eiko] = await Promise.all([
+    pedir('assets/fonts/neue-haas-pdf.ttf'),
+    pedir('assets/fonts/eiko-pdf.cff'),
+  ]);
+  fuentesPdfGuardadas = { haas, eiko };
+  return fuentesPdfGuardadas;
 }
 
 async function descargarVivienda(p, u, { tareas, ejecutadas = [], filtros = '', apellido = '' }) {
@@ -406,15 +429,18 @@ async function descargarVivienda(p, u, { tareas, ejecutadas = [], filtros = '', 
       const f = await fotoParaPdf(t);
       if (f) fotos.set(t.id, f);
     }
+    const ahora = new Date().toISOString();
     const blob = hojaDeReparto({
       vivienda: u.nombre,
       promocion: p.nombre,
-      fecha: fechaCorta(new Date().toISOString()),
+      fecha: fechaCorta(ahora),
+      hora: hora(ahora),
       autor: store.sesion()?.nombre || '',
       tareas, ejecutadas, fotos, filtros,
       // Por gremios o por estancias, como lo tenga puesto cada uno en
       // sus ajustes. Es su papel y su forma de repartir el trabajo.
       orden: ordenPdf(store.sesion()),
+      fuentes: await fuentesPdf(),
     });
     const nombre = nombreDeFichero(
       [u.nombre, apellido || (filtros ? 'filtrado' : '')].filter(Boolean).join('-'),

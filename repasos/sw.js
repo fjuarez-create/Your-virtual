@@ -35,6 +35,7 @@ const CODIGO = [
   'js/frases.js',
   'js/mensajes.js',
   'js/ajustesLocales.js',
+  'js/tipografiaPdf.js',
   'js/ejemplos.js',
   'js/catalog.js',
   'js/informe.js',
@@ -59,6 +60,9 @@ const CODIGO = [
    una cara no rompe nada, así que aquí sí se toleran los fallos. */
 const EXTRAS = [
   'assets/fonts/neue-haas-display-roman.woff2',
+  // Las corporativas planas que viajan DENTRO de los PDF de reparto.
+  'assets/fonts/neue-haas-pdf.ttf',
+  'assets/fonts/eiko-pdf.cff',
   'assets/fonts/opensans-var.woff2',
   'assets/fonts/inter-tight-latin-400-normal.woff2',
   'assets/fonts/inter-tight-latin-500-normal.woff2',

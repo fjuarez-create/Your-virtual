@@ -1,16 +1,24 @@
 /* ═══════════════════════════════════════════════════════════════
    pdf.js — hoja de repasos en PDF para pegar en la puerta.
 
-   El PDF se escribe a mano, sin librerías: solo texto y rectángulos con
-   las tipografías Helvetica que todo lector de PDF trae de serie. Eso
-   deja el fichero en unos pocos kilobytes y evita cargar 200 KB de
+   El PDF se escribe a mano, sin librerías: texto, rectángulos y las
+   fotos tal cual (JPEG dentro del fichero). Eso evita cargar 200 KB de
    dependencia en el móvil de obra.
 
-   El texto va en Latin-1 (WinAnsiEncoding), que cubre todas las tildes,
-   la eñe y los signos de apertura del castellano.
+   Hay dos juegos de letra. La hoja de siempre va en Helvetica, que
+   todo lector trae de serie y no pesa nada. La hoja de reparto lleva
+   incrustadas las tipografías corporativas —la Neue Haas del texto de
+   la app y la PP Eiko de los titulares—, que viajan dentro del PDF
+   para que el papel se lea con la misma letra que la pantalla, lo abra
+   quien lo abra. Si las fuentes no se pudieran cargar (sin cobertura y
+   sin caché), la hoja sale igual en Helvetica: papel antes que puristas.
+
+   El texto va en WinAnsi, que cubre todas las tildes, la eñe y los
+   signos de apertura del castellano.
    ═══════════════════════════════════════════════════════════════ */
 
 import { estado, oficio, OFICIOS, ZONAS } from './catalog.js';
+import { TIPOGRAFIAS_PDF } from './tipografiaPdf.js';
 
 const A4 = { ancho: 595.28, alto: 841.89 };
 const MARGEN = 48;
@@ -32,7 +40,18 @@ const ANCHOS = {
 };
 for (const d of '0123456789') ANCHOS[d] = 556;
 
-function anchoTexto(texto, tam, negrita = false) {
+function anchoTexto(texto, tam, negrita = false, fuente = 'helv') {
+  if (fuente !== 'helv') {
+    const anchos = TIPOGRAFIAS_PDF[fuente].anchos;
+    let total = 0;
+    for (const c of aWinAnsi(texto)) {
+      const codigo = c.charCodeAt(0);
+      total += (codigo >= 32 && anchos[codigo - 32]) || 500;
+    }
+    // La falsa negrita se hace trazando el borde, que no cambia el
+    // avance de cada letra: mismo ancho.
+    return (total / 1000) * tam;
+  }
   let total = 0;
   for (const c of texto) total += ANCHOS[c] ?? 556;
   // La negrita de Helvetica es algo más ancha; con este factor la
@@ -41,13 +60,13 @@ function anchoTexto(texto, tam, negrita = false) {
 }
 
 /** Parte un texto en líneas que quepan en `ancho`. */
-function partir(texto, ancho, tam, negrita = false) {
+function partir(texto, ancho, tam, negrita = false, fuente = 'helv') {
   const lineas = [];
   for (const parrafo of String(texto).split('\n')) {
     let actual = '';
     for (const palabra of parrafo.split(/\s+/).filter(Boolean)) {
       const prueba = actual ? actual + ' ' + palabra : palabra;
-      if (anchoTexto(prueba, tam, negrita) <= ancho) {
+      if (anchoTexto(prueba, tam, negrita, fuente) <= ancho) {
         actual = prueba;
       } else {
         if (actual) lineas.push(actual);
@@ -64,13 +83,22 @@ function escapar(texto) {
   return String(texto).replace(/[\\()]/g, (c) => '\\' + c);
 }
 
-/** Pasa a Latin-1; lo que no quepa se sustituye por algo parecido. */
-function latin1(texto) {
-  const equivalentes = { '—': '-', '–': '-', '«': '"', '»': '"', '“': '"', '”': '"', '‘': "'", '’': "'", '…': '...' };
+/* Pasa a WinAnsi, que es Latin-1 más un puñado de signos buenos —la
+   raya, las comillas, los puntos suspensivos— aparcados en los códigos
+   128–159. Se mapean a su byte y el lector, con /WinAnsiEncoding, los
+   entiende. Lo que ni así quepa se sustituye por un interrogante. */
+const BYTES_WINANSI = {
+  '€': 128, '‚': 130, '„': 132, '…': 133, '‘': 145, '’': 146,
+  '“': 147, '”': 148, '•': 149, '–': 150, '—': 151, '™': 153,
+};
+function aWinAnsi(texto) {
   return String(texto)
-    .replace(/[—–«»“”‘’…]/g, (c) => equivalentes[c] || c)
     .split('')
-    .map((c) => (c.charCodeAt(0) <= 255 ? c : '?'))
+    .map((c) => {
+      const especial = BYTES_WINANSI[c];
+      if (especial) return String.fromCharCode(especial);
+      return c.charCodeAt(0) <= 255 ? c : '?';
+    })
     .join('');
 }
 
@@ -96,14 +124,25 @@ const c3 = (c) => c.map((n) => n.toFixed(3)).join(' ');
 
 class Pagina {
   constructor() { this.ops = []; }
-  texto(x, y, cadena, { tam = 11, negrita = false, gris = 0, color = null, espaciado = 0 } = {}) {
+  texto(x, y, cadena, { tam = 11, negrita = false, gris = 0, color = null, espaciado = 0, fuente = 'helv' } = {}) {
+    let nombre = negrita ? 'F2' : 'F1';
+    if (fuente === 'haas') nombre = 'Fh';
+    if (fuente === 'eiko') nombre = 'Fe';
+    // La Neue Haas viaja en un solo peso; su negrita se fabrica
+    // trazando el contorno además de rellenarlo (modo 2 de texto),
+    // que es como engordan la letra media imprenta y la propia CSS.
+    const trazar = fuente === 'haas' && negrita;
+    this.ops.push('BT', color ? `${c3(color)} rg` : `${gris} g`);
+    if (trazar) {
+      this.ops.push(color ? `${c3(color)} RG` : `${gris} G`, `${(tam * 0.024).toFixed(3)} w`, '2 Tr');
+    } else {
+      this.ops.push('0 Tr');
+    }
     this.ops.push(
-      'BT',
-      color ? `${c3(color)} rg` : `${gris} g`,
-      `/${negrita ? 'F2' : 'F1'} ${tam} Tf`,
+      `/${nombre} ${tam} Tf`,
       espaciado ? `${espaciado} Tc` : '0 Tc',
       `1 0 0 1 ${x.toFixed(2)} ${y.toFixed(2)} Tm`,
-      `(${escapar(latin1(cadena))}) Tj`,
+      `(${escapar(aWinAnsi(cadena))}) Tj`,
       'ET',
     );
   }
@@ -185,7 +224,7 @@ class Pagina {
  * Se ensambla por partes —texto y bytes crudos— porque un JPEG no
  * sobrevive a un paso por string más que por casualidad.
  */
-function ensamblar(paginas, imagenes = new Map()) {
+function ensamblar(paginas, imagenes = new Map(), fuentes = {}) {
   const partes = [];        // trozos: string (latin-1/ascii) o Uint8Array
   let posicion = 0;
   const meter = (parte) => {
@@ -193,16 +232,30 @@ function ensamblar(paginas, imagenes = new Map()) {
     posicion += typeof parte === 'string' ? parte.length : parte.length;
   };
 
-  const idPaginas = 2;
-  const idFuente = 3;
-  const idFuenteNegrita = 4;
+  /* El reparto de números de objeto, seguido y por adelantado: primero
+     catálogo y páginas, luego las cuatro fuentes (las corporativas con
+     descriptor y fichero solo si vienen sus bytes), las imágenes y al
+     final las páginas con su contenido. */
+  let sig = 1;
+  const idCatalogo = sig++;
+  const idPaginas = sig++;
+  const idFuente = sig++;
+  const idFuenteNegrita = sig++;
+  const conHaas = !!fuentes.haas;
+  const conEiko = !!fuentes.eiko;
+  const idHaas = sig++;
+  const idHaasDesc = conHaas ? sig++ : 0;
+  const idHaasFichero = conHaas ? sig++ : 0;
+  const idEiko = sig++;
+  const idEikoDesc = conEiko ? sig++ : 0;
+  const idEikoFichero = conEiko ? sig++ : 0;
   const nombres = [...imagenes.keys()];
-  const idImagen = new Map(nombres.map((n, i) => [n, 5 + i]));
-  const primeraPagina = 5 + nombres.length;
+  const idImagen = new Map(nombres.map((n) => [n, sig++]));
+  const primeraPagina = sig;
   const total = primeraPagina + paginas.length * 2;
 
   const recursos = '<< '
-    + `/Font << /F1 ${idFuente} 0 R /F2 ${idFuenteNegrita} 0 R >> `
+    + `/Font << /F1 ${idFuente} 0 R /F2 ${idFuenteNegrita} 0 R /Fh ${idHaas} 0 R /Fe ${idEiko} 0 R >> `
     + (nombres.length
       ? `/XObject << ${nombres.map((n) => `/${n} ${idImagen.get(n)} 0 R`).join(' ')} >> `
       : '')
@@ -221,11 +274,43 @@ function ensamblar(paginas, imagenes = new Map()) {
   };
 
   meter('%PDF-1.4\n');
-  objeto(1, `<< /Type /Catalog /Pages ${idPaginas} 0 R >>`);
+  objeto(idCatalogo, `<< /Type /Catalog /Pages ${idPaginas} 0 R >>`);
   const kids = paginas.map((_, i) => `${primeraPagina + i * 2} 0 R`).join(' ');
   objeto(idPaginas, `<< /Type /Pages /Kids [${kids}] /Count ${paginas.length} >>`);
   objeto(idFuente, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>');
   objeto(idFuenteNegrita, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
+
+  /* Las corporativas. El descriptor es la ficha técnica que el PDF
+     exige de toda fuente incrustada: medidas generales y el fichero.
+     La Neue Haas es TrueType normal (FontFile2). La Eiko es OpenType
+     con tripas PostScript: se incrusta su tabla CFF pelada, que en el
+     mundo PDF se llama Type1C y entienden hasta los visores viejos. */
+  const descriptor = (nombre, m, idFichero, extra) =>
+    `<< /Type /FontDescriptor /FontName /${nombre} /Flags 32 `
+    + `/FontBBox [${m.caja.join(' ')}] /ItalicAngle 0 `
+    + `/Ascent ${m.ascendente} /Descent ${m.descendente} /CapHeight ${m.mayusculas} `
+    + `/StemV ${m.tallo} ${extra} ${idFichero} 0 R >>`;
+  const fuenteSimple = (nombre, subtipo, m, idDesc) =>
+    `<< /Type /Font /Subtype /${subtipo} /BaseFont /${nombre} /FirstChar 32 /LastChar 255 `
+    + `/Widths [${m.anchos.join(' ')}] /FontDescriptor ${idDesc} 0 R /Encoding /WinAnsiEncoding >>`;
+  const helvetica = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>';
+
+  if (conHaas) {
+    const m = TIPOGRAFIAS_PDF.haas;
+    objeto(idHaas, fuenteSimple('NeueHaasDisplay-Roman', 'TrueType', m, idHaasDesc));
+    objeto(idHaasDesc, descriptor('NeueHaasDisplay-Roman', m, idHaasFichero, '/FontFile2'));
+    objeto(idHaasFichero, `<< /Length ${fuentes.haas.length} /Length1 ${fuentes.haas.length} >>`, fuentes.haas);
+  } else {
+    objeto(idHaas, helvetica);
+  }
+  if (conEiko) {
+    const m = TIPOGRAFIAS_PDF.eiko;
+    objeto(idEiko, fuenteSimple('PPEiko-Thin', 'Type1', m, idEikoDesc));
+    objeto(idEikoDesc, descriptor('PPEiko-Thin', m, idEikoFichero, '/FontFile3'));
+    objeto(idEikoFichero, `<< /Length ${fuentes.eiko.length} /Subtype /Type1C >>`, fuentes.eiko);
+  } else {
+    objeto(idEiko, helvetica);
+  }
 
   for (const n of nombres) {
     const im = imagenes.get(n);
@@ -649,10 +734,10 @@ export function actaDelDia({ titulo, diaSemana, promocion, gente, conteo, villas
 /** Nombre de fichero legible y sin caracteres problemáticos. */
 /* ─── La hoja de reparto ──────────────────────────────────────────
    El PDF que se le pone al encargado de obra en la mano y que él corta
-   y reparte a los gremios. Cada tarea con su foto GRANDE —a todo lo
-   ancho del papel, que desde una lista de texto nadie encuentra el
-   rodapié—, su casilla para tachar a bolígrafo, su estancia y su
-   gremio. Y si se pide el histórico, las ejecutadas al final, en lista
+   y reparte a los gremios. Cada tarea con su foto, su casilla para
+   tachar a bolígrafo, su número para citarla por teléfono y sus chips
+   de dónde va. En dos columnas, con la letra corporativa incrustada.
+   Y si se pide el histórico, las ejecutadas al final, en lista
    apretada y sin fotos: son constancia, no trabajo por hacer. */
 
 /**
@@ -671,22 +756,34 @@ function ordenDePaseo(tareas, porGremio) {
   });
 }
 
+/* Los meses cortos del papel, sin depender de locales del navegador. */
+const MESES_PDF = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+function fechaCorta(iso) {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '' : `${d.getDate()} ${MESES_PDF[d.getMonth()]}`;
+}
+
 /**
- * Genera la hoja de reparto de una vivienda.
- *
- * `fotos` es un Map tareaId → { bytes, ancho, alto } con los JPEG ya
- * recortados (ver media.jpegParaPdf): aquí solo se pegan. `filtros` es
- * la frase de qué se filtró («Aluminio · Salón»), para que el papel
- * diga qué es y qué no es. `ejecutadas` van SIEMPRE al final.
- *
- * @returns {Blob} el PDF listo para bajar o compartir
+ * La hoja de reparto: el PDF de una vivienda para imprimir y dar en
+ * mano. La maqueta sale de la de Fran —cabecera blanca ligera, chips,
+ * caja gris para el texto, pie con quién lo generó— sobre el esqueleto
+ * que el papel necesita en obra: numeración seguida con casilla para
+ * tachar, franjas por gremio para poder cortar y repartir, la villa en
+ * cada pie por si las hojas se sueltan, y las ejecutadas al final en
+ * lista apretada. Va en dos columnas que fluyen como un periódico:
+ * cada una a su ritmo, sin huecos muertos. Y con la letra corporativa
+ * incrustada: Eiko para el titular, Neue Haas para todo lo demás.
  */
 export function hojaDeReparto({
-  vivienda, promocion, fecha, autor,
+  vivienda, promocion, fecha, hora = '', autor,
   tareas, ejecutadas = [], fotos = new Map(),
-  orden = 'oficio', filtros = '',
+  orden = 'oficio', filtros = '', fuentes = {},
 }) {
   const anchoUtil = A4.ancho - MARGEN * 2;
+  const SEPARACION = 16;
+  const ANCHO_COL = (anchoUtil - SEPARACION) / 2;
+  const ALTO_FOTO = ANCHO_COL * (3 / 4);   // el recorte 4:3 de jpegParaPdf
+  const SUELO = MARGEN + 20;
   const paginas = [];
   const imagenes = new Map();
   let pag = new Pagina();
@@ -703,152 +800,189 @@ export function hojaDeReparto({
   const grupos = (agrupar(tareas, comoAgrupar) || [{ titulo: '', sub: '', tareas }])
     .map((g) => ({ ...g, tareas: ordenDePaseo(g.tareas, comoAgrupar === 'oficio') }));
 
-  const SUELO = MARGEN + 18;
-
-  /* La cabecera grande de la primera hoja: la banda negra con el
-     nombre, como la app. En las siguientes, una línea que recuerda
-     dónde estás. */
+  /* La cabecera. La primera hoja lleva el nombre de la villa en la
+     Eiko, como los titulares de la app, y la promoción enfrente; las
+     siguientes, una línea que recuerda dónde estás por si la hoja se
+     corta por arriba. */
   const cabecera = (primera) => {
+    y = A4.alto - MARGEN;
     if (primera) {
-      const altoBanda = 118;
-      pag.pastilla(MARGEN - 14, A4.alto - MARGEN - altoBanda + 14, anchoUtil + 28, altoBanda, 16, COLOR.tinta);
-      let yy = A4.alto - MARGEN - 12;
-      pag.texto(MARGEN + 6, yy, 'UNIK WORKS', { tam: 9, negrita: true, color: [0.72, 0.7, 0.67], espaciado: 1.2 });
-      yy -= 34;
-      pag.texto(MARGEN + 6, yy, vivienda, { tam: 27, negrita: true, color: [1, 1, 1] });
-      yy -= 19;
-      pag.texto(MARGEN + 6, yy, `${promocion} · Hoja de repasos`, { tam: 11.5, color: [0.78, 0.76, 0.73] });
-      yy -= 18;
-      pag.texto(MARGEN + 6, yy, `${fecha}  ·  ${autor}`, { tam: 9.5, color: [0.62, 0.6, 0.57] });
-      y = A4.alto - MARGEN - altoBanda - 12;
-
-      const resumen = `${tareas.length} ${tareas.length === 1 ? 'repaso pendiente' : 'repasos pendientes'}`
-        + (ejecutadas.length ? `  ·  ${ejecutadas.length} ${ejecutadas.length === 1 ? 'ejecutado' : 'ejecutados'}` : '')
+      pag.texto(MARGEN, y - 24, vivienda, { tam: 28, fuente: 'eiko' });
+      pag.texto(A4.ancho - MARGEN - anchoTexto(promocion, 13, false, 'eiko'), y - 22, promocion,
+        { tam: 13, fuente: 'eiko', color: COLOR.topo });
+      y -= 50;
+      const resumen = `${tareas.length} ${tareas.length === 1 ? 'tarea pendiente' : 'tareas pendientes'}`
+        + (ejecutadas.length ? `  ·  ${ejecutadas.length} ${ejecutadas.length === 1 ? 'ejecutada' : 'ejecutadas'}` : '')
         + (filtros ? `  ·  Filtrado: ${filtros}` : '');
-      pag.texto(MARGEN, y - 4, resumen, { tam: 10, negrita: true, gris: 0.4 });
-      y -= 26;
-    } else {
-      y = A4.alto - MARGEN;
-      pag.texto(MARGEN, y, `${vivienda}  ·  ${promocion}  ·  ${fecha}`, { tam: 9.5, negrita: true, gris: 0.45 });
-      y -= 10;
-      pag.linea(MARGEN, y, A4.ancho - MARGEN, y, 0.8, 0.65);
+      pag.texto(MARGEN, y, resumen, { tam: 10, negrita: true, gris: 0.3, fuente: 'haas' });
+      y -= 12;
+      pag.linea(MARGEN, y, A4.ancho - MARGEN, y, 0.7, 0.85);
       y -= 22;
+    } else {
+      pag.texto(MARGEN, y - 8, `${vivienda}  ·  ${promocion}  ·  ${fecha}`,
+        { tam: 8.5, negrita: true, gris: 0.45, fuente: 'haas' });
+      y -= 16;
+      pag.linea(MARGEN, y, A4.ancho - MARGEN, y, 0.7, 0.85);
+      y -= 18;
     }
   };
   cabecera(true);
 
+  /* Las dos columnas: cada una lleva su propia altura y las tarjetas
+     van llenando la izquierda y luego la derecha, como un periódico. */
+  let alturaCol = [y, y];
+  let col = 0;
+
+  let grupoEnCurso = null;
   const saltar = () => {
     paginas.push(pag);
     pag = new Pagina();
     cabecera(false);
     if (grupoEnCurso) franja(grupoEnCurso, true);
+    alturaCol = [y, y];
+    col = 0;
   };
 
-  let grupoEnCurso = null;
   const franja = (g, seguida = false) => {
     if (!g.titulo) return;
     const conSub = !!g.sub && !seguida;
-    const alto = conSub ? 34 : 24;
-    pag.pastilla(MARGEN - 8, y - alto + 13, anchoUtil + 16, alto, 6, COLOR.beige);
-    pag.texto(MARGEN + 2, y, g.titulo, { tam: 13, negrita: true, color: [0.2, 0.18, 0.15] });
+    const alto = conSub ? 33 : 23;
+    pag.pastilla(MARGEN - 8, y - alto + 12, anchoUtil + 16, alto, 6, COLOR.beige);
+    pag.texto(MARGEN + 2, y, g.titulo, { tam: 12, negrita: true, color: [0.2, 0.18, 0.15], fuente: 'haas' });
     if (seguida) {
       const nota = '(sigue)';
-      pag.texto(A4.ancho - MARGEN - anchoTexto(nota, 9) - 2, y, nota, { tam: 9, gris: 0.45 });
+      pag.texto(A4.ancho - MARGEN - anchoTexto(nota, 8.5, false, 'haas') - 2, y, nota,
+        { tam: 8.5, gris: 0.45, fuente: 'haas' });
     }
-    if (conSub) pag.texto(MARGEN + 2, y - 12, g.sub, { tam: 9.5, color: [0.42, 0.38, 0.32] });
+    if (conSub) pag.texto(MARGEN + 2, y - 11, g.sub, { tam: 8.5, color: [0.42, 0.38, 0.32], fuente: 'haas' });
     y -= alto + 10;
   };
 
-  /* Una tarea: la foto grande —13,5 × 8,5 cm en papel, centrada— y
-     debajo la casilla, el número, dónde, y el texto. Con este tamaño
-     caben dos tareas por página: grande para verse desde el andamio,
-     sin convertir la hoja de una villa en un tomo. */
-  const ALTO_FOTO = 240;
-  const ANCHO_FOTO = ALTO_FOTO * (8 / 5);  // el recorte de jpegParaPdf
-  const TAM = 11.5;
-  const INTERLINEA = 15;
+  /* Los chips de una tarjeta: dónde va, su estado si está a medias y
+     de qué día es. Se pintan de derecha a izquierda y, si el sitio es
+     largo y no caben todos, se van cayendo los de menos sustancia. */
+  const chipsDe = (t) => {
+    const lista = [];
+    const sitio = comoAgrupar === 'oficio' ? t.zona : (oficio(t.oficio)?.corto || oficio(t.oficio)?.nombre);
+    if (sitio) lista.push({ texto: sitio, tam: 8 });
+    if (t.estado && t.estado !== 'pendiente' && t.estado !== 'verificada') {
+      lista.push({ texto: estado(t.estado).nombre.toUpperCase(), tam: 7 });
+    }
+    const dia = fechaCorta(t.creado);
+    if (dia) lista.push({ texto: dia, tam: 8 });
+    return lista;
+  };
+  const anchoChip = (c) => anchoTexto(c.texto, c.tam, false, 'haas') + 13;
 
-  const pintarTarea = (t, n) => {
-    const conFoto = fotos.has(t.id);
-    const lineas = partir(t.texto || 'Sin descripción', anchoUtil - 44, TAM);
-    const altoTexto = 22 + lineas.length * INTERLINEA + 14;
-    const altoTarjeta = (conFoto ? ALTO_FOTO + 10 : 0) + altoTexto;
+  const medirTarea = (t) => {
+    const lineas = partir(t.texto || 'Sin descripción', ANCHO_COL - 20, 9.5, false, 'haas');
+    return {
+      lineas,
+      alto: (fotos.has(t.id) ? ALTO_FOTO + 11 : 0) + 19 + (lineas.length * 13 + 16) + 15,
+    };
+  };
 
-    if (y - altoTarjeta < SUELO) saltar();
-
-    if (conFoto) {
+  const pintarTarea = (t, n, x, yTop, lineas) => {
+    let yy = yTop;
+    if (fotos.has(t.id)) {
       const nombre = `Im${imagenes.size + 1}`;
       imagenes.set(nombre, fotos.get(t.id));
-      pag.fotoRecortada(nombre, MARGEN + (anchoUtil - ANCHO_FOTO) / 2, y - ALTO_FOTO, ANCHO_FOTO, ALTO_FOTO, 10);
-      y -= ALTO_FOTO + 14;
+      pag.fotoRecortada(nombre, x, yy - ALTO_FOTO, ANCHO_COL, ALTO_FOTO, 10);
+      yy -= ALTO_FOTO + 11;
     }
 
-    // La casilla y el número, y a la derecha el dónde y el quién.
-    pag.recuadro(MARGEN, y - 11, 12, 12, 1.1, 0.25);
-    pag.texto(MARGEN + 20, y - 9, `${n}.`, { tam: 13, negrita: true });
-    const sitio = [t.zona, oficio(t.oficio)?.nombre].filter(Boolean).join('  ·  ');
-    if (sitio) {
-      pag.texto(A4.ancho - MARGEN - anchoTexto(sitio, 9.5, true), y - 9, sitio,
-        { tam: 9.5, negrita: true, color: [0.42, 0.38, 0.32] });
+    // La fila del número: casilla para tachar, número para citarla por
+    // teléfono, y los chips a la derecha.
+    pag.recuadro(x + 1, yy - 11, 10.5, 10.5, 1, 0.35);
+    pag.texto(x + 18, yy - 9.5, `${n}.`, { tam: 11.5, negrita: true, fuente: 'haas' });
+    let chips = chipsDe(t);
+    const hueco = ANCHO_COL - 22 - anchoTexto(`${n}.`, 11.5, true, 'haas') - 6;
+    while (chips.length && chips.reduce((s, c) => s + anchoChip(c) + 4, -4) > hueco) {
+      chips = chips.slice(0, -1);
     }
-    y -= 26;
+    let xChip = x + ANCHO_COL - chips.reduce((s, c) => s + anchoChip(c) + 4, -4);
+    for (const c of chips) {
+      const a = anchoChip(c);
+      pag.pastilla(xChip, yy - 12.5, a, 15, 7.5, COLOR.beigeSuave);
+      pag.texto(xChip + 6.5, yy - 7.5, c.texto, { tam: c.tam, color: [0.4, 0.37, 0.31], fuente: 'haas' });
+      xChip += a + 4;
+    }
+    yy -= 19;
+
+    // La caja gris con el texto, como en la maqueta.
+    const altoCaja = lineas.length * 13 + 16;
+    pag.pastilla(x, yy - altoCaja, ANCHO_COL, altoCaja, 8, COLOR.tarjeta);
     lineas.forEach((linea, i) => {
-      pag.texto(MARGEN + 20, y - i * INTERLINEA, linea, { tam: TAM });
+      pag.texto(x + 10, yy - 12 - i * 13, linea, { tam: 9.5, gris: 0.12, fuente: 'haas' });
     });
-    y -= (lineas.length - 1) * INTERLINEA + 12;
-    if (t.estado && t.estado !== 'pendiente' && t.estado !== 'verificada') {
-      pag.texto(MARGEN + 20, y, estado(t.estado).nombre.toUpperCase(), { tam: 8, negrita: true, gris: 0.5 });
-      y -= 12;
+  };
+
+  const ponerTarea = (t, n) => {
+    const { lineas, alto } = medirTarea(t);
+    if (alturaCol[col] - alto < SUELO) {
+      if (col === 0 && alturaCol[1] - alto >= SUELO) col = 1;
+      else saltar();
     }
-    pag.linea(MARGEN, y, A4.ancho - MARGEN, y, 0.5, 0.85);
-    y -= 16;
+    const x = MARGEN + col * (ANCHO_COL + SEPARACION);
+    pintarTarea(t, n, x, alturaCol[col], lineas);
+    alturaCol[col] -= alto;
   };
 
   let n = 0;
   grupos.forEach((g, i) => {
     grupoEnCurso = null;
-    if (i > 0) y -= 4;
-    if (y - 90 < SUELO) saltar();
+    y = Math.min(alturaCol[0], alturaCol[1]) - (i > 0 ? 6 : 0);
+    if (y - 110 < SUELO) saltar();
     franja(g);
     grupoEnCurso = g;
-    for (const t of g.tareas) pintarTarea(t, ++n);
+    alturaCol = [y, y];
+    col = 0;
+    for (const t of g.tareas) ponerTarea(t, ++n);
   });
   grupoEnCurso = null;
 
-  /* Las ejecutadas, SIEMPRE al final y en lista apretada: constancia
-     de lo hecho, no trabajo que repartir. Lo último ejecutado arriba. */
+  /* Las ejecutadas, SIEMPRE al final y en lista apretada, a lo ancho:
+     constancia de lo hecho, no trabajo que repartir. Lo último
+     ejecutado arriba. */
   if (ejecutadas.length) {
     const hechas = [...ejecutadas].sort((a, b) =>
       String(b.estadoEn || b.actualizado || '').localeCompare(String(a.estadoEn || a.actualizado || '')));
+    y = Math.min(alturaCol[0], alturaCol[1]) - 8;
     if (y - 80 < SUELO) saltar();
-    y -= 6;
-    pag.pastilla(MARGEN - 8, y - 24 + 13, anchoUtil + 16, 24, 6, COLOR.verdeSuave);
-    pag.texto(MARGEN + 2, y, 'Ejecutadas', { tam: 13, negrita: true, color: COLOR.verde });
-    y -= 34;
+    pag.pastilla(MARGEN - 8, y - 23 + 12, anchoUtil + 16, 23, 6, COLOR.verdeSuave);
+    pag.texto(MARGEN + 2, y, 'Ejecutadas', { tam: 12, negrita: true, color: COLOR.verde, fuente: 'haas' });
+    y -= 33;
     for (const t of hechas) {
-      const lineas = partir(t.texto || 'Sin descripción', anchoUtil - 130, 9.5);
-      const altoFila = Math.max(lineas.length * 12, 12) + 9;
-      if (y - altoFila < SUELO) saltar();
-      // El puntito verde de «hecho»: Helvetica no trae la marca de
-      // visto, y una X delante de algo terminado se lee al revés.
-      pag.pastilla(MARGEN, y - 1.5, 8, 8, 2.5, COLOR.verde);
-      lineas.forEach((linea, i) => pag.texto(MARGEN + 16, y - i * 12, linea, { tam: 9.5, gris: 0.25 }));
+      const lineas = partir(t.texto || 'Sin descripción', anchoUtil - 130, 9, false, 'haas');
+      const altoFila = Math.max(lineas.length * 12, 12) + 8;
+      if (y - altoFila < SUELO) { saltar(); }
+      // El puntito verde de «hecho»: la marca de visto no está en la
+      // fuente, y una X delante de algo terminado se lee al revés.
+      pag.pastilla(MARGEN, y - 1, 7.5, 7.5, 2.5, COLOR.verde);
+      lineas.forEach((linea, i) => pag.texto(MARGEN + 15, y - i * 12, linea, { tam: 9, gris: 0.25, fuente: 'haas' }));
       const sitio = [t.zona, oficio(t.oficio)?.corto].filter(Boolean).join(' · ');
-      if (sitio) pag.texto(A4.ancho - MARGEN - anchoTexto(sitio, 8.5), y, sitio, { tam: 8.5, gris: 0.55 });
+      if (sitio) {
+        pag.texto(A4.ancho - MARGEN - anchoTexto(sitio, 8, false, 'haas'), y, sitio,
+          { tam: 8, gris: 0.55, fuente: 'haas' });
+      }
       y -= altoFila;
     }
   }
 
+  /* El pie de cada hoja: la villa SIEMPRE —si las hojas se sueltan,
+     que cada una diga de dónde es—, quién generó el papel y cuándo,
+     y el número de página. */
   paginas.push(pag);
+  const generado = `Generado por ${autor} el ${fecha}` + (hora ? ` a las ${hora}` : '');
   paginas.forEach((p, i) => {
-    p.texto(MARGEN, MARGEN - 16,
-      `UNIK Works  ·  ${vivienda}  ·  ${tareas.length} ${tareas.length === 1 ? 'pendiente' : 'pendientes'}`,
-      { tam: 8.5, gris: 0.55 });
+    p.texto(MARGEN, MARGEN - 16, `${vivienda}  ·  ${promocion}  —  ${generado}`,
+      { tam: 7.5, gris: 0.5, fuente: 'haas' });
     const num = `Página ${i + 1} de ${paginas.length}`;
-    p.texto(A4.ancho - MARGEN - anchoTexto(num, 8.5), MARGEN - 16, num, { tam: 8.5, gris: 0.55 });
+    p.texto(A4.ancho - MARGEN - anchoTexto(num, 7.5, false, 'haas'), MARGEN - 16, num,
+      { tam: 7.5, gris: 0.5, fuente: 'haas' });
   });
 
-  return ensamblar(paginas, imagenes);
+  return ensamblar(paginas, imagenes, fuentes);
 }
 
 export function nombreDeFichero(vivienda, fecha) {
