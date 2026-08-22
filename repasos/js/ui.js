@@ -315,17 +315,67 @@ export function logoUnik({ alto = 26, color } = {}) {
   });
 }
 
-/* ─── Avisos ──────────────────────────────────────────────────── */
-let toastEl, toastTimer;
-export function toast(message, kind = '') {
-  if (!toastEl) {
-    toastEl = h('div.toast', { role: 'status', 'aria-live': 'polite' });
-    document.getElementById('app').append(toastEl);
-  }
-  toastEl.textContent = message;
-  toastEl.className = 'toast on' + (kind ? ' ' + kind : '');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { toastEl.className = 'toast' + (kind ? ' ' + kind : ''); }, 2800);
+/* ─── Avisos ──────────────────────────────────────────────────────
+   La banda de arriba, como la eligió Fran: radio 12, negro con una
+   levísima transparencia para lo normal y rojo translúcido para los
+   errores. Entra desde el borde con un muelle sutil, reposa (4 s los
+   normales, 6 los errores) y se va elevándose. Un toque la quita —o
+   ejecuta su acción, si la lleva— y deslizarla hacia arriba también.
+   Solo hay una a la vista: si llega otra, la anterior sale primero. */
+let avisoEl = null;
+let avisoTimer = 0;
+
+function quitarAviso() {
+  if (!avisoEl) return;
+  const el = avisoEl;
+  avisoEl = null;
+  clearTimeout(avisoTimer);
+  el.classList.add('fuera');
+  setTimeout(() => el.remove(), 320);
+}
+
+/**
+ * @param {string} message  lo que pasa, en una línea
+ * @param {string} kind     '' normal (negro) · 'err' error (rojo)
+ * @param {object} extras   detalle: segunda línea pequeña ·
+ *   icono: uno del catálogo (si no, check o alert según el tipo) ·
+ *   alTocar: acción al tocar la banda (reintentar, abrir…)
+ */
+export function toast(message, kind = '', { detalle = '', icono = '', alTocar = null } = {}) {
+  quitarAviso();
+  const el = h(kind ? `div.aviso.${kind}` : 'div.aviso',
+    { role: kind === 'err' ? 'alert' : 'status' },
+    icon(icono || (kind === 'err' ? 'alert' : 'check'), 21),
+    h('span.grow', null,
+      message,
+      detalle ? h('span.aviso-detalle', null, detalle) : null),
+  );
+
+  // Un toque: su acción si la tiene, y fuera.
+  el.addEventListener('click', () => {
+    quitarAviso();
+    alTocar?.();
+  });
+
+  // Deslizar hacia arriba, como en el propio iPhone.
+  let dedoY = null;
+  el.addEventListener('touchstart', (e) => { dedoY = e.touches[0].clientY; }, { passive: true });
+  el.addEventListener('touchmove', (e) => {
+    if (dedoY === null) return;
+    const delta = e.touches[0].clientY - dedoY;
+    if (delta < 0) el.style.transform = `translateY(${Math.max(delta, -140)}px)`;
+  }, { passive: true });
+  el.addEventListener('touchend', (e) => {
+    if (dedoY === null) return;
+    const delta = e.changedTouches[0].clientY - dedoY;
+    dedoY = null;
+    if (delta < -24) quitarAviso();
+    else el.style.transform = '';
+  });
+
+  document.getElementById('app').append(el);
+  avisoEl = el;
+  avisoTimer = setTimeout(quitarAviso, kind === 'err' ? 6000 : 4000);
 }
 
 /* ─── Hoja inferior ───────────────────────────────────────────── */

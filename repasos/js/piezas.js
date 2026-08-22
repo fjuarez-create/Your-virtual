@@ -816,10 +816,10 @@ export function entregarFichero(fichero, nombre) {
     document.body.append(enlace);
     enlace.click();
     setTimeout(() => { enlace.remove(); URL.revokeObjectURL(url); }, 4000);
+    toast('PDF descargado', '', { icono: 'documento', detalle: nombre });
   };
   if (!navigator.canShare?.({ files: [fichero] })) {
     bajar();
-    toast('PDF descargado');
     return;
   }
   menuFlotante((cerrar) => [

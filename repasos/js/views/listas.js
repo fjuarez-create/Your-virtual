@@ -453,6 +453,9 @@ async function descargarVivienda(p, u, { tareas, ejecutadas = [], filtros = '', 
     entregarFichero(fichero, nombre);
   } catch (e) {
     console.error('No se pudo generar el PDF de la vivienda:', e);
-    toast('No se ha podido generar el PDF', 'err');
+    toast('No se ha podido generar el PDF', 'err', {
+      detalle: 'Toca para volver a intentarlo',
+      alTocar: () => descargarVivienda(p, u, { tareas, ejecutadas, filtros, apellido }),
+    });
   }
 }

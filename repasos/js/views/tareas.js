@@ -387,7 +387,10 @@ async function descargarHoja(lista, tareas) {
     entregarFichero(fichero, nombre);
   } catch (e) {
     console.error('No se pudo generar el PDF del acta:', e);
-    toast('No se pudo generar el PDF', 'err');
+    toast('No se pudo generar el PDF', 'err', {
+      detalle: 'Toca para volver a intentarlo',
+      alTocar: () => descargarHoja(lista, tareas),
+    });
   }
 }
 

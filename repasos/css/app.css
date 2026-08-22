@@ -585,26 +585,49 @@ button.avatar:active { transform: scale(0.92); }
 }
 .viewer .close svg { width: 19px; height: 19px; }
 
-/* ─── Aviso flotante ───────────────────────────────────────────── */
-.toast {
-  position: absolute; left: 50%; z-index: 90;
-  bottom: calc(env(safe-area-inset-bottom) + var(--tab-h) + 20px);
-  transform: translate(-50%, 14px);
-  max-width: calc(100% - 40px);
-  background: var(--ink); color: #fff;
-  padding: 13px 19px; border-radius: 999px;
-  font-size: 13.5px; font-weight: 600; letter-spacing: -0.01em;
-  box-shadow: var(--shadow); opacity: 0; pointer-events: none;
-  transition: opacity 0.2s ease, transform 0.24s cubic-bezier(0.22, 0.8, 0.25, 1);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+/* ─── Aviso flotante ──────────────────────────────────────────────
+   La banda de arriba: radio 12, cuerpo generoso, sombra corta sin
+   resplandor. Negro con una levísima transparencia; el error, igual
+   pero rojo. El desenfoque de detrás es lo que hace que la
+   transparencia se lea con cualquier cosa debajo. */
+.aviso {
+  position: fixed; z-index: 120;
+  top: calc(env(safe-area-inset-top) + 12px);
+  left: 12px; right: 12px;
+  display: flex; align-items: center; gap: 13px;
+  background: rgba(12, 11, 10, 0.84);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  backdrop-filter: blur(14px) saturate(1.4);
+  color: #fff; border-radius: 12px;
+  padding: 17px 18px;
+  font-size: 15.5px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.25;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.16);
+  animation: aviso-entra 0.42s cubic-bezier(0.34, 1.45, 0.5, 1) both;
+  cursor: pointer;
 }
-.toast.on { opacity: 1; transform: translate(-50%, 0); }
-.toast.err { background: var(--danger); }
-/* Si la pantalla tiene botón flotante, el aviso sube por encima: si no,
-   se solapan justo cuando más se está mirando (al guardar una tarea). */
-#app.con-fab .toast { bottom: calc(env(safe-area-inset-bottom) + var(--tab-h) + 78px); }
-#app.sin-tabs .toast { bottom: calc(env(safe-area-inset-bottom) + 24px); }
-#app.sin-tabs.con-fab .toast { bottom: calc(env(safe-area-inset-bottom) + 86px); }
+.aviso > svg { flex: 0 0 21px; }
+.aviso.err { background: rgba(219, 62, 50, 0.86); }
+.aviso-detalle {
+  display: block; margin-top: 2px;
+  font-size: 13px; font-weight: 500; color: rgba(255, 255, 255, 0.66);
+}
+.aviso.fuera { animation: aviso-sale 0.26s cubic-bezier(0.5, 0, 0.8, 0.4) both; }
+
+/* Entra cayendo con un muelle sutil; sale elevándose y fundiéndose. */
+@keyframes aviso-entra {
+  0% { transform: translateY(calc(-100% - 24px)) scale(0.97); opacity: 0; }
+  55% { opacity: 1; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+@keyframes aviso-sale {
+  0% { transform: translateY(0) scale(1); opacity: 1; }
+  100% { transform: translateY(calc(-100% - 24px)) scale(0.97); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .aviso { animation: aviso-funde 0.2s ease both; }
+  .aviso.fuera { animation: aviso-funde 0.2s ease reverse both; }
+  @keyframes aviso-funde { from { opacity: 0; } to { opacity: 1; } }
+}
 
 /* ─── Estado vacío ─────────────────────────────────────────────── */
 .empty-state { padding: 40px 12px; text-align: center; }
