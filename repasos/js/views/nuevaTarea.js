@@ -71,7 +71,7 @@ export async function render({ promoId, unidadId }) {
   const papelera = (indice) => h('button.d-foto-papelera', {
     'aria-label': 'Borrar esta foto',
     onclick: () => menuFlotante((cerrar) => [
-      filaMenu('trash', 'Eliminar imagen', () => { cerrar(); fotos.splice(indice, 1); pintarFotos(); }),
+      filaMenu('trash', 'Eliminar imagen', () => { cerrar(); fotos.splice(indice, 1); pintarFotos(); apuntar(); }),
       filaMenu('corazon', 'Conservar', cerrar),
     ]),
   }, icon('trash'));
@@ -90,7 +90,29 @@ export async function render({ promoId, unidadId }) {
     if (fallos) toast(`${fallos} ${fallos === 1 ? 'foto no se pudo leer' : 'fotos no se pudieron leer'}`, 'err');
     pintarFotos();
     repasar();
+    apuntar();
   };
+  /* El borrador a prueba de muertes: cada cambio de fotos o de texto se
+     apunta en el almacén. Si iOS mata la app a media tarea, al volver
+     aquí está todo esperando. */
+  const apuntar = () => {
+    store.guardarBorradorNueva(unidadId, { fotos, texto: area?.value }).catch(() => {});
+  };
+
+  let textoBorrador = '';
+  if (!brutas.length) {
+    const borrador = await store.leerBorradorNueva(unidadId).catch(() => null);
+    if (borrador) {
+      fotos.push(...borrador.fotos.slice(0, TOPE));
+      textoBorrador = borrador.texto;
+      if (fotos.length) {
+        toast(fotos.length === 1
+          ? 'Recuperada la foto que tenías a medias'
+          : `Recuperadas las ${fotos.length} fotos que tenías a medias`);
+      }
+    }
+  }
+
   pintarFotos();
   if (brutas.length) meter(brutas);
 
@@ -150,7 +172,9 @@ export async function render({ promoId, unidadId }) {
     icon('plus'), 'Añadir otra foto');
 
   const area = h('textarea.d-area', { placeholder: 'Mensaje...', autocapitalize: 'sentences' });
+  if (textoBorrador) area.value = textoBorrador;
   area.addEventListener('input', () => repasar());
+  area.addEventListener('change', () => apuntar());
 
   /* ─── Guardar ─── */
   // La foto es obligatoria, como los otros cuatro campos. Una tarea sin
@@ -178,6 +202,7 @@ export async function render({ promoId, unidadId }) {
       for (const f of fotos) {
         await store.añadirMedio(t.id, { tipo: 'imagen', blob: f.blob, mime: f.mime, ancho: f.ancho, alto: f.alto });
       }
+      await store.borrarBorradorNueva(unidadId).catch(() => {});
       toast('Tarea guardada');
       ir(`#/p/${promoId}/v/${String(villa.id).split(':')[1]}`, { reemplazar: true });
     } catch (e) {

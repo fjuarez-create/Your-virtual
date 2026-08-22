@@ -471,13 +471,54 @@ export async function borrarTarea(id) {
   return actualizarTarea(id, { borrada: true });
 }
 
+/* ─── El borrador de la tarea nueva ───────────────────────────────
+   Las fotos elegidas se apuntan aquí EN CUANTO llegan, en bytes: si
+   iOS mata la app mientras se escribe la descripción, al volver a la
+   pantalla están esperando. Se borra al crear la tarea. */
+export async function guardarBorradorNueva(unidadId, { fotos = [], texto = '' } = {}) {
+  const clave = `borrador-nueva:${unidadId}`;
+  if (!fotos.length && !String(texto || '').trim()) { await db.meta.del(clave); return; }
+  await db.meta.set(clave, {
+    fotos: await Promise.all(fotos.map(async (f) => ({
+      bytes: await f.blob.arrayBuffer(), mime: f.mime, ancho: f.ancho, alto: f.alto,
+    }))),
+    texto: String(texto || ''),
+    guardado: ahora(),
+  });
+}
+export async function leerBorradorNueva(unidadId) {
+  const b = await db.meta.get(`borrador-nueva:${unidadId}`);
+  if (!b || (!b.fotos?.length && !b.texto)) return null;
+  return {
+    texto: b.texto || '',
+    fotos: (b.fotos || []).map((f) => ({
+      blob: new Blob([f.bytes], { type: f.mime }), mime: f.mime, ancho: f.ancho, alto: f.alto,
+    })),
+  };
+}
+export const borrarBorradorNueva = (unidadId) => db.meta.del(`borrador-nueva:${unidadId}`);
+
 /* ─── Medios ──────────────────────────────────────────────────── */
+
+/* Los ficheros de los medios viajan en BYTES crudos (ArrayBuffer), no
+   en Blobs, por la misma razón que los recorridos: a WebKit se le
+   pierden los ficheros de los Blobs guardados en IndexedDB cuando la
+   app pasa días cerrada, y una foto sin subir no puede depender de esa
+   lotería. Al leer se reconstruye un Blob vivo, que es lo que espera
+   todo el que consume medios; al escribir, la lectura completa del
+   Blob es además la prueba de vida: un fichero muerto no entra. */
+function despertarMedio(m) {
+  if (!m || m.blob instanceof Blob || !m.bytes) return m;
+  return { ...m, blob: new Blob([m.bytes], { type: m.mime || 'application/octet-stream' }) };
+}
+
 /** Material de la tarea. Las fotos del hilo no entran aquí: viven en
     su comentario y no deben mezclarse con el carrete de la tarea. */
 export async function mediosDeTarea(tareaId) {
   const todos = await db.porIndice('medios', 'tareaId', tareaId);
   return todos.filter((m) => !m.borrada && !m.comentarioId)
-    .sort((a, b) => a.creado.localeCompare(b.creado));
+    .sort((a, b) => a.creado.localeCompare(b.creado))
+    .map(despertarMedio);
 }
 
 /**
@@ -490,28 +531,35 @@ export async function mediosDeTarea(tareaId) {
  */
 /** Un medio suelto por su id. Lo usa la hoja de reparto en PDF. */
 export async function medioPorId(id) {
-  return db.get('medios', id);
+  return despertarMedio(await db.get('medios', id));
 }
 
 export async function fotosDeVerificacion(tareaId) {
   const todos = await db.porIndice('medios', 'tareaId', tareaId);
   return todos.filter((m) => !m.borrada && m.comentarioId && m.tipo === 'imagen')
-    .sort((a, b) => a.creado.localeCompare(b.creado));
+    .sort((a, b) => a.creado.localeCompare(b.creado))
+    .map(despertarMedio);
 }
 
 export async function añadirMedio(tareaId, { tipo, blob, mime, ancho, alto, duracion, nombre, comentarioId }) {
+  // La lectura completa es a la vez la conversión a bytes y la prueba
+  // de vida: un Blob muerto conserva el tamaño pero falla al leer, y
+  // aquí revienta ANTES de entrar en el almacén, no semanas después.
+  const bytes = await blob.arrayBuffer();
+  if (!bytes.byteLength) throw new Error('El fichero llegó vacío');
   const m = {
     id: nuevoId(),
     tareaId,
     comentarioId: comentarioId || null,
     tipo,                                  // 'imagen' | 'video' | 'audio'
     mime: mime || blob.type || 'application/octet-stream',
-    tam: blob.size,
+    tam: bytes.byteLength,
     ancho: ancho || 0,
     alto: alto || 0,
     duracion: duracion || 0,
     nombre: nombre || '',
-    blob,
+    blob: null,
+    bytes,
     subido: false,
     borrada: false,
     creado: ahora(),
@@ -526,7 +574,7 @@ export async function añadirMedio(tareaId, { tipo, blob, mime, ancho, alto, dur
     await encolar('tarea', tareaId);
   }
   await encolar('medio', m.id);
-  return m;
+  return despertarMedio(m);
 }
 
 export async function borrarMedio(id, { silencioso = false } = {}) {
@@ -538,10 +586,10 @@ export async function borrarMedio(id, { silencioso = false } = {}) {
   // de una tarea que se está borrando entera: ahí la regla no pinta.
   if (!silencioso && m.tipo === 'imagen' && !m.comentarioId) {
     const hermanas = (await mediosDeTarea(m.tareaId))
-      .filter((x) => x.tipo === 'imagen' && x.id !== id);
+      .filter((x) => x.tipo === 'imagen' && !x.perdido && x.id !== id);
     if (!hermanas.length) return { bloqueado: 'ultima-imagen' };
   }
-  await db.put('medios', { ...m, borrada: true, blob: null, actualizado: ahora() });
+  await db.put('medios', { ...m, borrada: true, blob: null, bytes: null, actualizado: ahora() });
   await encolar('medio-borrado', id);
   if (!silencioso) {
     const t = await db.get('tareas', m.tareaId);
@@ -574,7 +622,7 @@ export async function urlDePortada(tarea) {
     const [primera] = (await mediosDeTarea(tarea.id)).filter((m) => m.tipo === 'imagen');
     return primera ? urlDeMedio(primera) : '';
   }
-  const m = await db.get('medios', tarea.portadaId);
+  const m = despertarMedio(await db.get('medios', tarea.portadaId));
   return m && !m.borrada ? urlDeMedio(m) : '';
 }
 
@@ -1077,7 +1125,9 @@ export async function tareasDeLaObra(promoId) {
   const tareas = (await db.getAll('tareas')).filter((t) => !t.borrada && donde.has(t.listaId));
 
   // La portada de cada tarea: la marcada como tal, o su primera imagen.
-  const medios = (await db.getAll('medios')).filter((m) => !m.borrada && m.tipo === 'imagen');
+  const medios = (await db.getAll('medios'))
+    .filter((m) => !m.borrada && m.tipo === 'imagen')
+    .map(despertarMedio);
   const porTarea = new Map();
   const porId = new Map();
   for (const m of medios) {
@@ -1298,9 +1348,13 @@ export async function sincronizar({ forzar = false } = {}) {
       await tirar();
       estadoSync.ultimo = ahora();
       await db.meta.set('ultimoSync', estadoSync.ultimo);
-      // Con los datos ya al día, la purga de la época de pruebas. No
-      // bloquea la sincronización y solo actúa una vez por dispositivo.
-      purgarSinFotografia().catch(() => {});
+      // Con los datos ya al día: primero el blindaje de medios viejos
+      // (Blobs a bytes) y luego la purga de la época de pruebas. Ninguno
+      // bloquea la sincronización y ambos actúan una vez por dispositivo.
+      blindarMediosGuardados()
+        .catch(() => {})
+        .then(() => purgarSinFotografia())
+        .catch(() => {});
     } catch (e) {
       estadoSync.error = e.status === 401 ? 'sesion' : 'red';
       if (e.status === 401) { usuario = null; await db.meta.del('usuario'); location.hash = '#/entrar'; }
@@ -1311,6 +1365,31 @@ export async function sincronizar({ forzar = false } = {}) {
     }
   })();
   try { await sincronizando; } finally { sincronizando = null; }
+}
+
+/* ═══ El blindaje de los medios ya guardados ═══════════════════════
+   Los medios de antes de este cambio guardan Blobs, expuestos a la
+   pudrición de WebKit. Esto los pasa a bytes una sola vez por
+   dispositivo. Un fichero que ya esté muerto no se puede resucitar:
+   si estaba subido, el servidor lo tiene y aquí basta soltarlo; si
+   no, cuarentena —perdido y dicho a la cara—, nunca mentir. */
+export async function blindarMediosGuardados() {
+  const YA = 'medios-en-bytes-v1';
+  try { if (localStorage.getItem(YA)) return 0; } catch { return 0; }
+  let tocados = 0;
+  for (const m of await db.getAll('medios')) {
+    if (!(m.blob instanceof Blob)) continue;
+    try {
+      const bytes = await m.blob.arrayBuffer();
+      if (!bytes.byteLength && m.tam > 0) throw new Error('vacío');
+      await db.put('medios', { ...m, blob: null, bytes });
+    } catch {
+      await db.put('medios', { ...m, blob: null, bytes: null, perdido: !m.subido, actualizado: ahora() });
+    }
+    tocados += 1;
+  }
+  try { localStorage.setItem(YA, ahora()); } catch { /* idempotente */ }
+  return tocados;
 }
 
 /* ═══ La purga de las tareas sin fotografía ═══════════════════════
@@ -1336,7 +1415,7 @@ export async function purgarSinFotografia({ forzar = false } = {}) {
     .filter((t) => !t.borrada && String(t.creado || '') < corte);
   for (const t of tareas) {
     const medios = await mediosDeTarea(t.id);
-    if (medios.some((m) => m.tipo === 'imagen')) continue;
+    if (medios.some((m) => m.tipo === 'imagen' && !m.perdido)) continue;
     await borrarTarea(t.id);
     borradas += 1;
   }
@@ -1363,19 +1442,42 @@ async function empujar() {
         const c = await db.get('comentarios', item.id);
         if (c) await api.subirComentarios([sinBlobs(c)]);
       } else if (item.tipo === 'medio') {
-        const m = await db.get('medios', item.id);
+        const m = despertarMedio(await db.get('medios', item.id));
         if (m && !m.borrada && m.blob) {
-          await api.subirMedio(m, m.blob);
+          // Prueba de vida en el último momento: si el fichero murió en
+          // el almacén, mejor la cuarentena que subir aire.
+          let vivo = true;
+          try { vivo = (await m.blob.arrayBuffer()).byteLength === m.blob.size && m.blob.size > 0; }
+          catch { vivo = false; }
+          if (!vivo) {
+            await db.put('medios', { ...m, blob: null, bytes: null, perdido: true, actualizado: ahora() });
+            await db.desencolar(item.seq);
+            await refrescarPendientes();
+            continue;
+          }
+          const r = await api.subirMedio(m, m.blob);
+          // El servidor cuenta los bytes que guardó; si no cuadran con
+          // los que salieron, la subida NO vale y se reintenta.
+          if (r && typeof r.tam === 'number' && r.tam !== m.blob.size) {
+            throw new api.ApiError('El servidor guardó un fichero incompleto', 0, 'tam');
+          }
           const guardado = await db.get('medios', item.id);
           if (guardado) {
             // El vídeo y el audio pesan demasiado para quedarse en el
             // dispositivo una vez a salvo en el servidor; las fotos sí
             // se conservan porque son la vista del listado.
             const soltar = guardado.tipo !== 'imagen';
-            await db.put('medios', { ...guardado, subido: true, blob: soltar ? null : guardado.blob });
+            await db.put('medios', {
+              ...guardado, subido: true,
+              blob: null,
+              bytes: soltar ? null : guardado.bytes,
+            });
           }
         } else if (m && !m.blob && !m.borrada) {
-          await db.put('medios', { ...m, subido: true });
+          /* Antes esto marcaba «subido» un medio sin fichero, para que
+             no atascara la cola: una mentira que barría la pérdida
+             debajo de la alfombra. Ahora se dice la verdad: perdido. */
+          await db.put('medios', { ...m, perdido: true, actualizado: ahora() });
         }
       } else if (item.tipo === 'mensaje') {
         const m = await db.get('mensajes', item.id);

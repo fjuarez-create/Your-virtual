@@ -153,9 +153,13 @@ export async function render({ promoId, unidadId, seguir = false }) {
   // es justo el trabajo que más duele perder: el paseo ya está dado.
   let pendiente = await store.recorridoPendiente(unidadId);
 
-  /** El recorrido tal y como se guarda: el audio entero y las marcas. */
+  /** El recorrido tal y como se guarda: el audio entero y las marcas.
+      El id es UNO por paseo y fijo desde antes de grabar: los guardados
+      parciales de mitad de camino y el definitivo de al parar escriben
+      sobre el mismo registro, en vez de sembrar copias. */
+  const idPaseo = store.nuevoId();
   const paquete = (capturado) => ({
-    id: store.nuevoId(),
+    id: idPaseo,
     unidadId, promoId,
     creado: new Date().toISOString(),
     duracion: capturado.duracion,
@@ -216,6 +220,11 @@ export async function render({ promoId, unidadId, seguir = false }) {
 
     try {
       mando = await grabadora.empezar({
+        // El seguro contra muertes a media grabación: cada pocos
+        // segundos —y en cada marca— lo andado se escribe en el
+        // almacén. Si la app muere, al volver está el aviso de
+        // «recorrido a medias» con todo lo marcado hasta entonces.
+        alParcial: (parcial) => { store.guardarRecorrido(paquete(parcial)).catch(() => {}); },
         alAvisar: ({ segundos, pausado }) => {
           crono.textContent = grabadora.reloj(segundos);
           visor.classList.toggle('pausado', !!pausado);

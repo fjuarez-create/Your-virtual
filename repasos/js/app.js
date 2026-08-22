@@ -347,6 +347,9 @@ async function arrancar() {
   // pantalla saldría con iniciales y las caras aparecerían al
   // navegar, que se lee como un fallo.
   await store.cargarPersonas();
+  // Que iOS trate nuestro almacén como intocable: sin esto, con el
+  // disco justo puede purgar IndexedDB y llevarse fotos sin subir.
+  try { navigator.storage?.persist?.().catch(() => {}); } catch { /* no lo soporta */ }
   window.addEventListener('hashchange', enrutar);
   // Cuando la purga de tareas sin fotografía actúa (ver store.js), el
   // almacén lo deja dicho y aquí se le pone la banda.

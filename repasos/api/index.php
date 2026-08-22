@@ -1284,6 +1284,17 @@ function subir_medio(): void
     }
     @chmod($destino, 0644);
 
+    // Se cuentan los bytes que quedaron en disco: si no son los que
+    // llegaron —disco lleno, escritura cortada—, el fichero no vale y
+    // se dice. El móvil compara además esta cifra con la que envió, así
+    // que una subida coja no se da por buena en ningún extremo.
+    clearstatcache(true, $destino);
+    $enDisco = (int) @filesize($destino);
+    if ($enDisco !== $tam) {
+        @unlink($destino);
+        responder_error(500, 'El fichero se guardó incompleto.', 'guardar-corto');
+    }
+
     // Si se resube el mismo id con otra extensión, el fichero viejo sobra.
     if (is_string($rutaPrevia) && $rutaPrevia !== '' && $rutaPrevia !== $relativa) {
         @unlink(carpeta_medios() . '/' . $rutaPrevia);
@@ -1305,7 +1316,7 @@ function subir_medio(): void
         'actualizado' => ahora_iso(),
     ]);
 
-    responder(['id' => $id, 'ok' => true], 201);
+    responder(['id' => $id, 'ok' => true, 'tam' => $enDisco], 201);
 }
 
 function borrar_medio(string $id): void

@@ -307,7 +307,7 @@ export async function tareasSinFotografia(promoId) {
   const cojas = [];
   for (const t of tareas) {
     const medios = await store.mediosDeTarea(t.id);
-    if (!medios.some((m) => m.tipo === 'imagen')) cojas.push(t);
+    if (!medios.some((m) => m.tipo === 'imagen' && !m.perdido)) cojas.push(t);
   }
   return cojas;
 }

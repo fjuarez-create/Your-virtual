@@ -92,7 +92,7 @@ function nitidez(lienzo) {
  * `alAvisar` se llama con el estado cada poco para que la pantalla
  * pinte el cronómetro sin tener que preguntarlo ella.
  */
-export async function empezar({ alAvisar, alTope } = {}) {
+export async function empezar({ alAvisar, alTope, alParcial } = {}) {
   const stream = await navigator.mediaDevices.getUserMedia({
     video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
     audio: { echoCancellation: true, noiseSuppression: true },
@@ -112,9 +112,32 @@ export async function empezar({ alAvisar, alTope } = {}) {
   const rec = new MediaRecorder(soloAudio, mime ? { mimeType: mime, audioBitsPerSecond: 32000 } : undefined);
 
   const trozos = [];
-  rec.ondataavailable = (e) => { if (e.data?.size) trozos.push(e.data); };
-
   const marcas = [];
+
+  /* Lo grabado hasta ahora, empaquetado igual que al parar. Sirve para
+     que quien llama lo escriba en disco SEGÚN se graba: si iOS mata la
+     app a mitad de paseo, lo andado hasta el último aviso está a salvo.
+     Solo se avisa cuando hay alguna marca —un paseo sin marcas no
+     produce tareas y no merece resucitarse— y como mucho cada cinco
+     segundos, salvo al marcar, que avisa al momento: la marca es lo
+     que más duele perder. */
+  const capturaParcial = () => ({
+    audio: new Blob(trozos, { type: rec.mimeType || mime || 'audio/webm' }),
+    mime: rec.mimeType || mime || 'audio/webm',
+    duracion: transcurrido(),
+    marcas: [...marcas],
+  });
+  let ultimoParcial = 0;
+  const avisarParcial = (aLaFuerza = false) => {
+    if (!alParcial || parado || !marcas.length) return;
+    const ya = Date.now();
+    if (!aLaFuerza && ya - ultimoParcial < 5000) return;
+    ultimoParcial = ya;
+    // Guardar no puede tumbar la grabación: cualquier pega, silencio.
+    try { alParcial(capturaParcial()); } catch { /* seguimos grabando */ }
+  };
+
+  rec.ondataavailable = (e) => { if (e.data?.size) { trozos.push(e.data); avisarParcial(); } };
   const t0 = Date.now();
   let parado = false;
   let candado = null;
@@ -176,6 +199,7 @@ export async function empezar({ alAvisar, alTope } = {}) {
     const marca = { id: `${ms}`, ms, blob, ancho: w, alto: h };
     marcas.push(marca);
     alAvisar?.({ segundos: transcurrido(), marcas: marcas.length });
+    avisarParcial(true);
     return marca;
   }
 
