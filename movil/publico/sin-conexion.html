@@ -8,7 +8,14 @@
     /* Esta pantalla vive dentro de la app, no en la web: es lo único
        que se ve cuando el móvil no llega al servidor. Por eso no
        depende de nada de fuera —ni fuente, ni imagen, ni hoja de
-       estilos—: si dependiera, tampoco cargaría. */
+       estilos—: si dependiera, tampoco cargaría.
+
+       Y no acusa a la primera. Un tropiezo de medio segundo al abrir
+       la app recién instalada es normal en un iPhone; enseñar por eso
+       un error de servidor es mentir. Así que primero se prueba en
+       silencio, con la ruedecita de cargar, y solo si en unos segundos
+       el servidor sigue sin contestar se confiesa. En cuanto vuelve a
+       contestar, la app entra sola, sin pedir que nadie pulse nada. */
     :root { color-scheme: light; }
     * { box-sizing: border-box; }
     body {
@@ -19,7 +26,35 @@
       font: 500 16px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       text-align: center;
     }
-    .caja { max-width: 340px; }
+
+    /* La ruedecita de mientras-se-prueba: la misma pinta que cargar la
+       app, porque eso es lo que está pasando. El aro es el gris de
+       anillo de la propia app. */
+    .rueda {
+      position: fixed; top: 50%; left: 50%;
+      width: 28px; height: 28px; margin: -14px 0 0 -14px;
+      border: 3px solid #d9d9d9; border-top-color: #736b5c;
+      border-radius: 999px;
+      animation: girar 1s linear infinite, esfumarse .3s ease 8s forwards;
+    }
+    @keyframes girar { to { transform: rotate(360deg); } }
+    @keyframes esfumarse { to { opacity: 0; visibility: hidden; } }
+
+    /* La confesión, escondida de partida. El guion normal es que la
+       destape el javascript cuando toque, con su propio fundido; la
+       animación con retardo de 8 segundos es la red de seguridad para
+       que, aunque el javascript fallara, la pantalla nunca se quede en
+       blanco. */
+    .caja {
+      max-width: 340px;
+      opacity: 0; visibility: hidden;
+      animation: confesar .45s ease 8s forwards;
+    }
+    body.confesada .caja { animation: confesada .45s ease forwards; }
+    body.confesada .rueda { display: none; }
+    @keyframes confesar { to { opacity: 1; visibility: visible; } }
+    @keyframes confesada { to { opacity: 1; visibility: visible; } }
+
     .bola {
       width: 72px; height: 72px; margin: 0 auto 24px;
       border-radius: 999px; background: #d6cabc;
@@ -29,22 +64,168 @@
     p { color: #8c8c8c; margin: 0 0 26px; }
     button {
       width: 100%; height: 48px; border: 0; border-radius: 999px;
-      background: #000; color: #fff; font: 500 16px/1 inherit;
+      background: #000; color: #fff;
+      font: inherit; line-height: 1;
       -webkit-appearance: none;
     }
     button:active { opacity: .85; }
   </style>
 </head>
 <body>
-  <div class="caja">
+  <div class="rueda" role="status" aria-label="Conectando con la aplicación"></div>
+  <div class="caja" aria-live="polite">
     <div class="bola" aria-hidden="true">
       <svg width="32" height="32" viewBox="0 0 256 256" fill="#736b5c">
         <path d="M53.9,34.6A8,8,0,1,0,42.1,45.4L61.3,66.5C25,88.8,7.9,120.9,7.1,122.4a8,8,0,0,0,0,7.2c.3.6,8.2,15.7,25.5,30.9C54.1,179.4,81,190,112,190a127.4,127.4,0,0,0,37.3-5.4l22.8,25.1a8,8,0,1,0,11.8-10.8ZM128,158a30,30,0,0,1-30-30,29.6,29.6,0,0,1,2.9-12.8l39.9,43.9A29.7,29.7,0,0,1,128,158Z"/>
       </svg>
     </div>
     <h1>No se llega al servidor</h1>
-    <p>Puede ser la cobertura de la obra o que la aplicación esté un momento en mantenimiento. Lo que tengas apuntado sin subir sigue guardado en el móvil.</p>
+    <p>Puede ser la cobertura de la obra o que la aplicación esté un momento en mantenimiento. Lo que tengas apuntado sin subir sigue guardado en el móvil, y la aplicación entrará sola en cuanto el servidor responda.</p>
     <button onclick="location.replace('https://repasos.unikdi.com')">Volver a intentarlo</button>
   </div>
+
+  <script>
+  (function () {
+    'use strict';
+    /* Escrito a la antigua (var, function) aposta: tiene que correr
+       hasta en el iOS 15.6 más viejo que admite la app. */
+    var WEB = 'https://repasos.unikdi.com';
+    /* La sonda es una imagen y no un fetch: la página vive en un origen
+       raro (el esquema local de la app) y a un fetch hacia fuera el
+       navegador le exige papeles (CORS) que aquí no se pueden dar. A una
+       imagen no le pide ninguno. Son dos rutas y se van turnando: si
+       algún día una se renombrara en la web, la otra sigue contestando
+       y esta pantalla no se queda ciega sin que nadie se entere. */
+    var SONDAS = [
+      WEB + '/assets/icons/apple-touch-icon.png',
+      WEB + '/assets/icons/icon-192.png',
+    ];
+
+    /* El bloc de notas, con guantes y por duplicado: en el origen local
+       de la app alguno de los dos puede no existir, y esta página tiene
+       prohibido romperse. Se escribe en ambos y se lee el que haya. */
+    function apuntado(clave) {
+      var v = 0;
+      try { v = Number(sessionStorage.getItem(clave)) || 0; } catch (e) {}
+      if (!v) { try { v = Number(localStorage.getItem(clave)) || 0; } catch (e) {} }
+      return v;
+    }
+    function apuntar(clave, valor) {
+      try { sessionStorage.setItem(clave, String(valor)); } catch (e) {}
+      try { localStorage.setItem(clave, String(valor)); } catch (e) {}
+    }
+
+    var llegada = Date.now();
+    /* Cuánto se aguanta callado antes de confesar. La primera vez,
+       siete segundos: de sobra para el tropiezo tonto del arranque.
+       Si esta pantalla ya se vio hace nada, o venimos de un salto que
+       acabó mal, no se hace esperar mirando una ruedecita: se confiesa
+       casi al momento. */
+    var vistaHaceNada = llegada - apuntado('sinconexion-vista') < 45000
+                     || llegada - apuntado('sinconexion-salto') < 45000;
+    apuntar('sinconexion-vista', llegada);
+    var GRACIA = vistaHaceNada ? 1600 : 7000;
+
+    var confesada = false;
+    var saltando = false;
+    function confesar() {
+      if (confesada || saltando) return;
+      confesada = true;
+      document.body.classList.add('confesada');
+    }
+    var confesionPendiente = setTimeout(confesar, GRACIA);
+
+    /* Volver a la app: una sola vez, cancelando la confesión pendiente
+       —sería absurdo enseñar «no se llega» justo mientras se está
+       entrando— y apuntando la hora. Y con cinturón: si quince segundos
+       después seguimos en esta página es que el salto se quedó en nada,
+       así que se confiesa y se vuelve a sondear como si tal cosa. */
+    function volverALaApp() {
+      if (saltando) return;
+      saltando = true;
+      clearTimeout(confesionPendiente);
+      apuntar('sinconexion-salto', Date.now());
+      location.replace(WEB);
+      setTimeout(function () {
+        if (saltando) { saltando = false; confesar(); }
+      }, 15000);
+    }
+
+    /* El freno anti-rebote, mirado en cada ocasión: tras un salto se
+       dan 20 segundos de respiro antes del siguiente, no sea que el
+       servidor conteste a la sonda pero la app no cargue (mantenimiento
+       a medias) y nos pasemos el día rebotando entre las dos pantallas.
+       Si el reloj del móvil da un paso atrás —pasa al recuperar la
+       cobertura, que es justo cuando esto importa—, la marca quedaría
+       en el futuro y el freno echado para siempre: se reancla y listo,
+       caduca en 20 segundos como mucho. */
+    function reboteReciente() {
+      var desde = Date.now() - apuntado('sinconexion-salto');
+      if (desde < 0) { apuntar('sinconexion-salto', Date.now()); return true; }
+      return desde < 20000;
+    }
+
+    /* Las sondas van en fila india —nunca dos a la vez— y su plazo
+       crece con los intentos: en una obra con media raya el icono puede
+       tardar más de cuatro segundos, y no por eso está caído el
+       servidor. Matarlo siempre a los cuatro sería no entrar jamás. */
+    var sondaEnVuelo = false;
+    var intento = 0;
+    function sondear() {
+      if (saltando || sondaEnVuelo) return;
+      sondaEnVuelo = true;
+      var img = new Image();
+      var resuelta = false;
+      function cerrar() { resuelta = true; sondaEnVuelo = false; }
+      img.onload = function () {
+        if (resuelta) return;
+        cerrar();
+        if (saltando) return;
+        if (reboteReciente()) { confesar(); return; }
+        volverALaApp();
+      };
+      img.onerror = function () { if (!resuelta) cerrar(); };
+      /* El numerito de detrás evita que una copia guardada en caché dé
+         un «sí hay servidor» falso estando a oscuras. */
+      img.src = SONDAS[intento % SONDAS.length] + '?nada=' + Date.now();
+      var plazo = Math.min(4000 + intento * 1500, 15000);
+      intento += 1;
+      setTimeout(function () {
+        if (!resuelta) { cerrar(); img.src = ''; }
+      }, plazo);
+    }
+
+    /* La cadencia: seguido al principio, que es cuando el tropiezo se
+       cura solo, y luego cada pocos segundos sin prisa, también con la
+       confesión ya a la vista: en cuanto el servidor vuelva, adentro.
+       La cadena no se corta nunca —sondear ya sabe callarse cuando
+       toca—, así ningún despiste la deja muerta. */
+    var esperas = [1200, 1400, 1600, 1800, 2000];
+    var vuelta = 0;
+    function programar() {
+      var espera = vuelta < esperas.length ? esperas[vuelta] : 3500;
+      vuelta += 1;
+      setTimeout(function () { sondear(); programar(); }, espera);
+    }
+    sondear();
+    programar();
+
+    /* Si el móvil avisa de que ha vuelto la conexión, o esta página
+       vuelve a estar a la vista, se prueba en el acto. */
+    window.addEventListener('online', sondear);
+    window.addEventListener('pageshow', sondear);
+
+    /* El botón de siempre, con acuse de recibo. La persona manda:
+       aunque hubiera salto en marcha, el suyo va delante. */
+    var boton = document.querySelector('button');
+    if (boton) {
+      boton.onclick = function () {
+        boton.textContent = 'Conectando…';
+        saltando = false;
+        volverALaApp();
+      };
+    }
+  })();
+  </script>
 </body>
 </html>

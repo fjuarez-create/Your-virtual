@@ -22,8 +22,11 @@ vez cada muchos meses.
   dos cosas: que funcione sin cobertura una vez abierta, y que ningún
   enlace pueda sacar a nadie de la aplicación sin querer.
 - Vertical y solo vertical, que es como está hecho el diseño.
-- Una pantalla propia para cuando no se llega al servidor, que dice que
-  lo apuntado sigue guardado en el móvil.
+- Una pantalla propia para cuando no se llega al servidor. No acusa a la
+  primera: prueba en silencio unos segundos —los tropiezos del arranque
+  se curan solos— y únicamente si el servidor sigue sin contestar
+  confiesa, recordando que lo apuntado sigue guardado en el móvil. En
+  cuanto vuelve a contestar, entra sola en la aplicación.
 - Un robot de GitHub que compila, **se firma él solo** y sube a
   TestFlight. Sin Mac y sin exportar ningún certificado: lo único que
   hace falta es una clave de App Store Connect, que se saca de la web de
