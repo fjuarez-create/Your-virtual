@@ -348,6 +348,15 @@ async function arrancar() {
   // navegar, que se lee como un fallo.
   await store.cargarPersonas();
   window.addEventListener('hashchange', enrutar);
+  // Cuando la purga de tareas sin fotografía actúa (ver store.js), el
+  // almacén lo deja dicho y aquí se le pone la banda.
+  window.addEventListener('purga-sin-foto', (e) => {
+    const n = e.detail?.borradas || 0;
+    if (n) {
+      toast(`${n} ${n === 1 ? 'tarea sin fotografía borrada' : 'tareas sin fotografía borradas'} para siempre`,
+        '', { icono: 'trash' });
+    }
+  });
   // La onda del dedo de los botones anchos. Se engancha una sola vez a
   // todo el documento, así que vale también para los botones que se
   // creen después, y antes de pintar para que valga desde el primero.

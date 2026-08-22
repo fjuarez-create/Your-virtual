@@ -1298,6 +1298,9 @@ export async function sincronizar({ forzar = false } = {}) {
       await tirar();
       estadoSync.ultimo = ahora();
       await db.meta.set('ultimoSync', estadoSync.ultimo);
+      // Con los datos ya al día, la purga de la época de pruebas. No
+      // bloquea la sincronización y solo actúa una vez por dispositivo.
+      purgarSinFotografia().catch(() => {});
     } catch (e) {
       estadoSync.error = e.status === 401 ? 'sesion' : 'red';
       if (e.status === 401) { usuario = null; await db.meta.del('usuario'); location.hash = '#/entrar'; }
@@ -1308,6 +1311,42 @@ export async function sincronizar({ forzar = false } = {}) {
     }
   })();
   try { await sincronizando; } finally { sincronizando = null; }
+}
+
+/* ═══ La purga de las tareas sin fotografía ═══════════════════════
+   Orden de Fran (22 ago 2026): las tareas sin foto que dejó la época
+   de pruebas se borran PARA SIEMPRE, no se visten. Corre sola, una
+   vez por dispositivo, solo para quien administra, y únicamente tras
+   una sincronización completa: sin datos frescos podría tomar por
+   coja una tarea cuya foto aún no ha bajado del servidor.
+
+   La única red: no toca nada con menos de un día de vida. Desde el
+   blindaje una tarea sin foto no puede nacer, así que lo que lleve
+   más de 24 horas sin imagen es, con certeza, un resto de pruebas —
+   pero una tarea recién creada en otro móvil puede llegar unos
+   minutos antes que su fotografía, y a esa no hay que fusilarla. */
+export async function purgarSinFotografia({ forzar = false } = {}) {
+  if (!esAdmin() || usuario?.local) return 0;
+  const YA = 'purga-sin-foto-v1';
+  try { if (!forzar && localStorage.getItem(YA)) return 0; } catch { return 0; }
+
+  const corte = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+  let borradas = 0;
+  const tareas = (await db.getAll('tareas'))
+    .filter((t) => !t.borrada && String(t.creado || '') < corte);
+  for (const t of tareas) {
+    const medios = await mediosDeTarea(t.id);
+    if (medios.some((m) => m.tipo === 'imagen')) continue;
+    await borrarTarea(t.id);
+    borradas += 1;
+  }
+  try { localStorage.setItem(YA, ahora()); } catch { /* sin memoria, correrá otra vez: es idempotente */ }
+  if (borradas) {
+    // El aviso lo da la interfaz, no este almacén: se le deja dicho.
+    window.dispatchEvent(new CustomEvent('purga-sin-foto', { detail: { borradas } }));
+    avisar();
+  }
+  return borradas;
 }
 
 async function empujar() {

@@ -152,8 +152,8 @@ export async function render() {
         h('p.d-grupo-titulo', null, 'Datos de ejemplo'),
         item('edit', 'Arreglar los textos de prueba',
           'Cambia lo escrito a lo loco por repasos de verdad', () => arreglarPruebas()),
-        item('image', 'Vestir las tareas sin fotografía',
-          'A cada una, una imagen de muestra distinta', () => vestirSinFoto()),
+        item('trash', 'Borrar las tareas sin fotografía',
+          'Para siempre: una tarea sin foto no existe', () => borrarSinFoto()),
         item('users', 'Crear actas de ejemplo',
           'Tres actas firmadas por el equipo, para ver cómo queda', () => montarEjemplos()),
         hayEjemplos ? item('trash', 'Quitar las actas de ejemplo',
@@ -569,36 +569,37 @@ async function arreglarPruebas() {
 }
 
 /**
- * Viste con una imagen de muestra las tareas que no tienen ninguna.
+ * Borra PARA SIEMPRE las tareas que no tienen ninguna fotografía.
  *
- * La regla de la casa es que una tarea sin foto no existe; las que se
- * colaron antes del blindaje —recorridos a los que Safari les perdió
- * los ficheros— se quedaron cojas. Esto las enseña con su casilla,
- * como el arreglo de textos, y a cada una le pone una imagen distinta:
- * las láminas de materiales y las fotos de muestra revisadas.
+ * Es la orden de Fran para los restos de la época de pruebas: una
+ * tarea sin foto no existe, así que ni se viste ni se guarda — se va.
+ * La purga automática ya barre sola tras sincronizar (ver store.js);
+ * este botón es la escoba a mano: enseña la lista con sus casillas y
+ * borra lo marcado, también lo recién creado, porque aquí quien mira
+ * decide.
  */
-async function vestirSinFoto() {
+async function borrarSinFoto() {
   const p = PROMOCIONES.find((x) => x.activa);
   if (!p) return toast('No hay ninguna promoción activa', 'err');
 
   const cojas = await ejemplos.tareasSinFotografia(p.id);
-  if (!cojas.length) return toast('Todas las tareas tienen ya su imagen');
+  if (!cojas.length) return toast('Ninguna tarea está sin fotografía');
 
   const marcadas = new Set(cojas.map((t) => t.id));
   const contador = h('span');
   const pintarContador = () => {
-    contador.textContent = marcadas.size === 1 ? 'Vestir 1 tarea' : `Vestir ${marcadas.size} tareas`;
+    contador.textContent = marcadas.size === 1 ? 'Borrar 1 para siempre' : `Borrar ${marcadas.size} para siempre`;
   };
 
   const seguir = await sheet((cerrar) => {
-    const boton = h('button.btn.ink.full', { onclick: () => cerrar(true) }, contador);
+    const boton = h('button.btn.danger.full', { onclick: () => cerrar(true) }, contador);
     pintarContador();
     return [
       h('h2.title', null, 'Tareas sin fotografía'),
       h('p.sub', null,
-        `${cojas.length} ${cojas.length === 1 ? 'tarea no tiene' : 'tareas no tienen'} ninguna imagen, `
-        + 'y la regla es que eso no puede ser. Cada una recibirá una imagen de '
-        + 'muestra distinta, hasta que alguien haga en obra la foto de verdad.'),
+        `${cojas.length} ${cojas.length === 1 ? 'tarea no tiene' : 'tareas no tienen'} ninguna imagen. `
+        + 'Una tarea sin foto no existe: las marcadas se borran para siempre, '
+        + 'en todos los móviles. No se pueden recuperar.'),
       h('div.stack', { style: { marginTop: '14px', gap: '10px' } },
         cojas.map((t) => {
           const casilla = h('input', { type: 'checkbox', checked: true });
@@ -618,12 +619,10 @@ async function vestirSinFoto() {
   });
   if (!seguir || !marcadas.size) return;
 
-  const elegidas = cojas.filter((t) => marcadas.has(t.id));
-  toast('Vistiendo…');
-  const vestidas = await ejemplos.vestirSinFotografia(elegidas);
-  toast(vestidas === elegidas.length
-    ? `${vestidas} ${vestidas === 1 ? 'tarea vestida' : 'tareas vestidas'}`
-    : `${vestidas} de ${elegidas.length} vestidas · el resto, sin red no se pudo`, vestidas === elegidas.length ? undefined : 'err');
+  for (const t of cojas.filter((x) => marcadas.has(x.id))) {
+    await store.borrarTarea(t.id);
+  }
+  toast(`${marcadas.size} ${marcadas.size === 1 ? 'tarea borrada' : 'tareas borradas'} para siempre`, '', { icono: 'trash' });
   store.sincronizar({ forzar: true });
   refrescar();
 }
