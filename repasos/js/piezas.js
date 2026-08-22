@@ -795,6 +795,48 @@ export function filaMenu(icono, rotulo, accion, { rojo = false } = {}) {
   return h(`button.d-hoja-fila${rojaVa}`, { onclick: accion }, icon(icono), rotulo);
 }
 
+/**
+ * Entrega un fichero recién generado (un PDF, normalmente).
+ *
+ * En el iPhone, la hoja de compartir SOLO se abre al calor de un toque
+ * recién dado. Si la llamada llega tarde —porque generar el fichero
+ * llevó unos segundos de fotos y recortes— iOS la tumba con
+ * NotAllowedError, y durante un tiempo eso se leyó como «no se ha
+ * podido generar el PDF» cuando el PDF estaba perfectamente generado.
+ *
+ * Por eso aquí no se comparte directamente: se enseña una hoja con el
+ * fichero ya listo, y es el toque en «Compartir» —recién dado— el que
+ * abre la de iOS. Donde no hay hoja de compartir (el ordenador), se
+ * descarga sin más, como siempre.
+ */
+export function entregarFichero(fichero, nombre) {
+  const bajar = () => {
+    const url = URL.createObjectURL(fichero);
+    const enlace = h('a', { href: url, download: nombre, style: { display: 'none' } });
+    document.body.append(enlace);
+    enlace.click();
+    setTimeout(() => { enlace.remove(); URL.revokeObjectURL(url); }, 4000);
+  };
+  if (!navigator.canShare?.({ files: [fichero] })) {
+    bajar();
+    toast('PDF descargado');
+    return;
+  }
+  menuFlotante((cerrar) => [
+    h('p.d-hoja-titulo', null, 'El PDF está listo'),
+    filaMenu('share', 'Compartir', () => {
+      cerrar();
+      // La llamada sale aquí mismo, dentro del toque: es lo que iOS pide.
+      navigator.share({ files: [fichero], title: nombre }).catch((e) => {
+        // Cancelar la hoja es legítimo; cualquier otra pega, descarga:
+        // que el papel no se quede sin salir.
+        if (e?.name !== 'AbortError') bajar();
+      });
+    }),
+    filaMenu('documento', 'Guardar sin compartir', () => { cerrar(); bajar(); }),
+  ]);
+}
+
 /** Una fila que abre el selector de ficheros del sistema. */
 export function filaMenuFichero(cerrar, extra, icono, rotulo, onElegir) {
   return media.botonFichero({

@@ -8,7 +8,7 @@ import {
 import * as store from '../store.js';
 import * as media from '../media.js';
 import * as api from '../api.js';
-import { cabeceraDentro, barraSync, filtroEstado, filtroOficio, ctaAccion, ctaCancelar } from '../piezas.js';
+import { cabeceraDentro, barraSync, filtroEstado, filtroOficio, ctaAccion, ctaCancelar, entregarFichero } from '../piezas.js';
 import { usaIA, ordenPdf } from '../ajustesLocales.js';
 import { ir, refrescar, conFiltros, filtrosDeRuta, anotarFiltros } from '../app.js';
 import { informe } from '../informe.js';
@@ -382,20 +382,11 @@ async function descargarHoja(lista, tareas) {
     const nombre = nombreDeFichero(u?.nombre || 'vivienda', fechaCorta(lista.creado));
     const fichero = new File([blob], nombre, { type: 'application/pdf' });
 
-    if (navigator.canShare?.({ files: [fichero] })) {
-      await navigator.share({ files: [fichero], title: nombre });
-      return;
-    }
-
-    const url = URL.createObjectURL(blob);
-    const enlace = h('a', { href: url, download: nombre, style: { display: 'none' } });
-    document.body.append(enlace);
-    enlace.click();
-    setTimeout(() => { enlace.remove(); URL.revokeObjectURL(url); }, 4000);
-    toast('PDF descargado');
+    // La entrega va aparte y con su propia hoja: compartir en iOS exige
+    // un toque recién dado, no uno de hace unos segundos.
+    entregarFichero(fichero, nombre);
   } catch (e) {
-    if (e?.name === 'AbortError') return;
-    console.error(e);
+    console.error('No se pudo generar el PDF del acta:', e);
     toast('No se pudo generar el PDF', 'err');
   }
 }

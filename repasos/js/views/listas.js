@@ -18,6 +18,7 @@ import {
   cabecera, tarjetaActa, tarjetaTarea, cuandoTarea, cuandoCorto, bannerAvance, bannerMordido,
   hojaZonas, hojaFiltroTareas, caraDeGremio,
   avisoLocal, barraSync, menuFlotante, menuTarjeta, filaMenu, filaMenuFichero, bandeja,
+  entregarFichero,
 } from '../piezas.js';
 import { hojaDeReparto, nombreDeFichero, PROPORCION_FOTO_REPARTO } from '../pdf.js';
 import { ordenPdf } from '../ajustesLocales.js';
@@ -447,19 +448,11 @@ async function descargarVivienda(p, u, { tareas, ejecutadas = [], filtros = '', 
       [u.nombre, apellido || (filtros ? 'filtrado' : '')].filter(Boolean).join('-'),
       fechaCorta(new Date().toISOString()));
     const fichero = new File([blob], nombre, { type: 'application/pdf' });
-    if (navigator.canShare?.({ files: [fichero] })) {
-      await navigator.share({ files: [fichero], title: nombre });
-      return;
-    }
-    const url = URL.createObjectURL(blob);
-    const a = h('a', { href: url, download: nombre });
-    document.body.append(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    // La entrega va aparte y con su propia hoja: compartir en iOS exige
+    // un toque recién dado, no uno de hace varios segundos de fotos.
+    entregarFichero(fichero, nombre);
   } catch (e) {
-    if (e?.name === 'AbortError') return;
-    console.error(e);
+    console.error('No se pudo generar el PDF de la vivienda:', e);
     toast('No se ha podido generar el PDF', 'err');
   }
 }
