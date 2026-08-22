@@ -532,6 +532,15 @@ export async function añadirMedio(tareaId, { tipo, blob, mime, ancho, alto, dur
 export async function borrarMedio(id, { silencioso = false } = {}) {
   const m = await db.get('medios', id);
   if (!m) return;
+  // Una tarea creada no puede quedarse sin fotografía: es la regla de
+  // la casa. Si esta imagen es la última que le queda, no se borra y
+  // quien llama avisa de por qué. Las borradas «en silencio» son las
+  // de una tarea que se está borrando entera: ahí la regla no pinta.
+  if (!silencioso && m.tipo === 'imagen' && !m.comentarioId) {
+    const hermanas = (await mediosDeTarea(m.tareaId))
+      .filter((x) => x.tipo === 'imagen' && x.id !== id);
+    if (!hermanas.length) return { bloqueado: 'ultima-imagen' };
+  }
   await db.put('medios', { ...m, borrada: true, blob: null, actualizado: ahora() });
   await encolar('medio-borrado', id);
   if (!silencioso) {

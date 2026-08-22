@@ -92,7 +92,11 @@ export async function render({ listaId, tareaId }) {
           'aria-label': 'Borrar esta foto',
           onclick: async () => {
             if (!await confirmSheet({ title: '¿Borrar esta foto?', ok: 'Borrar', danger: true })) return;
-            await store.borrarMedio(m.id);
+            const r = await store.borrarMedio(m.id);
+            if (r?.bloqueado) {
+              toast('Una tarea no puede quedarse sin foto: añade otra antes de borrar esta', 'err');
+              return;
+            }
             refrescar();
           },
         }, icon('trash')) : null,
@@ -820,7 +824,11 @@ async function menuTarea(t, listaId, suya) {
       toast('Portada actualizada');
     } else {
       if (!await confirmSheet({ title: '¿Borrar este material?', ok: 'Borrar', danger: true })) return;
-      await store.borrarMedio(elegido);
+      const r = await store.borrarMedio(elegido);
+      if (r?.bloqueado) {
+        toast('Una tarea no puede quedarse sin foto: añade otra antes de borrar esta', 'err');
+        return;
+      }
       toast('Material borrado');
       await reponerFoto(t);
     }

@@ -917,10 +917,16 @@ export function hojaDeReparto({
     });
   };
 
+  /* Cada tarjeta cae en la columna que va más alta, como se llena un
+     tablón de corcho: así un grupo que acaba no deja la columna
+     derecha vacía mientras la izquierda se estira. Si no cabe en
+     ninguna, página nueva. */
   const ponerTarea = (t, n) => {
     const { lineas, alto } = medirTarea(t);
+    col = alturaCol[1] > alturaCol[0] ? 1 : 0;
     if (alturaCol[col] - alto < SUELO) {
-      if (col === 0 && alturaCol[1] - alto >= SUELO) col = 1;
+      const otra = 1 - col;
+      if (alturaCol[otra] - alto >= SUELO) col = otra;
       else saltar();
     }
     const x = MARGEN + col * (ANCHO_COL + SEPARACION);
@@ -932,7 +938,11 @@ export function hojaDeReparto({
   grupos.forEach((g, i) => {
     grupoEnCurso = null;
     y = Math.min(alturaCol[0], alturaCol[1]) - (i > 0 ? 6 : 0);
-    if (y - 110 < SUELO) saltar();
+    // Una franja sin sitio debajo para su primera tarjeta es un título
+    // huérfano al pie de página: mejor empezar el grupo en la siguiente.
+    const altoFranja = g.titulo ? (g.sub ? 33 : 23) + 10 : 0;
+    const primera = g.tareas.length ? Math.min(medirTarea(g.tareas[0]).alto, 320) : 0;
+    if (y - (altoFranja + primera) < SUELO) saltar();
     franja(g);
     grupoEnCurso = g;
     alturaCol = [y, y];

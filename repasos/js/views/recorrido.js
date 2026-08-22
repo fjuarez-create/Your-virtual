@@ -840,30 +840,47 @@ export async function render({ promoId, unidadId, seguir = false }) {
          no se tira porque a Safari se le haya caído un fichero. Y si
          aun así algo revienta, se dice y te quedas donde estás, con
          todo lo repasado intacto. */
+      /* La regla de la casa: una tarea sin fotografía NO EXISTE. Por
+         eso la prueba de vida de cada foto va ANTES de crear nada —una
+         lectura completa, que un Blob perdido conserva el tamaño y
+         solo falla al leer— y una ficha con todas sus fotos muertas no
+         se convierte en tarea: se cuenta y se dice, con su texto, para
+         que se vuelva a hacer esa foto en obra. Crearla sin imagen
+         sería colar por buena una tarea que la regla prohíbe. */
+      const conVida = [];
+      let sinCrear = 0;
+      for (const f of buenas) {
+        const fotosVivas = [];
+        if (!f.sinFoto) {
+          for (const m of fotosDe(f)) {
+            try {
+              if (!(m.blob instanceof Blob) || !m.blob.size) throw new Error('sin foto');
+              await m.blob.arrayBuffer();
+              fotosVivas.push(m);
+            } catch { /* muerta: si no queda ninguna, la ficha no entra */ }
+          }
+        }
+        if (fotosVivas.length) conVida.push({ f, fotosVivas });
+        else sinCrear += 1;
+      }
+      if (!conVida.length) {
+        toast('Ninguna foto ha sobrevivido y sin foto no se crean tareas. Vuelve a hacer el recorrido.', 'err');
+        return;
+      }
+
       let lista;
-      let perdidas = 0;
       try {
         lista = await store.crearLista({ unidadId, promoId, fase: FASE_UNICA });
-        for (const f of buenas) {
+        for (const { f, fotosVivas } of conVida) {
           const t = await store.crearTarea({
             listaId: lista.id, texto: f.texto.trim(), oficio: f.oficio, zona: f.zona,
           });
-          if (!f.sinFoto) {
-            // Todas las fotos del remate, no solo la principal.
-            for (const m of fotosDe(f)) {
-              try {
-                if (!(m.blob instanceof Blob) || !m.blob.size) throw new Error('sin foto');
-                // La lectura completa es la única prueba de vida real:
-                // un Blob perdido conserva el tamaño y solo falla al leer.
-                await m.blob.arrayBuffer();
-                await store.añadirMedio(t.id, {
-                  tipo: 'imagen', blob: m.blob, mime: 'image/jpeg',
-                  ancho: m.ancho, alto: m.alto,
-                });
-              } catch {
-                perdidas += 1;
-              }
-            }
+          // Todas las fotos vivas del remate, no solo la principal.
+          for (const m of fotosVivas) {
+            await store.añadirMedio(t.id, {
+              tipo: 'imagen', blob: m.blob, mime: 'image/jpeg',
+              ancho: m.ancho, alto: m.alto,
+            });
           }
         }
         await store.marcarRecorridoUsado(rec.id, lista.id);
@@ -876,9 +893,9 @@ export async function render({ promoId, unidadId, seguir = false }) {
       const yo = store.sesion();
       await hojaBienHecho({
         titulo: `Excelente${nombreCorto(yo) ? ', ' + nombreCorto(yo) : ''}`,
-        frase: `${buenas.length} ${buenas.length === 1 ? 'tarea creada' : 'tareas creadas'}. `
-          + (perdidas
-            ? `${perdidas === 1 ? 'Una foto no se pudo recuperar' : `${perdidas} fotos no se pudieron recuperar`} y ${perdidas === 1 ? 'su tarea sale' : 'sus tareas salen'} sin imagen.`
+        frase: `${conVida.length} ${conVida.length === 1 ? 'tarea creada' : 'tareas creadas'}. `
+          + (sinCrear
+            ? `${sinCrear === 1 ? 'Una se ha quedado fuera porque su foto se perdió' : `${sinCrear} se han quedado fuera porque sus fotos se perdieron`}: sin foto no se crean tareas.`
             : 'Que empiecen los remates.'),
         usuario: yo,
         boton: `Volver a ${u.nombre}`,

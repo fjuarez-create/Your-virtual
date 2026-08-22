@@ -272,18 +272,81 @@ export async function arreglarTextos(candidatos, alAvanzar = null) {
  * Si esa foto todavía no está subida, no pasa nada y la tarea se queda
  * con la imagen del oficio y su pie explicándolo, que es lo que había
  * antes. Así esto se puede usar hoy y las fotos entran cuando entren.
+ *
+ * `vuelta` es el número de pasada cuando hay más tareas que imágenes:
+ * a partir de la segunda, la imagen se tiñe un poco para que ni dos
+ * tareas con la misma lámina tengan exactamente la misma foto.
  */
-async function ponerFotoDeMuestra(tareaId, nombre) {
+async function ponerFotoDeMuestra(tareaId, nombre, vuelta = 0) {
   if (!nombre) return false;
   try {
     const res = await fetch(`assets/ejemplos/${nombre}.jpg`);
     if (!res.ok) return false;
-    const blob = await res.blob();
+    let blob = await res.blob();
     if (!blob.size || !String(blob.type).startsWith('image/')) return false;
+    if (vuelta) blob = (await teñir(blob, vuelta)) || blob;
     const img = await media.prepararImagen(blob);
     await store.añadirMedio(tareaId, { tipo: 'imagen', ...img });
     return true;
   } catch {
     return false;
   }
+}
+
+/* Un velo de color encima de la lámina, distinto en cada vuelta. */
+async function teñir(blob, vuelta) {
+  try {
+    const mapa = await createImageBitmap(blob);
+    const c = document.createElement('canvas');
+    c.width = mapa.width;
+    c.height = mapa.height;
+    const g = c.getContext('2d');
+    g.drawImage(mapa, 0, 0);
+    g.globalAlpha = 0.14;
+    g.fillStyle = `hsl(${(vuelta * 137) % 360} 45% 45%)`;
+    g.fillRect(0, 0, c.width, c.height);
+    return await new Promise((listo) => c.toBlob(listo, 'image/jpeg', 0.85));
+  } catch {
+    return null;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Vestir tareas sin fotografía
+
+   La regla de la casa es que una tarea sin foto no existe, pero
+   algunas se colaron antes de que la regla se blindara —recorridos a
+   los que Safari les perdió los ficheros—. Esto las encuentra y les
+   pone a cada una una imagen de muestra DISTINTA: las láminas de
+   materiales de obra y las cinco fotos revisadas de Commons. No es la
+   foto del remate y no lo finge; es que la tarea deje de estar coja.
+   ═══════════════════════════════════════════════════════════════ */
+
+const IMAGENES_MUESTRA = REPASOS_REALES.map((r) => r.foto);
+
+/** Las tareas vivas de la promoción que no tienen ni una imagen. */
+export async function tareasSinFotografia(promoId) {
+  const listas = (await db.getAll('listas')).filter((l) => !l.borrada && l.promoId === promoId);
+  const ids = new Set(listas.map((l) => l.id));
+  const tareas = (await db.getAll('tareas'))
+    .filter((t) => !t.borrada && ids.has(t.listaId))
+    .sort((a, b) => String(a.creado || '').localeCompare(String(b.creado || '')));
+  const cojas = [];
+  for (const t of tareas) {
+    const medios = await store.mediosDeTarea(t.id);
+    if (!medios.some((m) => m.tipo === 'imagen')) cojas.push(t);
+  }
+  return cojas;
+}
+
+/** Pone a cada tarea su imagen de muestra, cada una distinta. */
+export async function vestirSinFotografia(tareas, alAvanzar = null) {
+  let vestidas = 0;
+  for (let i = 0; i < tareas.length; i++) {
+    const nombre = IMAGENES_MUESTRA[i % IMAGENES_MUESTRA.length];
+    const vuelta = Math.floor(i / IMAGENES_MUESTRA.length);
+    if (await ponerFotoDeMuestra(tareas[i].id, nombre, vuelta)) vestidas += 1;
+    alAvanzar?.(vestidas, tareas.length);
+  }
+  return vestidas;
 }

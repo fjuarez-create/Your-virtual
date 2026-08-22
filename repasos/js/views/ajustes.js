@@ -152,6 +152,8 @@ export async function render() {
         h('p.d-grupo-titulo', null, 'Datos de ejemplo'),
         item('edit', 'Arreglar los textos de prueba',
           'Cambia lo escrito a lo loco por repasos de verdad', () => arreglarPruebas()),
+        item('image', 'Vestir las tareas sin fotografía',
+          'A cada una, una imagen de muestra distinta', () => vestirSinFoto()),
         item('users', 'Crear actas de ejemplo',
           'Tres actas firmadas por el equipo, para ver cómo queda', () => montarEjemplos()),
         hayEjemplos ? item('trash', 'Quitar las actas de ejemplo',
@@ -562,6 +564,66 @@ async function arreglarPruebas() {
   const { hechas, conFoto } = await ejemplos.arreglarTextos(elegidos);
   toast(`${hechas} ${hechas === 1 ? 'tarea arreglada' : 'tareas arregladas'}`
     + (conFoto ? ` · ${conFoto} con foto` : ''));
+  store.sincronizar({ forzar: true });
+  refrescar();
+}
+
+/**
+ * Viste con una imagen de muestra las tareas que no tienen ninguna.
+ *
+ * La regla de la casa es que una tarea sin foto no existe; las que se
+ * colaron antes del blindaje —recorridos a los que Safari les perdió
+ * los ficheros— se quedaron cojas. Esto las enseña con su casilla,
+ * como el arreglo de textos, y a cada una le pone una imagen distinta:
+ * las láminas de materiales y las fotos de muestra revisadas.
+ */
+async function vestirSinFoto() {
+  const p = PROMOCIONES.find((x) => x.activa);
+  if (!p) return toast('No hay ninguna promoción activa', 'err');
+
+  const cojas = await ejemplos.tareasSinFotografia(p.id);
+  if (!cojas.length) return toast('Todas las tareas tienen ya su imagen');
+
+  const marcadas = new Set(cojas.map((t) => t.id));
+  const contador = h('span');
+  const pintarContador = () => {
+    contador.textContent = marcadas.size === 1 ? 'Vestir 1 tarea' : `Vestir ${marcadas.size} tareas`;
+  };
+
+  const seguir = await sheet((cerrar) => {
+    const boton = h('button.btn.ink.full', { onclick: () => cerrar(true) }, contador);
+    pintarContador();
+    return [
+      h('h2.title', null, 'Tareas sin fotografía'),
+      h('p.sub', null,
+        `${cojas.length} ${cojas.length === 1 ? 'tarea no tiene' : 'tareas no tienen'} ninguna imagen, `
+        + 'y la regla es que eso no puede ser. Cada una recibirá una imagen de '
+        + 'muestra distinta, hasta que alguien haga en obra la foto de verdad.'),
+      h('div.stack', { style: { marginTop: '14px', gap: '10px' } },
+        cojas.map((t) => {
+          const casilla = h('input', { type: 'checkbox', checked: true });
+          casilla.addEventListener('change', () => {
+            if (casilla.checked) marcadas.add(t.id); else marcadas.delete(t.id);
+            pintarContador();
+            boton.disabled = !marcadas.size;
+          });
+          return h('label.row', null,
+            h('div.row-lead', null, casilla),
+            h('div.grow', null, h('div.row-title', null, t.texto || 'Sin texto')),
+          );
+        })),
+      boton,
+      h('button.btn.ghost.full', { onclick: () => cerrar(false) }, 'Cancelar'),
+    ];
+  });
+  if (!seguir || !marcadas.size) return;
+
+  const elegidas = cojas.filter((t) => marcadas.has(t.id));
+  toast('Vistiendo…');
+  const vestidas = await ejemplos.vestirSinFotografia(elegidas);
+  toast(vestidas === elegidas.length
+    ? `${vestidas} ${vestidas === 1 ? 'tarea vestida' : 'tareas vestidas'}`
+    : `${vestidas} de ${elegidas.length} vestidas · el resto, sin red no se pudo`, vestidas === elegidas.length ? undefined : 'err');
   store.sincronizar({ forzar: true });
   refrescar();
 }
