@@ -1,0 +1,327 @@
+name: Copia nocturna de UNIK repasos
+
+# Cada noche baja TODO lo que la app guarda en el servidor —la base de
+# datos entera y todas las fotos y audios— lo cifra y lo deja guardado
+# en GitHub durante 90 días. Si un día el hosting se pierde o algo se
+# borra por error, cualquier noche de los últimos tres meses está a un
+# clic, en el apartado «Artifacts» de cada ejecución.
+#
+# CÓMO ENTRA SIN NINGUNA CONTRASEÑA NUEVA
+#
+# La API tiene una puerta (api/copia) que solo se abre si quien llama
+# enseña la misma llave que haya escrita en api/datos/copia.clave del
+# servidor. Ese fichero normalmente NO EXISTE: este robot inventa una
+# llave al azar, la sube por FTP con los mismos secretos del despliegue,
+# llama a la puerta, y retira el fichero al terminar, pase lo que pase.
+# Sin fichero, la puerta responde siempre «403 Sin permiso».
+#
+# La copia viaja y se guarda CIFRADA (AES-256). No es manía: este
+# repositorio es público, y un artifact sin cifrar podría bajárselo
+# cualquiera con las fotos de la obra y los datos de la base dentro.
+#
+# Secretos (Settings → Secrets and variables → Actions):
+#   REPASOS_FTP_SERVER, REPASOS_FTP_USERNAME, REPASOS_FTP_PASSWORD
+#       los del despliegue, que ya están puestos
+#   REPASOS_FTP_SERVER_DIR   (opcional) igual que en el despliegue
+#   REPASOS_COPIA_CLAVE      NUEVO: la contraseña con la que se cifra la
+#       copia. Una frase larga inventada. Se apunta en el bloc de notas
+#       ANTES de crear el secreto, porque sin ella una copia no se
+#       puede abrir nunca más. Y no pasa por ninguna conversación: del
+#       bloc de notas al secreto, directamente.
+#
+# EL RELOJ: GitHub solo hace caso del «schedule» que esté en la rama por
+# defecto del repositorio, y la de este repositorio es la del showroom.
+# Mientras tanto, la cita de las 03:14 de abajo no suena sola: cada
+# noche la pone en marcha una rutina de Claude que dispara este mismo
+# robot. Si algún día este fichero llega a la rama por defecto, el reloj
+# de GitHub toma el relevo y esa rutina sobra.
+
+on:
+  schedule:
+    - cron: '14 3 * * *' # 05:14 en Madrid en verano, 04:14 en invierno
+  workflow_dispatch:
+  push:
+    branches: [claude/uniq-repasos-app-2ja8y2]
+    paths: ['.github/LANZAR-COPIA.txt']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: copia-repasos
+  cancel-in-progress: false
+
+jobs:
+  copiar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DOMINIO: https://repasos.unikdi.com
+    steps:
+      # Si falta algo se dice a las claras y en rojo. Una copia que no
+      # se hace y calla es peor que una que no se hace y avisa.
+      - name: Comprobar que están los secretos
+        env:
+          SERVER: ${{ secrets.REPASOS_FTP_SERVER }}
+          USERNAME: ${{ secrets.REPASOS_FTP_USERNAME }}
+          PASSWORD: ${{ secrets.REPASOS_FTP_PASSWORD }}
+          COPIA: ${{ secrets.REPASOS_COPIA_CLAVE }}
+        run: |
+          set -eu
+          falta=""
+          [ -n "$SERVER" ]   || falta="$falta REPASOS_FTP_SERVER"
+          [ -n "$USERNAME" ] || falta="$falta REPASOS_FTP_USERNAME"
+          [ -n "$PASSWORD" ] || falta="$falta REPASOS_FTP_PASSWORD"
+          [ -n "$COPIA" ]    || falta="$falta REPASOS_COPIA_CLAVE"
+          if [ -n "$falta" ]; then
+            {
+              echo "## La copia de esta noche NO se ha hecho"
+              echo ""
+              echo "Faltan estos secretos en **Settings → Secrets and variables → Actions**:"
+              echo ""
+              for s in $falta; do echo "- \`$s\`"; done
+              case "$falta" in *REPASOS_COPIA_CLAVE*)
+                echo ""
+                echo "\`REPASOS_COPIA_CLAVE\` es la contraseña que cifra la copia: una frase"
+                echo "larga inventada. Apúntala en tu bloc de notas ANTES de crear el"
+                echo "secreto, porque sin ella una copia no se puede abrir nunca más."
+                ;;
+              esac
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "Faltan secretos:$falta" >&2
+            exit 1
+          fi
+          echo "Los cuatro secretos están puestos."
+
+      # Mismo cuidado que en el despliegue: lftp casi siempre viene ya en
+      # la imagen, y cuando no, el «apt-get update» es lo que se cuelga.
+      - name: Instalar lftp
+        timeout-minutes: 6
+        run: |
+          set -eu
+          if command -v lftp > /dev/null; then
+            echo "lftp ya está en la imagen: $(lftp --version | head -1)"
+            exit 0
+          fi
+          if timeout 120 sudo apt-get install -y -qq lftp; then
+            echo "lftp instalado con la lista que ya traía la imagen."
+            exit 0
+          fi
+          for intento in 1 2 3; do
+            echo "Instalando lftp (intento $intento de 3)…"
+            if timeout 120 sudo apt-get update -qq \
+               && timeout 120 sudo apt-get install -y -qq lftp; then
+              echo "lftp instalado."
+              exit 0
+            fi
+            sleep $((intento * 10))
+          done
+          echo "No se ha podido instalar lftp tras tres intentos." >&2
+          exit 1
+
+      # Las mismas mañas que .github/scripts/ftp-deploy.sh: probar FTPS y
+      # caer a FTP plano si el servidor no lo admite, y dar con la
+      # carpeta del dominio (httpdocs en Plesk). Se escriben en un
+      # fichero aparte porque varios pasos las necesitan, incluido el de
+      # limpieza que corre aunque algo falle.
+      - name: Preparar el camino al servidor
+        env:
+          FTP_SERVER: ${{ secrets.REPASOS_FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.REPASOS_FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.REPASOS_FTP_PASSWORD }}
+          FTP_SERVER_DIR: ${{ secrets.REPASOS_FTP_SERVER_DIR }}
+        run: |
+          set -eu
+          cat > "$RUNNER_TEMP/ftp.sh" <<'FTPSH'
+          SETTINGS='
+            set ssl:verify-certificate no;
+            set ftp:passive-mode true;
+            set net:timeout 20;
+            set net:max-retries 3;
+            set net:reconnect-interval-base 4;
+            set net:reconnect-interval-multiplier 2;
+            set mirror:parallel-transfer-count 8;
+            set xfer:clobber on;
+            set cmd:fail-exit true;
+          '
+          TLS="$SETTINGS set ftp:ssl-allow true; set ftp:ssl-force true; set ftp:ssl-protect-data false;"
+          PLAIN="$SETTINGS set ftp:ssl-allow false;"
+
+          # $1 = bloque de ajustes, $2 = comandos a ejecutar ya conectado.
+          run_lftp() {
+            printf '%s\nopen -u "%s","%s" "%s"\n%s\nbye\n' \
+              "$1" "$FTP_USERNAME" "$FTP_PASSWORD" "$FTP_SERVER" "$2" | lftp
+          }
+
+          # Prueba FTPS una vez y deja apuntado el resultado para los
+          # demás pasos, que solo tienen que llamar a cargar_camino.
+          elegir_camino() {
+            if run_lftp "$TLS" "pwd" >/dev/null 2>&1; then
+              echo tls > "$RUNNER_TEMP/ftp-modo"
+            else
+              echo "El servidor no aceptó FTPS; se usa FTP plano."
+              echo plain > "$RUNNER_TEMP/ftp-modo"
+            fi
+          }
+
+          cargar_camino() {
+            case "$(cat "$RUNNER_TEMP/ftp-modo" 2>/dev/null || echo tls)" in
+              plain) OPTS="$PLAIN" ;;
+              *)     OPTS="$TLS" ;;
+            esac
+            DIR="$(cat "$RUNNER_TEMP/ftp-dir" 2>/dev/null || echo .)"
+          }
+
+          buscar_carpeta() {
+            DIR="${FTP_SERVER_DIR:-}"
+            case "$DIR" in "" | "." | "./") DIR="" ;; esac
+            if [ -z "$DIR" ]; then
+              if run_lftp "$OPTS" "cls -1" 2>/dev/null | tr -d '\r/' | grep -qx httpdocs; then
+                DIR=httpdocs
+              else
+                DIR=.
+              fi
+            fi
+            echo "$DIR" > "$RUNNER_TEMP/ftp-dir"
+            echo "Carpeta del dominio: $DIR"
+          }
+          FTPSH
+          . "$RUNNER_TEMP/ftp.sh"
+          elegir_camino
+          cargar_camino
+          buscar_carpeta
+
+      - name: Pedir el volcado con una llave de un solo uso
+        env:
+          FTP_SERVER: ${{ secrets.REPASOS_FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.REPASOS_FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.REPASOS_FTP_PASSWORD }}
+        run: |
+          set -eu
+          . "$RUNNER_TEMP/ftp.sh"
+          cargar_camino
+          mkdir -p copia
+
+          TOKEN="$(openssl rand -hex 32)"
+          printf '%s\n' "$TOKEN" > "$RUNNER_TEMP/copia.clave"
+          run_lftp "$OPTS" "cd \"$DIR\"; put \"$RUNNER_TEMP/copia.clave\" -o api/datos/copia.clave"
+          echo "La llave de un solo uso está puesta. Se llama a la puerta…"
+
+          curl -fsS --retry 3 --retry-delay 5 --max-time 300 \
+            -H "X-Clave-Copia: $TOKEN" \
+            -o copia/base-de-datos.json "$DOMINIO/api/copia"
+
+          jq -e '.tablas | type == "object"' copia/base-de-datos.json > /dev/null || {
+            echo "El volcado no tiene la forma esperada; esto es lo que ha llegado:" >&2
+            head -c 400 copia/base-de-datos.json >&2 || true
+            exit 1
+          }
+          echo "Volcado recibido (motor $(jq -r .motor copia/base-de-datos.json), generado $(jq -r .generado copia/base-de-datos.json)):"
+          jq -r '.tablas | to_entries[] | "  \(.key): \(.value | length) filas"' copia/base-de-datos.json
+
+      # Corre AUNQUE algo haya fallado antes: una llave olvidada en el
+      # servidor es una puerta que se queda abierta.
+      - name: Retirar la llave del servidor
+        if: always()
+        env:
+          FTP_SERVER: ${{ secrets.REPASOS_FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.REPASOS_FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.REPASOS_FTP_PASSWORD }}
+        run: |
+          set -u
+          [ -n "${FTP_SERVER:-}" ] || { echo "Sin secretos, no hay llave que retirar."; exit 0; }
+          [ -f "$RUNNER_TEMP/ftp.sh" ] || { echo "No se llegó a abrir el camino FTP."; exit 0; }
+          . "$RUNNER_TEMP/ftp.sh"
+          cargar_camino
+          if run_lftp "$OPTS" "cd \"$DIR\"; rm api/datos/copia.clave" 2>/dev/null; then
+            echo "Llave retirada."
+          else
+            echo "La llave no estaba (no llegó a subirse)."
+          fi
+          if run_lftp "$OPTS" "cd \"$DIR\"; cls -1 api/datos/copia.clave" 2>/dev/null | grep -q copia.clave; then
+            echo "::warning::No se ha podido retirar api/datos/copia.clave del servidor. Sin ella la puerta no se abre igualmente, pero conviene borrarla a mano."
+          fi
+
+      - name: Bajar las fotos y los audios
+        env:
+          FTP_SERVER: ${{ secrets.REPASOS_FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.REPASOS_FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.REPASOS_FTP_PASSWORD }}
+        run: |
+          set -eu
+          . "$RUNNER_TEMP/ftp.sh"
+          cargar_camino
+          mkdir -p copia/fotos
+          if run_lftp "$OPTS" "cd \"$DIR\"; cls -1 api/uploads" >/dev/null 2>&1; then
+            run_lftp "$OPTS" "cd \"$DIR\"; mirror --ignore-time --no-perms api/uploads \"$PWD/copia/fotos\""
+          else
+            echo "En el servidor no hay carpeta api/uploads; no hay ficheros que bajar."
+          fi
+          echo "Ficheros bajados: $(find copia/fotos -type f | wc -l)"
+
+      # La base de datos sabe cuántos ficheros vivos debería haber. Si lo
+      # bajado no cuadra, se avisa: puede que la carpeta de medios del
+      # servidor no sea api/uploads (la configuración «uploads» admite
+      # una ruta absoluta) y entonces este robot habría que ajustarlo.
+      - name: Cotejar la base de datos con lo bajado
+        run: |
+          set -eu
+          ESPERADAS=$(jq '[(.tablas.medios // [])[] | select(((.ruta // "") != "") and ((.borrada // 0 | tostring) != "1"))] | length' copia/base-de-datos.json)
+          BAJADAS=$(find copia/fotos -type f | wc -l)
+          TABLAS=$(jq '.tablas | length' copia/base-de-datos.json)
+          TAREAS=$(jq '(.tablas.tareas // []) | length' copia/base-de-datos.json)
+          echo "La base habla de $ESPERADAS ficheros vivos; se han bajado $BAJADAS."
+          if [ "$BAJADAS" -lt "$ESPERADAS" ]; then
+            echo "::warning::La base de datos habla de $ESPERADAS ficheros pero solo se han bajado $BAJADAS. Si la carpeta de medios del servidor no es api/uploads, hay que ajustar este robot."
+          fi
+          {
+            echo "ESPERADAS=$ESPERADAS"
+            echo "BAJADAS=$BAJADAS"
+            echo "TABLAS=$TABLAS"
+            echo "TAREAS=$TAREAS"
+          } >> "$GITHUB_ENV"
+
+      - name: Cifrar la copia y probar que se abre
+        env:
+          COPIA_CLAVE: ${{ secrets.REPASOS_COPIA_CLAVE }}
+        run: |
+          set -eu
+          FECHA="$(date -u +%F)"
+          echo "FECHA=$FECHA" >> "$GITHUB_ENV"
+          tar czf copia.tar.gz -C copia .
+          openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt \
+            -in copia.tar.gz -out "copia-repasos-$FECHA.tar.gz.enc" -pass env:COPIA_CLAVE
+          rm -rf copia.tar.gz copia
+          ls -lh "copia-repasos-$FECHA.tar.gz.enc"
+          # La prueba del algodón: una copia que no se ha probado a abrir
+          # no es una copia. Se descifra y se lee el índice entero.
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 \
+            -in "copia-repasos-$FECHA.tar.gz.enc" -pass env:COPIA_CLAVE | tar tz > indice.txt
+          echo "La copia se abre bien: $(grep -c . indice.txt) entradas dentro."
+
+      - name: Guardar la copia en GitHub (90 días)
+        uses: actions/upload-artifact@v4
+        with:
+          name: copia-repasos-${{ env.FECHA }}
+          path: copia-repasos-*.tar.gz.enc
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Contarlo en el resumen
+        run: |
+          {
+            echo "## Copia hecha y guardada"
+            echo ""
+            echo "- Base de datos: **$TABLAS tablas**, con $TAREAS tareas y $ESPERADAS ficheros vivos apuntados."
+            echo "- Fotos y audios bajados del servidor: **$BAJADAS ficheros**."
+            echo "- Todo cifrado en \`copia-repasos-$FECHA.tar.gz.enc\`, guardado 90 días en el apartado **Artifacts** de esta página."
+            echo ""
+            echo "### Si un día hay que abrir una copia"
+            echo ""
+            echo '```'
+            echo "openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in copia-repasos-$FECHA.tar.gz.enc -out copia.tar.gz"
+            echo "tar xzf copia.tar.gz"
+            echo '```'
+            echo ""
+            echo "La contraseña que pide es la del secreto \`REPASOS_COPIA_CLAVE\` (la frase del bloc de notas)."
+          } >> "$GITHUB_STEP_SUMMARY"

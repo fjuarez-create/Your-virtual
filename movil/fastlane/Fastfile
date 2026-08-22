@@ -55,6 +55,79 @@ platform :ios do
     UI.success("Subida la compilación. En unos minutos aparece en TestFlight.")
   end
 
+  desc "Pregunta a App Store Connect cómo está todo y lo cuenta en cristiano. No toca nada."
+  lane :estado do
+    require "spaceship"
+    require "time"
+
+    Spaceship::ConnectAPI.auth(
+      key_id: ENV.fetch("APPSTORE_CLAVE_ID"),
+      issuer_id: ENV.fetch("APPSTORE_EMISOR_ID"),
+      key: ENV.fetch("APPSTORE_CLAVE_P8")
+    )
+
+    app = Spaceship::ConnectAPI::App.find(IDENTIFICADOR)
+    UI.user_error!("En esta cuenta de Apple no aparece ninguna app con el identificador #{IDENTIFICADOR}.") if app.nil?
+
+    lineas = ["## #{app.name} en App Store Connect", ""]
+
+    # Las versiones de la tienda: la publicada, la que esté en revisión…
+    begin
+      versiones = app.get_app_store_versions.to_a
+      if versiones.empty?
+        lineas << "En la tienda todavía no hay ninguna versión creada."
+      else
+        lineas << "### Versiones en la tienda"
+        lineas << ""
+        versiones.sort_by { |v| v.created_date.to_s }.reverse.first(3).each do |v|
+          # Apple está mudando el nombre del campo del estado; se lee el
+          # que haya. Con versiones viejas de fastlane solo existe el
+          # segundo.
+          bruto = (v.respond_to?(:app_version_state) && v.app_version_state) || v.app_store_state
+          lineas << "- **Versión #{v.version_string}** — #{en_cristiano_tienda(bruto)}"
+        end
+      end
+    rescue StandardError => e
+      lineas << "No se han podido leer las versiones de la tienda: #{e.message}"
+    end
+
+    # Las últimas compilaciones subidas y cómo las tiene TestFlight.
+    begin
+      builds = Spaceship::ConnectAPI::Build.all(
+        app_id: app.id,
+        sort: "-uploadedDate",
+        includes: "preReleaseVersion,buildBetaDetail"
+      )
+      lineas << ""
+      if builds.empty?
+        lineas << "Todavía no se ha subido ninguna compilación."
+      else
+        lineas << "### Últimas compilaciones subidas"
+        lineas << ""
+        builds.first(5).each do |b|
+          version = b.pre_release_version && b.pre_release_version.version
+          cuando = begin
+            Time.parse(b.uploaded_date.to_s).localtime.strftime("%d/%m/%Y a las %H:%M")
+          rescue StandardError
+            b.uploaded_date.to_s
+          end
+          detalle = b.build_beta_detail
+          en_testflight = detalle && (detalle.internal_build_state || detalle.external_build_state)
+          texto = b.expired ? "caducada: TestFlight ya no la reparte" : en_cristiano_build(b.processing_state, en_testflight)
+          lineas << "- **#{version} (compilación #{b.version})**, subida el #{cuando} — #{texto}"
+        end
+      end
+    rescue StandardError => e
+      lineas << "No se han podido leer las compilaciones: #{e.message}"
+    end
+
+    texto = lineas.join("\n")
+    texto.each_line { |l| UI.message(l.chomp) }
+    if ENV["GITHUB_STEP_SUMMARY"]
+      File.open(ENV["GITHUB_STEP_SUMMARY"], "a") { |f| f.puts(texto, "") }
+    end
+  end
+
   # ─── Los pasos, uno a uno ──────────────────────────────────────
 
   # Apple solo admite dos o tres certificados de distribución vivos. Como
@@ -165,5 +238,56 @@ platform :ios do
       distribute_external: false,
       notify_external_testers: false
     )
+  end
+end
+
+# ─── Traductores para el carril «estado» ─────────────────────────
+#
+# Apple contesta con siglas en mayúsculas. Aquí se pasan a frases que
+# digan qué está pasando y, cuando toca, qué falta por hacer. Si un día
+# aparece una sigla nueva, se enseña tal cual en vez de esconderla.
+
+def en_cristiano_tienda(estado)
+  {
+    "PREPARE_FOR_SUBMISSION" => "en preparación: todavía no se ha enviado a revisión",
+    "READY_FOR_REVIEW" => "lista para enviarse a revisión",
+    "WAITING_FOR_REVIEW" => "en la cola de revisión de Apple",
+    "IN_REVIEW" => "Apple la está revisando ahora mismo",
+    "PENDING_DEVELOPER_RELEASE" => "APROBADA por Apple: solo falta que pulses «Publicar esta versión»",
+    "PENDING_APPLE_RELEASE" => "aprobada: Apple la publicará automáticamente",
+    "PROCESSING_FOR_DISTRIBUTION" => "aprobada: preparándose para salir en la tienda",
+    "READY_FOR_DISTRIBUTION" => "publicada y disponible en la App Store",
+    "READY_FOR_SALE" => "publicada y disponible en la App Store",
+    "REJECTED" => "RECHAZADA por Apple: los motivos están en el Resolution Center de la web",
+    "METADATA_REJECTED" => "rechazada por la ficha (textos, capturas o datos de revisión), no por la app",
+    "DEVELOPER_REJECTED" => "retirada de la revisión por ti: hay que volver a enviarla",
+    "DEVELOPER_REMOVED_FROM_SALE" => "retirada de la venta por ti",
+    "REMOVED_FROM_SALE" => "retirada de la venta",
+    "INVALID_BINARY" => "la compilación enviada no vale: hay que subir otra"
+  }.fetch(estado.to_s, "estado «#{estado}»")
+end
+
+def en_cristiano_build(procesado, en_testflight)
+  case procesado.to_s
+  when "PROCESSING" then return "Apple todavía la está procesando"
+  when "FAILED", "INVALID" then return "Apple la rechazó al procesarla"
+  end
+  case en_testflight.to_s
+  when "IN_BETA_TESTING", "READY_FOR_BETA_TESTING"
+    "procesada y disponible en TestFlight"
+  when "READY_FOR_BETA_SUBMISSION"
+    "procesada; en TestFlight para probadores internos"
+  when "WAITING_FOR_BETA_REVIEW"
+    "esperando la revisión de TestFlight para probadores externos"
+  when "IN_BETA_REVIEW"
+    "en revisión de TestFlight para probadores externos"
+  when "BETA_REJECTED"
+    "rechazada para TestFlight externo"
+  when "EXPIRED"
+    "caducada: TestFlight ya no la reparte"
+  when "MISSING_EXPORT_COMPLIANCE"
+    "a falta de contestar la pregunta del cifrado (export compliance) en la web"
+  else
+    "procesada"
   end
 end

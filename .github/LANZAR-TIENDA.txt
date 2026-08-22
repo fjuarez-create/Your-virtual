@@ -1,0 +1,6 @@
+Este fichero es un interruptor: al cambiarlo y empujarlo se pone en
+marcha el robot «Mirar la App Store», que pregunta a Apple cómo está
+la app y lo cuenta en el resumen. La línea de abajo solo existe para
+poder cambiar algo.
+
+Último toque: 2026-08-22 — estreno del robot de la tienda.

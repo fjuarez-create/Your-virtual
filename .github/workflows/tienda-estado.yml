@@ -1,0 +1,88 @@
+name: Mirar la App Store
+
+# Pregunta a App Store Connect cómo está la app de verdad —qué versión
+# hay en la tienda y en qué punto está, qué compilaciones hay subidas y
+# si TestFlight las tiene listas— y lo escribe en cristiano en el
+# resumen de la ejecución. No toca nada en Apple: solo mira.
+#
+# Corre en una máquina Linux corriente: para preguntar no hace falta
+# Mac. Usa la misma clave de App Store Connect que el robot que compila:
+#
+#   APPSTORE_CLAVE_ID    el Key ID de la clave de App Store Connect
+#   APPSTORE_EMISOR_ID   el Issuer ID, en la misma página
+#   APPSTORE_CLAVE_P8    el contenido del fichero .p8, pegado entero
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/uniq-repasos-app-2ja8y2]
+    paths: ['.github/LANZAR-TIENDA.txt']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tienda-estado
+  cancel-in-progress: true
+
+jobs:
+  # Si faltan los secretos se explica en el resumen y no se sigue.
+  mirar-secretos:
+    runs-on: ubuntu-latest
+    outputs:
+      seguir: ${{ steps.repaso.outputs.seguir }}
+    steps:
+      - id: repaso
+        env:
+          CLAVE_ID: ${{ secrets.APPSTORE_CLAVE_ID }}
+          EMISOR: ${{ secrets.APPSTORE_EMISOR_ID }}
+          CLAVE_P8: ${{ secrets.APPSTORE_CLAVE_P8 }}
+        run: |
+          FALTAN=""
+          [ -z "$CLAVE_ID" ] && FALTAN="$FALTAN APPSTORE_CLAVE_ID"
+          [ -z "$EMISOR" ]   && FALTAN="$FALTAN APPSTORE_EMISOR_ID"
+          [ -z "$CLAVE_P8" ] && FALTAN="$FALTAN APPSTORE_CLAVE_P8"
+          if [ -n "$FALTAN" ]; then
+            echo "seguir=no" >> "$GITHUB_OUTPUT"
+            {
+              echo "## No se le puede preguntar a Apple todavía"
+              echo ""
+              echo "Faltan estos secretos en **Settings → Secrets and variables → Actions**:"
+              echo ""
+              for s in $FALTAN; do echo "- \`$s\`"; done
+              echo ""
+              echo "Son los mismos que usa el robot que compila la app; en \`movil/README.md\`"
+              echo "está de dónde sale cada uno."
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "seguir=si" >> "$GITHUB_OUTPUT"
+          fi
+
+  preguntar:
+    needs: mirar-secretos
+    if: needs.mirar-secretos.outputs.seguir == 'si'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Traer el repositorio
+        uses: actions/checkout@v4
+
+      - name: Preparar Ruby y fastlane
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+          working-directory: movil
+
+      - name: Preguntar a App Store Connect
+        working-directory: movil
+        env:
+          APPSTORE_CLAVE_ID: ${{ secrets.APPSTORE_CLAVE_ID }}
+          APPSTORE_EMISOR_ID: ${{ secrets.APPSTORE_EMISOR_ID }}
+          APPSTORE_CLAVE_P8: ${{ secrets.APPSTORE_CLAVE_P8 }}
+          # Para que las fechas del resumen salgan en hora española.
+          TZ: Europe/Madrid
+          FASTLANE_SKIP_UPDATE_CHECK: '1'
+          FASTLANE_HIDE_CHANGELOG: '1'
+          FASTLANE_DISABLE_COLORS: '1'
+        run: bundle exec fastlane ios estado

@@ -159,6 +159,10 @@ function despachar(string $metodo, array $p): void
         cambios();
     }
 
+    if ($r0 === 'copia' && $metodo === 'GET') {
+        volcar_copia();
+    }
+
     if ($r0 === 'diagnostico' && ($p[1] ?? '') === 'salida' && $metodo === 'GET') {
         diagnostico_salida();
     }
@@ -1317,6 +1321,41 @@ function subir_medio(): void
     ]);
 
     responder(['id' => $id, 'ok' => true, 'tam' => $enDisco], 201);
+}
+
+/**
+ * El volcado para la copia nocturna: todas las tablas de la base, en
+ * JSON. Los ficheros de las fotos no van aquí: el robot se los lleva
+ * por FTP; esto es lo que el FTP no ve, la base de datos.
+ *
+ * No pide sesión porque lo llama un robot de madrugada. En su lugar
+ * exige una clave de un solo uso que ese mismo robot deja por FTP en
+ * datos/copia.clave justo antes de llamar y retira justo después. Sin
+ * ese fichero en su sitio, 403 seco: el resto del año esta puerta no
+ * existe.
+ */
+function volcar_copia(): void
+{
+    $fichero = __DIR__ . '/datos/copia.clave';
+    $clave = (string) ($_SERVER['HTTP_X_CLAVE_COPIA'] ?? '');
+    $guardada = is_file($fichero) ? trim((string) @file_get_contents($fichero)) : '';
+    if ($guardada === '' || $clave === '' || !hash_equals($guardada, $clave)) {
+        responder_error(403, 'Sin permiso.', 'clave');
+    }
+
+    $pdo = bd();
+    $motor = (string) $pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
+    $tablas = $motor === 'sqlite'
+        ? $pdo->query("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")->fetchAll(PDO::FETCH_COLUMN)
+        : $pdo->query('SHOW TABLES')->fetchAll(PDO::FETCH_COLUMN);
+
+    $volcado = ['generado' => ahora_iso(), 'motor' => $motor, 'tablas' => []];
+    foreach ($tablas as $t) {
+        // El nombre viene de la propia base, no de fuera; aun así, comillas.
+        $envuelto = $motor === 'sqlite' ? '"' . $t . '"' : '`' . $t . '`';
+        $volcado['tablas'][$t] = $pdo->query('SELECT * FROM ' . $envuelto)->fetchAll(PDO::FETCH_ASSOC);
+    }
+    responder($volcado);
 }
 
 function borrar_medio(string $id): void
