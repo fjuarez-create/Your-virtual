@@ -23,14 +23,15 @@ import { TIPOGRAFIAS_PDF } from './tipografiaPdf.js';
 const A4 = { ancho: 595.28, alto: 841.89 };
 const MARGEN = 48;
 
-/* Las medidas de la tarjeta de la hoja de reparto, aquí arriba porque
-   la comparte quien recorta las fotos: el recorte del móvil y la caja
-   del papel tienen que tener la misma proporción o la foto saldría
-   estirada. La foto es casi cuadrada —lo más cuadrada que deja la
-   página con cuatro tarjetas y cuatro líneas de texto—. */
+/* La columna de la hoja de reparto y la proporción del recorte de sus
+   fotos. En el papel el alto de la foto es elástico —crece para llenar
+   la página—, así que la foto ya no se estira a su caja: la CUBRE,
+   recortando lo que sobre por los bordes, como el object-fit: cover de
+   la propia app. El recorte del móvil va un pelín vertical (0,95),
+   que es el centro del abanico de cajas posibles: pierde poco por
+   arriba y poco por los lados, se ponga donde se ponga. */
 const ANCHO_COL_REPARTO = (A4.ancho - MARGEN * 2 - 16) / 2;   // 241,64
-const ALTO_FOTO_REPARTO = 210;
-export const PROPORCION_FOTO_REPARTO = ANCHO_COL_REPARTO / ALTO_FOTO_REPARTO;
+export const PROPORCION_FOTO_REPARTO = 0.95;
 
 /* Anchos de Helvetica en milésimas de punto. Con ellos las líneas se
    parten donde toca en vez de salirse del papel. */
@@ -200,11 +201,25 @@ class Pagina {
    * hace que una foto pegada en el papel se vea de la misma familia
    * que las tarjetas de la aplicación.
    */
-  fotoRecortada(nombre, x, y, ancho, alto, radio = 10) {
+  fotoRecortada(nombre, x, y, ancho, alto, radio = 10, imAncho = 0, imAlto = 0) {
     const r = Math.min(radio, alto / 2, ancho / 2);
     const k = r * 0.5523;
     const x2 = x + ancho;
     const y2 = y + alto;
+    /* Con las medidas reales de la imagen, se dibuja cubriendo la caja
+       —a lo object-fit: cover—: se agranda hasta tapar, centrada, y el
+       recorte se come lo que sobre. Sin medidas, se estira como antes. */
+    let dw = ancho;
+    let dh = alto;
+    let dx = x;
+    let dy = y;
+    if (imAncho > 0 && imAlto > 0) {
+      const escala = Math.max(ancho / imAncho, alto / imAlto);
+      dw = imAncho * escala;
+      dh = imAlto * escala;
+      dx = x - (dw - ancho) / 2;
+      dy = y - (dh - alto) / 2;
+    }
     this.ops.push(
       'q',
       `${(x + r).toFixed(2)} ${y.toFixed(2)} m`,
@@ -217,7 +232,7 @@ class Pagina {
       `${x.toFixed(2)} ${(y + r).toFixed(2)} l`,
       `${x.toFixed(2)} ${(y + r - k).toFixed(2)} ${(x + r - k).toFixed(2)} ${y.toFixed(2)} ${(x + r).toFixed(2)} ${y.toFixed(2)} c`,
       'W n',
-      `${ancho.toFixed(2)} 0 0 ${alto.toFixed(2)} ${x.toFixed(2)} ${y.toFixed(2)} cm`,
+      `${dw.toFixed(2)} 0 0 ${dh.toFixed(2)} ${dx.toFixed(2)} ${dy.toFixed(2)} cm`,
       `/${nombre} Do`,
       'Q',
     );
@@ -778,10 +793,16 @@ function fechaCorta(iso) {
  * caja gris para el texto, pie con quién lo generó— sobre el esqueleto
  * que el papel necesita en obra: numeración seguida con casilla para
  * tachar, franjas por gremio para poder cortar y repartir, la villa en
- * cada pie por si las hojas se sueltan, y las ejecutadas al final en
- * lista apretada. Va en dos columnas que fluyen como un periódico:
- * cada una a su ritmo, sin huecos muertos. Y con la letra corporativa
- * incrustada: Eiko para el titular, Neue Haas para todo lo demás.
+ * cada pie por si las hojas se sueltan, y las ejecutadas al final. Con
+ * la letra corporativa incrustada: Eiko para el titular, Neue Haas
+ * para todo lo demás.
+ *
+ * `fotos` es un Map tareaId → { bytes, ancho, alto } con los JPEG ya
+ * recortados (ver media.jpegParaPdf): aquí solo se pegan, cubriendo su
+ * caja. `filtros` es la frase de qué se filtró («Aluminio · Salón»).
+ * `ejecutadas` van SIEMPRE al final, en su propia página.
+ *
+ * @returns {Blob} el PDF listo para bajar o compartir
  */
 export function hojaDeReparto({
   vivienda, promocion, fecha, hora = '', autor,
@@ -791,17 +812,24 @@ export function hojaDeReparto({
   const anchoUtil = A4.ancho - MARGEN * 2;
   const SEPARACION = 16;
   const ANCHO_COL = ANCHO_COL_REPARTO;
-  const ALTO_FOTO = ALTO_FOTO_REPARTO;
   const SUELO = MARGEN + 18;
-
-  /* La cuadrícula perfecta que pidió Fran: CUATRO tarjetas por página,
-     todas del mismo alto. El texto se corta a cuatro líneas con puntos
-     suspensivos —para el papel bastan— y a cambio la tarjeta entera se
-     fija a un alto constante: dos tareas ocupan media página, una, un
-     cuarto, y las filas casan al milímetro. */
   const LINEA = 12.5;
   const MAX_LINEAS = 4;
-  const ALTO_TARJETA = ALTO_FOTO + 8 + 17 + (MAX_LINEAS * LINEA + 14) + 10;
+
+  /* La cuadrícula que pidió Fran, en dos tiempos. Primero se planifica
+     en frío qué franjas y qué filas de dos tarjetas caben en cada
+     página, contando la foto por su alto mínimo; luego, al pintar, el
+     aire que sobre en la página se reparte entre sus filas subiendo el
+     alto de las fotos, con tope en la proporción 1:1,25. Así cuatro
+     tarjetas llenan la página entera haya mucho o poco texto, dos
+     tareas solas salen a media página con la foto grande de verdad, y
+     una, en su cuarto. */
+  const FOTO_MINIMA = 200;
+  const FOTO_TOPE = ANCHO_COL * 1.25;
+  const AIRE_FILA = 14;
+  const ALTO_PRIMERA = 64;   // lo que gasta la cabecera grande
+  const ALTO_RESTO = 34;     // y la línea de recuerdo de las demás
+
   const paginas = [];
   const imagenes = new Map();
   let pag = new Pagina();
@@ -821,12 +849,11 @@ export function hojaDeReparto({
   /* La cabecera. La primera hoja lleva el nombre de la villa en la
      Eiko, como los titulares de la app, y la promoción enfrente; las
      siguientes, una línea que recuerda dónde estás por si la hoja se
-     corta por arriba. */
+     corta por arriba. Apretadas a propósito: cada punto que gastan se
+     lo quitan al alto de las fotos. */
   const cabecera = (primera) => {
     y = A4.alto - MARGEN;
     if (primera) {
-      /* Apretada a propósito: cada punto que gasta la cabecera se lo
-         quita al alto de las cuatro fotos de la primera página. */
       pag.texto(MARGEN, y - 22, vivienda, { tam: 27, fuente: 'eiko' });
       pag.texto(A4.ancho - MARGEN - anchoTexto(promocion, 12.5, false, 'eiko'), y - 20, promocion,
         { tam: 12.5, fuente: 'eiko', color: COLOR.topo });
@@ -846,22 +873,6 @@ export function hojaDeReparto({
       y -= 18;
     }
   };
-  cabecera(true);
-
-  /* Las dos columnas: cada una lleva su propia altura y las tarjetas
-     van llenando la izquierda y luego la derecha, como un periódico. */
-  let alturaCol = [y, y];
-  let col = 0;
-
-  let grupoEnCurso = null;
-  const saltar = () => {
-    paginas.push(pag);
-    pag = new Pagina();
-    cabecera(false);
-    if (grupoEnCurso) franja(grupoEnCurso, true);
-    alturaCol = [y, y];
-    col = 0;
-  };
 
   const franja = (g, seguida = false) => {
     if (!g.titulo) return;
@@ -877,6 +888,7 @@ export function hojaDeReparto({
     if (conSub) pag.texto(MARGEN + 2, y - 11, g.sub, { tam: 8.5, color: [0.42, 0.38, 0.32], fuente: 'haas' });
     y -= alto + 10;
   };
+  const altoDeFranja = (g, seguida) => (g.titulo ? ((!seguida && g.sub) ? 33 : 23) + 10 : 0);
 
   /* Los chips de una tarjeta: dónde va, su estado si está a medias y
      de qué día es. Se pintan de derecha a izquierda y, si el sitio es
@@ -894,12 +906,12 @@ export function hojaDeReparto({
   };
   const anchoChip = (c) => anchoTexto(c.texto, c.tam, false, 'haas') + 13;
 
-  const medirTarea = (t) => {
+  const medirLineas = (t) => {
     let lineas = partir(t.texto || 'Sin descripción', ANCHO_COL - 20, 9.5, false, 'haas');
     if (lineas.length > MAX_LINEAS) {
-      // Cuatro líneas y puntos suspensivos: en papel basta, y el alto
-      // fijo de la tarjeta es lo que hace perfecta la cuadrícula. El
-      // texto entero sigue en la aplicación.
+      // Cuatro líneas y puntos suspensivos: en papel bastan, y el tope
+      // es lo que deja crecer a las fotos. El texto entero sigue en la
+      // aplicación.
       lineas = lineas.slice(0, MAX_LINEAS);
       let ultima = lineas[MAX_LINEAS - 1];
       while (ultima && anchoTexto(ultima + '…', 9.5, false, 'haas') > ANCHO_COL - 20) {
@@ -907,99 +919,117 @@ export function hojaDeReparto({
       }
       lineas[MAX_LINEAS - 1] = ultima + '…';
     }
-    return {
-      lineas,
-      // Con foto, el alto es SIEMPRE el de la tarjeta entera aunque el
-      // texto sea corto: así las filas casan. Sin foto (tareas de antes
-      // del blindaje), lo justo.
-      alto: fotos.has(t.id) ? ALTO_TARJETA : 17 + (lineas.length * LINEA + 14) + 12,
-    };
+    return lineas;
   };
 
-  const pintarTarea = (t, n, x, yTop, lineas) => {
+  /* ── El plan: qué cabe en cada página, con la foto mínima ── */
+  const disponible = (primera) => A4.alto - MARGEN - (primera ? ALTO_PRIMERA : ALTO_RESTO) - SUELO;
+  const paginasPlan = [];
+  let plan = { primera: true, segmentos: [], usado: 0 };
+  const cerrarPagina = () => {
+    if (plan.segmentos.length) paginasPlan.push(plan);
+    plan = { primera: false, segmentos: [], usado: 0 };
+  };
+
+  let n = 0;
+  grupos.forEach((g) => {
+    const pares = [];
+    for (let i = 0; i < g.tareas.length; i += 2) pares.push(g.tareas.slice(i, i + 2));
+    pares.forEach((par, indicePar) => {
+      const cartas = par.map((t) => ({ t, n: ++n, lineas: medirLineas(t) }));
+      const cajaMax = Math.max(...cartas.map((c) => c.lineas.length)) * LINEA + 14;
+      const conFoto = par.some((t) => fotos.has(t.id));
+      const altoMin = (conFoto ? FOTO_MINIMA + 8 : 0) + 17 + cajaMax + AIRE_FILA;
+      const arranque = indicePar === 0;
+      const necesita = (arranque ? altoDeFranja(g, false) : 0) + altoMin;
+      if (plan.usado + necesita > disponible(plan.primera)) {
+        cerrarPagina();
+        if (g.titulo) {
+          plan.segmentos.push({ tipo: 'franja', g, seguida: !arranque });
+          plan.usado += altoDeFranja(g, !arranque);
+        }
+      } else if (arranque && g.titulo) {
+        plan.segmentos.push({ tipo: 'franja', g, seguida: false });
+        plan.usado += altoDeFranja(g, false);
+      }
+      plan.segmentos.push({ tipo: 'fila', cartas, cajaMax, conFoto, altoMin });
+      plan.usado += altoMin;
+    });
+  });
+  cerrarPagina();
+
+  /* ── La pintura: se reparte el aire y se dibuja ── */
+  const pintarCarta = (c, x, yTop, altoFoto) => {
     let yy = yTop;
+    const t = c.t;
     if (fotos.has(t.id)) {
+      const im = fotos.get(t.id);
       const nombre = `Im${imagenes.size + 1}`;
-      imagenes.set(nombre, fotos.get(t.id));
-      pag.fotoRecortada(nombre, x, yy - ALTO_FOTO, ANCHO_COL, ALTO_FOTO, 10);
-      yy -= ALTO_FOTO + 8;
+      imagenes.set(nombre, im);
+      pag.fotoRecortada(nombre, x, yy - altoFoto, ANCHO_COL, altoFoto, 10, im.ancho, im.alto);
+      yy -= altoFoto + 8;
     }
 
     // La fila del número: casilla para tachar, número para citarla por
     // teléfono, y los chips a la derecha.
     pag.recuadro(x + 1, yy - 11, 10.5, 10.5, 1, 0.35);
-    pag.texto(x + 18, yy - 9.5, `${n}.`, { tam: 11.5, negrita: true, fuente: 'haas' });
+    pag.texto(x + 18, yy - 9.5, `${c.n}.`, { tam: 11.5, negrita: true, fuente: 'haas' });
     let chips = chipsDe(t);
-    const hueco = ANCHO_COL - 22 - anchoTexto(`${n}.`, 11.5, true, 'haas') - 6;
-    while (chips.length && chips.reduce((s, c) => s + anchoChip(c) + 4, -4) > hueco) {
+    const hueco = ANCHO_COL - 22 - anchoTexto(`${c.n}.`, 11.5, true, 'haas') - 6;
+    while (chips.length && chips.reduce((s, ch) => s + anchoChip(ch) + 4, -4) > hueco) {
       chips = chips.slice(0, -1);
     }
-    let xChip = x + ANCHO_COL - chips.reduce((s, c) => s + anchoChip(c) + 4, -4);
-    for (const c of chips) {
-      const a = anchoChip(c);
+    let xChip = x + ANCHO_COL - chips.reduce((s, ch) => s + anchoChip(ch) + 4, -4);
+    for (const ch of chips) {
+      const a = anchoChip(ch);
       pag.pastilla(xChip, yy - 12.5, a, 15, 7.5, COLOR.beigeSuave);
-      pag.texto(xChip + 6.5, yy - 7.5, c.texto, { tam: c.tam, color: [0.4, 0.37, 0.31], fuente: 'haas' });
+      pag.texto(xChip + 6.5, yy - 7.5, ch.texto, { tam: ch.tam, color: [0.4, 0.37, 0.31], fuente: 'haas' });
       xChip += a + 4;
     }
     yy -= 17;
 
     // La caja gris con el texto, como en la maqueta.
-    const altoCaja = lineas.length * LINEA + 14;
+    const altoCaja = c.lineas.length * LINEA + 14;
     pag.pastilla(x, yy - altoCaja, ANCHO_COL, altoCaja, 8, COLOR.tarjeta);
-    lineas.forEach((linea, i) => {
+    c.lineas.forEach((linea, i) => {
       pag.texto(x + 10, yy - 11.5 - i * LINEA, linea, { tam: 9.5, gris: 0.12, fuente: 'haas' });
     });
   };
 
-  /* Cada tarjeta cae en la columna que va más alta, como se llena un
-     tablón de corcho: así un grupo que acaba no deja la columna
-     derecha vacía mientras la izquierda se estira. Si no cabe en
-     ninguna, página nueva. */
-  const ponerTarea = (t, n) => {
-    const { lineas, alto } = medirTarea(t);
-    col = alturaCol[1] > alturaCol[0] ? 1 : 0;
-    if (alturaCol[col] - alto < SUELO) {
-      const otra = 1 - col;
-      if (alturaCol[otra] - alto >= SUELO) col = otra;
-      else saltar();
-    }
-    const x = MARGEN + col * (ANCHO_COL + SEPARACION);
-    pintarTarea(t, n, x, alturaCol[col], lineas);
-    alturaCol[col] -= alto;
-  };
-
-  let n = 0;
-  grupos.forEach((g, i) => {
-    grupoEnCurso = null;
-    y = Math.min(alturaCol[0], alturaCol[1]) - (i > 0 ? 6 : 0);
-    // Una franja sin sitio debajo para su primera tarjeta es un título
-    // huérfano al pie de página: mejor empezar el grupo en la siguiente.
-    const altoFranja = g.titulo ? (g.sub ? 33 : 23) + 10 : 0;
-    const primera = g.tareas.length ? Math.min(medirTarea(g.tareas[0]).alto, 320) : 0;
-    if (y - (altoFranja + primera) < SUELO) saltar();
-    franja(g);
-    grupoEnCurso = g;
-    alturaCol = [y, y];
-    col = 0;
-    for (const t of g.tareas) ponerTarea(t, ++n);
+  paginasPlan.forEach((pg, i) => {
+    if (i > 0) { paginas.push(pag); pag = new Pagina(); }
+    cabecera(pg.primera);
+    const filasConFoto = pg.segmentos.filter((s) => s.tipo === 'fila' && s.conFoto).length;
+    const sobra = Math.max(0, disponible(pg.primera) - pg.usado);
+    const crecida = filasConFoto ? Math.min(sobra / filasConFoto, FOTO_TOPE - FOTO_MINIMA) : 0;
+    pg.segmentos.forEach((s) => {
+      if (s.tipo === 'franja') { franja(s.g, s.seguida); return; }
+      const altoFoto = s.conFoto ? FOTO_MINIMA + crecida : 0;
+      s.cartas.forEach((c, j) => pintarCarta(c, MARGEN + j * (ANCHO_COL + SEPARACION), y, altoFoto));
+      y -= (s.conFoto ? altoFoto + 8 : 0) + 17 + s.cajaMax + AIRE_FILA;
+    });
   });
-  grupoEnCurso = null;
 
-  /* Las ejecutadas, SIEMPRE al final y en lista apretada, a lo ancho:
-     constancia de lo hecho, no trabajo que repartir. Lo último
-     ejecutado arriba. */
+  /* Las ejecutadas, SIEMPRE al final y en su propia página, en lista
+     apretada a lo ancho: constancia de lo hecho, no trabajo que
+     repartir. Lo último ejecutado arriba. */
   if (ejecutadas.length) {
     const hechas = [...ejecutadas].sort((a, b) =>
       String(b.estadoEn || b.actualizado || '').localeCompare(String(a.estadoEn || a.actualizado || '')));
-    y = Math.min(alturaCol[0], alturaCol[1]) - 8;
-    if (y - 80 < SUELO) saltar();
+    paginas.push(pag);
+    pag = new Pagina();
+    cabecera(false);
     pag.pastilla(MARGEN - 8, y - 23 + 12, anchoUtil + 16, 23, 6, COLOR.verdeSuave);
     pag.texto(MARGEN + 2, y, 'Ejecutadas', { tam: 12, negrita: true, color: COLOR.verde, fuente: 'haas' });
     y -= 33;
     for (const t of hechas) {
       const lineas = partir(t.texto || 'Sin descripción', anchoUtil - 130, 9, false, 'haas');
       const altoFila = Math.max(lineas.length * 12, 12) + 8;
-      if (y - altoFila < SUELO) { saltar(); }
+      if (y - altoFila < SUELO) {
+        paginas.push(pag);
+        pag = new Pagina();
+        cabecera(false);
+      }
       // El puntito verde de «hecho»: la marca de visto no está en la
       // fuente, y una X delante de algo terminado se lee al revés.
       pag.pastilla(MARGEN, y - 1, 7.5, 7.5, 2.5, COLOR.verde);
