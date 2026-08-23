@@ -160,6 +160,9 @@ function despachar(string $metodo, array $p): void
     }
 
     if ($r0 === 'copia' && $metodo === 'GET') {
+        if (($p[1] ?? '') === 'fichero') {
+            servir_copia_fichero((string) ($_GET['id'] ?? ''));
+        }
         volcar_copia();
     }
 
@@ -1334,7 +1337,13 @@ function subir_medio(): void
  * ese fichero en su sitio, 403 seco: el resto del año esta puerta no
  * existe.
  */
-function volcar_copia(): void
+/**
+ * La cerradura de la puerta de la copia: solo abre si quien llama trae
+ * la misma llave que haya en datos/copia.clave. Ese fichero normalmente
+ * NO existe —lo pone el robot un momento y lo retira al acabar—, así
+ * que la respuesta de la casa es 403.
+ */
+function exigir_clave_copia(): void
 {
     $fichero = __DIR__ . '/datos/copia.clave';
     $clave = (string) ($_SERVER['HTTP_X_CLAVE_COPIA'] ?? '');
@@ -1342,6 +1351,50 @@ function volcar_copia(): void
     if ($guardada === '' || $clave === '' || !hash_equals($guardada, $clave)) {
         responder_error(403, 'Sin permiso.', 'clave');
     }
+}
+
+/**
+ * Entrega un fichero de medios al robot de la copia. Existe porque la
+ * carpeta de medios puede vivir fuera de la carpeta del dominio (en
+ * Plesk la configuración «uploads» admite una ruta absoluta) y entonces
+ * el FTP del robot no llega a ella; el PHP sí, porque es quien la usa a
+ * diario. Misma cerradura que el volcado.
+ */
+function servir_copia_fichero(string $id): void
+{
+    exigir_clave_copia();
+    if (!es_uuid($id)) {
+        responder_error(400, 'Identificador incorrecto.', 'formato');
+    }
+    $stmt = bd()->prepare('SELECT mime, ruta, borrada FROM medios WHERE id = ?');
+    $stmt->execute([$id]);
+    $m = $stmt->fetch();
+    if (!$m || (int) $m['borrada'] === 1 || $m['ruta'] === '') {
+        responder_error(404, 'El medio no existe.', 'sin-fila');
+    }
+
+    $ruta = carpeta_medios() . '/' . $m['ruta'];
+    $real = realpath($ruta);
+    // El mismo cinturón que servir_medio: la ruta guardada nunca debe
+    // salirse de la carpeta de medios.
+    if ($real === false || strpos($real, carpeta_medios()) !== 0 || !is_file($real)) {
+        // Con su propio código: al robot le importa distinguir «no hay
+        // fila» de «la fila está pero el fichero no», que es una foto
+        // perdida en el servidor y hay que decirlo bien alto.
+        responder_error(404, 'La base de datos habla de este fichero pero no está en el disco.', 'sin-fichero');
+    }
+
+    header('Content-Type: ' . $m['mime']);
+    header('Content-Length: ' . filesize($real));
+    header('X-Content-Type-Options: nosniff');
+    header('Cache-Control: no-store');
+    readfile($real);
+    exit;
+}
+
+function volcar_copia(): void
+{
+    exigir_clave_copia();
 
     $pdo = bd();
     $motor = (string) $pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
@@ -1349,7 +1402,33 @@ function volcar_copia(): void
         ? $pdo->query("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")->fetchAll(PDO::FETCH_COLUMN)
         : $pdo->query('SHOW TABLES')->fetchAll(PDO::FETCH_COLUMN);
 
-    $volcado = ['generado' => ahora_iso(), 'motor' => $motor, 'tablas' => []];
+    // La carpeta real y cuántos ficheros hay en ella: el robot coteja
+    // estas cuentas con lo que baja, y si un día no cuadran, el volcado
+    // mismo dice dónde mirar. El recuento baja a las subcarpetas porque
+    // las rutas de los medios llevan año y mes (2026/08/…); -1 significa
+    // que no se pudo contar, que no es lo mismo que cero.
+    $carpeta = carpeta_medios();
+    try {
+        $enDisco = 0;
+        $arbol = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($carpeta, FilesystemIterator::SKIP_DOTS)
+        );
+        foreach ($arbol as $nodo) {
+            if ($nodo->isFile()) {
+                $enDisco++;
+            }
+        }
+    } catch (Throwable $e) {
+        $enDisco = -1;
+    }
+
+    $volcado = [
+        'generado' => ahora_iso(),
+        'motor' => $motor,
+        'carpeta_medios' => $carpeta,
+        'ficheros_en_disco' => $enDisco,
+        'tablas' => [],
+    ];
     foreach ($tablas as $t) {
         // El nombre viene de la propia base, no de fuera; aun así, comillas.
         $envuelto = $motor === 'sqlite' ? '"' . $t . '"' : '`' . $t . '`';

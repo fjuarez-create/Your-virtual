@@ -219,6 +219,67 @@ jobs:
           echo "Volcado recibido (motor $(jq -r .motor copia/base-de-datos.json), generado $(jq -r .generado copia/base-de-datos.json)):"
           jq -r '.tablas | to_entries[] | "  \(.key): \(.value | length) filas"' copia/base-de-datos.json
 
+      # Las fotos y los audios se piden UNO A UNO por la misma puerta,
+      # con la llave todavía puesta. No se bajan por FTP a propósito: la
+      # carpeta de medios del servidor puede vivir fuera de la carpeta
+      # del dominio (en Plesk la configuración «uploads» admite una ruta
+      # absoluta) y el FTP no llega a ella; el PHP sí, porque es quien
+      # la usa a diario. La noche del estreno el espejo FTP bajó 2
+      # ficheros de 98 por esto exactamente.
+      #
+      # Un fichero que falle no tumba el paso: se apunta, se sigue con
+      # los demás, y al final del todo el robot se pone en rojo si faltó
+      # alguno. Una copia con 97 de 98 fotos vale más que ninguna, pero
+      # jamás se vende como completa.
+      - name: Bajar las fotos y los audios
+        run: |
+          set -eu
+          TOKEN="$(tr -d '\n' < "$RUNNER_TEMP/copia.clave")"
+          mkdir -p copia/fotos
+          TOTAL=0
+          MAL=0
+          LISTA_MAL=""
+          while IFS="$(printf '\t')" read -r id ruta tam; do
+            [ -n "$id" ] || continue
+            case "$ruta" in
+              /*|*..*)
+                echo "Ruta sospechosa en la base; se apunta y no se toca: $ruta"
+                MAL=$((MAL + 1)); LISTA_MAL="$LISTA_MAL $ruta"
+                continue
+                ;;
+            esac
+            destino="copia/fotos/$ruta"
+            mkdir -p "$(dirname "$destino")"
+            if curl -fsS --retry 3 --retry-delay 4 --max-time 120 \
+                 -H "X-Clave-Copia: $TOKEN" \
+                 -o "$destino.parte" "$DOMINIO/api/copia/fichero?id=$id"; then
+              BAJADO=$(wc -c < "$destino.parte")
+              case "$tam" in ''|null|0) tamConocido=0 ;; *) tamConocido=1 ;; esac
+              if [ "$tamConocido" = 1 ] && [ "$BAJADO" != "$tam" ]; then
+                echo "MAL  $ruta: la base dice $tam bytes y han llegado $BAJADO."
+                rm -f "$destino.parte"
+                MAL=$((MAL + 1)); LISTA_MAL="$LISTA_MAL $ruta"
+              else
+                mv "$destino.parte" "$destino"
+                TOTAL=$((TOTAL + 1))
+              fi
+            else
+              echo "MAL  $ruta: el servidor no lo ha entregado."
+              rm -f "$destino.parte"
+              MAL=$((MAL + 1)); LISTA_MAL="$LISTA_MAL $ruta"
+            fi
+          done < <(jq -r '(.tablas.medios // [])[]
+              | select(((.ruta // "") != "") and ((.borrada // 0 | tostring) != "1"))
+              | [.id, .ruta, (.tam // 0 | tostring)] | @tsv' copia/base-de-datos.json)
+          echo "Bajados $TOTAL ficheros; con problema: $MAL."
+          {
+            echo "COPIA_BAJADAS=$TOTAL"
+            echo "COPIA_MAL=$MAL"
+          } >> "$GITHUB_ENV"
+          if [ "$MAL" -gt 0 ]; then
+            echo "::warning::$MAL fichero(s) no han podido bajarse:$LISTA_MAL"
+          fi
+
       # Corre AUNQUE algo haya fallado antes: una llave olvidada en el
       # servidor es una puerta que se queda abierta.
       - name: Retirar la llave del servidor
@@ -242,27 +303,10 @@ jobs:
             echo "::warning::No se ha podido retirar api/datos/copia.clave del servidor. Sin ella la puerta no se abre igualmente, pero conviene borrarla a mano."
           fi
 
-      - name: Bajar las fotos y los audios
-        env:
-          FTP_SERVER: ${{ secrets.REPASOS_FTP_SERVER }}
-          FTP_USERNAME: ${{ secrets.REPASOS_FTP_USERNAME }}
-          FTP_PASSWORD: ${{ secrets.REPASOS_FTP_PASSWORD }}
-        run: |
-          set -eu
-          . "$RUNNER_TEMP/ftp.sh"
-          cargar_camino
-          mkdir -p copia/fotos
-          if run_lftp "$OPTS" "cd \"$DIR\"; cls -1 api/uploads" >/dev/null 2>&1; then
-            run_lftp "$OPTS" "cd \"$DIR\"; mirror --ignore-time --no-perms api/uploads \"$PWD/copia/fotos\""
-          else
-            echo "En el servidor no hay carpeta api/uploads; no hay ficheros que bajar."
-          fi
-          echo "Ficheros bajados: $(find copia/fotos -type f | wc -l)"
-
-      # La base de datos sabe cuántos ficheros vivos debería haber. Si lo
-      # bajado no cuadra, se avisa: puede que la carpeta de medios del
-      # servidor no sea api/uploads (la configuración «uploads» admite
-      # una ruta absoluta) y entonces este robot habría que ajustarlo.
+      # La base de datos sabe cuántos ficheros vivos debería haber, y el
+      # volcado trae además cuántos ve el servidor en su carpeta. Aquí se
+      # ponen las tres cuentas en fila; si no cuadran, el último paso del
+      # robot se encarga de teñirlo de rojo.
       - name: Cotejar la base de datos con lo bajado
         run: |
           set -eu
@@ -270,10 +314,10 @@ jobs:
           BAJADAS=$(find copia/fotos -type f | wc -l)
           TABLAS=$(jq '.tablas | length' copia/base-de-datos.json)
           TAREAS=$(jq '(.tablas.tareas // []) | length' copia/base-de-datos.json)
+          CARPETA=$(jq -r '.carpeta_medios // "?"' copia/base-de-datos.json)
+          EN_DISCO=$(jq -r '.ficheros_en_disco // -1' copia/base-de-datos.json)
           echo "La base habla de $ESPERADAS ficheros vivos; se han bajado $BAJADAS."
-          if [ "$BAJADAS" -lt "$ESPERADAS" ]; then
-            echo "::warning::La base de datos habla de $ESPERADAS ficheros pero solo se han bajado $BAJADAS. Si la carpeta de medios del servidor no es api/uploads, hay que ajustar este robot."
-          fi
+          echo "El servidor ve $EN_DISCO ficheros en su carpeta de medios ($CARPETA)."
           {
             echo "ESPERADAS=$ESPERADAS"
             echo "BAJADAS=$BAJADAS"
@@ -310,8 +354,16 @@ jobs:
       - name: Contarlo en el resumen
         run: |
           {
-            echo "## Copia hecha y guardada"
-            echo ""
+            if [ "${COPIA_MAL:-0}" -gt 0 ] || [ "${BAJADAS:-0}" -lt "${ESPERADAS:-0}" ]; then
+              echo "## Copia guardada, pero INCOMPLETA"
+              echo ""
+              echo "Faltan ficheros: la base habla de $ESPERADAS y se han bajado $BAJADAS."
+              echo "El detalle está en el paso «Bajar las fotos y los audios» de esta ejecución."
+              echo ""
+            else
+              echo "## Copia hecha y guardada"
+              echo ""
+            fi
             echo "- Base de datos: **$TABLAS tablas**, con $TAREAS tareas y $ESPERADAS ficheros vivos apuntados."
             echo "- Fotos y audios bajados del servidor: **$BAJADAS ficheros**."
             echo "- Todo cifrado en \`copia-repasos-$FECHA.tar.gz.enc\`, guardado 90 días en el apartado **Artifacts** de esta página."
@@ -325,3 +377,16 @@ jobs:
             echo ""
             echo "La contraseña que pide es la del secreto \`REPASOS_COPIA_CLAVE\` (la frase del bloc de notas)."
           } >> "$GITHUB_STEP_SUMMARY"
+
+      # Al final del todo, para que la copia —aunque incompleta— ya esté
+      # guardada arriba: si faltó un solo fichero, la ejecución acaba en
+      # rojo. Una copia a la que le falta una foto y sale en verde es la
+      # mentira más cara que puede contar este robot.
+      - name: Plantarse si falta algún fichero
+        run: |
+          set -eu
+          if [ "${COPIA_MAL:-0}" -gt 0 ] || [ "${BAJADAS:-0}" -lt "${ESPERADAS:-0}" ]; then
+            echo "::error::La copia se ha guardado pero está incompleta: la base habla de ${ESPERADAS:-?} ficheros y se han bajado ${BAJADAS:-?} (${COPIA_MAL:-0} con problema). El detalle está en el paso «Bajar las fotos y los audios»."
+            exit 1
+          fi
+          echo "La copia está completa: los $BAJADAS ficheros que la base esperaba."
