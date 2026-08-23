@@ -16,23 +16,13 @@
    saludo, que al jefe de obra no le baila con los días. */
 import { h, icon, avatar, toast, fechaCorta, hora } from '../ui.js';
 import * as store from '../store.js';
-import { PROMOCIONES, unidad, estado, puedeVerificar } from '../catalog.js';
+import { PROMOCIONES, unidad, estado } from '../catalog.js';
 import { avisoLocal, barraSync, bannerMordido as banner, cabecera, tarjetaVilla, cuandoVilla } from '../piezas.js';
 import { ir, conFiltros, refrescar } from '../app.js';
 
-/**
- * El saludo, con las frases literales del diseño: lunes y viernes
- * tienen la suya y el resto de la semana comparte una. El jefe de obra
- * ve siempre la misma — a él la frase no le informa de nada y una que
- * cambia sola acaba leyéndose como ruido.
- */
-function saludo(usuario) {
-  if (!puedeVerificar(usuario)) return 'A por los repasos pendientes! 💪🏼';
-  const dia = new Date().getDay();
-  if (dia === 1) return 'Qué bien sienta un lunes de repasos. 🪖';
-  if (dia === 5) return 'Magnífico viernes para pillar repasos. 🔪';
-  return 'Hoy vamos a cazar cada repaso! 👋🏻';
-}
+/* El saludo de cazar repasos se retiró en agosto de 2026, cuando la
+   portada dejó de ser solo de repasos: desde entonces el que manda es
+   el nombre del proyecto, decidido por Fran sobre la maqueta. */
 
 /* El banner con el mordisco se mudó a piezas.js: lo comparte con el
    aviso de recorrido a medias de la ficha de la vivienda. Aquí llega
@@ -160,7 +150,7 @@ export async function render() {
       /* La cabecera del diseño: la cara y las tres bolas. */
       cabecera({ seccion: 'inicio' }),
 
-      h('h1.d-saludo', null, saludo(yo)),
+      h('h1.d-saludo', null, p.nombre),
       avisoLocal() || barraSync(),
 
       h('p.d-epigrafe', null, 'Pendiente de revisión por la DF'),
