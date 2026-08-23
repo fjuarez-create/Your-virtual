@@ -18,7 +18,7 @@
 declare(strict_types=1);
 
 /** Se sube al añadir campos o tablas. */
-const ESQUEMA_VERSION = 8;
+const ESQUEMA_VERSION = 9;
 
 /**
  * Campos que tienen que existir, por tabla, con el tipo que usa MySQL.
@@ -186,6 +186,15 @@ function esquema_arreglar_datos(PDO $pdo): array
     // ya habían rebotado se quedarían contadas como pendientes: no
     // saldrían en el contador de rechazadas ni en su filtro, que es justo
     // para lo que se hizo el estado.
+    // La lista de estancias de la obra vive en meta con la clave «zonas»,
+    // en JSON, y no cabe en un VARCHAR(255): en MySQL se ensancha la
+    // columna a TEXT. En SQLite ya es TEXT de nacimiento. Repetirlo no
+    // estropea nada, que es la regla de esta función.
+    if (motor() !== 'sqlite') {
+        $pdo->exec('ALTER TABLE meta MODIFY valor TEXT NOT NULL');
+        $hechos[] = 'meta.valor pasa a TEXT';
+    }
+
     if (in_array('rechazada', esquema_columnas($pdo, 'tareas'), true)) {
         $sent = $pdo->prepare(
             "UPDATE tareas SET estado = 'rechazada' WHERE estado = 'pendiente' AND rechazada = 1"

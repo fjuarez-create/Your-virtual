@@ -266,6 +266,27 @@ function editarUsuario(u) {
           h('div.row-title', null, u.rol === 'admin' ? 'Quitar permisos de administrador' : 'Hacer administrador'),
         ),
       ),
+      // El permiso de verificar, persona a persona. En esta obra el DEO
+      // no verifica, pero en otra puede que sí: por eso no va atado a la
+      // empresa, se decide aquí. La empresa solo pone la sugerencia al
+      // dar de alta.
+      h('button.row', {
+        onclick: async () => {
+          await api.editarUsuario(u.id, { verifica: !u.verifica });
+          cerrar(true);
+          toast(u.verifica ? 'Ya no puede verificar' : 'Ya puede verificar');
+          refrescar();
+        },
+      },
+        h('div.row-lead', null, icon('check', 18)),
+        h('div.grow', null,
+          h('div.row-title', null, u.verifica ? 'Quitarle el permiso de verificar' : 'Dejarle verificar'),
+          h('div.row-sub', { style: { whiteSpace: 'normal' } },
+            u.verifica
+              ? 'Pasará a mover tareas solo entre pendiente y resuelta'
+              : 'Podrá dar tareas por verificadas y rechazarlas'),
+        ),
+      ),
       h('button.row', {
         class: u.activo ? 'danger' : '',
         onclick: async () => {

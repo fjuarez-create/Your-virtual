@@ -605,7 +605,7 @@ export function caraDeGremio(o, tam = 40) {
    que no existe. Lo que los separa es el número, que va al lado. Los
    baños sí llevan iconos distintos porque sí son cosas distintas: un
    aseo no tiene ducha. */
-const ICONO_DE_ESTANCIA = {
+export const ICONO_DE_ESTANCIA = {
   Aseo: 'inodoro',
   Cocina: 'cazuela',
   Entrada: 'puerta',

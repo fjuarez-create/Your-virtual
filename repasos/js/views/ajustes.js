@@ -101,6 +101,9 @@ export async function render() {
         admin && api.HAY_SERVIDOR && !u.local
           ? item('users', 'Usuarios', 'Alta y baja del equipo', () => ir('#/usuarios'))
           : null,
+        admin && api.HAY_SERVIDOR && !u.local
+          ? item('casa', 'Estancias de la obra', 'Añadir, renombrar o quitar', () => ir('#/estancias'))
+          : null,
       ),
 
       /* El grupo sale siempre. Antes colgaba entero de que hubiera

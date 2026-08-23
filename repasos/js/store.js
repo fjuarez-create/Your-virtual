@@ -471,6 +471,17 @@ export async function borrarTarea(id) {
   return actualizarTarea(id, { borrada: true });
 }
 
+/* ─── Las estancias de la obra ────────────────────────────────────
+   La copia local de la lista que edita el administrador: con ella la
+   app abre con las estancias buenas aunque no haya cobertura. La de
+   verdad vive en el servidor y se refresca en cada arranque. */
+export const zonasLocales = async () => (await db.meta.get('zonas')) || null;
+
+export async function guardarZonasLocales(plantas) {
+  if (plantas) await db.meta.set('zonas', plantas);
+  else await db.meta.del('zonas');
+}
+
 /* ─── El borrador de la tarea nueva ───────────────────────────────
    Las fotos elegidas se apuntan aquí EN CUANTO llegan, en bytes: si
    iOS mata la app mientras se escribe la descripción, al volver a la

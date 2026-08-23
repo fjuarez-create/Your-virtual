@@ -159,6 +159,16 @@ function despachar(string $metodo, array $p): void
         cambios();
     }
 
+    if ($r0 === 'config' && ($p[1] ?? '') === 'zonas') {
+        if ($metodo === 'GET') {
+            leer_zonas();
+        }
+        if ($metodo === 'PUT') {
+            guardar_zonas();
+        }
+        responder_error(405, 'Método no permitido.');
+    }
+
     if ($r0 === 'copia' && $metodo === 'GET') {
         if (($p[1] ?? '') === 'fichero') {
             servir_copia_fichero((string) ($_GET['id'] ?? ''));
@@ -1337,6 +1347,85 @@ function subir_medio(): void
  * ese fichero en su sitio, 403 seco: el resto del año esta puerta no
  * existe.
  */
+/* ─── Las estancias de la obra ──────────────────────────────────
+   La lista que antes vivía escrita en el código del móvil. Se guarda en
+   meta con la clave «zonas» como JSON: [{ nombre, zonas: [...] }, …].
+   Sin fila guardada, la app usa su lista de fábrica; por eso «borrar»
+   es una manera válida de volver a ella. */
+
+/** La lista guardada, o null si se está con la de fábrica. */
+function zonas_guardadas(): ?array
+{
+    $crudo = meta_valor('zonas');
+    if ($crudo === null) {
+        return null;
+    }
+    $plantas = json_decode($crudo, true);
+    return is_array($plantas) ? $plantas : null;
+}
+
+function leer_zonas(): void
+{
+    exigir_sesion();
+    responder(['plantas' => zonas_guardadas()]);
+}
+
+function guardar_zonas(): void
+{
+    exigir_admin();
+    $d = cuerpo();
+    if (!array_key_exists('plantas', $d)) {
+        responder_error(400, 'Falta la lista de plantas.', 'formato');
+    }
+
+    // Null es «volver a la lista de fábrica»: se borra lo guardado.
+    if ($d['plantas'] === null) {
+        meta_poner('zonas', null);
+        responder(['ok' => true, 'plantas' => null]);
+    }
+
+    if (!is_array($d['plantas']) || count($d['plantas']) === 0 || count($d['plantas']) > 12) {
+        responder_error(400, 'La lista de plantas no tiene buena pinta.', 'formato');
+    }
+
+    $limpias = [];
+    $vistas = [];
+    $totales = 0;
+    foreach ($d['plantas'] as $planta) {
+        if (!is_array($planta)) {
+            responder_error(400, 'Hay una planta que no tiene buena pinta.', 'formato');
+        }
+        $nombre = trim((string) ($planta['nombre'] ?? ''));
+        if ($nombre === '' || mb_strlen($nombre) > 60) {
+            responder_error(400, 'Cada planta necesita un nombre de hasta 60 letras.', 'nombre');
+        }
+        $zonas = [];
+        foreach ((array) ($planta['zonas'] ?? []) as $zona) {
+            $zona = trim((string) $zona);
+            if ($zona === '' || mb_strlen($zona) > 40) {
+                responder_error(400, 'Cada estancia necesita un nombre de hasta 40 letras.', 'zona');
+            }
+            $llana = mb_strtolower($zona);
+            if (isset($vistas[$llana])) {
+                responder_error(400, "La estancia «{$zona}» está repetida.", 'repetida');
+            }
+            $vistas[$llana] = true;
+            $zonas[] = $zona;
+            $totales++;
+        }
+        $limpias[] = ['nombre' => $nombre, 'zonas' => $zonas];
+    }
+    if ($totales === 0) {
+        responder_error(400, 'Tiene que quedar al menos una estancia.', 'vacio');
+    }
+    if ($totales > 80) {
+        responder_error(400, 'Ochenta estancias son demasiadas para un selector.', 'demasiadas');
+    }
+
+    meta_poner('zonas', json_encode($limpias, JSON_UNESCAPED_UNICODE));
+    responder(['ok' => true, 'plantas' => $limpias]);
+}
+
 /**
  * La cerradura de la puerta de la copia: solo abre si quien llama trae
  * la misma llave que haya en datos/copia.clave. Ese fichero normalmente

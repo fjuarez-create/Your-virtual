@@ -10,6 +10,7 @@ import * as store from './store.js';
 import * as api from './api.js';
 import { borrarBase } from './db.js';
 import { hayFotosSinMandar } from './pendientes.js';
+import { fijarPlantas } from './catalog.js';
 
 /* ─── Rutas ───────────────────────────────────────────────────── */
 const RUTAS = [
@@ -33,6 +34,7 @@ const RUTAS = [
   { patron: /^\/acta\/(\d{4}-\d{2}-\d{2})$/,   vista: () => import('./views/acta.js'),         params: (m) => ({ fecha: m[1] }) },
   { patron: /^\/ajustes$/,                    vista: () => import('./views/ajustes.js'),      params: () => ({}) },
   { patron: /^\/usuarios$/,                   vista: () => import('./views/usuarios.js'),     params: () => ({}) },
+  { patron: /^\/estancias$/,                  vista: () => import('./views/estancias.js'),    params: () => ({}) },
 ];
 
 /**
@@ -347,6 +349,17 @@ async function arrancar() {
   // pantalla saldría con iniciales y las caras aparecerían al
   // navegar, que se lee como un fallo.
   await store.cargarPersonas();
+  // Las estancias de la obra: primero la copia del móvil —la app abre
+  // igual sin cobertura— y por detrás las del servidor, por si el
+  // administrador las cambió desde otro dispositivo. Sin nada guardado
+  // se queda la lista de fábrica.
+  try { fijarPlantas(await store.zonasLocales()); } catch { /* con la de fábrica vale */ }
+  if (api.HAY_SERVIDOR && navigator.onLine) {
+    api.leerZonas().then(async (r) => {
+      fijarPlantas(r.plantas);
+      await store.guardarZonasLocales(r.plantas);
+    }).catch(() => { /* sin servidor se sigue con lo local */ });
+  }
   // Que iOS trate nuestro almacén como intocable: sin esto, con el
   // disco justo puede purgar IndexedDB y llevarse fotos sin subir.
   try { navigator.storage?.persist?.().catch(() => {}); } catch { /* no lo soporta */ }

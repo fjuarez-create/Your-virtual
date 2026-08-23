@@ -66,6 +66,12 @@ export const editarUsuario = (id, datos) =>
 export const eliminarUsuario = (id) =>
   pedir('usuarios/' + encodeURIComponent(id), { metodo: 'DELETE' });
 
+/* ─── Las estancias de la obra ────────────────────────────────── */
+export const leerZonas = () => pedir('config/zonas');
+/** Guarda la lista entera; con null se vuelve a la de fábrica. */
+export const guardarZonas = (plantas) =>
+  pedir('config/zonas', { metodo: 'PUT', json: { plantas } });
+
 /* ─── Foto de perfil ──────────────────────────────────────────── */
 /** La versión va en la dirección: al cambiar la foto cambia la URL y
     el navegador deja de servir la anterior desde su caché. */

@@ -219,3 +219,27 @@ function carpeta_medios(): string
     }
     return realpath($ruta) ?: $ruta;
 }
+
+/* ─── La tabla meta como almacén de ajustes ─────────────────────
+   Pares clave→valor sueltos: la versión del esquema, la huella de la
+   cuenta de revisión… y los ajustes de la obra que se editan desde la
+   app, como la lista de estancias. Para media docena de claves no hace
+   falta una tabla cada vez. */
+
+/** El valor guardado bajo una clave, o null si no hay. */
+function meta_valor(string $clave): ?string
+{
+    $stmt = bd()->prepare('SELECT valor FROM meta WHERE clave = ?');
+    $stmt->execute([$clave]);
+    $valor = $stmt->fetchColumn();
+    return $valor === false ? null : (string) $valor;
+}
+
+/** Guarda un valor bajo una clave; con null, la borra. */
+function meta_poner(string $clave, ?string $valor): void
+{
+    bd()->prepare('DELETE FROM meta WHERE clave = ?')->execute([$clave]);
+    if ($valor !== null) {
+        bd()->prepare('INSERT INTO meta (clave, valor) VALUES (?, ?)')->execute([$clave, $valor]);
+    }
+}

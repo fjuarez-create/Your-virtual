@@ -306,14 +306,12 @@ export function estadosPermitidos(usuario) {
    estancia que ya no esté en esta lista sigue enseñándola bien, pero
    deja de poder filtrarse por ella. Por eso el selector añade siempre
    la estancia que traiga la tarea aunque no esté aquí. */
-export const PLANTAS = [
+export const PLANTAS_DE_FABRICA = [
   {
-    id: 'baja',
     nombre: 'Planta baja',
     zonas: ['Aseo', 'Cocina', 'Entrada', 'Escalera', 'Lavadero', 'Salón'],
   },
   {
-    id: 'alta',
     nombre: 'Planta alta',
     zonas: [
       'Baño principal', 'Baño suite', 'Dormitorio 1', 'Dormitorio 2',
@@ -321,16 +319,44 @@ export const PLANTAS = [
     ],
   },
   {
-    id: 'otros',
     nombre: 'Otros',
     zonas: ['Acceso exterior', 'Cubierta', 'Jardín', 'Sótano'],
   },
 ];
 
+/* Desde que el administrador puede editarlas en Ajustes, estas dos son
+   variables y no constantes: la lista de fábrica es solo el punto de
+   partida y la red de seguridad. Los módulos ESM comparten la variable
+   viva —no una copia—, así que llamar a fijarPlantas() cambia lo que
+   ven todos los que importan PLANTAS o ZONAS, sin tocarlos. */
+export let PLANTAS = PLANTAS_DE_FABRICA;
+
 /* La lista llana, para lo que solo necesita saber si una estancia vale:
    la IA, que la recibe cerrada para no inventarse un «baño de arriba»,
    y los filtros. */
-export const ZONAS = PLANTAS.flatMap((p) => p.zonas);
+export let ZONAS = PLANTAS.flatMap((p) => p.zonas);
+
+/**
+ * Pone la lista de estancias que se le dé, o la de fábrica con null.
+ * Lo que llegue se sanea en vez de creerse: esta lista viene del
+ * servidor o del almacén del móvil, y una fila rota aquí dejaría sin
+ * selector de estancias a toda la app.
+ */
+export function fijarPlantas(plantas) {
+  const limpias = Array.isArray(plantas)
+    ? plantas
+        .map((p) => ({
+          nombre: String(p?.nombre || '').trim(),
+          zonas: (Array.isArray(p?.zonas) ? p.zonas : [])
+            .map((z) => String(z || '').trim())
+            .filter(Boolean),
+        }))
+        .filter((p) => p.nombre)
+    : null;
+  const valen = limpias && limpias.some((p) => p.zonas.length);
+  PLANTAS = valen ? limpias : PLANTAS_DE_FABRICA;
+  ZONAS = PLANTAS.flatMap((p) => p.zonas);
+}
 
 /** Las tareas de antes de que existiera el campo no tienen estancia. */
 export const ZONA_VACIA = '';

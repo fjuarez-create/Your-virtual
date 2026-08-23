@@ -54,6 +54,7 @@ const CODIGO = [
   'js/views/acta.js',
   'js/views/ajustes.js',
   'js/views/usuarios.js',
+  'js/views/estancias.js',
 ];
 
 /* LO DEMÁS: tipografías, iconos y las caras de los gremios. Que falte
