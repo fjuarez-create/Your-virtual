@@ -131,6 +131,16 @@ platform :ios do
       lineas << "No se ha podido repasar la ficha: #{e.message}"
     end
 
+    # Si Apple ha dicho algo —un rechazo, una pega, una pregunta— está
+    # en el Resolution Center de su web. Leerlo sí se puede por aquí;
+    # contestar no, eso sigue siendo a mano.
+    begin
+      lineas.concat(lo_que_dice_apple(app))
+    rescue StandardError => e
+      lineas << ""
+      lineas << "No se ha podido mirar si Apple ha dicho algo: #{e.message}"
+    end
+
     texto = lineas.join("\n")
     texto.each_line { |l| UI.message(l.chomp) }
     if ENV["GITHUB_STEP_SUMMARY"]
@@ -182,27 +192,34 @@ platform :ios do
 
     UI.message("Enviando a revisión la versión #{version.version_string} con la compilación #{build.version}…")
 
-    # Apple cambió hace poco la manera de enviar: antes se creaba un
-    # «envío de versión» y ahora un «envío de revisión» que puede llevar
-    # varias cosas dentro. Se intenta el nuevo y, si esta librería aún no
-    # lo trae, el de antes.
-    hecho = false
-    begin
-      envio = Spaceship::ConnectAPI::ReviewSubmission.create(
-        app_id: app.id,
-        platform: Spaceship::ConnectAPI::Platform::IOS
-      )
-      envio.add_app_store_version_to_review_items(app_store_version_id: version.id)
-      envio.submit_for_review
-      hecho = true
-    rescue StandardError => e
-      UI.important("Por la vía nueva no ha podido ser (#{e.message}); se prueba la de antes.")
+    # Apple retiró la manera antigua de enviar —un «envío de versión»— y
+    # ahora se hace con un «envío de revisión», que es una carpeta que
+    # puede llevar varias cosas dentro y se manda entera.
+    plataforma = Spaceship::ConnectAPI::Platform::IOS
+
+    # Si ya hubiera una carpeta abierta se reutiliza. Crear otra sin
+    # mirar deja dos envíos compitiendo por la misma versión.
+    envio = begin
+      app.get_ready_review_submission(platform: plataforma, includes: "items")
+    rescue StandardError
+      nil
     end
 
-    unless hecho
-      version.create_app_store_version_submission
-      hecho = true
+    if envio
+      UI.message("Ya había un envío empezado; se aprovecha ese.")
+    else
+      envio = app.create_review_submission(platform: plataforma)
     end
+
+    # Meter dos veces la misma versión da error, así que se mira antes.
+    ya_dentro = begin
+      (envio.items || []).any? { |i| i.app_store_version && i.app_store_version.id == version.id }
+    rescue StandardError
+      false
+    end
+    envio.add_app_store_version_to_review_items(app_store_version_id: version.id) unless ya_dentro
+
+    envio.submit_for_review
 
     UI.success("Enviada. La versión #{version.version_string} está en la cola de revisión de Apple.")
     if ENV["GITHUB_STEP_SUMMARY"]
@@ -570,6 +587,62 @@ def repaso_de_la_ficha(app, version)
     dudas.each { |t| lineas << "- #{t}" }
     lineas << ""
   end
+  lineas
+end
+
+# Lo que Apple haya escrito en el Resolution Center: los rechazos y sus
+# motivos. Se puede LEER por la API, que es lo que importa para saber a
+# qué atenerse; contestar sigue habiendo que hacerlo desde su web.
+def lo_que_dice_apple(app)
+  plataforma = Spaceship::ConnectAPI::Platform::IOS
+
+  envio = nil
+  %i[get_in_progress_review_submission get_ready_review_submission].each do |via|
+    next if envio
+    envio = begin
+      app.send(via, platform: plataforma)
+    rescue StandardError
+      nil
+    end
+  end
+  return [] if envio.nil?
+
+  hilos = begin
+    envio.fetch_resolution_center_threads
+  rescue StandardError => e
+    return ["", "### Lo que dice Apple", "", "No se han podido leer los mensajes: #{e.message}"]
+  end
+  return [] if hilos.nil? || hilos.empty?
+
+  lineas = ["", "### Lo que dice Apple", ""]
+  hilos.first(3).each do |hilo|
+    begin
+      motivos = hilo.fetch_rejection_reasons
+      (motivos || []).first(5).each do |m|
+        titulo = (m.respond_to?(:title) && m.title) || (m.respond_to?(:reason) && m.reason)
+        lineas << "- **#{titulo}**" if lleno?(titulo)
+      end
+    rescue StandardError
+      # Que no se puedan leer los motivos no impide leer los mensajes,
+      # que es donde Apple suele explicarse de verdad.
+      nil
+    end
+
+    begin
+      (hilo.fetch_messages || []).last(3).each do |m|
+        texto = (m.respond_to?(:message_body) && m.message_body) || (m.respond_to?(:body) && m.body)
+        next unless lleno?(texto)
+        # Viene en inglés y puede ser largo; se recorta para el resumen.
+        recorte = texto.to_s.strip.gsub(/\s+/, " ")
+        recorte = "#{recorte[0, 400]}…" if recorte.length > 400
+        lineas << "  > #{recorte}"
+      end
+    rescue StandardError => e
+      lineas << "  (no se han podido leer los mensajes de este hilo: #{e.message})"
+    end
+  end
+  lineas << ""
+  lineas << "Contestar a esto hay que hacerlo desde la web de Apple; por aquí solo se lee."
   lineas
 end
 
