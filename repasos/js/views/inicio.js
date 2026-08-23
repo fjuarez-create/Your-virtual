@@ -16,8 +16,10 @@
    saludo, que al jefe de obra no le baila con los días. */
 import { h, icon, avatar, toast, fechaCorta, hora } from '../ui.js';
 import * as store from '../store.js';
+import * as api from '../api.js';
 import { PROMOCIONES, unidad, estado } from '../catalog.js';
 import { avisoLocal, barraSync, bannerMordido as banner, cabecera, tarjetaVilla, cuandoVilla } from '../piezas.js';
+import { tarjetaReunion } from './obra.js';
 import { ir, conFiltros, refrescar } from '../app.js';
 
 /* El saludo de cazar repasos se retiró en agosto de 2026, cuando la
@@ -90,6 +92,13 @@ export async function render() {
   const d = await store.datosHome(p.id);
   const c = d.conteo;
 
+  /* La obra en la portada: la última reunión y sus tareas pendientes.
+     Se pregunta al servidor —la obra va siempre en línea— y, si no hay
+     cobertura o todavía no hubo ninguna reunión, la portada sale sin
+     este bloque: lo de repasos vive en el almacén local y no espera. */
+  let obra = null;
+  try { obra = await api.obraEstado(p.id); } catch { obra = null; }
+
   const pct = c.total ? Math.round((100 * c.hechas) / c.total) : 0;
 
   /* ─── La actividad reciente ─── */
@@ -152,6 +161,20 @@ export async function render() {
 
       h('h1.d-saludo', null, p.nombre),
       avisoLocal() || barraSync(),
+
+      // Desplegado a mano: el pintor no aplana listas anidadas.
+      ...(obra && obra.ultima ? [
+        h('p.d-epigrafe', null, 'Última reunión de obra'),
+        tarjetaReunion(obra.ultima, { esHoy: obra.ultima.fecha === obra.hoy }),
+      ] : []),
+      ...(obra && obra.pendientes ? [
+        banner({
+          clase: 'negro',
+          rotulo: 'Tareas de obra pendientes',
+          cifra: obra.pendientes,
+          adonde: '#/obra',
+        }),
+      ] : []),
 
       h('p.d-epigrafe', null, 'Pendiente de revisión por la DF'),
       banner({

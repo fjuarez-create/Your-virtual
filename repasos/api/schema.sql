@@ -160,3 +160,48 @@ CREATE TABLE IF NOT EXISTS lecturas (
   KEY ix_lecturas_mensaje (mensaje_id),
   KEY ix_lecturas_actualizado (actualizado)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ═══ La obra: reuniones y encargos ═══════════════════════════════
+-- Una reunión de obra al día, con su acta. Los ENCARGOS son las tareas
+-- que nacen de una reunión: en pantalla se llaman «tareas», pero por
+-- dentro llevan nombre propio para no chocar jamás con la tabla
+-- `tareas`, que guarda repasos (ver CLAUDE.md, el diccionario).
+CREATE TABLE IF NOT EXISTS reuniones (
+  id                CHAR(36)     NOT NULL,
+  promo_id          VARCHAR(40)  NOT NULL,
+  fecha             CHAR(10)     NOT NULL,
+  empezada          CHAR(24)     NOT NULL,
+  terminada         CHAR(24)     DEFAULT NULL,
+  asistentes        TEXT         NOT NULL,
+  invitados         TEXT         NOT NULL,
+  borrada           TINYINT(1)   NOT NULL DEFAULT 0,
+  creado            CHAR(24)     NOT NULL,
+  actualizado       CHAR(24)     NOT NULL,
+  creado_por        CHAR(36)     DEFAULT NULL,
+  creado_por_nombre VARCHAR(120) NOT NULL DEFAULT '',
+  PRIMARY KEY (id),
+  UNIQUE KEY ix_reuniones_dia (promo_id, fecha)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS encargos (
+  id                 CHAR(36)     NOT NULL,
+  reunion_id         CHAR(36)     NOT NULL,
+  promo_id           VARCHAR(40)  NOT NULL,
+  texto              TEXT         NOT NULL,
+  general            TINYINT(1)   NOT NULL DEFAULT 1,
+  unidad_id          VARCHAR(60)  NOT NULL DEFAULT '',
+  responsable_id     CHAR(36)     DEFAULT NULL,
+  responsable_nombre VARCHAR(120) NOT NULL DEFAULT '',
+  fecha_limite       CHAR(10)     NOT NULL DEFAULT '',
+  estado             VARCHAR(12)  NOT NULL DEFAULT 'pendiente',
+  hecho_en           CHAR(24)     DEFAULT NULL,
+  hecho_por_nombre   VARCHAR(120) NOT NULL DEFAULT '',
+  borrada            TINYINT(1)   NOT NULL DEFAULT 0,
+  creado             CHAR(24)     NOT NULL,
+  actualizado        CHAR(24)     NOT NULL,
+  creado_por         CHAR(36)     DEFAULT NULL,
+  creado_por_nombre  VARCHAR(120) NOT NULL DEFAULT '',
+  PRIMARY KEY (id),
+  KEY ix_encargos_reunion (reunion_id),
+  KEY ix_encargos_estado (promo_id, estado)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

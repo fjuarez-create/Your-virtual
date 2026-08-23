@@ -136,7 +136,7 @@ export async function render({ promoId, desdeTab = false }) {
     clase: 'pantalla-diseno',
     contenido: [
       cabecera({ seccion: 'viviendas' }),
-      h('h1.d-saludo', null, 'Viviendas'),
+      h('h1.d-saludo', null, 'Repasos de viviendas'),
       avisoLocal() || barraSync(),
       h('div.d-fila-selector', null, conmutador, bolaFiltros),
       aplicados,

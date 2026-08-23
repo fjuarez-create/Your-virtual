@@ -35,6 +35,8 @@ const RUTAS = [
   { patron: /^\/ajustes$/,                    vista: () => import('./views/ajustes.js'),      params: () => ({}) },
   { patron: /^\/usuarios$/,                   vista: () => import('./views/usuarios.js'),     params: () => ({}) },
   { patron: /^\/estancias$/,                  vista: () => import('./views/estancias.js'),    params: () => ({}) },
+  { patron: /^\/obra$/,                       vista: () => import('./views/obra.js'),         params: () => ({}) },
+  { patron: /^\/obra\/r\/([^/]+)$/,           vista: () => import('./views/reunion.js'),      params: (m) => ({ reunionId: m[1] }) },
 ];
 
 /**

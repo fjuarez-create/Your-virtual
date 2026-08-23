@@ -1120,7 +1120,8 @@ export function cabecera({ seccion, volver, titulo = '', menu, derecha } = {}) {
       avatar(store.sesion(), { tam: CAB_BOLA, onclick: () => ir('#/ajustes') }),
       h('div.d-cab-menu', null,
         bola('inicio', 'brujula', 'Inicio', '#/'),
-        bola('viviendas', 'casa', 'Viviendas', '#/viviendas'),
+        bola('obra', 'grua', 'Reuniones de obra', '#/obra'),
+        bola('viviendas', 'casa', 'Repasos de viviendas', '#/viviendas'),
         bola('listas', 'periodico', 'Partes', '#/listas'),
       ),
     );

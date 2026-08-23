@@ -214,6 +214,36 @@ function despachar(string $metodo, array $p): void
         responder_error(404, 'Ruta del oído desconocida.');
     }
 
+    if ($r0 === 'obra') {
+        $r1 = $p[1] ?? '';
+        if ($r1 === 'estado' && $metodo === 'GET') {
+            obra_estado();
+        }
+        if ($r1 === 'reuniones') {
+            if ($metodo === 'GET' && !isset($p[2])) {
+                listar_reuniones();
+            }
+            if ($metodo === 'POST' && !isset($p[2])) {
+                empezar_reunion();
+            }
+            if ($metodo === 'GET' && isset($p[2])) {
+                ver_reunion($p[2]);
+            }
+            if ($metodo === 'PATCH' && isset($p[2])) {
+                editar_reunion($p[2]);
+            }
+        }
+        if ($r1 === 'encargos') {
+            if ($metodo === 'POST' && !isset($p[2])) {
+                crear_encargo();
+            }
+            if ($metodo === 'PATCH' && isset($p[2])) {
+                editar_encargo($p[2]);
+            }
+        }
+        responder_error(404, 'Ruta de obra desconocida.');
+    }
+
     responder_error(404, 'Ruta desconocida.');
 }
 
@@ -1771,5 +1801,475 @@ function medio_salida(array $f): array
         'tam' => (int) $f['tam'], 'ancho' => (int) $f['ancho'], 'alto' => (int) $f['alto'],
         'duracion' => (int) $f['duracion'], 'borrada' => (int) $f['borrada'] === 1,
         'creado' => $f['creado'], 'actualizado' => $f['actualizado'],
+    ];
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   La obra: reuniones y encargos
+   ═══════════════════════════════════════════════════════════════
+   Los ENCARGOS son las tareas que nacen de una reunión: en pantalla se
+   llaman «tareas», pero por dentro llevan nombre propio para no chocar
+   jamás con la tabla `tareas`, que guarda repasos (ver CLAUDE.md).
+
+   A diferencia de los repasos, esto va SIEMPRE en línea: sin outbox y
+   sin upsert de cliente. Una reunión se lleva estando presente, y quien
+   la lleva tiene cobertura o espera un momento; a cambio el servidor es
+   la única verdad, y el sello de las 23:59 no se esquiva atrasando el
+   reloj del móvil.
+*/
+
+/** La reunión la llevan la DF y el administrador: los mismos que verifican. */
+function exigir_df(): array
+{
+    $yo = exigir_sesion();
+    if ($yo['rol'] !== 'admin' && !$yo['verifica']) {
+        responder_error(403, 'Las reuniones de obra las llevan la dirección facultativa y el administrador.', 'permiso');
+    }
+    return $yo;
+}
+
+/** El día de hoy en la obra: la fecha se corta con el reloj de Madrid. */
+function hoy_obra(): string
+{
+    return (new DateTimeImmutable('now', new DateTimeZone('Europe/Madrid')))->format('Y-m-d');
+}
+
+/**
+ * El sello de las 23:59. Al acabar el día, el acta queda cerrada: se
+ * compara la fecha de la reunión con el día de hoy en Madrid, aquí en
+ * el servidor. Lo único que sobrevive al sello es tachar encargos como
+ * hechos —o destacharlos—, que no cambia lo acordado: solo cuenta cómo
+ * va cumpliéndose.
+ */
+function exigir_reunion_abierta(array $reunion): void
+{
+    if ((string) $reunion['fecha'] < hoy_obra()) {
+        responder_error(403, 'El acta de ese día ya está sellada: a las 23:59 se cierra sola.', 'sellada');
+    }
+}
+
+function reunion_o_404(string $id): array
+{
+    if (!es_uuid($id)) {
+        responder_error(404, 'Reunión desconocida.');
+    }
+    $sent = bd()->prepare('SELECT * FROM reuniones WHERE id = ? AND borrada = 0');
+    $sent->execute([$id]);
+    $fila = $sent->fetch();
+    if (!$fila) {
+        responder_error(404, 'Reunión desconocida.');
+    }
+    return $fila;
+}
+
+function promo_pedida(): string
+{
+    $promo = mb_substr(trim((string) ($_GET['promo'] ?? '')), 0, 60);
+    if ($promo === '') {
+        responder_error(400, 'Falta la promoción.', 'formato');
+    }
+    return $promo;
+}
+
+/** Lo que la portada necesita saber de la obra, en una sola llamada. */
+function obra_estado(): void
+{
+    exigir_sesion();
+    $promo = promo_pedida();
+
+    $sent = bd()->prepare('SELECT * FROM reuniones WHERE promo_id = ? AND borrada = 0 ORDER BY fecha DESC LIMIT 1');
+    $sent->execute([$promo]);
+    $ultima = $sent->fetch() ?: null;
+
+    $pend = bd()->prepare("SELECT COUNT(*) FROM encargos WHERE promo_id = ? AND estado = 'pendiente' AND borrada = 0");
+    $pend->execute([$promo]);
+
+    $salida = null;
+    if ($ultima) {
+        $salida = reunion_salida($ultima);
+        $cuentas = contar_encargos($ultima['id']);
+        $salida['encargos'] = $cuentas['total'];
+        $salida['pendientes'] = $cuentas['pendientes'];
+    }
+
+    responder([
+        'hoy'        => hoy_obra(),
+        'ultima'     => $salida,
+        'pendientes' => (int) $pend->fetchColumn(),
+    ]);
+}
+
+function contar_encargos(string $reunionId): array
+{
+    $sent = bd()->prepare(
+        "SELECT COUNT(*) AS total, COALESCE(SUM(CASE WHEN estado = 'pendiente' THEN 1 ELSE 0 END), 0) AS pendientes
+           FROM encargos WHERE reunion_id = ? AND borrada = 0"
+    );
+    $sent->execute([$reunionId]);
+    $fila = $sent->fetch() ?: [];
+    return ['total' => (int) ($fila['total'] ?? 0), 'pendientes' => (int) ($fila['pendientes'] ?? 0)];
+}
+
+function listar_reuniones(): void
+{
+    exigir_sesion();
+    $promo = promo_pedida();
+
+    $sent = bd()->prepare('SELECT * FROM reuniones WHERE promo_id = ? AND borrada = 0 ORDER BY fecha DESC LIMIT 200');
+    $sent->execute([$promo]);
+    $filas = $sent->fetchAll();
+
+    // Cuántos encargos tiene cada una y cuántos siguen pendientes, de
+    // una sola consulta: la lista se abre todos los días y no tiene por
+    // qué costar una consulta por reunión.
+    $cuentas = [];
+    $sent = bd()->prepare(
+        "SELECT reunion_id, COUNT(*) AS total,
+                COALESCE(SUM(CASE WHEN estado = 'pendiente' THEN 1 ELSE 0 END), 0) AS pendientes
+           FROM encargos WHERE promo_id = ? AND borrada = 0 GROUP BY reunion_id"
+    );
+    $sent->execute([$promo]);
+    foreach ($sent->fetchAll() as $c) {
+        $cuentas[$c['reunion_id']] = $c;
+    }
+
+    // Lo pendiente de toda la obra, venga de la reunión que venga: la
+    // pantalla de Obra lo enseña sin obligar a abrir acta por acta.
+    $sent = bd()->prepare(
+        "SELECT e.*, r.fecha AS reunion_fecha FROM encargos e
+           JOIN reuniones r ON r.id = e.reunion_id
+          WHERE e.promo_id = ? AND e.estado = 'pendiente' AND e.borrada = 0 AND r.borrada = 0
+          ORDER BY r.fecha DESC, e.creado ASC LIMIT 100"
+    );
+    $sent->execute([$promo]);
+    $pendientes = array_map(static function ($f) {
+        $salida = encargo_salida($f);
+        $salida['reunionFecha'] = $f['reunion_fecha'];
+        return $salida;
+    }, $sent->fetchAll());
+
+    responder(['hoy' => hoy_obra(), 'reuniones' => array_map(static function ($f) use ($cuentas) {
+        $c = $cuentas[$f['id']] ?? null;
+        $salida = reunion_salida($f);
+        $salida['encargos'] = (int) ($c['total'] ?? 0);
+        $salida['pendientes'] = (int) ($c['pendientes'] ?? 0);
+        return $salida;
+    }, $filas), 'tareasPendientes' => $pendientes]);
+}
+
+function empezar_reunion(): void
+{
+    $yo = exigir_df();
+    $promo = texto(cuerpo(), 'promoId', 60);
+    if ($promo === '') {
+        responder_error(400, 'Falta la promoción.', 'formato');
+    }
+    $hoy = hoy_obra();
+
+    // Una reunión por día y promoción, y el botón se puede pulsar dos
+    // veces sin miedo: si la de hoy ya está empezada, se devuelve esa.
+    $existente = reunion_del_dia($promo, $hoy);
+    if ($existente) {
+        responder(['reunion' => reunion_salida($existente), 'nueva' => false]);
+    }
+
+    $registro = [
+        'id'                => uuid(),
+        'promo_id'          => $promo,
+        'fecha'             => $hoy,
+        'empezada'          => ahora_iso(),
+        'terminada'         => null,
+        // Quien la empieza está en ella: es la primera de la lista.
+        'asistentes'        => json_encode([$yo['id']]),
+        'invitados'         => '[]',
+        'borrada'           => 0,
+        'creado'            => ahora_iso(),
+        'actualizado'       => ahora_iso(),
+        'creado_por'        => $yo['id'],
+        'creado_por_nombre' => (string) $yo['nombre'],
+    ];
+    try {
+        $columnas = array_keys($registro);
+        bd()->prepare(sprintf(
+            'INSERT INTO reuniones (%s) VALUES (%s)',
+            implode(', ', $columnas),
+            implode(', ', array_fill(0, count($columnas), '?'))
+        ))->execute(array_values($registro));
+    } catch (PDOException $e) {
+        // Dos móviles a la vez: el índice único deja pasar solo a uno,
+        // y el otro se lleva la misma reunión, como si llegara tarde.
+        if ($e->getCode() !== '23000') {
+            throw $e;
+        }
+        $existente = reunion_del_dia($promo, $hoy);
+        if ($existente) {
+            responder(['reunion' => reunion_salida($existente), 'nueva' => false]);
+        }
+        throw $e;
+    }
+    responder(['reunion' => reunion_salida($registro), 'nueva' => true], 201);
+}
+
+function reunion_del_dia(string $promo, string $fecha): ?array
+{
+    $sent = bd()->prepare('SELECT * FROM reuniones WHERE promo_id = ? AND fecha = ?');
+    $sent->execute([$promo, $fecha]);
+    return $sent->fetch() ?: null;
+}
+
+function ver_reunion(string $id): void
+{
+    exigir_sesion();
+    $reunion = reunion_o_404($id);
+
+    $sent = bd()->prepare('SELECT * FROM encargos WHERE reunion_id = ? AND borrada = 0 ORDER BY creado ASC');
+    $sent->execute([$id]);
+    $encargos = array_map('encargo_salida', $sent->fetchAll());
+
+    // El arrastre: lo pendiente de reuniones anteriores, para repasarlo
+    // en la de hoy sin ir a buscarlo acta por acta.
+    $sent = bd()->prepare(
+        "SELECT e.*, r.fecha AS reunion_fecha FROM encargos e
+           JOIN reuniones r ON r.id = e.reunion_id
+          WHERE e.promo_id = ? AND e.estado = 'pendiente' AND e.borrada = 0
+            AND r.borrada = 0 AND r.fecha < ?
+          ORDER BY r.fecha ASC, e.creado ASC"
+    );
+    $sent->execute([$reunion['promo_id'], $reunion['fecha']]);
+    $arrastre = array_map(static function ($f) {
+        $salida = encargo_salida($f);
+        $salida['reunionFecha'] = $f['reunion_fecha'];
+        return $salida;
+    }, $sent->fetchAll());
+
+    responder([
+        'hoy'      => hoy_obra(),
+        'reunion'  => reunion_salida($reunion),
+        'encargos' => $encargos,
+        'arrastre' => $arrastre,
+    ]);
+}
+
+function editar_reunion(string $id): void
+{
+    exigir_df();
+    $reunion = reunion_o_404($id);
+    exigir_reunion_abierta($reunion);
+    $c = cuerpo();
+
+    $cambios = [];
+    if (array_key_exists('asistentes', $c)) {
+        $cambios['asistentes'] = json_encode(lista_de_uuids($c['asistentes']));
+    }
+    if (array_key_exists('invitados', $c)) {
+        $cambios['invitados'] = json_encode(lista_de_nombres($c['invitados']), JSON_UNESCAPED_UNICODE);
+    }
+    if (array_key_exists('terminada', $c)) {
+        // Terminarla dos veces no mueve la hora; y mientras el día no
+        // se selle, la DF puede reabrirla para apuntar lo olvidado.
+        $cambios['terminada'] = $c['terminada'] ? ((string) ($reunion['terminada'] ?? '') ?: ahora_iso()) : null;
+    }
+    if (!$cambios) {
+        responder_error(400, 'Nada que cambiar.', 'formato');
+    }
+    $cambios['actualizado'] = ahora_iso();
+
+    $asignaciones = implode(', ', array_map(static fn ($k) => "{$k} = ?", array_keys($cambios)));
+    $valores = array_values($cambios);
+    $valores[] = $id;
+    bd()->prepare("UPDATE reuniones SET {$asignaciones} WHERE id = ?")->execute($valores);
+
+    responder(['reunion' => reunion_salida(reunion_o_404($id))]);
+}
+
+/** Ids de usuario válidos, sin repetidos y con un tope de cordura. */
+function lista_de_uuids($valor): array
+{
+    if (!is_array($valor)) {
+        return [];
+    }
+    $ids = [];
+    foreach ($valor as $id) {
+        if (is_string($id) && es_uuid($id) && !in_array($id, $ids, true)) {
+            $ids[] = $id;
+        }
+    }
+    return array_slice($ids, 0, 60);
+}
+
+/** Nombres de invitados: gente de la obra sin cuenta en la app. */
+function lista_de_nombres($valor): array
+{
+    if (!is_array($valor)) {
+        return [];
+    }
+    $nombres = [];
+    foreach ($valor as $n) {
+        $n = mb_substr(trim((string) $n), 0, 80);
+        if ($n !== '' && !in_array($n, $nombres, true)) {
+            $nombres[] = $n;
+        }
+    }
+    return array_slice($nombres, 0, 60);
+}
+
+/** Una fecha de calendario «AAAA-MM-DD», o vacío si no viene o viene rara. */
+function fecha_de_dia($valor): string
+{
+    $valor = trim((string) $valor);
+    return preg_match('/^\d{4}-\d{2}-\d{2}$/', $valor) === 1 ? $valor : '';
+}
+
+function crear_encargo(): void
+{
+    $yo = exigir_df();
+    $c = cuerpo();
+    $reunion = reunion_o_404((string) ($c['reunionId'] ?? ''));
+    exigir_reunion_abierta($reunion);
+
+    $texto = mb_substr(trim((string) ($c['texto'] ?? '')), 0, 2000);
+    if ($texto === '') {
+        responder_error(400, 'El encargo necesita un texto.', 'formato');
+    }
+    $general = booleano($c, 'general', true);
+    $unidad = $general ? '' : texto($c, 'unidadId', 80);
+    if (!$general && $unidad === '') {
+        responder_error(400, 'O es general o lleva vivienda.', 'formato');
+    }
+
+    $registro = [
+        'id'                 => uuid(),
+        'reunion_id'         => $reunion['id'],
+        'promo_id'           => $reunion['promo_id'],
+        'texto'              => $texto,
+        'general'            => $general ? 1 : 0,
+        'unidad_id'          => $unidad,
+        'responsable_id'     => es_uuid($c['responsableId'] ?? null) ? $c['responsableId'] : null,
+        'responsable_nombre' => texto($c, 'responsableNombre', 120),
+        'fecha_limite'       => fecha_de_dia($c['fechaLimite'] ?? ''),
+        'estado'             => 'pendiente',
+        'hecho_en'           => null,
+        'hecho_por_nombre'   => '',
+        'borrada'            => 0,
+        'creado'             => ahora_iso(),
+        'actualizado'        => ahora_iso(),
+        'creado_por'         => $yo['id'],
+        'creado_por_nombre'  => (string) $yo['nombre'],
+    ];
+    $columnas = array_keys($registro);
+    bd()->prepare(sprintf(
+        'INSERT INTO encargos (%s) VALUES (%s)',
+        implode(', ', $columnas),
+        implode(', ', array_fill(0, count($columnas), '?'))
+    ))->execute(array_values($registro));
+
+    responder(['encargo' => encargo_salida($registro)], 201);
+}
+
+function editar_encargo(string $id): void
+{
+    $yo = exigir_sesion();
+    if (!es_uuid($id)) {
+        responder_error(404, 'Encargo desconocido.');
+    }
+    $sent = bd()->prepare('SELECT * FROM encargos WHERE id = ? AND borrada = 0');
+    $sent->execute([$id]);
+    $encargo = $sent->fetch();
+    if (!$encargo) {
+        responder_error(404, 'Encargo desconocido.');
+    }
+    $c = cuerpo();
+    $cambios = [];
+
+    // Tachar un encargo —o destacharlo— puede hacerlo cualquiera del
+    // equipo y en cualquier momento: el sello cierra lo ACORDADO, no el
+    // ir cumpliéndolo.
+    if (array_key_exists('estado', $c)) {
+        $estado = $c['estado'] === 'hecho' ? 'hecho' : 'pendiente';
+        $cambios['estado'] = $estado;
+        $cambios['hecho_en'] = $estado === 'hecho' ? ahora_iso() : null;
+        $cambios['hecho_por_nombre'] = $estado === 'hecho' ? (string) $yo['nombre'] : '';
+    }
+
+    // Lo demás —el texto, el responsable, la fecha, borrarlo— es tocar
+    // el acta: DF o administrador, y solo mientras el día no se selle.
+    $edita = array_intersect_key($c, array_flip([
+        'texto', 'general', 'unidadId', 'responsableId', 'responsableNombre', 'fechaLimite', 'borrada',
+    ]));
+    if ($edita) {
+        exigir_df();
+        exigir_reunion_abierta(reunion_o_404((string) $encargo['reunion_id']));
+
+        if (array_key_exists('texto', $edita)) {
+            $texto = mb_substr(trim((string) $edita['texto']), 0, 2000);
+            if ($texto === '') {
+                responder_error(400, 'El encargo necesita un texto.', 'formato');
+            }
+            $cambios['texto'] = $texto;
+        }
+        if (array_key_exists('general', $edita) || array_key_exists('unidadId', $edita)) {
+            $general = array_key_exists('general', $edita)
+                ? (bool) $edita['general'] : (int) $encargo['general'] === 1;
+            $unidad = $general ? '' : (array_key_exists('unidadId', $edita)
+                ? texto($edita, 'unidadId', 80) : (string) $encargo['unidad_id']);
+            if (!$general && $unidad === '') {
+                responder_error(400, 'O es general o lleva vivienda.', 'formato');
+            }
+            $cambios['general'] = $general ? 1 : 0;
+            $cambios['unidad_id'] = $unidad;
+        }
+        if (array_key_exists('responsableId', $edita)) {
+            $cambios['responsable_id'] = es_uuid($edita['responsableId'] ?? null) ? $edita['responsableId'] : null;
+        }
+        if (array_key_exists('responsableNombre', $edita)) {
+            $cambios['responsable_nombre'] = texto($edita, 'responsableNombre', 120);
+        }
+        if (array_key_exists('fechaLimite', $edita)) {
+            $cambios['fecha_limite'] = fecha_de_dia($edita['fechaLimite']);
+        }
+        if (array_key_exists('borrada', $edita)) {
+            $cambios['borrada'] = booleano($edita, 'borrada') ? 1 : 0;
+        }
+    }
+
+    if (!$cambios) {
+        responder_error(400, 'Nada que cambiar.', 'formato');
+    }
+    $cambios['actualizado'] = ahora_iso();
+
+    $asignaciones = implode(', ', array_map(static fn ($k) => "{$k} = ?", array_keys($cambios)));
+    $valores = array_values($cambios);
+    $valores[] = $id;
+    bd()->prepare("UPDATE encargos SET {$asignaciones} WHERE id = ?")->execute($valores);
+
+    $sent = bd()->prepare('SELECT * FROM encargos WHERE id = ?');
+    $sent->execute([$id]);
+    responder(['encargo' => encargo_salida($sent->fetch())]);
+}
+
+function reunion_salida(array $f): array
+{
+    return [
+        'id' => $f['id'], 'promoId' => $f['promo_id'], 'fecha' => $f['fecha'],
+        'empezada' => $f['empezada'], 'terminada' => $f['terminada'] ?? null,
+        'asistentes' => json_decode((string) $f['asistentes'], true) ?: [],
+        'invitados' => json_decode((string) $f['invitados'], true) ?: [],
+        'sellada' => (string) $f['fecha'] < hoy_obra(),
+        'creado' => $f['creado'], 'actualizado' => $f['actualizado'],
+        'creadoPor' => $f['creado_por'], 'creadoPorNombre' => $f['creado_por_nombre'],
+    ];
+}
+
+function encargo_salida(array $f): array
+{
+    return [
+        'id' => $f['id'], 'reunionId' => $f['reunion_id'], 'promoId' => $f['promo_id'],
+        'texto' => $f['texto'], 'general' => (int) $f['general'] === 1,
+        'unidadId' => (string) $f['unidad_id'],
+        'responsableId' => $f['responsable_id'], 'responsableNombre' => (string) $f['responsable_nombre'],
+        'fechaLimite' => (string) $f['fecha_limite'], 'estado' => $f['estado'],
+        'hechoEn' => $f['hecho_en'] ?? null, 'hechoPorNombre' => (string) $f['hecho_por_nombre'],
+        'creado' => $f['creado'], 'actualizado' => $f['actualizado'],
+        'creadoPor' => $f['creado_por'], 'creadoPorNombre' => $f['creado_por_nombre'],
     ];
 }

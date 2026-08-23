@@ -150,6 +150,30 @@ export const urlMedio = (id) => API_BASE + 'medios/' + encodeURIComponent(id) + 
  */
 export const salidaAInternet = () => pedir('diagnostico/salida');
 
+/* ─── La obra: reuniones y encargos ───────────────────────────────
+   En pantalla los encargos se llaman «tareas» —las que nacen de una
+   reunión—, pero por dentro llevan nombre propio para no chocar con
+   las tareas de siempre, que son repasos (ver CLAUDE.md).
+
+   Todo esto va SIEMPRE en línea, sin outbox: el servidor es la única
+   verdad y el sello de las 23:59 se decide con su reloj, no con el
+   del móvil. */
+export const obraEstado = (promoId) =>
+  pedir('obra/estado?promo=' + encodeURIComponent(promoId));
+export const obraReuniones = (promoId) =>
+  pedir('obra/reuniones?promo=' + encodeURIComponent(promoId));
+export const empezarReunion = (promoId) =>
+  pedir('obra/reuniones', { metodo: 'POST', json: { promoId } });
+export const verReunion = (id) =>
+  pedir('obra/reuniones/' + encodeURIComponent(id));
+/** Cambia asistentes, invitados o el terminada de la reunión. */
+export const editarReunion = (id, datos) =>
+  pedir('obra/reuniones/' + encodeURIComponent(id), { metodo: 'PATCH', json: datos });
+export const crearEncargo = (datos) =>
+  pedir('obra/encargos', { metodo: 'POST', json: datos });
+export const editarEncargo = (id, datos) =>
+  pedir('obra/encargos/' + encodeURIComponent(id), { metodo: 'PATCH', json: datos });
+
 /* ─── Claude ──────────────────────────────────────────────────────
    La clave vive en el servidor y no vuelve nunca: de aquí solo sale
    si hay una puesta y sus cuatro últimos caracteres, para reconocerla. */
