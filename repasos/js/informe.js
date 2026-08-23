@@ -13,7 +13,7 @@ import { unidad, promocion, estado, enObra } from './catalog.js';
 
 export async function informe(lista, { abrirImpresion = false } = {}) {
   const tareas = await store.tareasDeLista(lista.id);
-  if (!tareas.length) { toast('La lista no tiene tareas que listar', 'err'); return; }
+  if (!tareas.length) { toast('El parte no tiene repasos que listar', 'err'); return; }
 
   const u = unidad(lista.unidadId);
   const p = promocion(lista.promoId);
@@ -65,7 +65,7 @@ export async function informe(lista, { abrirImpresion = false } = {}) {
         h('div.inf-meta', null,
           h('p', null, h('b', null, 'Inspección: '), `${fechaLarga(lista.creado)} · ${hora(lista.creado)}`),
           h('p', null, h('b', null, 'Realizada por: '), lista.creadoPorNombre),
-          h('p', null, h('b', null, 'Tareas: '), `${tareas.length} (${pendientes} pendientes)`),
+          h('p', null, h('b', null, 'Repasos: '), `${tareas.length} (${pendientes} pendientes)`),
           h('p', null, h('b', null, 'Emitido: '), `${fechaLarga(new Date().toISOString())}`),
         ),
       ),

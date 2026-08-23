@@ -166,28 +166,28 @@ export async function render() {
       h('p.d-epigrafe', null, 'Pendiente de revisión por la DF'),
       banner({
         clase: 'beige',
-        rotulo: 'Tareas completadas por verificar',
+        rotulo: 'Repasos completados por verificar',
         cifra: c.esperando,
         adonde: '#/tareas/resuelta',
       }),
 
-      h('p.d-epigrafe', null, 'Tareas revisadas por la DF'),
+      h('p.d-epigrafe', null, 'Repasos revisados por la DF'),
       banner({
         clase: 'verde',
-        rotulo: 'Tareas verificadas',
+        rotulo: 'Repasos verificados',
         cifra: c.hechas,
         adonde: '#/tareas/verificada',
       }),
       banner({
         clase: 'rojo',
-        rotulo: 'Tareas rechazadas',
+        rotulo: 'Repasos rechazados',
         cifra: c.rechazadas,
         adonde: '#/tareas/rechazada',
       }),
 
       h('p.d-epigrafe', null, p.nombre),
       tarjetaVilla({
-        titulo: `${d.sinVerificar} ${d.sinVerificar === 1 ? 'tarea pendiente' : 'tareas pendientes'}`,
+        titulo: `${d.sinVerificar} ${d.sinVerificar === 1 ? 'repaso pendiente' : 'repasos pendientes'}`,
         cuando: cuandoVilla(d.ultimaSinVerificar),
         caras: d.caras,
         hechas: c.hechas,

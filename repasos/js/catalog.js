@@ -114,9 +114,9 @@ export const FASE_UNICA = 'pre';
  */
 export const ESTADOS = [
   { id: 'pendiente', nombre: 'Pendiente', plural: 'Pendientes', tag: '' },
-  { id: 'resuelta', nombre: 'Completada', plural: 'Completadas', tag: 'warn' },
-  { id: 'rechazada', nombre: 'Rechazada', plural: 'Rechazadas', tag: 'rojo' },
-  { id: 'verificada', nombre: 'Verificada', plural: 'Verificadas', tag: 'ink' },
+  { id: 'resuelta', nombre: 'Completado', plural: 'Completados', tag: 'warn' },
+  { id: 'rechazada', nombre: 'Rechazado', plural: 'Rechazados', tag: 'rojo' },
+  { id: 'verificada', nombre: 'Verificado', plural: 'Verificados', tag: 'ink' },
 ];
 
 /**

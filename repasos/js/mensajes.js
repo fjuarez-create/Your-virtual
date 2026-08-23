@@ -55,7 +55,7 @@ export async function bloqueDeMensajes(unidadId, promoId) {
       mensajes.length
         ? h('div.stack', { style: { marginTop: '10px', gap: '8px' } }, filas)
         : h('p.hint', { style: { marginTop: '8px' } },
-            'Nada escrito todavía. Aquí va lo que hay que contar de esta vivienda y no es una tarea.'),
+            'Nada escrito todavía. Aquí va lo que hay que contar de esta vivienda y no es un repaso.'),
     );
   };
 

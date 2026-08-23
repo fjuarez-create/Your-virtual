@@ -81,7 +81,7 @@ export async function render({ promoId, unidadId }) {
   const TOPE = 2;
   const meter = async (ficheros) => {
     const hueco = TOPE - fotos.length;
-    if (hueco <= 0) { toast('Dos fotos es el tope de una tarea', 'err'); return; }
+    if (hueco <= 0) { toast('Dos fotos es el tope de un repaso', 'err'); return; }
     toast('Preparando…');
     let fallos = 0;
     for (const f of [...ficheros].slice(0, hueco)) {
@@ -181,7 +181,7 @@ export async function render({ promoId, unidadId }) {
   // foto obliga a quien la lee a fiarse de una frase, y quien la escribe
   // estaba delante del remate: la foto es lo único que no se puede
   // reconstruir después.
-  const guardarBtn = h('button.d-boton-negro', { disabled: true }, 'Guardar tarea');
+  const guardarBtn = h('button.d-boton-negro', { disabled: true }, 'Guardar repaso');
   const repasar = () => {
     guardarBtn.disabled = !(zona && gremio && area.value.trim() && fotos.length);
     botonMas.disabled = fotos.length >= TOPE;
@@ -203,7 +203,7 @@ export async function render({ promoId, unidadId }) {
         await store.añadirMedio(t.id, { tipo: 'imagen', blob: f.blob, mime: f.mime, ancho: f.ancho, alto: f.alto });
       }
       await store.borrarBorradorNueva(unidadId).catch(() => {});
-      toast('Tarea guardada');
+      toast('Repaso guardado');
       ir(`#/p/${promoId}/v/${String(villa.id).split(':')[1]}`, { reemplazar: true });
     } catch (e) {
       toast(e.message, 'err');
@@ -217,7 +217,7 @@ export async function render({ promoId, unidadId }) {
     contenido: [
       cabecera({
         volver: rutaVilla,
-        titulo: 'Nueva tarea',
+        titulo: 'Nuevo repaso',
         menu: () => menuFlotante((cerrar) => [
           filaMenu('trash', 'Descartar el borrador', () => { cerrar(); ir(rutaVilla); }),
         ]),

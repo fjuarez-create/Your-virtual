@@ -369,7 +369,7 @@ async function arrancar() {
   window.addEventListener('purga-sin-foto', (e) => {
     const n = e.detail?.borradas || 0;
     if (n) {
-      toast(`${n} ${n === 1 ? 'tarea sin fotografía borrada' : 'tareas sin fotografía borradas'} para siempre`,
+      toast(`${n} ${n === 1 ? 'repaso sin fotografía borrado' : 'repasos sin fotografía borrados'} para siempre`,
         '', { icono: 'trash' });
     }
   });

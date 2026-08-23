@@ -29,24 +29,24 @@ import { hojaDePuerta, nombreDeFichero } from '../pdf.js';
 /** Lo que dice la pantalla cuando no hay ninguna, por estado. */
 const VACIO = {
   resuelta: {
-    titulo: 'Ninguna tarea completada',
-    frase: 'Cuando la obra dé una tarea por arreglada, aparecerá aquí para que le des el visto bueno.',
-    salida: { rotulo: 'Revisar tareas pendientes', estado: 'pendiente' },
+    titulo: 'Ningún repaso completado',
+    frase: 'Cuando la obra dé un repaso por arreglado, aparecerá aquí para que le des el visto bueno.',
+    salida: { rotulo: 'Revisar repasos pendientes', estado: 'pendiente' },
   },
   verificada: {
-    titulo: 'Ninguna tarea verificada',
+    titulo: 'Ningún repaso verificado',
     frase: 'Aquí se irán guardando todas las que deis por buenas, de la primera a la última.',
     salida: { rotulo: 'Ver lo que falta por verificar', estado: 'resuelta' },
   },
   rechazada: {
-    titulo: 'Ninguna tarea rechazada',
+    titulo: 'Ningún repaso rechazado',
     frase: 'Nada devuelto a la obra ahora mismo. Cuando rechacéis una, aparece aquí hasta que la rehagan.',
-    salida: { rotulo: 'Revisar tareas completadas', estado: 'resuelta' },
+    salida: { rotulo: 'Revisar repasos completados', estado: 'resuelta' },
   },
   pendiente: {
-    titulo: 'Ninguna tarea pendiente',
+    titulo: 'Ningún repaso pendiente',
     frase: 'No queda trabajo por hacer en la promoción. Si eso no cuadra, revisa lo completado.',
-    salida: { rotulo: 'Revisar tareas completadas', estado: 'resuelta' },
+    salida: { rotulo: 'Revisar repasos completados', estado: 'resuelta' },
   },
 };
 
@@ -118,7 +118,7 @@ export async function render({ promoId, estadoId = 'resuelta' }) {
   }, h('span'), icon('caretAbajo'));
 
   const bolaFiltros = h('button.d-bola-embudo', {
-    'aria-label': 'Filtrar tareas',
+    'aria-label': 'Filtrar repasos',
     onclick: async () => {
       const r = await hojaFiltroTareas({
         vivienda: filtroVivienda,
@@ -217,7 +217,7 @@ export async function render({ promoId, estadoId = 'resuelta' }) {
     const hayFiltros = !!filtroVivienda || filtroOficios.length > 0;
     const v = VACIO[estadoId];
     const [titulo, frase, rotulo, accion] = hayFiltros
-      ? ['Ninguna tarea con estos filtros', 'Prueba a quitar alguno para ver el resto.',
+      ? ['Ningún repaso con estos filtros', 'Prueba a quitar alguno para ver el resto.',
         'Quitar los filtros', () => { filtroVivienda = ''; filtroOficios = []; pintar(); }]
       : [v.titulo, v.frase, v.salida.rotulo, () => cambiarEstado(v.salida.estado)];
     return [
@@ -230,7 +230,7 @@ export async function render({ promoId, estadoId = 'resuelta' }) {
 
   /* ─── El menú de los tres puntos ─── */
   const menu = async () => {
-    const elegido = await menuTarjeta('Tareas', [
+    const elegido = await menuTarjeta('Repasos', [
       ...ORDENES.map((o) => ({
         id: `orden:${o.id}`,
         icono: orden === o.id ? 'check' : 'listaChecks',
@@ -249,7 +249,7 @@ export async function render({ promoId, estadoId = 'resuelta' }) {
     if (!items.length) { toast('No hay nada que bajar'); return; }
     const rotulo = estado(estadoId).plural;
     const blob = hojaDePuerta({
-      vivienda: `Tareas ${rotulo.toLowerCase()}`,
+      vivienda: `Repasos ${rotulo.toLowerCase()}`,
       promocion: p.nombre,
       fecha: new Date().toLocaleDateString('es-ES'),
       autor: store.sesion()?.nombre || '',
@@ -274,7 +274,7 @@ export async function render({ promoId, estadoId = 'resuelta' }) {
     sinTabs: true,
     clase: 'pantalla-diseno',
     contenido: [
-      cabecera({ volver: '#/', titulo: 'Tareas', menu }),
+      cabecera({ volver: '#/', titulo: 'Repasos', menu }),
       avisoLocal() || barraSync(),
       h('div.d-fila-filtro', null, selector, bolaFiltros),
       filtros,

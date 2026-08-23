@@ -58,9 +58,9 @@ export async function render() {
       clase: 'pantalla-diseno',
       contenido: [
         cabecera({ seccion: 'listas' }),
-        h('h1.d-saludo', null, 'Actas'),
+        h('h1.d-saludo', null, 'Partes'),
         emptyState('clipboard', 'Todavía no hay ningún día de obra',
-          'El acta se abre sola con el primer repaso que se apunte. Cada día tendrá la suya, con lo que se haya tocado y quién estuvo.'),
+          'El parte se abre solo con el primer repaso que se apunte. Cada día tendrá el suyo, con lo que se haya tocado y quién estuvo.'),
       ],
     };
   }
@@ -170,7 +170,7 @@ export async function render() {
     clase: 'pantalla-diseno',
     contenido: [
       cabecera({ seccion: 'listas' }),
-      h('h1.d-saludo', null, 'Actas'),
+      h('h1.d-saludo', null, 'Partes'),
       avisoLocal() || barraSync(),
       h('div.d-fila-filtro', null, selector, bolaFiltros),
       filtros,

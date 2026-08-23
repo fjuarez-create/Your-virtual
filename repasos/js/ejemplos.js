@@ -73,7 +73,7 @@ export async function crear(promoId) {
     .sort((a, b) => (b.avatar ? 1 : 0) - (a.avatar ? 1 : 0));
 
   const libres = await viviendasLibres(promoId, 3);
-  if (!libres.length) throw new Error('No quedan viviendas sin tareas donde montarlas.');
+  if (!libres.length) throw new Error('No quedan viviendas sin repasos donde montarlos.');
 
   const reparto = [3, 2, 1];
   let actas = 0;

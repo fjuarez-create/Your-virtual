@@ -112,12 +112,12 @@ export async function render() {
       h('div.d-grupo', null,
         h('p.d-grupo-titulo', null, 'Preferencias'),
         api.HAY_SERVIDOR ? item('edit', 'Que la IA proponga el texto',
-          'Al crear una tarea desde una foto o la galería', null, { derecha: casillaIA }) : null,
+          'Al crear un repaso desde una foto o la galería', null, { derecha: casillaIA }) : null,
         // En un recorrido es normal sacar dos fotos de lo mismo: una de
         // lejos para situarlo y otra de cerca. Encendido, eso es una
         // tarea con dos fotos; apagado, dos tareas.
         api.HAY_SERVIDOR ? item('image', 'Juntar las fotos de un mismo repaso',
-          'En un recorrido, varias fotos de la misma cosa salen como una sola tarea',
+          'En un recorrido, varias fotos de la misma cosa salen como un solo repaso',
           null, { derecha: casillaJuntar }) : null,
         // Cómo sale partida la hoja que se imprime o se manda por
         // WhatsApp. El detalle dice lo que hay puesto ahora mismo.
@@ -155,12 +155,12 @@ export async function render() {
         h('p.d-grupo-titulo', null, 'Datos de ejemplo'),
         item('edit', 'Arreglar los textos de prueba',
           'Cambia lo escrito a lo loco por repasos de verdad', () => arreglarPruebas()),
-        item('trash', 'Borrar las tareas sin fotografía',
-          'Para siempre: una tarea sin foto no existe', () => borrarSinFoto()),
-        item('users', 'Crear actas de ejemplo',
-          'Tres actas firmadas por el equipo, para ver cómo queda', () => montarEjemplos()),
-        hayEjemplos ? item('trash', 'Quitar las actas de ejemplo',
-          `${hayEjemplos} ${hayEjemplos === 1 ? 'acta puesta' : 'actas puestas'}`,
+        item('trash', 'Borrar los repasos sin fotografía',
+          'Para siempre: un repaso sin foto no existe', () => borrarSinFoto()),
+        item('users', 'Crear partes de ejemplo',
+          'Tres partes firmados por el equipo, para ver cómo queda', () => montarEjemplos()),
+        hayEjemplos ? item('trash', 'Quitar los partes de ejemplo',
+          `${hayEjemplos} ${hayEjemplos === 1 ? 'parte puesto' : 'partes puestos'}`,
           () => quitarEjemplos()) : null,
       ) : null,
 
@@ -307,7 +307,7 @@ function hojaClave(estado) {
     return [
       h('h2.title', null, 'Clave de Anthropic'),
       h('p.sub', { style: { marginTop: '6px' } },
-        'Con ella, al terminar un recorrido las tareas salen escritas a partir '
+        'Con ella, al terminar un recorrido los repasos salen escritos a partir '
         + 'de lo que dijiste, y tú solo repasas. Se guarda en el servidor y no '
         + 'vuelve a salir de ahí.'),
       estado?.puesta
@@ -379,7 +379,7 @@ function hojaClaveOido(estado) {
       h('h2.title', null, 'Clave de OpenAI'),
       h('p.sub', { style: { marginTop: '6px' } },
         'Es la que pasa a texto lo que vas diciendo durante el recorrido, para '
-        + 'que las tareas salgan de tus palabras y no solo de lo que se ve en '
+        + 'que los repasos salgan de tus palabras y no solo de lo que se ve en '
         + 'la foto. Se guarda en el servidor y no vuelve a salir de ahí.'),
       estado?.puesta
         ? h('p.hint', { style: { marginTop: '10px' } },
@@ -491,8 +491,8 @@ async function montarEjemplos() {
   if (!p) return toast('No hay ninguna promoción activa', 'err');
 
   const seguir = await confirmSheet({
-    title: '¿Crear actas de ejemplo?',
-    text: 'Se montan tres actas en viviendas que no tengan nada, firmadas por '
+    title: '¿Crear partes de ejemplo?',
+    text: 'Se montan tres partes en viviendas que no tengan nada, firmados por '
       + 'gente del equipo, para ver cómo queda la app con varias personas. '
       + 'Se llaman «Ejemplo · …» y se pueden quitar desde aquí mismo.',
     ok: 'Crear',
@@ -501,7 +501,7 @@ async function montarEjemplos() {
 
   try {
     const { actas, tareas } = await ejemplos.crear(p.id);
-    toast(`${actas} actas y ${tareas} tareas de ejemplo`);
+    toast(`${actas} partes y ${tareas} repasos de ejemplo`);
     refrescar();
   } catch (e) {
     toast(e.message || 'No se pudieron crear', 'err');
@@ -526,7 +526,7 @@ async function arreglarPruebas() {
   const marcadas = new Set(candidatos.map((c) => c.tarea.id));
   const contador = h('span');
   const pintarContador = () => {
-    contador.textContent = marcadas.size === 1 ? 'Arreglar 1 tarea' : `Arreglar ${marcadas.size} tareas`;
+    contador.textContent = marcadas.size === 1 ? 'Arreglar 1 repaso' : `Arreglar ${marcadas.size} repasos`;
   };
 
   const seguir = await sheet((cerrar) => {
@@ -537,7 +537,7 @@ async function arreglarPruebas() {
     return [
       h('h2.title', null, 'Textos de prueba'),
       h('p.sub', null,
-        `${candidatos.length} ${candidatos.length === 1 ? 'tarea parece' : 'tareas parecen'} `
+        `${candidatos.length} ${candidatos.length === 1 ? 'repaso parece' : 'repasos parecen'} `
         + 'escritas para probar. Cada una pasaría a ser un repaso de verdad, '
         + 'con su oficio y su estancia. Quita las que sí valgan.'),
       h('div.stack', { style: { marginTop: '14px', gap: '10px' } },
@@ -565,7 +565,7 @@ async function arreglarPruebas() {
   const elegidos = candidatos.filter((c) => marcadas.has(c.tarea.id));
   toast('Arreglando…');
   const { hechas, conFoto } = await ejemplos.arreglarTextos(elegidos);
-  toast(`${hechas} ${hechas === 1 ? 'tarea arreglada' : 'tareas arregladas'}`
+  toast(`${hechas} ${hechas === 1 ? 'repaso arreglado' : 'repasos arreglados'}`
     + (conFoto ? ` · ${conFoto} con foto` : ''));
   store.sincronizar({ forzar: true });
   refrescar();
@@ -586,7 +586,7 @@ async function borrarSinFoto() {
   if (!p) return toast('No hay ninguna promoción activa', 'err');
 
   const cojas = await ejemplos.tareasSinFotografia(p.id);
-  if (!cojas.length) return toast('Ninguna tarea está sin fotografía');
+  if (!cojas.length) return toast('Ningún repaso está sin fotografía');
 
   const marcadas = new Set(cojas.map((t) => t.id));
   const contador = h('span');
@@ -598,10 +598,10 @@ async function borrarSinFoto() {
     const boton = h('button.btn.danger.full', { onclick: () => cerrar(true) }, contador);
     pintarContador();
     return [
-      h('h2.title', null, 'Tareas sin fotografía'),
+      h('h2.title', null, 'Repasos sin fotografía'),
       h('p.sub', null,
-        `${cojas.length} ${cojas.length === 1 ? 'tarea no tiene' : 'tareas no tienen'} ninguna imagen. `
-        + 'Una tarea sin foto no existe: las marcadas se borran para siempre, '
+        `${cojas.length} ${cojas.length === 1 ? 'repaso no tiene' : 'repasos no tienen'} ninguna imagen. `
+        + 'Un repaso sin foto no existe: los marcados se borran para siempre, '
         + 'en todos los móviles. No se pueden recuperar.'),
       h('div.stack', { style: { marginTop: '14px', gap: '10px' } },
         cojas.map((t) => {
@@ -625,7 +625,7 @@ async function borrarSinFoto() {
   for (const t of cojas.filter((x) => marcadas.has(x.id))) {
     await store.borrarTarea(t.id);
   }
-  toast(`${marcadas.size} ${marcadas.size === 1 ? 'tarea borrada' : 'tareas borradas'} para siempre`, '', { icono: 'trash' });
+  toast(`${marcadas.size} ${marcadas.size === 1 ? 'repaso borrado' : 'repasos borrados'} para siempre`, '', { icono: 'trash' });
   store.sincronizar({ forzar: true });
   refrescar();
 }
@@ -653,13 +653,13 @@ async function ponerVersionNueva(registro) {
 
 async function quitarEjemplos() {
   const seguir = await confirmSheet({
-    title: '¿Quitar las actas de ejemplo?',
+    title: '¿Quitar los partes de ejemplo?',
     text: 'Solo se retiran las que empiezan por «Ejemplo · ». El repaso real no se toca.',
     ok: 'Quitar', danger: true,
   });
   if (!seguir) return;
   const n = await ejemplos.borrar();
-  toast(n ? `${n} ${n === 1 ? 'acta retirada' : 'actas retiradas'}` : 'No había ninguna');
+  toast(n ? `${n} ${n === 1 ? 'parte retirado' : 'partes retirados'}` : 'No había ninguna');
   refrescar();
 }
 
