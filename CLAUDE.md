@@ -20,6 +20,26 @@ en el oficio —`commit`, `push`, `outbox`— y los identificadores que ya
 están escritos en datos de producción y no se pueden renombrar sin
 migrar la base entera.
 
+## El diccionario de la casa (decidido por Fran, agosto de 2026)
+
+En pantalla, cuatro palabras con dueño fijo:
+
+- **Repaso**: lo de una vivienda, con su circuito de verificación por
+  la DF (pendiente → completado → verificado/rechazado).
+- **Tarea**: SOLO lo que sale de una reunión de obra, con responsable
+  y fecha límite.
+- **Parte**: el papeleo de repasos — el del día y el de cada vivienda.
+- **Acta**: SOLO el documento de una reunión de obra.
+
+OJO, la trampa que no hay que pisar: **por dentro, la tabla `tareas`,
+la ruta `#/tareas/…` y los nombres de código (`crearTarea`,
+`tareaId`…) guardan REPASOS**. Son identificadores que ya viven en
+producción y no se renombran (ver la excepción del idioma, arriba).
+Al leer código, fíjate en el identificador; al leer pantalla, en la
+palabra. Y cuando se construyan las tareas de reunión, su entidad
+llevará por dentro un nombre propio que no choque (`encargos`), nunca
+`tareas`.
+
 ## Lo que no se hace nunca
 
 - **No se cambia la contraseña de Fran** (f.juarez@unikdi.com). Lo ha
