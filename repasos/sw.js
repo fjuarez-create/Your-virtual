@@ -162,6 +162,13 @@ self.addEventListener('fetch', (e) => {
   // fotos con sesión, y una copia cacheada solo puede confundir.
   if (url.pathname.includes('/api/')) return;
 
+  // El taller —la rama de pruebas publicada en /taller— tiene su propia
+  // caché y su propio service worker, acotado a esa carpeta. Lo suyo no
+  // se toca: sin esta línea, la regla de navegación de abajo contestaría
+  // /taller con la portada de ESTA app, y el taller sería invisible
+  // desde cualquier navegador que ya la tuviera en caché.
+  if (url.pathname === '/taller' || url.pathname.startsWith('/taller/')) return;
+
   // Navegación: la portada sale de esta misma caché, no de la red.
   //
   // Parece al revés de lo lógico —¿no habría que ir a por lo último?—
