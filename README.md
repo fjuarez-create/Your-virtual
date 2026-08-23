@@ -1,6 +1,10 @@
-# UNIK · Showroom Virtual — SERENEA
+# RIC — Real Estate Investments Platform
 
-Showroom inmobiliario interactivo en WebGL (Three.js) para el **Edificio Apolo**
+**RIC** es la plataforma de inversión y comercialización inmobiliaria: un
+showroom interactivo en WebGL (Three.js) multi-promoción y multi-edificio,
+preparado para conectar con backend de disponibilidad en tiempo real.
+
+Su primer despliegue es el showroom del **Edificio Apolo**
 (Serenea by Unik, C/ Íñigo López de Mendoza, Las Huesas, Telde): **166 viviendas**
 en cuatro plantas (1–4, el número de planta coincide con el primer dígito de cada
 vivienda), con patios ajardinados interiores y terrazas en la planta 4.
@@ -55,7 +59,7 @@ vivienda), con patios ajardinados interiores y terrazas en la planta 4.
 
 ## 🚀 Ejecutar en local
 
-Es un sitio 100 % estático (sin build). Basta un servidor de ficheros:
+RIC es un sitio 100 % estático (sin build). Basta un servidor de ficheros:
 
 ```bash
 cd Your-virtual
