@@ -3113,3 +3113,17 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
     font: 500 17px/1.5 var(--d-font, -apple-system, sans-serif);
   }
 }
+
+/* El sello del taller: solo existe cuando la app corre en /taller (lo
+   decide app.js por la ruta). En la app real no aparece jamás. */
+body.es-taller::before {
+  content: 'TALLER \00b7 datos de prueba';
+  position: fixed; left: 12px;
+  bottom: calc(env(safe-area-inset-bottom) + 12px);
+  z-index: 900; pointer-events: none;
+  background: rgba(12, 11, 10, 0.84); color: #fff;
+  font: 600 11px/1 var(--d-font, sans-serif);
+  letter-spacing: 0.06em;
+  padding: 7px 12px; border-radius: 999px;
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+}

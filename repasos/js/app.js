@@ -344,6 +344,10 @@ export function refrescar() {
 
 /* ─── Arranque ────────────────────────────────────────────────── */
 async function arrancar() {
+  // El sello del taller: si la app corre en /taller se dice bien claro,
+  // con un rótulo flotante. Nadie debe poder confundir el banco de
+  // pruebas con la obra real, ni un segundo.
+  if (location.pathname.startsWith('/taller')) document.body.classList.add('es-taller');
   await store.cargarSesion();
   // El directorio del equipo antes de pintar: si no, la primera
   // pantalla saldría con iniciales y las caras aparecerían al
