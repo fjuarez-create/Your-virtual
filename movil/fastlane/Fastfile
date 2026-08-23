@@ -403,8 +403,19 @@ def repaso_de_la_ficha(app, version)
   # 4. El nombre, el subtítulo, la política de privacidad y las
   #    categorías, que viven en otro sitio distinto de la versión.
   begin
-    infos = app.get_app_infos
-    info = infos.find { |i| i.app_store_state.to_s != "READY_FOR_SALE" } || infos.first
+    # El nombre y la política de privacidad no cuelgan de la versión
+    # sino de la «ficha» de la app, que va por su cuenta y tiene su
+    # propia copia editable y su copia publicada.
+    info = begin
+      app.fetch_edit_app_info
+    rescue StandardError
+      nil
+    end
+    info ||= begin
+      app.fetch_live_app_info
+    rescue StandardError
+      nil
+    end
     if info
       begin
         info.get_app_info_localizations.each do |l|
