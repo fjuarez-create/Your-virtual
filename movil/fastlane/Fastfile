@@ -172,6 +172,42 @@ platform :ios do
     end
   end
 
+  desc "Retira un envío de revisión VACÍO. No toca los que llevan algo dentro."
+  lane :retirar_envio do
+    require "spaceship"
+
+    Spaceship::ConnectAPI.auth(
+      key_id: ENV.fetch("APPSTORE_CLAVE_ID"),
+      issuer_id: ENV.fetch("APPSTORE_EMISOR_ID"),
+      key: ENV.fetch("APPSTORE_CLAVE_P8")
+    )
+
+    buscado = ENV.fetch("ENVIO_ID", "").strip
+    UI.user_error!("No se ha dicho qué envío retirar.") if buscado.empty?
+
+    app = Spaceship::ConnectAPI::App.find(IDENTIFICADOR)
+    UI.user_error!("No aparece la app #{IDENTIFICADOR}.") if app.nil?
+
+    envio = app.get_review_submissions(includes: "items").find { |e| e.id == buscado }
+    UI.user_error!("En esta cuenta no hay ningún envío con el identificador #{buscado}.") if envio.nil?
+
+    # Los dos cerrojos. Retirar un envío que lleva una versión dentro, o
+    # uno que está en mitad de una conversación con Apple, es meterse
+    # donde no llaman: eso lo decide Fran, no un robot.
+    estado = envio.state.to_s
+    unless estado == "READY_FOR_REVIEW"
+      UI.user_error!("Ese envío está «#{en_cristiano_envio(estado)}». Solo retiro los que están preparados y sin mandar.")
+    end
+
+    dentro = (envio.items || []).length
+    unless dentro.zero?
+      UI.user_error!("Ese envío lleva #{dentro} cosa(s) dentro. Solo retiro los vacíos.")
+    end
+
+    envio.cancel_submission
+    UI.success("Retirado el envío vacío #{buscado}.")
+  end
+
   desc "Envía a revisión la versión en curso. Se planta si algo no está en su sitio."
   lane :enviar do
     require "spaceship"

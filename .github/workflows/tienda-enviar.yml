@@ -20,8 +20,12 @@ on:
   workflow_dispatch:
     inputs:
       confirmar:
-        description: 'Escribe ENVIAR para confirmar que quieres mandarla a la cola de revisión de Apple'
+        description: 'Escribe ENVIAR para mandarla a la cola de revisión de Apple, o RETIRAR para recoger un envío vacío'
         required: true
+        default: ''
+      retirar_envio_id:
+        description: 'Solo para RETIRAR: el identificador del envío vacío que hay que recoger'
+        required: false
         default: ''
   # El empujón del fichero-señal NO envía nada: el trabajo de abajo solo
   # se ejecuta cuando el disparo es a mano. Está aquí porque GitHub no
@@ -45,16 +49,28 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Confirmar que se quiere enviar
+      - name: Confirmar qué se quiere hacer
         env:
           CONFIRMAR: ${{ inputs.confirmar }}
+          ENVIO_ID: ${{ inputs.retirar_envio_id }}
         run: |
           set -eu
-          if [ "$CONFIRMAR" != "ENVIAR" ]; then
-            echo "::error::Para enviar la app a revisión hay que escribir ENVIAR en la casilla. No se ha enviado nada."
-            exit 1
-          fi
-          echo "Confirmado."
+          case "$CONFIRMAR" in
+            ENVIAR)
+              echo "Confirmado: enviar a revisión."
+              ;;
+            RETIRAR)
+              if [ -z "${ENVIO_ID:-}" ]; then
+                echo "::error::Para RETIRAR hay que decir qué envío. No se ha tocado nada."
+                exit 1
+              fi
+              echo "Confirmado: retirar el envío vacío ${ENVIO_ID}."
+              ;;
+            *)
+              echo "::error::Hay que escribir ENVIAR o RETIRAR en la casilla. No se ha tocado nada."
+              exit 1
+              ;;
+          esac
 
       - name: Comprobar que están los secretos
         env:
@@ -133,6 +149,7 @@ jobs:
           working-directory: movil
 
       - name: Enviar a revisión
+        if: inputs.confirmar == 'ENVIAR'
         working-directory: movil
         env:
           APPSTORE_CLAVE_ID: ${{ secrets.APPSTORE_CLAVE_ID }}
@@ -143,3 +160,17 @@ jobs:
           FASTLANE_HIDE_CHANGELOG: '1'
           FASTLANE_DISABLE_COLORS: '1'
         run: bundle exec fastlane ios enviar
+
+      - name: Retirar el envío vacío
+        if: inputs.confirmar == 'RETIRAR'
+        working-directory: movil
+        env:
+          APPSTORE_CLAVE_ID: ${{ secrets.APPSTORE_CLAVE_ID }}
+          APPSTORE_EMISOR_ID: ${{ secrets.APPSTORE_EMISOR_ID }}
+          APPSTORE_CLAVE_P8: ${{ secrets.APPSTORE_CLAVE_P8 }}
+          ENVIO_ID: ${{ inputs.retirar_envio_id }}
+          TZ: Europe/Madrid
+          FASTLANE_SKIP_UPDATE_CHECK: '1'
+          FASTLANE_HIDE_CHANGELOG: '1'
+          FASTLANE_DISABLE_COLORS: '1'
+        run: bundle exec fastlane ios retirar_envio
