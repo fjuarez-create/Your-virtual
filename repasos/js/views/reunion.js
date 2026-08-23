@@ -1,24 +1,37 @@
 /* LA REUNIÓN DE UN DÍA — en marcha si es la de hoy, acta si ya pasó.
 
-   De arriba a abajo: quién está en la mesa (los del equipo con su
-   cara, los invitados sin cuenta en pastilla), las tareas que salen de
-   esta reunión, lo que sigue pendiente de reuniones anteriores para
-   repasarlo en voz alta, y el botón de terminar.
+   De arriba a abajo: quién está en la mesa, la grabación (el panel
+   calcado de las notas de voz del iPhone, y después su conducto:
+   transcribir por partes, poner nombre a las voces, redactar), la
+   propuesta de acta de la IA cuando existe —para revisarla y
+   firmarla—, las tareas de esta reunión, el arrastre de pendientes y
+   el botón de terminar.
 
    El acta se sella sola a las 23:59 del día, en el servidor. Hasta
    entonces la DF y el administrador pueden añadir y corregir; después,
-   lo único que sigue vivo es tachar tareas como hechas, que no cambia
-   lo acordado: solo cuenta cómo va cumpliéndose. */
+   lo único que sigue vivo es tachar tareas como hechas.
+
+   Del diccionario de la casa: lo que la IA propone y lo que se firma
+   son TAREAS de reunión (encargos por dentro), nunca repasos. */
 import { h, icon, toast, hora, avatar, sheet } from '../ui.js';
 import * as api from '../api.js';
 import * as store from '../store.js';
-import { puedeVerificar } from '../catalog.js';
-import { cabecera, avisoLocal, barraSync } from '../piezas.js';
+import { puedeVerificar, unidades, unidad } from '../catalog.js';
+import { cabecera, avisoLocal, barraSync, menuFlotante, filaMenu } from '../piezas.js';
+import { grabarAudio } from '../media.js';
 import { fechaDeActa, diaDeLaSemana } from './historial.js';
 import {
-  filaEncargo, tacharEncargo, hojaEncargo, avisarDeError,
+  filaEncargo, tacharEncargo, hojaEncargo, hojaDatosDeTarea, avisarDeError, subDeEncargo, pedirNombre,
 } from '../piezasObra.js';
+import { empezarGrabadora, hayGrabacionEnMarcha } from '../grabadora.js';
 import { ir, refrescar } from '../app.js';
+
+/* ─── Estado que sobrevive a los repintados ───
+   El conducto de una grabación (transcribiendo, poniendo voces…) y el
+   borrador de la propuesta en edición viven aquí, a nivel de módulo:
+   cada refrescar() repinta la vista, pero esto no se olvida. */
+const CONDUCTO = new Map();    // grabacionId → { fase, detalle }
+const BORRADOR = new Map();    // reunionId → { sello, resumen, tareas }
 
 export async function render({ reunionId }) {
   let datos = null;
@@ -41,11 +54,22 @@ export async function render({ reunionId }) {
     ] };
   }
 
-  const { reunion: r, encargos, arrastre } = datos;
+  const { reunion: r, encargos, arrastre, grabaciones, resumen, propuesta } = datos;
   const esHoy = r.fecha === datos.hoy;
   const abierta = !r.sellada;
   const df = puedeVerificar(store.sesion());
   const edita = df && abierta;
+
+  // El registro de voces solo hace falta si hay algo transcrito.
+  let voces = [];
+  let hayServicioVoces = false;
+  if (grabaciones.some((g) => g.partes.some((p) => p.dicho.length))) {
+    try {
+      const rv = await api.listarVoces(r.promoId);
+      voces = rv.voces;
+      hayServicioVoces = rv.servicio.hay;
+    } catch { /* sin registro no se rompe nada */ }
+  }
 
   const tachar = async (e) => { if (await tacharEncargo(e)) refrescar(); };
   const abrir = edita
@@ -73,8 +97,86 @@ export async function render({ reunionId }) {
         ? h('p.d-nota-pie', { style: { margin: '0' } }, 'Sin asistentes apuntados.')
         : null,
     ),
+  ];
 
-    /* ─── Las tareas de esta reunión ─── */
+  /* ─── La grabación ─── */
+  if (edita || grabaciones.length) {
+    contenido.push(h('p.d-epigrafe', null, 'La grabación'));
+
+    if (edita && !hayGrabacionEnMarcha() && !grabaciones.some((g) => g.estado === 'grabando')) {
+      contenido.push(h('div.d-grab-quieta', null,
+        icon('mic'),
+        h('div.grow', null,
+          h('div.d-grab-quieta-titulo', null, grabaciones.length ? 'Grabar otro rato' : 'Sin grabar todavía'),
+          h('div.d-grab-quieta-sub', null, 'Se transcribe al parar · el audio se borra a los 30 días'),
+        ),
+        h('button.d-grab-quieta-boton', {
+          onclick: async () => {
+            await empezarGrabadora({
+              reunionId: r.id,
+              titulo: esHoy ? 'Reunión de hoy' : `Reunión del ${Number(r.fecha.slice(8, 10))}`,
+              alTerminar: (g) => { conducir(g.id, r.promoId); refrescar(); },
+            });
+            refrescar();
+          },
+        }, 'Grabar'),
+      ));
+    }
+
+    for (const g of grabaciones) {
+      contenido.push(tarjetaGrabacion(g, { edita, promoId: r.promoId }));
+    }
+  }
+
+  /* ─── ¿Quién es quién? ─── */
+  const conVoces = grabaciones.filter((g) => g.estado === 'transcrita' && g.partes.some((p) => p.dicho.length));
+  if (edita && conVoces.length) {
+    for (const g of conVoces) {
+      const bloque = bloqueQuienEsQuien(g, { reunion: r, voces, hayServicioVoces });
+      if (bloque) {
+        contenido.push(h('p.d-epigrafe', null, '¿Quién es quién?'), ...bloque);
+      }
+    }
+  }
+
+  /* ─── La propuesta del acta ─── */
+  const hayTranscrito = grabaciones.some((g) => g.estado === 'transcrita');
+  if (edita && propuesta) {
+    contenido.push(...bloquePropuesta(r, propuesta));
+  } else if (edita && hayTranscrito && !resumen) {
+    const redactando = CONDUCTO.get('redactar:' + r.id);
+    const boton = h('button.d-boton-negro', {
+      style: { marginTop: '18px' },
+      disabled: !!redactando,
+      onclick: async () => {
+        CONDUCTO.set('redactar:' + r.id, { fase: 'redactando' });
+        refrescar();
+        try {
+          await api.redactarActa(r.id, unidades(r.promoId).map((u) => ({ id: u.id, nombre: u.nombre })));
+          BORRADOR.delete(r.id);
+          toast('Propuesta de acta lista: revísala');
+        } catch (e) { avisarDeError(e); } finally {
+          CONDUCTO.delete('redactar:' + r.id);
+          refrescar();
+        }
+      },
+    }, icon('edit'), redactando ? 'Redactando el acta…' : 'Redactar el acta con la IA');
+    contenido.push(boton,
+      h('p.d-nota-pie', null,
+        'La IA lee la transcripción y propone el resumen y las tareas, con responsable '
+        + 'cuando quedó claro. Nada se crea hasta que tú lo firmes.'));
+  }
+
+  /* ─── El acta ya firmada ─── */
+  if (resumen) {
+    contenido.push(
+      h('p.d-epigrafe', null, 'El acta'),
+      h('div.d-acta-prosa', null, resumen),
+    );
+  }
+
+  /* ─── Las tareas de esta reunión ─── */
+  contenido.push(
     h('p.d-epigrafe', null, 'Tareas de esta reunión'),
     encargos.length
       ? h('div', null, encargos.map((e) => filaEncargo(e, { alTachar: tachar, alAbrir: abrir })))
@@ -87,7 +189,7 @@ export async function render({ reunionId }) {
           onclick: async () => { if (await hojaEncargo({ reunionId: r.id, promoId: r.promoId })) refrescar(); },
         }, icon('plus'), 'Apuntar una tarea')
       : null,
-  ];
+  );
 
   /* ─── El arrastre ─── */
   if (arrastre.length) {
@@ -103,6 +205,7 @@ export async function render({ reunionId }) {
     const terminar = h('button.d-boton-negro', {
       style: { marginTop: '24px' },
       onclick: async () => {
+        if (hayGrabacionEnMarcha()) { toast('Para antes la grabación', 'err'); return; }
         terminar.disabled = true;
         try {
           await api.editarReunion(r.id, { terminada: true });
@@ -122,11 +225,339 @@ export async function render({ reunionId }) {
   return { sinTabs: true, clase: 'pantalla-diseno', contenido };
 }
 
-/**
- * La hoja de la mesa: quién del equipo está en la reunión y qué
- * invitados de fuera —gente de la obra sin cuenta en la app— se
- * apuntan a mano. Resuelve a true si se guardó en el servidor.
- */
+/* ═══ El conducto: transcribir → voces, empujado desde el móvil ═══
+   Un hosting compartido no tiene trabajadores de fondo, así que el
+   móvil pide un paso corto cada vez hasta que no queda nada. Si la
+   app se cierra a la mitad, el botón de la tarjeta lo retoma. */
+async function conducir(grabacionId, promoId) {
+  if (CONDUCTO.has(grabacionId)) return;
+  CONDUCTO.set(grabacionId, { fase: 'transcribiendo', detalle: '' });
+  refrescar();
+  try {
+    let quedan = 1;
+    while (quedan > 0) {
+      const r = await api.transcribirGrabacion(grabacionId);
+      quedan = r.quedan;
+      CONDUCTO.set(grabacionId, { fase: 'transcribiendo', detalle: quedan ? `quedan ${quedan}` : '' });
+    }
+    // La identificación automática, si hay huellas con las que comparar.
+    CONDUCTO.set(grabacionId, { fase: 'voces', detalle: '' });
+    refrescar();
+    for (let paso = 0; paso < 240; paso++) {
+      const r = await api.identificarGrabacion(grabacionId);
+      if (!r.disponible || r.quedan === 0) break;
+      // Los trabajos acústicos tardan un rato: se pregunta con calma.
+      await new Promise((listo) => setTimeout(listo, r.paso === 'en-cola' ? 8000 : 1500));
+    }
+    toast('Grabación transcrita');
+  } catch (e) {
+    avisarDeError(e);
+  } finally {
+    CONDUCTO.delete(grabacionId);
+    refrescar();
+  }
+}
+
+/* ─── La tarjeta de una grabación ─── */
+function tarjetaGrabacion(g, { edita, promoId }) {
+  const enConducto = CONDUCTO.get(g.id);
+  const min = Math.max(1, Math.round(g.duracion / 60));
+  const sub = [`${min} min`];
+  let chip = null;
+  let accion = null;
+
+  if (enConducto) {
+    chip = h('span.d-chip.ambar', null,
+      enConducto.fase === 'voces' ? 'poniendo voces…' : `transcribiendo… ${enConducto.detalle || ''}`.trim());
+  } else if (g.estado === 'grabando') {
+    chip = h('span.d-chip.ambar', null, 'a medias');
+    if (edita && !hayGrabacionEnMarcha()) {
+      accion = h('button.d-chip', {
+        onclick: async () => {
+          try { await api.cerrarGrabacion(g.id, g.duracion); refrescar(); } catch (e) { avisarDeError(e); }
+        },
+      }, 'Cerrar');
+    }
+  } else if (g.estado === 'lista') {
+    chip = h('span.d-chip', null, 'sin transcribir');
+    if (edita) {
+      accion = h('button.d-chip.ambar', { onclick: () => conducir(g.id, promoId) }, 'Transcribir');
+    }
+  } else if (g.estado === 'transcrita') {
+    chip = h('span.d-chip.verde', null, 'transcrita');
+  }
+  if (g.audioBorrado) {
+    sub.push('audio borrado a los 30 días');
+  }
+
+  const partes = g.partes.filter((p) => p.tam > 0);
+  const cuerpo = h('div.d-encargo', null,
+    h('div.d-grab-fila-icono', null, icon('mic', 20)),
+    h('div.grow', null,
+      h('div.d-encargo-texto', null, `Grabación de las ${hora(g.creado)} h`),
+      h('div.d-encargo-sub', null, sub.join(' · ')),
+    ),
+    accion, chip,
+  );
+
+  if (g.audioBorrado || !partes.length) return cuerpo;
+
+  // Tocar la fila despliega el audio, parte a parte.
+  let abierto = false;
+  const caja = h('div');
+  cuerpo.querySelector('.grow').style.cursor = 'pointer';
+  cuerpo.querySelector('.grow').addEventListener('click', () => {
+    abierto = !abierto;
+    caja.replaceChildren(...(abierto
+      ? partes.map((p) => h('audio', {
+          controls: true, preload: 'none',
+          src: api.urlAudioGrabacion(g.id, p.n),
+          style: { width: '100%', marginTop: '8px' },
+        }))
+      : []));
+  });
+  return h('div', null, cuerpo, caja);
+}
+
+/* ─── ¿Quién es quién?: las voces de una grabación ─── */
+
+/** Las voces que se oyen: una fila por hablante y parte, con lo que dijo. */
+function vocesDeGrabacion(g) {
+  const filas = [];
+  for (const p of g.partes) {
+    const porVoz = new Map();
+    for (const seg of p.dicho) {
+      const v = porVoz.get(seg.h) || { parte: p.n, h: seg.h, segundos: 0, mejor: null, frase: '' };
+      v.segundos += Math.max(0, seg.fin - seg.ini);
+      if (!v.mejor || (seg.fin - seg.ini) > (v.mejor.fin - v.mejor.ini)) v.mejor = seg;
+      if (!v.frase && seg.texto.length > 25) v.frase = seg.texto;
+      porVoz.set(seg.h, v);
+    }
+    for (const v of porVoz.values()) {
+      v.frase = v.frase || v.mejor?.texto || '';
+      filas.push(v);
+    }
+  }
+  filas.sort((a, b) => b.segundos - a.segundos);
+  return filas;
+}
+
+let sonando = null;   // el <audio> de escucha de voz, uno como mucho
+
+function escucharTramo(grabacionId, parte, seg) {
+  if (sonando) { sonando.pause(); sonando = null; }
+  const a = new Audio(api.urlAudioGrabacion(grabacionId, parte));
+  const desde = Math.max(0, seg.ini);
+  const hasta = Math.min(seg.fin, desde + 7);   // siete segundos bastan para reconocer a alguien
+  a.addEventListener('loadedmetadata', () => { a.currentTime = desde; a.play().catch(() => {}); });
+  a.addEventListener('timeupdate', () => { if (a.currentTime >= hasta) { a.pause(); } });
+  a.load();
+  sonando = a;
+}
+
+function bloqueQuienEsQuien(g, { reunion, voces, hayServicioVoces }) {
+  const filas = vocesDeGrabacion(g);
+  if (!filas.length) return null;
+
+  const mapa = { ...(g.hablantes?.mapa || {}) };
+  const nodos = [];
+
+  for (const v of filas) {
+    const etiqueta = `${v.parte}:${v.h}`;
+    const puesto = mapa[etiqueta];
+    const min = Math.max(1, Math.round(v.segundos / 60));
+
+    const elegir = () => menuFlotante((cerrarMenu) => [
+      ...(reunion.asistentes || []).map((id) => {
+        const p = store.persona(id);
+        return filaMenu(null, p.nombre || 'Alguien', () => {
+          cerrarMenu();
+          asignar(etiqueta, { personaId: id, nombre: p.nombre || '' });
+        });
+      }),
+      ...(reunion.invitados || []).map((n) => filaMenu(null, `${n} (invitado)`, () => {
+        cerrarMenu();
+        asignar(etiqueta, { personaId: null, nombre: n });
+      })),
+      filaMenu(null, 'Otra persona…', async () => {
+        cerrarMenu();
+        const nombre = await pedirNombre('¿Quién es esta voz?', '');
+        if (nombre) asignar(etiqueta, { personaId: null, nombre });
+      }),
+      puesto ? filaMenu(null, 'Dejarla sin nombre', () => { cerrarMenu(); asignar(etiqueta, null); }) : null,
+    ].filter(Boolean), { conX: true });
+
+    const asignar = async (et, quien) => {
+      if (quien === null) delete mapa[et];
+      else mapa[et] = { ...quien, auto: false };
+      try {
+        await api.guardarHablantes(g.id, mapa);
+        // Si el nombre es de alguien del equipo, su voz queda apuntada
+        // en el registro; la huella se aprende con su clip de 15 s.
+        if (quien) {
+          await api.crearVoz({
+            promoId: reunion.promoId,
+            personaId: quien.personaId,
+            personaNombre: quien.nombre,
+            muestraGrabacionId: g.id,
+            muestraParte: v.parte,
+            muestraDesde: v.mejor?.ini || 0,
+            muestraHasta: v.mejor?.fin || 0,
+          });
+        }
+        refrescar();
+      } catch (e) { avisarDeError(e); }
+    };
+
+    nodos.push(h('div.d-encargo', null,
+      h('button.d-encargo-bola', {
+        'aria-label': 'Escuchar esta voz',
+        style: { color: 'var(--d-beige-tinta)', borderColor: '#c9c4bb' },
+        onclick: () => v.mejor && escucharTramo(g.id, v.parte, v.mejor),
+      }, icon('mic', 18)),
+      h('div.grow', null,
+        h('div.d-encargo-texto', null, puesto?.nombre
+          ? puesto.nombre + (puesto.auto ? ' · reconocida' : '')
+          : `Voz ${v.h}${g.partes.length > 1 ? ` (parte ${v.parte + 1})` : ''}`),
+        h('div.d-encargo-sub', null, `${min} min hablando · «${v.frase.slice(0, 70)}${v.frase.length > 70 ? '…' : ''}»`),
+      ),
+      h('button.d-chip', { class: puesto ? 'verde' : 'ambar', onclick: elegir },
+        puesto ? 'cambiar' : 'asignar'),
+    ));
+  }
+
+  // El aprendizaje: para cada persona asignada sin huella, su clip.
+  const sinHuella = [];
+  const vistos = new Set();
+  for (const et of Object.keys(mapa)) {
+    const quien = mapa[et];
+    const clavePersona = quien.personaId || quien.nombre;
+    if (vistos.has(clavePersona)) continue;
+    vistos.add(clavePersona);
+    const voz = voces.find((x) => (quien.personaId && x.personaId === quien.personaId)
+      || (!quien.personaId && x.personaNombre === quien.nombre));
+    if (!voz || (!voz.conHuella && !voz.enrolando)) {
+      sinHuella.push({ quien, voz });
+    }
+  }
+  if (sinHuella.length) {
+    nodos.push(h('p.d-nota-pie', null, hayServicioVoces
+      ? 'Para que la app reconozca sola a alguien en la próxima reunión, graba su huella: quince segundos hablando, con su permiso.'
+      : 'Las huellas de voz están sin activar (Ajustes → Clave de pyannote): de momento se pregunta en cada reunión.'));
+    for (const { quien } of sinHuella) {
+      nodos.push(h('button.d-fantasma', {
+        style: { marginTop: '8px' },
+        onclick: async () => {
+          const clip = await grabarAudio();
+          if (!clip) return;
+          try {
+            const rv = await api.crearVoz({ promoId: reunion.promoId, personaId: quien.personaId, personaNombre: quien.nombre });
+            const rs = await api.subirMuestraVoz(rv.voz.id, clip.blob);
+            toast(rs.enrolando
+              ? `La voz de ${quien.nombre} se está aprendiendo`
+              : `Clip de ${quien.nombre} guardado; se enrolará al activar las huellas`);
+            refrescar();
+          } catch (e) { avisarDeError(e); }
+        },
+      }, icon('mic'), `Aprender la voz de ${quien.nombre}`));
+    }
+  }
+
+  return nodos;
+}
+
+/* ─── La propuesta del acta: revisar y firmar ─── */
+function bloquePropuesta(r, propuesta) {
+  // El borrador local sobrevive a los repintados; si el servidor trae
+  // una propuesta más nueva (re-redactada), el borrador viejo se tira.
+  let borrador = BORRADOR.get(r.id);
+  if (!borrador || borrador.sello !== propuesta.redactada) {
+    borrador = {
+      sello: propuesta.redactada,
+      resumen: propuesta.resumen,
+      tareas: propuesta.tareas.map((t) => ({ ...t })),
+    };
+    BORRADOR.set(r.id, borrador);
+  }
+
+  const area = h('textarea.d-area', { rows: 6, style: { marginTop: '0' } });
+  area.value = borrador.resumen;
+  area.addEventListener('input', () => { borrador.resumen = area.value; });
+
+  const lista = h('div');
+  const pintarTareas = () => {
+    lista.replaceChildren(...borrador.tareas.map((t, i) => {
+      const dudas = [];
+      if (!t.responsableNombre) dudas.push('sin responsable');
+      if (!t.seguro) dudas.push('revísala');
+      return h('div.d-encargo', null,
+        h('button.d-encargo-bola', {
+          'aria-label': 'Quitar esta tarea de la propuesta',
+          style: { color: 'var(--d-gris)', borderColor: '#c9c4bb' },
+          onclick: () => { borrador.tareas.splice(i, 1); pintarTareas(); pintarFirma(); },
+        }, icon('x', 16)),
+        h('button.grow', {
+          onclick: async () => {
+            const salida = await hojaDatosDeTarea({
+              promoId: r.promoId,
+              valores: t,
+              titulo: 'Revisar la tarea propuesta',
+              botonTexto: 'Así está bien',
+              conBorrar: true,
+              textoBorrar: 'Quitarla de la propuesta',
+            });
+            if (!salida) return;
+            if (salida.borrar) borrador.tareas.splice(i, 1);
+            else borrador.tareas[i] = { ...t, ...salida.valores, seguro: true };
+            pintarTareas();
+            pintarFirma();
+          },
+        },
+          h('div.d-encargo-texto', null, t.texto),
+          h('div.d-encargo-sub', null, subDeEncargo({
+            general: t.general, unidadId: t.unidadId,
+            responsableNombre: t.responsableNombre, fechaLimite: t.fechaLimite,
+          })),
+        ),
+        dudas.length ? h('span.d-chip.ambar', null, dudas.join(' · ')) : null,
+      );
+    }));
+  };
+  pintarTareas();
+
+  const firmar = h('button.d-boton-negro', {
+    style: { marginTop: '16px' },
+    onclick: async () => {
+      firmar.disabled = true;
+      try {
+        const res = await api.aceptarActa(r.id, { resumen: borrador.resumen.trim(), tareas: borrador.tareas });
+        BORRADOR.delete(r.id);
+        toast(res.encargos.length === 1
+          ? 'Acta firmada: una tarea creada'
+          : `Acta firmada: ${res.encargos.length} tareas creadas`);
+        refrescar();
+      } catch (e) { firmar.disabled = false; avisarDeError(e); }
+    },
+  });
+  const pintarFirma = () => {
+    const n = borrador.tareas.length;
+    firmar.replaceChildren(icon('check'),
+      n === 0 ? 'Firmar el acta (sin tareas)' : n === 1 ? 'Firmar el acta · 1 tarea' : `Firmar el acta · ${n} tareas`);
+  };
+  pintarFirma();
+
+  return [
+    h('p.d-epigrafe', null, 'La propuesta del acta'),
+    h('p.d-nota-pie', { style: { margin: '0 6px 10px' } },
+      'La ha escrito la IA a partir de la grabación. Toca una tarea para corregirla, '
+      + 'el redondel para quitarla, y firma: solo entonces se crean.'),
+    area,
+    lista,
+    firmar,
+  ];
+}
+
+/* ─── La hoja de la mesa (asistentes e invitados) ─── */
 function hojaMesa(r) {
   return sheet((cerrar) => {
     const dentro = new Set(r.asistentes || []);

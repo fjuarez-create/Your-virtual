@@ -41,6 +41,7 @@ const CODIGO = [
   'js/informe.js',
   'js/pdf.js',
   'js/piezasObra.js',
+  'js/grabadora.js',
   'js/views/entrar.js',
   'js/views/inicio.js',
   'js/views/obra.js',

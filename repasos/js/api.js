@@ -23,7 +23,7 @@ export class ApiError extends Error {
   }
 }
 
-async function pedir(ruta, { metodo = 'GET', json, form, signal } = {}) {
+async function pedir(ruta, { metodo = 'GET', json, form, crudo, signal } = {}) {
   if (!HAY_SERVIDOR) throw new ApiError('Sin servidor configurado', 0, 'sin-servidor');
   const opciones = { method: metodo, credentials: 'include', signal, headers: {} };
   if (json !== undefined) {
@@ -31,6 +31,10 @@ async function pedir(ruta, { metodo = 'GET', json, form, signal } = {}) {
     opciones.body = JSON.stringify(json);
   } else if (form) {
     opciones.body = form;
+  } else if (crudo) {
+    // El cuerpo tal cual, sin envolver: así viajan las partes de audio.
+    opciones.headers['Content-Type'] = 'application/octet-stream';
+    opciones.body = crudo;
   }
   let res;
   try {
@@ -173,6 +177,44 @@ export const crearEncargo = (datos) =>
   pedir('obra/encargos', { metodo: 'POST', json: datos });
 export const editarEncargo = (id, datos) =>
   pedir('obra/encargos/' + encodeURIComponent(id), { metodo: 'PATCH', json: datos });
+
+/* La grabación de la reunión: el audio sube por PARTES (el móvil rota
+   la grabadora cada tanto y cada parte es un fichero completo), la
+   transcripción va parte a parte y el acta la redacta la IA como
+   propuesta que la DF firma. */
+export const empezarGrabacion = (reunionId, mime) =>
+  pedir(`obra/reuniones/${encodeURIComponent(reunionId)}/grabaciones`, { metodo: 'POST', json: { mime } });
+export const subirParteGrabacion = (id, n, dur, blob) =>
+  pedir(`obra/grabaciones/${encodeURIComponent(id)}/parte?n=${n}&dur=${Math.round(dur)}`, { metodo: 'POST', crudo: blob });
+export const cerrarGrabacion = (id, duracion) =>
+  pedir(`obra/grabaciones/${encodeURIComponent(id)}/cerrar`, { metodo: 'POST', json: { duracion: Math.round(duracion) } });
+/** Transcribe UNA parte pendiente; se llama en bucle hasta que `quedan` sea 0. */
+export const transcribirGrabacion = (id) =>
+  pedir(`obra/grabaciones/${encodeURIComponent(id)}/transcribir`, { metodo: 'POST', json: {} });
+export const redactarActa = (reunionId, unidades) =>
+  pedir(`obra/reuniones/${encodeURIComponent(reunionId)}/redactar`, { metodo: 'POST', json: { unidades } });
+export const aceptarActa = (reunionId, datos) =>
+  pedir(`obra/reuniones/${encodeURIComponent(reunionId)}/acta`, { metodo: 'POST', json: datos });
+export const urlAudioGrabacion = (id, parte = 0) =>
+  `${API_BASE}obra/grabaciones/${encodeURIComponent(id)}/audio?parte=${parte}`;
+
+/* Quién es quién: el mapa manual de cada grabación, el registro de
+   voces de la obra y —con la clave de pyannote puesta— las huellas que
+   hacen que la app reconozca las voces sola en la reunión siguiente. */
+export const listarVoces = (promoId) =>
+  pedir('obra/voces?promo=' + encodeURIComponent(promoId));
+export const crearVoz = (datos) => pedir('obra/voces', { metodo: 'POST', json: datos });
+export const subirMuestraVoz = (id, blob) =>
+  pedir(`obra/voces/${encodeURIComponent(id)}/muestra`, { metodo: 'POST', crudo: blob });
+export const guardarHablantes = (grabacionId, mapa) =>
+  pedir(`obra/grabaciones/${encodeURIComponent(grabacionId)}/hablantes`, { metodo: 'POST', json: { mapa } });
+/** Un paso de identificación automática; se llama en bucle hasta quedan 0. */
+export const identificarGrabacion = (id) =>
+  pedir(`obra/grabaciones/${encodeURIComponent(id)}/identificar`, { metodo: 'POST', json: {} });
+export const vocesEstado = () => pedir('obra/voces/clave');
+export const vocesPonerClave = (clave) =>
+  pedir('obra/voces/clave', { metodo: 'POST', json: { clave } });
+export const vocesQuitarClave = () => pedir('obra/voces/clave', { metodo: 'DELETE' });
 
 /* ─── Claude ──────────────────────────────────────────────────────
    La clave vive en el servidor y no vuelve nunca: de aquí solo sale

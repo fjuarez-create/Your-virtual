@@ -76,24 +76,27 @@ export async function tacharEncargo(e) {
 }
 
 /**
- * La hoja de crear o editar una tarea de reunión. Con `encargo` edita;
- * sin él, crea en la reunión indicada. Resuelve a true si algo cambió
- * en el servidor —guardado o borrado—, para que quien la abrió sepa si
- * tiene que repintar.
+ * La hoja de los datos de una tarea de reunión: texto, alcance,
+ * responsable y fecha. Es la misma para las tareas de verdad y para
+ * las propuestas de la IA; lo único que cambia es qué se hace al
+ * guardar, y eso lo pone quien la abre.
+ *
+ * Resuelve a { valores } al guardar, { borrar: true } si se borra, o
+ * null si se cierra sin más.
  */
-export function hojaEncargo({ reunionId, promoId, encargo = null }) {
+export function hojaDatosDeTarea({ promoId, valores = null, titulo, botonTexto, conBorrar = false, textoBorrar = 'Borrar la tarea' }) {
   return sheet((cerrar) => {
-    let general = encargo ? !!encargo.general : true;
-    let unidadId = encargo?.unidadId || '';
-    let responsable = encargo && (encargo.responsableId || encargo.responsableNombre)
-      ? { id: encargo.responsableId, nombre: encargo.responsableNombre }
+    let general = valores ? !!valores.general : true;
+    let unidadId = valores?.unidadId || '';
+    let responsable = valores && (valores.responsableId || valores.responsableNombre)
+      ? { id: valores.responsableId || null, nombre: valores.responsableNombre }
       : null;
-    let fechaLimite = encargo?.fechaLimite || '';
+    let fechaLimite = valores?.fechaLimite || '';
 
     const area = h('textarea.d-area', {
       placeholder: 'Qué hay que hacer…', autocapitalize: 'sentences', rows: 3,
     });
-    if (encargo) area.value = encargo.texto;
+    if (valores) area.value = valores.texto || '';
 
     const selecto = (alPinchar) => {
       const b = h('button.d-desplegable', { style: { width: '100%' }, onclick: alPinchar },
@@ -137,29 +140,19 @@ export function hojaEncargo({ reunionId, promoId, encargo = null }) {
     });
 
     const guardar = h('button.d-boton-negro', {
-      onclick: async () => {
+      onclick: () => {
         const texto = area.value.trim();
         if (!texto) return;
-        guardar.disabled = true;
-        try {
-          const datos = {
-            texto,
-            general,
-            unidadId,
-            responsableId: responsable?.id || null,
-            responsableNombre: responsable?.nombre || '',
-            fechaLimite,
-          };
-          if (encargo) await api.editarEncargo(encargo.id, datos);
-          else await api.crearEncargo({ reunionId, ...datos });
-          toast(encargo ? 'Tarea guardada' : 'Tarea apuntada');
-          cerrar(true);
-        } catch (err) {
-          guardar.disabled = false;
-          avisarDeError(err);
-        }
+        cerrar({ valores: {
+          texto,
+          general,
+          unidadId,
+          responsableId: responsable?.id || null,
+          responsableNombre: responsable?.nombre || '',
+          fechaLimite,
+        } });
       },
-    }, encargo ? 'Guardar los cambios' : 'Apuntar la tarea');
+    }, botonTexto);
 
     const repintar = () => {
       poner(selAlcance, general ? 'Toda la obra (general)' : (unidad(unidadId)?.nombre || 'Elegir vivienda'), general || !!unidadId);
@@ -169,31 +162,59 @@ export function hojaEncargo({ reunionId, promoId, encargo = null }) {
     };
     area.addEventListener('input', repintar);
     repintar();
-    setTimeout(() => { if (!encargo) area.focus(); }, 60);
+    setTimeout(() => { if (!valores) area.focus(); }, 60);
 
     return [
-      h('h2.title', null, encargo ? 'Editar la tarea' : 'Tarea de la reunión'),
+      h('h2.title', null, titulo),
       area,
       campo('Dónde', selAlcance),
       campo('Quién se encarga', selResponsable),
       campo('Para cuándo', selFecha),
       guardar,
-      encargo ? h('button.btn.ghost.full', {
+      conBorrar ? h('button.btn.ghost.full', {
         onclick: async () => {
           if (!await confirmSheet({
             title: '¿Borrar esta tarea?',
             text: 'Desaparece del acta y de los pendientes.',
             ok: 'Borrar', danger: true,
           })) return;
-          try {
-            await api.editarEncargo(encargo.id, { borrada: true });
-            toast('Tarea borrada');
-            cerrar(true);
-          } catch (err) { avisarDeError(err); }
+          cerrar({ borrar: true });
         },
-      }, 'Borrar la tarea') : null,
+      }, textoBorrar) : null,
     ];
   });
+}
+
+/**
+ * La hoja de crear o editar una tarea de reunión DE VERDAD: la de
+ * datos, más la llamada al servidor. Resuelve a true si algo cambió,
+ * para que quien la abrió sepa si tiene que repintar.
+ */
+export async function hojaEncargo({ reunionId, promoId, encargo = null }) {
+  const salida = await hojaDatosDeTarea({
+    promoId,
+    valores: encargo,
+    titulo: encargo ? 'Editar la tarea' : 'Tarea de la reunión',
+    botonTexto: encargo ? 'Guardar los cambios' : 'Apuntar la tarea',
+    conBorrar: !!encargo,
+  });
+  if (!salida) return false;
+  try {
+    if (salida.borrar) {
+      await api.editarEncargo(encargo.id, { borrada: true });
+      toast('Tarea borrada');
+    } else if (encargo) {
+      await api.editarEncargo(encargo.id, salida.valores);
+      toast('Tarea guardada');
+    } else {
+      await api.crearEncargo({ reunionId, ...salida.valores });
+      toast('Tarea apuntada');
+    }
+    return true;
+  } catch (err) {
+    avisarDeError(err);
+    return false;
+  }
 }
 
 /** El aviso que corresponde: sin cobertura, acta sellada o lo que diga el servidor. */
@@ -208,7 +229,7 @@ function poner(desplegable, textoVisible, puesto) {
   desplegable.classList.toggle('puesto', !!puesto);
 }
 
-function pedirNombre(titulo, valor) {
+export function pedirNombre(titulo, valor) {
   return sheet((cerrar) => {
     const caja = h('input.input', { type: 'text', value: valor || '', maxlength: 80, autocomplete: 'off' });
     const listo = () => { const t = caja.value.trim(); if (t) cerrar(t); };

@@ -2956,6 +2956,87 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 /* La nota pequeña al pie de un bloque: el recordatorio del sello. */
 .d-nota-pie { margin: 10px 6px 0; font-size: 12.5px; line-height: 1.5; color: var(--d-gris); }
 
+/* ─── La grabadora de reuniones ──────────────────────────────────
+   Calcada del grabador de notas de voz de iOS: panel oscuro desde
+   abajo, título, cronómetro con centésimas, la onda roja avanzando y
+   el cuadrado de parar dentro de su aro. Vive colgada del body: se
+   pliega a una barrita y se sigue usando la app sin dejar de grabar. */
+.d-grabadora {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 85;
+  background: #131211; color: #fff;
+  border-radius: 24px 24px 0 0;
+  height: min(74vh, 620px);
+  display: flex; flex-direction: column; align-items: center;
+  padding: 8px 20px calc(env(safe-area-inset-bottom) + 26px);
+  box-shadow: 0 -18px 50px rgba(0, 0, 0, 0.35);
+}
+.d-grab-asa { padding: 8px 34px; background: none; }
+.d-grab-asa span { display: block; width: 44px; height: 5px; border-radius: 999px; background: #4a4846; }
+.d-grab-titulo {
+  margin: 16px 0 0; font-size: 24px; font-weight: 600;
+  letter-spacing: -0.01em; text-align: center;
+  max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.d-grab-crono { margin-top: 8px; font-size: 15px; color: #9d9a96; font-variant-numeric: tabular-nums; }
+.d-grab-lienzo { flex: 1; width: 100%; display: flex; align-items: center; min-height: 0; }
+.d-grab-onda { width: 100%; height: 160px; display: block; }
+.d-grab-estado { margin: 0 0 18px; font-size: 12.5px; color: #8c8984; text-align: center; }
+.d-grab-parar {
+  width: 84px; height: 84px; border-radius: 999px; background: none;
+  border: 3px solid #3a3835; display: grid; place-items: center; flex: none;
+}
+.d-grab-cuadrado { width: 30px; height: 30px; border-radius: 8px; background: var(--d-rojo); display: block; }
+.d-grab-cuadrado.chico { width: 15px; height: 15px; border-radius: 4px; }
+.d-grab-parar:active .d-grab-cuadrado { transform: scale(0.88); }
+
+.d-grab-mini {
+  position: fixed; left: 12px; right: 12px;
+  bottom: calc(env(safe-area-inset-bottom) + 12px);
+  z-index: 85; height: 54px; border-radius: 999px;
+  background: #131211; color: #fff;
+  display: flex; align-items: center; gap: 10px; padding: 0 8px 0 18px;
+  font-size: 15px; font-weight: 500;
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.35);
+}
+.d-grab-punto {
+  width: 10px; height: 10px; border-radius: 999px; background: var(--d-rojo);
+  animation: d-grab-late 1.2s ease-in-out infinite;
+}
+@keyframes d-grab-late { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+.d-grab-mini-crono { margin-left: auto; color: #9d9a96; font-variant-numeric: tabular-nums; }
+.d-grab-mini-parar {
+  width: 40px; height: 40px; border-radius: 999px; background: #2a2825;
+  display: grid; place-items: center; flex: none;
+}
+
+/* La tarjeta de «sin grabar todavía», con su botón negro. */
+.d-grab-quieta {
+  background: #fff; border-radius: var(--d-radio);
+  padding: 14px 16px; display: flex; align-items: center; gap: 12px;
+}
+.d-grab-quieta > svg { width: 24px; height: 24px; flex: none; color: var(--d-beige-tinta); }
+.d-grab-quieta .grow { flex: 1; min-width: 0; }
+.d-grab-quieta-titulo { font-size: 16px; font-weight: 500; color: var(--d-tinta); }
+.d-grab-quieta-sub { margin-top: 3px; font-size: 12.5px; line-height: 1.4; color: var(--d-gris); }
+.d-grab-quieta-boton {
+  flex: none; height: 48px; padding: 0 24px; border-radius: 999px;
+  background: var(--d-tinta); color: #fff; font-size: 16px; font-weight: 500;
+}
+
+/* El icono redondo de la fila de una grabación ya hecha. */
+.d-grab-fila-icono {
+  width: 36px; height: 36px; flex: none; border-radius: 999px;
+  background: var(--d-gris-suave); color: var(--d-beige-tinta);
+  display: grid; place-items: center;
+}
+
+/* El acta en prosa, ya firmada. */
+.d-acta-prosa {
+  background: #fff; border-radius: var(--d-radio);
+  padding: 16px; font-size: 14.5px; line-height: 1.55; color: #33312e;
+  white-space: pre-wrap;
+}
+
 /* ─── El acta de un día ─────────────────────────────────────── */
 .d-acta-portada {
   background: #fff; border-radius: var(--d-radio);

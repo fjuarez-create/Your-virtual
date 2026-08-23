@@ -174,6 +174,8 @@ CREATE TABLE IF NOT EXISTS reuniones (
   terminada         CHAR(24)     DEFAULT NULL,
   asistentes        TEXT         NOT NULL,
   invitados         TEXT         NOT NULL,
+  resumen           MEDIUMTEXT,
+  propuesta         MEDIUMTEXT,
   borrada           TINYINT(1)   NOT NULL DEFAULT 0,
   creado            CHAR(24)     NOT NULL,
   actualizado       CHAR(24)     NOT NULL,
@@ -204,4 +206,52 @@ CREATE TABLE IF NOT EXISTS encargos (
   PRIMARY KEY (id),
   KEY ix_encargos_reunion (reunion_id),
   KEY ix_encargos_estado (promo_id, estado)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ═══ El audio de las reuniones y el registro de voces ═══════════
+-- Una grabación por reunión, guardada por PARTES: cada parte es un
+-- fichero de audio completo (el móvil rota la grabadora cada media
+-- hora), porque los trozos de un mp4 de iPhone no se pueden pegar en
+-- el servidor. `partes` y `hablantes` van en JSON: cambian de forma
+-- con el proveedor de voces y no se consultan por columnas.
+CREATE TABLE IF NOT EXISTS grabaciones (
+  id                CHAR(36)     NOT NULL,
+  reunion_id        CHAR(36)     NOT NULL,
+  promo_id          VARCHAR(40)  NOT NULL,
+  estado            VARCHAR(14)  NOT NULL DEFAULT 'grabando',
+  mime              VARCHAR(60)  NOT NULL DEFAULT '',
+  duracion          INT          NOT NULL DEFAULT 0,
+  tam               BIGINT       NOT NULL DEFAULT 0,
+  partes            MEDIUMTEXT,
+  hablantes         TEXT,
+  audio_borrado     TINYINT(1)   NOT NULL DEFAULT 0,
+  borrada           TINYINT(1)   NOT NULL DEFAULT 0,
+  creado            VARCHAR(32)  NOT NULL,
+  actualizado       VARCHAR(32)  NOT NULL,
+  creado_por        CHAR(36)     DEFAULT NULL,
+  creado_por_nombre VARCHAR(120) NOT NULL DEFAULT '',
+  PRIMARY KEY (id),
+  KEY ix_grabaciones_reunion (reunion_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- A quién suena cada voz de la obra. La huella (`huella_id`) es el
+-- identificador del voiceprint en el proveedor acústico, si lo hay;
+-- la muestra apunta a un tramo de una grabación para poder escucharla
+-- al asignar, sin recortar ficheros.
+CREATE TABLE IF NOT EXISTS voces (
+  id                   CHAR(36)     NOT NULL,
+  promo_id             VARCHAR(40)  NOT NULL,
+  persona_id           CHAR(36)     DEFAULT NULL,
+  persona_nombre       VARCHAR(120) NOT NULL DEFAULT '',
+  huella               MEDIUMTEXT,
+  huella_trabajo       VARCHAR(80)  NOT NULL DEFAULT '',
+  muestra_grabacion_id CHAR(36)     DEFAULT NULL,
+  muestra_parte        INT          NOT NULL DEFAULT 0,
+  muestra_desde        DOUBLE       NOT NULL DEFAULT 0,
+  muestra_hasta        DOUBLE       NOT NULL DEFAULT 0,
+  borrada              TINYINT(1)   NOT NULL DEFAULT 0,
+  creado               VARCHAR(32)  NOT NULL,
+  actualizado          VARCHAR(32)  NOT NULL,
+  PRIMARY KEY (id),
+  KEY ix_voces_promo (promo_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

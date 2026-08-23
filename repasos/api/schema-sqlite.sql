@@ -157,6 +157,8 @@ CREATE TABLE IF NOT EXISTS reuniones (
   terminada         TEXT,
   asistentes        TEXT NOT NULL,
   invitados         TEXT NOT NULL,
+  resumen           TEXT,
+  propuesta         TEXT,
   borrada           INTEGER NOT NULL DEFAULT 0,
   creado            TEXT NOT NULL,
   actualizado       TEXT NOT NULL,
@@ -186,3 +188,42 @@ CREATE TABLE IF NOT EXISTS encargos (
 );
 CREATE INDEX IF NOT EXISTS ix_encargos_reunion ON encargos (reunion_id);
 CREATE INDEX IF NOT EXISTS ix_encargos_estado ON encargos (promo_id, estado);
+
+-- ═══ El audio de las reuniones y el registro de voces ═══════════
+-- (ver el comentario del esquema de MySQL: partes por fichero completo
+-- y JSON para lo que cambia de forma con el proveedor)
+CREATE TABLE IF NOT EXISTS grabaciones (
+  id                TEXT NOT NULL PRIMARY KEY,
+  reunion_id        TEXT NOT NULL,
+  promo_id          TEXT NOT NULL,
+  estado            TEXT NOT NULL DEFAULT 'grabando',
+  mime              TEXT NOT NULL DEFAULT '',
+  duracion          INTEGER NOT NULL DEFAULT 0,
+  tam               INTEGER NOT NULL DEFAULT 0,
+  partes            TEXT,
+  hablantes         TEXT,
+  audio_borrado     INTEGER NOT NULL DEFAULT 0,
+  borrada           INTEGER NOT NULL DEFAULT 0,
+  creado            TEXT NOT NULL,
+  actualizado       TEXT NOT NULL,
+  creado_por        TEXT,
+  creado_por_nombre TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS ix_grabaciones_reunion ON grabaciones (reunion_id);
+
+CREATE TABLE IF NOT EXISTS voces (
+  id                   TEXT NOT NULL PRIMARY KEY,
+  promo_id             TEXT NOT NULL,
+  persona_id           TEXT,
+  persona_nombre       TEXT NOT NULL DEFAULT '',
+  huella               TEXT,
+  huella_trabajo       TEXT NOT NULL DEFAULT '',
+  muestra_grabacion_id TEXT,
+  muestra_parte        INTEGER NOT NULL DEFAULT 0,
+  muestra_desde        REAL NOT NULL DEFAULT 0,
+  muestra_hasta        REAL NOT NULL DEFAULT 0,
+  borrada              INTEGER NOT NULL DEFAULT 0,
+  creado               TEXT NOT NULL,
+  actualizado          TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_voces_promo ON voces (promo_id);

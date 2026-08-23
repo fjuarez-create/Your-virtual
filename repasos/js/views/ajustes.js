@@ -28,9 +28,11 @@ export async function render() {
   // qué falta en vez de desaparecer sin explicación.
   let claude = null;
   let oido = null;
+  let voces = null;
   if (admin && api.HAY_SERVIDOR && !u.local) {
     try { claude = await api.claudeEstado(); } catch { claude = { puesta: false, final: '' }; }
     try { oido = await api.oidoEstado(); } catch { oido = { puesta: false, final: '' }; }
+    try { voces = await api.vocesEstado(); } catch { voces = { puesta: false, final: '' }; }
   }
 
   /** Una fila de tarjeta: icono, rótulo, detalle y lo que haya a la derecha. */
@@ -174,6 +176,9 @@ export async function render() {
         item('mic', 'Clave de OpenAI',
           oido?.puesta ? `Puesta · termina en ${oido.final}` : 'Sin poner · lo que digas no se transcribe',
           () => hojaClaveOido(oido)),
+        item('users', 'Clave de pyannote (huellas de voz)',
+          voces?.puesta ? `Puesta · termina en ${voces.final}` : 'Sin poner · las voces se asignan a mano cada día',
+          () => hojaClaveVoces(voces)),
       ) : null,
 
       h('div.d-grupo', null,
@@ -395,6 +400,77 @@ function hojaClaveOido(estado) {
             style: { marginTop: '8px' },
             onclick: async () => {
               await api.oidoQuitarClave();
+              cerrar(true);
+              toast('Clave retirada');
+              refrescar();
+            },
+          }, 'Quitar la clave del servidor')
+        : null,
+      ctaCancelar(() => cerrar(false)),
+    ];
+  });
+}
+
+/**
+ * La clave de pyannote: la memoria de las voces. Sin ella, la pantalla
+ * de «¿quién es quién?» funciona igual pero pregunta cada día; con
+ * ella, la app enrola cada voz asignada y en la reunión siguiente pone
+ * los nombres sola.
+ */
+function hojaClaveVoces(estado) {
+  return sheet((cerrar) => {
+    const campo = h('input.input', {
+      type: 'password', placeholder: 'Clave de api.pyannote.ai…',
+      autocomplete: 'off', autocapitalize: 'off', autocorrect: 'off', spellcheck: 'false',
+    });
+    const aviso = h('p.hint.err', { style: { display: 'none' } });
+    const guardar = ctaAccion('GUARDAR LA CLAVE', { icono: 'check' });
+
+    const fallo = (texto) => {
+      aviso.textContent = texto;
+      aviso.style.display = 'block';
+      guardar.disabled = false;
+      guardar.querySelector('.grow').textContent = 'GUARDAR LA CLAVE';
+    };
+
+    guardar.addEventListener('click', async () => {
+      aviso.style.display = 'none';
+      const clave = campo.value.trim();
+      if (!clave) return fallo('No has pegado nada.');
+      guardar.disabled = true;
+      guardar.querySelector('.grow').textContent = 'GUARDANDO…';
+      try {
+        await api.vocesPonerClave(clave);
+        cerrar(true);
+        toast('Clave guardada · la app irá aprendiendo las voces');
+        refrescar();
+      } catch (e) {
+        fallo(e?.message || 'No se ha podido guardar.');
+      }
+    });
+
+    return [
+      h('h2.title', null, 'Clave de pyannote'),
+      h('p.sub', { style: { marginTop: '6px' } },
+        'Es la memoria de las voces de la obra: con ella, cada voz que asignes '
+        + 'en un acta queda aprendida y en la reunión siguiente sale ya con su '
+        + 'nombre. La huella se guarda en NUESTRO servidor, no en el suyo. '
+        + 'La cuenta se hace en pyannote.ai (hay prueba gratuita de 30 días).'),
+      estado?.puesta
+        ? h('p.hint', { style: { marginTop: '10px' } },
+            `Ahora hay una puesta que termina en ${estado.final}. Si pegas otra, la sustituye.`)
+        : null,
+      h('div.stack', { style: { marginTop: '14px' } }, campo),
+      aviso,
+      h('p.hint', { style: { marginTop: '10px' } },
+        'Ojo: la voz es un dato personal. Avisa al equipo y apunta su conformidad '
+        + 'antes de enrolar a nadie; quitar a alguien es borrar su voz en Ajustes.'),
+      guardar,
+      estado?.puesta
+        ? h('button.btn.ghost.full', {
+            style: { marginTop: '8px' },
+            onclick: async () => {
+              await api.vocesQuitarClave();
               cerrar(true);
               toast('Clave retirada');
               refrescar();

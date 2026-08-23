@@ -18,7 +18,7 @@
 declare(strict_types=1);
 
 /** Se sube al añadir campos o tablas. */
-const ESQUEMA_VERSION = 10;
+const ESQUEMA_VERSION = 11;
 
 /**
  * Campos que tienen que existir, por tabla, con el tipo que usa MySQL.
@@ -55,6 +55,13 @@ const ESQUEMA_CAMPOS = [
     ],
     'medios' => [
         'comentario_id' => 'CHAR(36) DEFAULT NULL',
+    ],
+    'reuniones' => [
+        // El acta que sale de la grabación: el resumen ya aceptado y,
+        // aparte, la propuesta de la IA a la espera de revisión (JSON).
+        // Nulos hasta que existen: una reunión sin audio no los usa.
+        'resumen'   => 'MEDIUMTEXT',
+        'propuesta' => 'MEDIUMTEXT',
     ],
 ];
 

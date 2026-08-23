@@ -14,6 +14,7 @@ require __DIR__ . '/lib/nucleo.php';
 require __DIR__ . '/lib/auth.php';
 require __DIR__ . '/lib/claude.php';
 require __DIR__ . '/lib/oido.php';
+require __DIR__ . '/lib/voces.php';
 
 /**
  * Tipos admitidos y extensión con la que se guardan. Las funciones se
@@ -29,6 +30,12 @@ const MIMES = [
 
 /** Máximo de registros por tabla y tanda en la bajada de cambios. */
 const TOPE_CAMBIOS = 500;
+
+/** Cuántos días vive el audio de una reunión (decidido por Fran). */
+const GRABACION_DIAS_AUDIO = 30;
+
+/** Tope por parte de audio: el del transcriptor, que es el más estrecho. */
+const GRABACION_TOPE_PARTE = 25 * 1024 * 1024;
 
 // Nada de la API se cachea, ni siquiera por error.
 header('Cache-Control: no-store');
@@ -239,6 +246,60 @@ function despachar(string $metodo, array $p): void
             }
             if ($metodo === 'PATCH' && isset($p[2])) {
                 editar_encargo($p[2]);
+            }
+        }
+        if ($r1 === 'reuniones' && isset($p[2], $p[3])) {
+            if ($p[3] === 'grabaciones' && $metodo === 'POST') {
+                empezar_grabacion($p[2]);
+            }
+            if ($p[3] === 'redactar' && $metodo === 'POST') {
+                redactar_acta($p[2]);
+            }
+            if ($p[3] === 'acta' && $metodo === 'POST') {
+                aceptar_acta($p[2]);
+            }
+        }
+        if ($r1 === 'grabaciones' && isset($p[2], $p[3])) {
+            if ($p[3] === 'parte' && $metodo === 'POST') {
+                subir_parte_grabacion($p[2]);
+            }
+            if ($p[3] === 'cerrar' && $metodo === 'POST') {
+                cerrar_grabacion($p[2]);
+            }
+            if ($p[3] === 'transcribir' && $metodo === 'POST') {
+                transcribir_grabacion($p[2]);
+            }
+            if ($p[3] === 'audio' && $metodo === 'GET') {
+                servir_audio_grabacion($p[2]);
+            }
+            if ($p[3] === 'hablantes' && $metodo === 'POST') {
+                guardar_hablantes($p[2]);
+            }
+            if ($p[3] === 'identificar' && $metodo === 'POST') {
+                identificar_grabacion($p[2]);
+            }
+        }
+        if ($r1 === 'voces') {
+            $r2 = $p[2] ?? '';
+            if ($r2 === '' && $metodo === 'GET') {
+                listar_voces();
+            }
+            if ($r2 === '' && $metodo === 'POST') {
+                crear_voz();
+            }
+            if ($r2 === 'clave') {
+                if ($metodo === 'GET') {
+                    voces_estado();
+                }
+                if ($metodo === 'POST') {
+                    voces_poner_clave();
+                }
+                if ($metodo === 'DELETE') {
+                    voces_quitar_clave();
+                }
+            }
+            if (isset($p[3]) && $p[3] === 'muestra' && $metodo === 'POST') {
+                subir_muestra_voz($r2);
             }
         }
         responder_error(404, 'Ruta de obra desconocida.');
@@ -1915,6 +1976,10 @@ function listar_reuniones(): void
     exigir_sesion();
     $promo = promo_pedida();
 
+    // La escoba del audio viejo pasa aquí: es la pantalla que se abre
+    // todos los días y este hosting no tiene cron.
+    grabaciones_purgar();
+
     $sent = bd()->prepare('SELECT * FROM reuniones WHERE promo_id = ? AND borrada = 0 ORDER BY fecha DESC LIMIT 200');
     $sent->execute([$promo]);
     $filas = $sent->fetchAll();
@@ -2042,11 +2107,21 @@ function ver_reunion(string $id): void
         return $salida;
     }, $sent->fetchAll());
 
+    // Las grabaciones de esta reunión, con su estado.
+    $sent = bd()->prepare('SELECT * FROM grabaciones WHERE reunion_id = ? AND borrada = 0 ORDER BY creado ASC');
+    $sent->execute([$id]);
+    $grabaciones = array_map('grabacion_salida', $sent->fetchAll());
+
+    $propuesta = json_decode((string) ($reunion['propuesta'] ?? ''), true);
+
     responder([
-        'hoy'      => hoy_obra(),
-        'reunion'  => reunion_salida($reunion),
-        'encargos' => $encargos,
-        'arrastre' => $arrastre,
+        'hoy'         => hoy_obra(),
+        'reunion'     => reunion_salida($reunion),
+        'encargos'    => $encargos,
+        'arrastre'    => $arrastre,
+        'grabaciones' => $grabaciones,
+        'resumen'     => (string) ($reunion['resumen'] ?? ''),
+        'propuesta'   => is_array($propuesta) ? $propuesta : null,
     ]);
 }
 
@@ -2271,5 +2346,900 @@ function encargo_salida(array $f): array
         'hechoEn' => $f['hecho_en'] ?? null, 'hechoPorNombre' => (string) $f['hecho_por_nombre'],
         'creado' => $f['creado'], 'actualizado' => $f['actualizado'],
         'creadoPor' => $f['creado_por'], 'creadoPorNombre' => $f['creado_por_nombre'],
+    ];
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   La grabación de las reuniones
+   ═══════════════════════════════════════════════════════════════
+   El audio de una reunión llega por PARTES: el móvil rota la grabadora
+   cada tanto y sube cada parte como un fichero de audio completo. No
+   es capricho: los trozos de un mp4 de iPhone no se pueden pegar en el
+   servidor, y así cada parte cabe además en los topes del transcriptor
+   (25 MB y 25 minutos por llamada).
+
+   La transcripción va también parte a parte, una por petición: el
+   móvil insiste hasta que no queda ninguna. Un hosting compartido no
+   tiene trabajadores de fondo, así que el que empuja el trabajo es el
+   cliente y el servidor solo da pasos cortos.
+
+   El audio se borra solo a los 30 días (decidido por Fran): el acta y
+   la transcripción se quedan; la voz de la gente, no.
+*/
+
+/** Dónde viven los ficheros de audio de las reuniones. */
+function carpeta_grabaciones(): string
+{
+    $carpeta = carpeta_medios() . '/reuniones';
+    if (!is_dir($carpeta)) {
+        @mkdir($carpeta, 0755, true);
+    }
+    return $carpeta;
+}
+
+function extension_de_audio(string $mime): string
+{
+    $limpio = strtolower(trim(explode(';', $mime)[0]));
+    $mapa = ['audio/webm' => 'webm', 'audio/mp4' => 'm4a', 'audio/x-m4a' => 'm4a',
+             'audio/aac' => 'm4a', 'audio/ogg' => 'ogg', 'audio/mpeg' => 'mp3',
+             'audio/wav' => 'wav', 'video/mp4' => 'mp4'];
+    return $mapa[$limpio] ?? 'webm';
+}
+
+function ruta_de_parte(array $g, int $n): string
+{
+    return carpeta_grabaciones() . '/' . $g['id'] . '.parte-' . $n . '.' . extension_de_audio((string) $g['mime']);
+}
+
+function grabacion_o_404(string $id): array
+{
+    if (!es_uuid($id)) {
+        responder_error(404, 'Grabación desconocida.');
+    }
+    $sent = bd()->prepare('SELECT * FROM grabaciones WHERE id = ? AND borrada = 0');
+    $sent->execute([$id]);
+    $fila = $sent->fetch();
+    if (!$fila) {
+        responder_error(404, 'Grabación desconocida.');
+    }
+    return $fila;
+}
+
+function partes_de(array $g): array
+{
+    $partes = json_decode((string) ($g['partes'] ?? '[]'), true);
+    return is_array($partes) ? $partes : [];
+}
+
+function guardar_partes(string $id, array $partes, array $ademas = []): void
+{
+    $cambios = ['partes' => json_encode(array_values($partes), JSON_UNESCAPED_UNICODE)] + $ademas;
+    $cambios['actualizado'] = ahora_iso();
+    $asig = implode(', ', array_map(static fn ($k) => "{$k} = ?", array_keys($cambios)));
+    $valores = array_values($cambios);
+    $valores[] = $id;
+    bd()->prepare("UPDATE grabaciones SET {$asig} WHERE id = ?")->execute($valores);
+}
+
+function empezar_grabacion(string $reunionId): void
+{
+    $yo = exigir_df();
+    $reunion = reunion_o_404($reunionId);
+    exigir_reunion_abierta($reunion);
+
+    $mime = texto(cuerpo(), 'mime', 60, 'audio/webm');
+    $registro = [
+        'id'                => uuid(),
+        'reunion_id'        => $reunion['id'],
+        'promo_id'          => $reunion['promo_id'],
+        'estado'            => 'grabando',
+        'mime'              => $mime,
+        'duracion'          => 0,
+        'tam'               => 0,
+        'partes'            => '[]',
+        'hablantes'         => null,
+        'audio_borrado'     => 0,
+        'borrada'           => 0,
+        'creado'            => ahora_iso(),
+        'actualizado'       => ahora_iso(),
+        'creado_por'        => $yo['id'],
+        'creado_por_nombre' => (string) $yo['nombre'],
+    ];
+    $columnas = array_keys($registro);
+    bd()->prepare(sprintf(
+        'INSERT INTO grabaciones (%s) VALUES (%s)',
+        implode(', ', $columnas),
+        implode(', ', array_fill(0, count($columnas), '?'))
+    ))->execute(array_values($registro));
+
+    responder(['grabacion' => grabacion_salida($registro)], 201);
+}
+
+/**
+ * Una parte de audio, en crudo en el cuerpo de la petición. `n` es su
+ * número de orden y `dur` sus segundos, que el móvil sí conoce.
+ * Subir la misma parte dos veces la sobreescribe: el reintento de una
+ * subida cortada no duplica nada.
+ */
+function subir_parte_grabacion(string $id): void
+{
+    exigir_df();
+    $g = grabacion_o_404($id);
+    if ($g['estado'] !== 'grabando') {
+        responder_error(409, 'Esta grabación ya está cerrada.', 'cerrada');
+    }
+
+    $n = max(0, (int) ($_GET['n'] ?? 0));
+    $dur = max(0, (int) ($_GET['dur'] ?? 0));
+
+    $cuerpo = file_get_contents('php://input');
+    if ($cuerpo === false || $cuerpo === '') {
+        responder_error(400, 'La parte ha llegado vacía.', 'formato');
+    }
+    if (strlen($cuerpo) > GRABACION_TOPE_PARTE) {
+        responder_error(413, 'La parte pesa más de lo que admite el transcriptor.', 'demasiado-grande');
+    }
+
+    $ruta = ruta_de_parte($g, $n);
+    if (file_put_contents($ruta, $cuerpo, LOCK_EX) === false) {
+        responder_error(500, 'No se ha podido guardar el audio en el servidor.', 'disco');
+    }
+
+    $partes = partes_de($g);
+    $partes = array_values(array_filter($partes, static fn ($p) => (int) $p['n'] !== $n));
+    $partes[] = ['n' => $n, 'tam' => strlen($cuerpo), 'duracion' => $dur, 'estado' => 'sin-transcribir', 'texto' => ''];
+    usort($partes, static fn ($a, $b) => $a['n'] <=> $b['n']);
+
+    $tam = 0;
+    $duracion = 0;
+    foreach ($partes as $p) {
+        $tam += (int) $p['tam'];
+        $duracion += (int) $p['duracion'];
+    }
+    guardar_partes($id, $partes, ['tam' => $tam, 'duracion' => $duracion]);
+
+    responder(['ok' => true, 'partes' => count($partes)]);
+}
+
+function cerrar_grabacion(string $id): void
+{
+    exigir_df();
+    $g = grabacion_o_404($id);
+    if ($g['estado'] === 'grabando') {
+        $duracion = max((int) $g['duracion'], entero(cuerpo(), 'duracion'));
+        bd()->prepare("UPDATE grabaciones SET estado = 'lista', duracion = ?, actualizado = ? WHERE id = ?")
+            ->execute([$duracion, ahora_iso(), $id]);
+        $g = grabacion_o_404($id);
+    }
+    responder(['grabacion' => grabacion_salida($g)]);
+}
+
+/**
+ * Transcribe UNA parte pendiente por llamada y cuenta cuántas quedan:
+ * el móvil repite la petición hasta que la respuesta diga cero. Así
+ * ninguna petición se acerca al corte del hosting aunque la reunión
+ * durase dos horas.
+ */
+function transcribir_grabacion(string $id): void
+{
+    exigir_df();
+    $g = grabacion_o_404($id);
+    if ($g['estado'] === 'grabando') {
+        responder_error(409, 'La grabación sigue abierta: ciérrala antes de transcribir.', 'sin-cerrar');
+    }
+    if ((int) $g['audio_borrado'] === 1) {
+        responder_error(410, 'El audio de esta grabación ya se borró (a los 30 días se van solos).', 'audio-borrado');
+    }
+
+    $partes = partes_de($g);
+    $pendientes = array_values(array_filter($partes, static fn ($p) => ($p['estado'] ?? '') !== 'transcrita'));
+    if (!$pendientes) {
+        responder(['grabacion' => grabacion_salida($g), 'quedan' => 0]);
+    }
+
+    $parte = $pendientes[0];
+    $ruta = ruta_de_parte($g, (int) $parte['n']);
+    if (!is_file($ruta)) {
+        responder_error(500, 'Falta el fichero de la parte ' . $parte['n'] . ' en el servidor.', 'sin-fichero');
+    }
+
+    // El oído de reuniones: transcribe Y separa voces (A, B, C…). Si el
+    // modelo diarizado no entrara, cae solo al plano y la parte queda
+    // transcrita sin voces, que siempre es mejor que un error.
+    $resultado = oido_transcribir_reunion($ruta, (string) $g['mime']);
+
+    foreach ($partes as &$p) {
+        if ((int) $p['n'] === (int) $parte['n']) {
+            $p['estado'] = 'transcrita';
+            $p['texto'] = $resultado['texto'];
+            $p['dicho'] = $resultado['dicho'];
+        }
+    }
+    unset($p);
+
+    $quedan = count(array_filter($partes, static fn ($p) => $p['estado'] !== 'transcrita'));
+    guardar_partes($id, $partes, $quedan === 0 ? ['estado' => 'transcrita'] : []);
+
+    responder(['grabacion' => grabacion_salida(grabacion_o_404($id)), 'quedan' => $quedan]);
+}
+
+/** El audio de una parte, con Range: sin él iOS ni empieza a sonar. */
+function servir_audio_grabacion(string $id): void
+{
+    exigir_sesion();
+    $g = grabacion_o_404($id);
+    if ((int) $g['audio_borrado'] === 1) {
+        responder_error(410, 'El audio de esta grabación ya se borró.', 'audio-borrado');
+    }
+    $n = max(0, (int) ($_GET['parte'] ?? 0));
+    $ruta = ruta_de_parte($g, $n);
+    $real = realpath($ruta);
+    if ($real === false || strpos($real, carpeta_grabaciones()) !== 0 || !is_file($real)) {
+        responder_error(404, 'Esa parte no está en el servidor.');
+    }
+
+    $tam = filesize($real);
+    header('Content-Type: ' . ((string) $g['mime'] ?: 'application/octet-stream'));
+    header('Content-Disposition: inline; filename="reunion-' . $n . '.' . extension_de_audio((string) $g['mime']) . '"');
+    header('Accept-Ranges: bytes');
+    header('Cache-Control: private, max-age=3600');
+    header('X-Content-Type-Options: nosniff');
+
+    $inicio = 0;
+    $fin = $tam - 1;
+    $rango = $_SERVER['HTTP_RANGE'] ?? '';
+    if ($rango !== '' && preg_match('/bytes=(\d*)-(\d*)/', $rango, $m2)) {
+        if ($m2[1] !== '') {
+            $inicio = (int) $m2[1];
+        }
+        if ($m2[2] !== '') {
+            $fin = min((int) $m2[2], $tam - 1);
+        }
+        if ($inicio > $fin || $inicio >= $tam) {
+            header('Content-Range: bytes */' . $tam);
+            http_response_code(416);
+            exit;
+        }
+        http_response_code(206);
+        header("Content-Range: bytes {$inicio}-{$fin}/{$tam}");
+    }
+
+    header('Content-Length: ' . (string) ($fin - $inicio + 1));
+    $f = fopen($real, 'rb');
+    if ($f === false) {
+        responder_error(500, 'No se pudo leer el audio.');
+    }
+    fseek($f, $inicio);
+    $restante = $fin - $inicio + 1;
+    while ($restante > 0 && !feof($f)) {
+        $trozo = fread($f, (int) min(262144, $restante));
+        if ($trozo === false) {
+            break;
+        }
+        echo $trozo;
+        $restante -= strlen($trozo);
+        flush();
+    }
+    fclose($f);
+    exit;
+}
+
+/**
+ * La IA redacta la propuesta de acta: resumen y tareas con responsable
+ * y fecha cuando se dijeron. Se guarda como PROPUESTA en la reunión:
+ * no crea nada hasta que la DF o el administrador la revisan y firman.
+ *
+ * El móvil manda su catálogo de viviendas (vive en el cliente) para
+ * que una tarea de «la 14» pueda engancharse a la Villa 14 de verdad.
+ */
+function redactar_acta(string $reunionId): void
+{
+    exigir_df();
+    $reunion = reunion_o_404($reunionId);
+    exigir_reunion_abierta($reunion);
+
+    // Todo lo transcrito de esta reunión, en orden y CON NOMBRE cuando
+    // se sabe: primero el que puso la identificación automática en cada
+    // frase, luego el mapa manual de «¿quién es quién?», y si no, el
+    // hablante anónimo. Un guion con nombres cambia el acta: «Alba:
+    // pide el vidrio» ya dice quién se comprometió.
+    $sentVoces = bd()->prepare('SELECT id, persona_nombre FROM voces WHERE promo_id = ? AND borrada = 0');
+    $sentVoces->execute([$reunion['promo_id']]);
+    $nombreDeVoz = $sentVoces->fetchAll(PDO::FETCH_KEY_PAIR);
+
+    $sent = bd()->prepare("SELECT * FROM grabaciones WHERE reunion_id = ? AND borrada = 0 AND estado = 'transcrita' ORDER BY creado ASC");
+    $sent->execute([$reunionId]);
+    $texto = '';
+    foreach ($sent->fetchAll() as $g) {
+        $hablantes = json_decode((string) ($g['hablantes'] ?? ''), true) ?: [];
+        $mapa = (array) ($hablantes['mapa'] ?? []);
+        foreach (partes_de($g) as $p) {
+            $dicho = (array) ($p['dicho'] ?? []);
+            if (!$dicho) {
+                $trozo = trim((string) ($p['texto'] ?? ''));
+                if ($trozo !== '') {
+                    $texto .= ($texto === '' ? '' : "\n\n") . $trozo;
+                }
+                continue;
+            }
+            $anterior = '';
+            foreach ($dicho as $seg) {
+                $quien = '';
+                if (!empty($seg['quien']) && isset($nombreDeVoz[$seg['quien']])) {
+                    $quien = (string) $nombreDeVoz[$seg['quien']];
+                } elseif (!empty($mapa[$p['n'] . ':' . $seg['h']]['nombre'])) {
+                    $quien = (string) $mapa[$p['n'] . ':' . $seg['h']]['nombre'];
+                } else {
+                    $quien = 'Hablante ' . $seg['h'];
+                }
+                if ($quien === $anterior) {
+                    $texto .= ' ' . $seg['texto'];
+                } else {
+                    $texto .= ($texto === '' ? '' : "\n") . $quien . ': ' . $seg['texto'];
+                    $anterior = $quien;
+                }
+            }
+        }
+    }
+    if (trim($texto) === '') {
+        responder_error(409, 'No hay ninguna transcripción de esta reunión todavía.', 'sin-transcripcion');
+    }
+
+    // Quién estaba en la mesa, con nombre.
+    $gente = [];
+    $asistentes = json_decode((string) $reunion['asistentes'], true) ?: [];
+    if ($asistentes) {
+        $huecos = implode(',', array_fill(0, count($asistentes), '?'));
+        $sent = bd()->prepare("SELECT nombre FROM usuarios WHERE id IN ({$huecos})");
+        $sent->execute($asistentes);
+        $gente = $sent->fetchAll(PDO::FETCH_COLUMN);
+    }
+    foreach (json_decode((string) $reunion['invitados'], true) ?: [] as $inv) {
+        $gente[] = $inv . ' (invitado)';
+    }
+
+    // El equipo entero, para atribuir responsables por nombre.
+    $equipo = [];
+    foreach (bd()->query('SELECT id, nombre, empresa FROM usuarios WHERE activo = 1 ORDER BY nombre')->fetchAll() as $u) {
+        $equipo[] = ['id' => $u['id'], 'nombre' => $u['nombre'], 'empresa' => (string) ($u['empresa'] ?? '')];
+    }
+
+    // El catálogo de viviendas llega del móvil, saneado.
+    $unidades = [];
+    foreach ((array) (cuerpo()['unidades'] ?? []) as $u) {
+        if (is_array($u) && isset($u['id'], $u['nombre'])) {
+            $unidades[] = ['id' => mb_substr((string) $u['id'], 0, 80), 'nombre' => mb_substr((string) $u['nombre'], 0, 60)];
+        }
+    }
+
+    $acta = claude_redactar_acta((string) $reunion['fecha'], $gente, $texto, $equipo, $unidades);
+
+    // Los nombres del modelo se anclan a ids reales aquí, no en el
+    // móvil: el nombre puede venir a medias («Alba») y aquí está la
+    // lista entera para casarlo sin ambigüedad.
+    $tareas = [];
+    foreach ($acta['tareas'] as $t) {
+        if (!is_array($t) || trim((string) ($t['texto'] ?? '')) === '') {
+            continue;
+        }
+        $unidadId = '';
+        foreach ($unidades as $u) {
+            if (llano($u['nombre']) === llano((string) ($t['unidadNombre'] ?? '')) && $u['nombre'] !== '') {
+                $unidadId = $u['id'];
+                break;
+            }
+        }
+        $responsableId = null;
+        $responsableNombre = trim((string) ($t['responsableNombre'] ?? ''));
+        foreach ($equipo as $p) {
+            $suyo = llano($p['nombre']);
+            $dicho = llano($responsableNombre);
+            if ($dicho !== '' && ($suyo === $dicho || strpos($suyo, $dicho) === 0)) {
+                $responsableId = $p['id'];
+                $responsableNombre = $p['nombre'];
+                break;
+            }
+        }
+        $tareas[] = [
+            'texto'             => mb_substr(trim((string) $t['texto']), 0, 2000),
+            'general'           => $unidadId === '',
+            'unidadId'          => $unidadId,
+            'responsableId'     => $responsableId,
+            'responsableNombre' => mb_substr($responsableNombre, 0, 120),
+            'fechaLimite'       => fecha_de_dia($t['fechaLimite'] ?? ''),
+            'seguro'            => (bool) ($t['seguro'] ?? false),
+        ];
+    }
+
+    $propuesta = [
+        'resumen'  => mb_substr($acta['resumen'], 0, 8000),
+        'tareas'   => $tareas,
+        'redactada' => ahora_iso(),
+    ];
+    bd()->prepare('UPDATE reuniones SET propuesta = ?, actualizado = ? WHERE id = ?')
+        ->execute([json_encode($propuesta, JSON_UNESCAPED_UNICODE), ahora_iso(), $reunionId]);
+
+    responder(['propuesta' => $propuesta, 'gasto' => $acta['gasto']]);
+}
+
+/**
+ * La firma del acta: la DF revisa la propuesta —quita, corrige,
+ * asigna— y lo que llega aquí se convierte en tareas de verdad y en el
+ * resumen guardado. La propuesta se retira: ya cumplió.
+ */
+function aceptar_acta(string $reunionId): void
+{
+    $yo = exigir_df();
+    $reunion = reunion_o_404($reunionId);
+    exigir_reunion_abierta($reunion);
+    $c = cuerpo();
+
+    $resumen = mb_substr(trim((string) ($c['resumen'] ?? '')), 0, 8000);
+    $entrada = is_array($c['tareas'] ?? null) ? $c['tareas'] : [];
+
+    $creadas = [];
+    foreach ($entrada as $t) {
+        if (!is_array($t)) {
+            continue;
+        }
+        $texto = mb_substr(trim((string) ($t['texto'] ?? '')), 0, 2000);
+        if ($texto === '') {
+            continue;
+        }
+        $general = booleano($t, 'general', true);
+        $unidad = $general ? '' : texto($t, 'unidadId', 80);
+        if (!$general && $unidad === '') {
+            $general = true;
+        }
+        $registro = [
+            'id'                 => uuid(),
+            'reunion_id'         => $reunion['id'],
+            'promo_id'           => $reunion['promo_id'],
+            'texto'              => $texto,
+            'general'            => $general ? 1 : 0,
+            'unidad_id'          => $unidad,
+            'responsable_id'     => es_uuid($t['responsableId'] ?? null) ? $t['responsableId'] : null,
+            'responsable_nombre' => texto($t, 'responsableNombre', 120),
+            'fecha_limite'       => fecha_de_dia($t['fechaLimite'] ?? ''),
+            'estado'             => 'pendiente',
+            'hecho_en'           => null,
+            'hecho_por_nombre'   => '',
+            'borrada'            => 0,
+            'creado'             => ahora_iso(),
+            'actualizado'        => ahora_iso(),
+            'creado_por'         => $yo['id'],
+            'creado_por_nombre'  => (string) $yo['nombre'],
+        ];
+        $columnas = array_keys($registro);
+        bd()->prepare(sprintf(
+            'INSERT INTO encargos (%s) VALUES (%s)',
+            implode(', ', $columnas),
+            implode(', ', array_fill(0, count($columnas), '?'))
+        ))->execute(array_values($registro));
+        $creadas[] = encargo_salida($registro);
+    }
+
+    bd()->prepare('UPDATE reuniones SET resumen = ?, propuesta = NULL, actualizado = ? WHERE id = ?')
+        ->execute([$resumen !== '' ? $resumen : null, ahora_iso(), $reunionId]);
+
+    responder(['encargos' => $creadas, 'resumen' => $resumen]);
+}
+
+/**
+ * Borra los ficheros de audio con más de 30 días. La transcripción y
+ * el acta se quedan; la voz de la gente, no. Se dispara al listar las
+ * reuniones —que se abre a diario—, porque este hosting no tiene cron.
+ */
+function grabaciones_purgar(): void
+{
+    $limite = gmdate('Y-m-d\TH:i:s', time() - GRABACION_DIAS_AUDIO * 86400) . '.000Z';
+    $sent = bd()->prepare('SELECT * FROM grabaciones WHERE audio_borrado = 0 AND creado < ? LIMIT 10');
+    $sent->execute([$limite]);
+    foreach ($sent->fetchAll() as $g) {
+        foreach (partes_de($g) as $p) {
+            @unlink(ruta_de_parte($g, (int) $p['n']));
+        }
+        bd()->prepare('UPDATE grabaciones SET audio_borrado = 1, actualizado = ? WHERE id = ?')
+            ->execute([ahora_iso(), $g['id']]);
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Quién es quién: el registro de voces y su aprendizaje
+   ═══════════════════════════════════════════════════════════════
+   El mapa manual («0:A es Alba») se guarda en la grabación y sirve tal
+   cual para el acta. Cuando además hay clave de pyannote, cada nombre
+   asignado se enrola como huella y las reuniones siguientes salen ya
+   con nombre: la app aprende las voces. Sin clave, todo funciona
+   igual, solo que preguntando cada día — un minuto de trabajo.
+*/
+
+function voz_salida(array $v): array
+{
+    return [
+        'id' => $v['id'], 'promoId' => $v['promo_id'],
+        'personaId' => $v['persona_id'], 'personaNombre' => (string) $v['persona_nombre'],
+        // La huella JAMÁS sale del servidor: al móvil solo va si la hay.
+        'conHuella' => trim((string) ($v['huella'] ?? '')) !== '',
+        'enrolando' => trim((string) ($v['huella_trabajo'] ?? '')) !== '',
+        'muestra' => [
+            'grabacionId' => $v['muestra_grabacion_id'],
+            'parte' => (int) $v['muestra_parte'],
+            'desde' => (float) $v['muestra_desde'],
+            'hasta' => (float) $v['muestra_hasta'],
+        ],
+        'creado' => $v['creado'], 'actualizado' => $v['actualizado'],
+    ];
+}
+
+/**
+ * El registro de voces de la promoción. De paso recoge los
+ * enrolamientos que pyannote haya terminado: sus salidas se borran a
+ * las 24 horas, así que cada visita a esta pantalla es una ocasión de
+ * guardar la huella antes de que se evapore.
+ */
+function listar_voces(): void
+{
+    exigir_sesion();
+    $promo = promo_pedida();
+
+    if (voces_clave() !== '') {
+        $sent = bd()->prepare("SELECT * FROM voces WHERE promo_id = ? AND borrada = 0 AND huella_trabajo != ''");
+        $sent->execute([$promo]);
+        foreach ($sent->fetchAll() as $v) {
+            $t = voces_mirar_trabajo((string) $v['huella_trabajo']);
+            if ($t['estado'] === 'hecho') {
+                $huella = (string) ($t['salida']['voiceprint'] ?? '');
+                bd()->prepare("UPDATE voces SET huella = ?, huella_trabajo = '', actualizado = ? WHERE id = ?")
+                    ->execute([$huella !== '' ? $huella : null, ahora_iso(), $v['id']]);
+            } elseif ($t['estado'] === 'fallado') {
+                bd()->prepare("UPDATE voces SET huella_trabajo = '', actualizado = ? WHERE id = ?")
+                    ->execute([ahora_iso(), $v['id']]);
+            }
+        }
+    }
+
+    $sent = bd()->prepare('SELECT * FROM voces WHERE promo_id = ? AND borrada = 0 ORDER BY persona_nombre');
+    $sent->execute([$promo]);
+    responder([
+        'voces' => array_map('voz_salida', $sent->fetchAll()),
+        'servicio' => ['hay' => voces_clave() !== ''],
+    ]);
+}
+
+/**
+ * Da de alta —o reapunta— la voz de alguien: a quién pertenece y en
+ * qué tramo de qué grabación se le oye claro (la muestra que se
+ * escucha al asignar, y de la que saldrá el clip de enrolamiento).
+ */
+function crear_voz(): void
+{
+    exigir_df();
+    $c = cuerpo();
+    $promo = texto($c, 'promoId', 60);
+    $personaId = es_uuid($c['personaId'] ?? null) ? $c['personaId'] : null;
+    $personaNombre = texto($c, 'personaNombre', 120);
+    if ($promo === '' || ($personaId === null && $personaNombre === '')) {
+        responder_error(400, 'La voz necesita promoción y dueño.', 'formato');
+    }
+    if ($personaId !== null) {
+        $sent = bd()->prepare('SELECT nombre FROM usuarios WHERE id = ?');
+        $sent->execute([$personaId]);
+        $nombre = $sent->fetchColumn();
+        if ($nombre !== false) {
+            $personaNombre = (string) $nombre;
+        }
+    }
+
+    // Una voz por dueño y promoción: reasignar actualiza la muestra y
+    // deja la huella pendiente de re-enrolar con el clip nuevo.
+    $sent = $personaId !== null
+        ? bd()->prepare('SELECT * FROM voces WHERE promo_id = ? AND persona_id = ? AND borrada = 0')
+        : bd()->prepare('SELECT * FROM voces WHERE promo_id = ? AND persona_id IS NULL AND persona_nombre = ? AND borrada = 0');
+    $sent->execute([$promo, $personaId ?? $personaNombre]);
+    $hay = $sent->fetch();
+
+    $muestra = [
+        'muestra_grabacion_id' => es_uuid($c['muestraGrabacionId'] ?? null) ? $c['muestraGrabacionId'] : null,
+        'muestra_parte' => max(0, (int) ($c['muestraParte'] ?? 0)),
+        'muestra_desde' => max(0.0, (float) ($c['muestraDesde'] ?? 0)),
+        'muestra_hasta' => max(0.0, (float) ($c['muestraHasta'] ?? 0)),
+    ];
+
+    if ($hay) {
+        $cambios = $muestra + ['persona_nombre' => $personaNombre, 'actualizado' => ahora_iso()];
+        $asig = implode(', ', array_map(static fn ($k) => "{$k} = ?", array_keys($cambios)));
+        $valores = array_values($cambios);
+        $valores[] = $hay['id'];
+        bd()->prepare("UPDATE voces SET {$asig} WHERE id = ?")->execute($valores);
+        responder(['voz' => voz_salida(array_merge($hay, $cambios))]);
+    }
+
+    $registro = [
+        'id' => uuid(),
+        'promo_id' => $promo,
+        'persona_id' => $personaId,
+        'persona_nombre' => $personaNombre,
+        'huella' => null,
+        'huella_trabajo' => '',
+        'borrada' => 0,
+        'creado' => ahora_iso(),
+        'actualizado' => ahora_iso(),
+    ] + $muestra;
+    $columnas = array_keys($registro);
+    bd()->prepare(sprintf(
+        'INSERT INTO voces (%s) VALUES (%s)',
+        implode(', ', $columnas),
+        implode(', ', array_fill(0, count($columnas), '?'))
+    ))->execute(array_values($registro));
+    responder(['voz' => voz_salida($registro)], 201);
+}
+
+/** Dónde viven los clips de enrolamiento. */
+function carpeta_voces(): string
+{
+    $carpeta = carpeta_medios() . '/voces';
+    if (!is_dir($carpeta)) {
+        @mkdir($carpeta, 0755, true);
+    }
+    return $carpeta;
+}
+
+/**
+ * El clip de la voz (un WAV corto recortado en el móvil, donde esa
+ * persona habla sola). Se guarda SIEMPRE —las huellas no son portables
+ * y con el clip se puede re-enrolar donde haga falta— y, si hay clave
+ * de pyannote, se encarga la huella en el momento.
+ */
+function subir_muestra_voz(string $id): void
+{
+    exigir_df();
+    if (!es_uuid($id)) {
+        responder_error(404, 'Voz desconocida.');
+    }
+    $sent = bd()->prepare('SELECT * FROM voces WHERE id = ? AND borrada = 0');
+    $sent->execute([$id]);
+    $voz = $sent->fetch();
+    if (!$voz) {
+        responder_error(404, 'Voz desconocida.');
+    }
+
+    $clip = file_get_contents('php://input');
+    if ($clip === false || strlen($clip) < 1000) {
+        responder_error(400, 'El clip ha llegado vacío.', 'formato');
+    }
+    if (strlen($clip) > 10 * 1024 * 1024) {
+        responder_error(413, 'El clip es demasiado grande.', 'demasiado-grande');
+    }
+    $ruta = carpeta_voces() . '/' . $id . '.wav';
+    if (file_put_contents($ruta, $clip, LOCK_EX) === false) {
+        responder_error(500, 'No se ha podido guardar el clip.', 'disco');
+    }
+
+    $enrolando = false;
+    if (voces_clave() !== '') {
+        $media = voces_subir_media($ruta);
+        $trabajo = voces_encargar_huella($media);
+        bd()->prepare('UPDATE voces SET huella = NULL, huella_trabajo = ?, actualizado = ? WHERE id = ?')
+            ->execute([$trabajo, ahora_iso(), $id]);
+        $enrolando = true;
+    } else {
+        bd()->prepare('UPDATE voces SET actualizado = ? WHERE id = ?')->execute([ahora_iso(), $id]);
+    }
+
+    responder(['ok' => true, 'enrolando' => $enrolando]);
+}
+
+/** El mapa manual: «en esta grabación, la voz 0:A es Alba». */
+function guardar_hablantes(string $grabacionId): void
+{
+    exigir_df();
+    $g = grabacion_o_404($grabacionId);
+
+    $mapa = [];
+    foreach ((array) (cuerpo()['mapa'] ?? []) as $etiqueta => $quien) {
+        if (!is_array($quien) || !preg_match('/^\d+:[A-Za-z0-9_-]{1,12}$/', (string) $etiqueta)) {
+            continue;
+        }
+        $mapa[(string) $etiqueta] = [
+            'vozId' => es_uuid($quien['vozId'] ?? null) ? $quien['vozId'] : null,
+            'personaId' => es_uuid($quien['personaId'] ?? null) ? $quien['personaId'] : null,
+            'nombre' => mb_substr(trim((string) ($quien['nombre'] ?? '')), 0, 120),
+            'auto' => (bool) ($quien['auto'] ?? false),
+        ];
+    }
+
+    $hablantes = json_decode((string) ($g['hablantes'] ?? ''), true) ?: [];
+    $hablantes['mapa'] = $mapa;
+    bd()->prepare('UPDATE grabaciones SET hablantes = ?, actualizado = ? WHERE id = ?')
+        ->execute([json_encode($hablantes, JSON_UNESCAPED_UNICODE), ahora_iso(), $grabacionId]);
+
+    responder(['grabacion' => grabacion_salida(grabacion_o_404($grabacionId))]);
+}
+
+/**
+ * La identificación automática: el audio contra las huellas de la
+ * obra, parte a parte y por pasos cortos —encargar, esperar, casar—,
+ * empujada por el móvil igual que la transcripción. Cada llamada da un
+ * paso y cuenta lo que queda.
+ */
+function identificar_grabacion(string $id): void
+{
+    exigir_df();
+    $g = grabacion_o_404($id);
+
+    if (voces_clave() === '') {
+        responder(['disponible' => false, 'motivo' => 'sin-clave']);
+    }
+    $sent = bd()->prepare("SELECT * FROM voces WHERE promo_id = ? AND borrada = 0 AND huella IS NOT NULL AND huella != ''");
+    $sent->execute([$g['promo_id']]);
+    $huellas = [];
+    $nombres = [];
+    foreach ($sent->fetchAll() as $v) {
+        $huellas[$v['id']] = (string) $v['huella'];
+        $nombres[$v['id']] = ['vozId' => $v['id'], 'personaId' => $v['persona_id'], 'nombre' => (string) $v['persona_nombre']];
+    }
+    if (!$huellas) {
+        responder(['disponible' => false, 'motivo' => 'sin-huellas']);
+    }
+    if ((int) $g['audio_borrado'] === 1) {
+        responder_error(410, 'El audio ya se borró: no se puede identificar.', 'audio-borrado');
+    }
+
+    $hablantes = json_decode((string) ($g['hablantes'] ?? ''), true) ?: [];
+    $auto = $hablantes['_auto'] ?? null;
+    $partes = partes_de($g);
+
+    // La siguiente parte transcrita y aún sin voces.
+    $pendiente = null;
+    foreach ($partes as $p) {
+        if (($p['estado'] ?? '') === 'transcrita' && !in_array($p['voces'] ?? '', ['hecha', 'fallada'], true)) {
+            $pendiente = $p;
+            break;
+        }
+    }
+
+    if ($pendiente === null) {
+        // Todo casado: el mapa automático sale de los propios segmentos.
+        $mapa = $hablantes['mapa'] ?? [];
+        foreach ($partes as $p) {
+            $votos = [];
+            foreach ((array) ($p['dicho'] ?? []) as $seg) {
+                if (!empty($seg['quien'])) {
+                    $votos[$seg['h']][$seg['quien']] = ($votos[$seg['h']][$seg['quien']] ?? 0) + 1;
+                }
+            }
+            foreach ($votos as $h => $cuenta) {
+                arsort($cuenta);
+                $vozId = (string) array_key_first($cuenta);
+                $etiqueta = $p['n'] . ':' . $h;
+                if (isset($nombres[$vozId]) && empty($mapa[$etiqueta]['nombre'])) {
+                    $mapa[$etiqueta] = $nombres[$vozId] + ['auto' => true];
+                }
+            }
+        }
+        $hablantes['mapa'] = $mapa;
+        unset($hablantes['_auto']);
+        bd()->prepare('UPDATE grabaciones SET hablantes = ?, actualizado = ? WHERE id = ?')
+            ->execute([json_encode($hablantes, JSON_UNESCAPED_UNICODE), ahora_iso(), $id]);
+        responder(['disponible' => true, 'quedan' => 0, 'grabacion' => grabacion_salida(grabacion_o_404($id))]);
+    }
+
+    $n = (int) $pendiente['n'];
+
+    // Paso 1: encargar la identificación de esta parte.
+    if (!is_array($auto) || (int) ($auto['parte'] ?? -1) !== $n) {
+        $ruta = ruta_de_parte($g, $n);
+        if (!is_file($ruta)) {
+            responder_error(500, 'Falta el fichero de la parte ' . $n . '.', 'sin-fichero');
+        }
+        $media = voces_subir_media($ruta);
+        $trabajo = voces_encargar_identificacion($media, $huellas);
+        $hablantes['_auto'] = ['parte' => $n, 'trabajo' => $trabajo];
+        bd()->prepare('UPDATE grabaciones SET hablantes = ?, actualizado = ? WHERE id = ?')
+            ->execute([json_encode($hablantes, JSON_UNESCAPED_UNICODE), ahora_iso(), $id]);
+        responder(['disponible' => true, 'quedan' => 1 + contar_partes_sin_voces($partes, $n), 'paso' => 'encargada']);
+    }
+
+    // Paso 2: mirar cómo va y, si terminó, casar por solape de tiempos.
+    $t = voces_mirar_trabajo((string) $auto['trabajo']);
+    if ($t['estado'] === 'en-cola') {
+        responder(['disponible' => true, 'quedan' => 1 + contar_partes_sin_voces($partes, $n), 'paso' => 'en-cola']);
+    }
+
+    foreach ($partes as &$p) {
+        if ((int) $p['n'] !== $n) {
+            continue;
+        }
+        if ($t['estado'] === 'fallado') {
+            $p['voces'] = 'fallada';
+            break;
+        }
+        $segmentos = (array) ($t['salida']['identification'] ?? $t['salida']['diarization'] ?? []);
+        foreach ((array) ($p['dicho'] ?? []) as $i => $seg) {
+            $mejor = null;
+            $mejorSolape = 0.0;
+            foreach ($segmentos as $s) {
+                $ini = (float) ($s['start'] ?? 0);
+                $fin = (float) ($s['end'] ?? 0);
+                $solape = min((float) $seg['fin'], $fin) - max((float) $seg['ini'], $ini);
+                if ($solape > $mejorSolape) {
+                    $mejorSolape = $solape;
+                    $mejor = (string) ($s['speaker'] ?? '');
+                }
+            }
+            if ($mejor !== null && isset($huellas[$mejor])) {
+                $p['dicho'][$i]['quien'] = $mejor;
+            }
+        }
+        $p['voces'] = 'hecha';
+    }
+    unset($p);
+
+    unset($hablantes['_auto']);
+    guardar_partes($id, $partes, ['hablantes' => json_encode($hablantes, JSON_UNESCAPED_UNICODE)]);
+    responder(['disponible' => true, 'quedan' => contar_partes_sin_voces($partes, -1), 'paso' => 'casada']);
+}
+
+function contar_partes_sin_voces(array $partes, int $menos): int
+{
+    $n = 0;
+    foreach ($partes as $p) {
+        if (($p['estado'] ?? '') === 'transcrita' && (int) $p['n'] !== $menos
+            && !in_array($p['voces'] ?? '', ['hecha', 'fallada'], true)) {
+            $n++;
+        }
+    }
+    return $n;
+}
+
+/* Estado y clave del servicio de voces, calcados de los de Claude. */
+function voces_estado(): void
+{
+    exigir_admin();
+    $clave = voces_clave();
+    responder(['puesta' => $clave !== '', 'final' => $clave !== '' ? substr($clave, -4) : '', 'modelo' => VOCES_MODELO]);
+}
+
+function voces_poner_clave(): void
+{
+    exigir_admin();
+    $clave = trim((string) (cuerpo()['clave'] ?? ''));
+    if (strlen($clave) < 12) {
+        responder_error(400, 'Esa clave no parece una clave de pyannote.', 'formato');
+    }
+    voces_guardar_clave($clave);
+    responder(['puesta' => true, 'final' => substr($clave, -4)]);
+}
+
+function voces_quitar_clave(): void
+{
+    exigir_admin();
+    voces_borrar_clave();
+    responder(['puesta' => false, 'final' => '']);
+}
+
+function grabacion_salida(array $g): array
+{
+    $partes = array_map(static fn ($p) => [
+        'n' => (int) $p['n'],
+        'tam' => (int) $p['tam'],
+        'duracion' => (int) $p['duracion'],
+        'estado' => (string) ($p['estado'] ?? 'sin-transcribir'),
+        'texto' => (string) ($p['texto'] ?? ''),
+        'dicho' => is_array($p['dicho'] ?? null) ? $p['dicho'] : [],
+    ], partes_de($g));
+
+    $hablantes = json_decode((string) ($g['hablantes'] ?? ''), true);
+
+    return [
+        'id' => $g['id'], 'reunionId' => $g['reunion_id'], 'promoId' => $g['promo_id'],
+        'estado' => $g['estado'], 'mime' => (string) $g['mime'],
+        'duracion' => (int) $g['duracion'], 'tam' => (int) $g['tam'],
+        'partes' => $partes,
+        'hablantes' => is_array($hablantes) ? $hablantes : [],
+        'audioBorrado' => (int) ($g['audio_borrado'] ?? 0) === 1,
+        'creado' => $g['creado'], 'actualizado' => $g['actualizado'],
+        'creadoPor' => $g['creado_por'], 'creadoPorNombre' => $g['creado_por_nombre'],
     ];
 }
