@@ -121,6 +121,15 @@ platform :ios do
       lineas << "No se han podido leer las compilaciones: #{e.message}"
     end
 
+    # Y el repaso hueco por hueco de lo que Apple exige para dejar
+    # enviar la app, que es la pregunta de verdad.
+    begin
+      lineas.concat(repaso_de_la_ficha(app))
+    rescue StandardError => e
+      lineas << ""
+      lineas << "No se ha podido repasar la ficha: #{e.message}"
+    end
+
     texto = lineas.join("\n")
     texto.each_line { |l| UI.message(l.chomp) }
     if ENV["GITHUB_STEP_SUMMARY"]
@@ -265,6 +274,185 @@ def en_cristiano_tienda(estado)
     "REMOVED_FROM_SALE" => "retirada de la venta",
     "INVALID_BINARY" => "la compilación enviada no vale: hay que subir otra"
   }.fetch(estado.to_s, "estado «#{estado}»")
+end
+
+# ─── El repaso de la ficha ───────────────────────────────────────
+#
+# Apple no deja enviar una app a revisión hasta que están todos los
+# huecos rellenos, y su web no te dice cuáles faltan hasta que le das
+# al botón y te lo escupe en rojo. Esto los mira uno a uno por la API
+# y los reparte en tres montones: lo que ya está, lo que puedo dejar
+# hecho yo desde aquí, y lo que solo puede hacer Fran.
+#
+# Lo que no se pueda comprobar se dice en voz alta. Un hueco que no se
+# ha podido mirar y se calla es el que te tumba el envío.
+
+def lleno?(valor)
+  !valor.nil? && valor.to_s.strip != ""
+end
+
+def repaso_de_la_ficha(app)
+  version = begin
+    app.get_edit_app_store_version
+  rescue StandardError
+    nil
+  end
+
+  if version.nil?
+    return ["", "### Para enviarla a revisión", "",
+            "Ahora mismo no hay ninguna versión en preparación: hay que crear una antes de nada."]
+  end
+
+  hecho = []
+  mio = []
+  tuyo = []
+  dudas = []
+
+  # 1. La compilación. Sin una pegada a la versión no hay nada que
+  #    revisar, y es el despiste más típico: subirla a TestFlight y
+  #    creer que con eso ya está enviada.
+  begin
+    build = version.build
+    if build
+      hecho << "La compilación #{build.version} está pegada a la versión #{version.version_string}."
+    else
+      mio << "Pegar a la versión #{version.version_string} la última compilación de TestFlight."
+    end
+  rescue StandardError => e
+    dudas << "si hay una compilación pegada a la versión (#{e.message})"
+  end
+
+  # 2. Los textos de la ficha y las capturas, idioma por idioma.
+  begin
+    locales = version.get_app_store_version_localizations
+    if locales.empty?
+      tuyo << "La ficha no tiene ningún idioma dado de alta."
+    end
+    locales.each do |l|
+      falta = []
+      falta << "la descripción" unless lleno?(l.description)
+      falta << "las palabras clave" unless lleno?(l.keywords)
+      falta << "la URL de soporte" unless lleno?(l.support_url)
+      if falta.empty?
+        hecho << "Los textos de la ficha en #{l.locale} están puestos."
+      else
+        mio << "Escribir #{falta.join(", ")} en #{l.locale}."
+      end
+
+      begin
+        capturas = l.get_app_screenshot_sets(includes: "appScreenshots")
+        total = capturas.sum { |c| (c.app_screenshots || []).length }
+        if total.zero?
+          tuyo << "Subir las capturas de pantalla de #{l.locale}: Apple no las admite por esta vía, van desde la web."
+        else
+          hecho << "Hay #{total} capturas subidas en #{l.locale}."
+        end
+      rescue StandardError => e
+        dudas << "cuántas capturas hay en #{l.locale} (#{e.message})"
+      end
+    end
+  rescue StandardError => e
+    dudas << "los textos de la ficha (#{e.message})"
+  end
+
+  # 3. Los datos de revisión: a quién llama Apple si algo va mal y con
+  #    qué cuenta entra el revisor. Aquí es donde se cayó la vez
+  #    anterior, y es justo lo que puedo dejar puesto yo.
+  begin
+    detalle = version.fetch_app_store_review_detail
+    if detalle.nil?
+      mio << "Rellenar los datos de contacto para la revisión."
+    else
+      contacto = [detalle.contact_first_name, detalle.contact_last_name,
+                  detalle.contact_phone, detalle.contact_email]
+      if contacto.all? { |c| lleno?(c) }
+        hecho << "Los datos de contacto para Apple están puestos."
+      else
+        mio << "Rellenar los datos de contacto para la revisión (nombre, teléfono y correo)."
+      end
+
+      if detalle.demo_account_required == false
+        dudas << "por qué la ficha dice que el revisor NO necesita cuenta, si la app pide entrar"
+      elsif lleno?(detalle.demo_account_name) && lleno?(detalle.demo_account_password)
+        hecho << "La cuenta de prueba para el revisor está puesta (#{detalle.demo_account_name})."
+      else
+        mio << "Poner la cuenta de prueba del revisor, la misma que ya publica el servidor."
+      end
+    end
+  rescue StandardError => e
+    dudas << "los datos de revisión (#{e.message})"
+  end
+
+  # 4. El nombre, el subtítulo, la política de privacidad y las
+  #    categorías, que viven en otro sitio distinto de la versión.
+  begin
+    infos = app.get_app_infos
+    info = infos.find { |i| i.app_store_state.to_s != "READY_FOR_SALE" } || infos.first
+    if info
+      begin
+        info.get_app_info_localizations.each do |l|
+          hecho << "El nombre en la tienda es «#{l.name}» (#{l.locale})." if lleno?(l.name)
+          if lleno?(l.privacy_policy_url)
+            hecho << "La política de privacidad está enlazada en #{l.locale}."
+          else
+            mio << "Enlazar la política de privacidad en #{l.locale} (ya está publicada en la web)."
+          end
+        end
+      rescue StandardError => e
+        dudas << "el nombre y la política de privacidad (#{e.message})"
+      end
+
+      begin
+        if info.primary_category
+          hecho << "La categoría está elegida."
+        else
+          mio << "Elegir la categoría de la app."
+        end
+      rescue StandardError => e
+        dudas << "la categoría (#{e.message})"
+      end
+
+      begin
+        edades = info.fetch_age_rating_declaration
+        if edades
+          hecho << "El cuestionario de edad recomendada está contestado."
+        else
+          mio << "Contestar el cuestionario de edad recomendada."
+        end
+      rescue StandardError => e
+        dudas << "el cuestionario de edad recomendada (#{e.message})"
+      end
+    end
+  rescue StandardError => e
+    dudas << "los datos generales de la app (#{e.message})"
+  end
+
+  # Los contratos y los datos fiscales no se pueden mirar por la API y
+  # son el motivo número uno de app terminada que no puede salir.
+  tuyo << "Comprobar en «Business» que el contrato de apps gratuitas está firmado y aceptado."
+
+  lineas = ["", "### Para enviarla a revisión", ""]
+  unless hecho.empty?
+    lineas << "**Ya está hecho:**"
+    hecho.each { |t| lineas << "- #{t}" }
+    lineas << ""
+  end
+  unless mio.empty?
+    lineas << "**Puedo dejarlo hecho yo desde aquí, si me lo dices:**"
+    mio.each { |t| lineas << "- #{t}" }
+    lineas << ""
+  end
+  unless tuyo.empty?
+    lineas << "**Solo lo puedes hacer tú, desde la web de Apple:**"
+    tuyo.each { |t| lineas << "- #{t}" }
+    lineas << ""
+  end
+  unless dudas.empty?
+    lineas << "**Esto no lo he podido comprobar** (lo digo en vez de darlo por bueno):"
+    dudas.each { |t| lineas << "- #{t}" }
+    lineas << ""
+  end
+  lineas
 end
 
 def en_cristiano_build(procesado, en_testflight)
