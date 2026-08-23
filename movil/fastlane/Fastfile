@@ -72,6 +72,7 @@ platform :ios do
     lineas = ["## #{app.name} en App Store Connect", ""]
 
     # Las versiones de la tienda: la publicada, la que esté en revisión…
+    en_curso = nil
     begin
       versiones = app.get_app_store_versions.to_a
       if versiones.empty?
@@ -79,13 +80,13 @@ platform :ios do
       else
         lineas << "### Versiones en la tienda"
         lineas << ""
-        versiones.sort_by { |v| v.created_date.to_s }.reverse.first(3).each do |v|
-          # Apple está mudando el nombre del campo del estado; se lee el
-          # que haya. Con versiones viejas de fastlane solo existe el
-          # segundo.
-          bruto = (v.respond_to?(:app_version_state) && v.app_version_state) || v.app_store_state
-          lineas << "- **Versión #{v.version_string}** — #{en_cristiano_tienda(bruto)}"
+        recientes = versiones.sort_by { |v| v.created_date.to_s }.reverse
+        recientes.first(3).each do |v|
+          lineas << "- **Versión #{v.version_string}** — #{en_cristiano_tienda(estado_de(v))}"
         end
+        # La que está en curso es la que todavía no ha salido a la
+        # tienda: la que se puede tocar y la que hay que enviar.
+        en_curso = recientes.find { |v| !PUBLICADAS.include?(estado_de(v).to_s) }
       end
     rescue StandardError => e
       lineas << "No se han podido leer las versiones de la tienda: #{e.message}"
@@ -124,7 +125,7 @@ platform :ios do
     # Y el repaso hueco por hueco de lo que Apple exige para dejar
     # enviar la app, que es la pregunta de verdad.
     begin
-      lineas.concat(repaso_de_la_ficha(app))
+      lineas.concat(repaso_de_la_ficha(app, en_curso))
     rescue StandardError => e
       lineas << ""
       lineas << "No se ha podido repasar la ficha: #{e.message}"
@@ -291,16 +292,23 @@ def lleno?(valor)
   !valor.nil? && valor.to_s.strip != ""
 end
 
-def repaso_de_la_ficha(app)
-  version = begin
-    app.get_edit_app_store_version
-  rescue StandardError
-    nil
-  end
+# Los estados en los que la versión ya ha salido a la tienda y no es la
+# que hay que enviar. Todo lo demás está en curso.
+PUBLICADAS = %w[
+  READY_FOR_DISTRIBUTION READY_FOR_SALE REPLACED_WITH_NEW_VERSION
+  REMOVED_FROM_SALE DEVELOPER_REMOVED_FROM_SALE NOT_APPLICABLE
+].freeze
 
+# Apple está mudando el nombre del campo del estado y va sirviendo uno u
+# otro según la versión de la librería; se lee el que haya.
+def estado_de(version)
+  (version.respond_to?(:app_version_state) && version.app_version_state) || version.app_store_state
+end
+
+def repaso_de_la_ficha(app, version)
   if version.nil?
     return ["", "### Para enviarla a revisión", "",
-            "Ahora mismo no hay ninguna versión en preparación: hay que crear una antes de nada."]
+            "No he encontrado ninguna versión en curso que repasar."]
   end
 
   hecho = []
@@ -312,7 +320,16 @@ def repaso_de_la_ficha(app)
   #    revisar, y es el despiste más típico: subirla a TestFlight y
   #    creer que con eso ya está enviada.
   begin
-    build = version.build
+    build = begin
+      version.respond_to?(:get_build) ? version.get_build : nil
+    rescue StandardError
+      nil
+    end
+    build ||= begin
+      version.build
+    rescue StandardError
+      nil
+    end
     if build
       hecho << "La compilación #{build.version} está pegada a la versión #{version.version_string}."
     else
