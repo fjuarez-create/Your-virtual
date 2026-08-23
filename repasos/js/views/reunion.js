@@ -83,7 +83,7 @@ export async function render({ reunionId }) {
           : 'Esta reunión no dejó tareas apuntadas.'),
     edita
       ? h('button.d-fantasma', {
-          style: { marginTop: '10px' },
+          style: { marginTop: '8px' },
           onclick: async () => { if (await hojaEncargo({ reunionId: r.id, promoId: r.promoId })) refrescar(); },
         }, icon('plus'), 'Apuntar una tarea')
       : null,
@@ -92,7 +92,7 @@ export async function render({ reunionId }) {
   /* ─── El arrastre ─── */
   if (arrastre.length) {
     contenido.push(
-      h('p.d-epigrafe', null, 'Pendiente de reuniones anteriores'),
+      h('p.d-epigrafe', null, 'Pendientes de reuniones anteriores'),
       h('div', null, arrastre.map((e) => filaEncargo(e, { alTachar: tachar, origen: true }))),
       h('p.d-nota-pie', null, 'Lo que se tache aquí queda tachado también en su acta de origen.'),
     );

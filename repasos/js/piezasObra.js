@@ -27,7 +27,10 @@ export function lineaDeGente(r) {
   }
   if (!nombres.length) return 'Sin asistentes apuntados';
   if (nombres.length === 1) return nombres[0];
-  return `${nombres.slice(0, -1).join(', ')} y ${nombres[nombres.length - 1]}`;
+  const ultimo = nombres[nombres.length - 1];
+  // «Francisco e Íñigo», no «y Íñigo»: la conjunción cambia ante i.
+  const conjuncion = /^(i|í|hi)/i.test(ultimo) ? 'e' : 'y';
+  return `${nombres.slice(0, -1).join(', ')} ${conjuncion} ${ultimo}`;
 }
 
 /** La segunda línea de una tarea: alcance, responsable, fecha y origen. */

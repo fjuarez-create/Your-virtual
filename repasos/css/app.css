@@ -2893,6 +2893,9 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
    aquí, así que se marca en beige como todo lo que está en curso. */
 .d-acta-dia.hoy { background: var(--d-beige); }
 .d-acta-dia-cab { display: flex; align-items: flex-start; gap: 12px; }
+/* Sin esto, la pila de caras flotaba a media tarjeta en vez de
+   quedarse pegada al borde derecho, donde la espera el ojo. */
+.d-acta-dia-cab .grow { flex: 1; min-width: 0; }
 .d-acta-dia-cuando { margin: 0; font-size: 14px; color: var(--d-gris); }
 .d-acta-dia.hoy .d-acta-dia-cuando { color: var(--d-beige-tinta); font-weight: 500; }
 .d-acta-dia-fecha {
@@ -2912,19 +2915,21 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 .d-acta-dia.hoy .d-acta-dia-chips .d-chip.rojo { background: #fff; }
 
 /* ─── La obra: reuniones y encargos ──────────────────────────── */
-/* La fila de los presentes: las caras solapadas, los invitados sin
-   cuenta en pastilla y el botón de añadir en punteado. */
-.d-mesa { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-.d-mesa .avatar { border: 2.5px solid var(--d-fondo); margin-left: -12px; }
-.d-mesa .avatar:first-child { margin-left: 0; }
+/* La fila de los presentes: las caras, los invitados sin cuenta en
+   pastilla y el botón de añadir en punteado. Las pastillas miden lo
+   mismo que las caras: una fila con tres alturas se ve descuidada. */
+.d-mesa { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.d-mesa .avatar { border: 2.5px solid var(--d-fondo); }
 .d-invitado {
+  display: inline-flex; align-items: center; height: 44px;
   font-size: 13px; font-weight: 600; color: var(--d-gris);
-  background: #e9e7e2; padding: 9px 13px; border-radius: 999px;
+  background: #e9e7e2; padding: 0 14px; border-radius: 999px;
 }
 .d-mesa-mas {
+  display: inline-flex; align-items: center; height: 44px; box-sizing: border-box;
   font-size: 13px; font-weight: 600; color: var(--d-gris);
   background: transparent; border: 1.5px dashed #b9b3a8;
-  padding: 9px 13px; border-radius: 999px;
+  padding: 0 14px; border-radius: 999px;
 }
 
 /* La tarea de una reunión: pastilla blanca con su redondel para

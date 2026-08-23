@@ -64,13 +64,14 @@ export async function render() {
   /* ─── Hoy ─── */
   contenido.push(h('p.d-epigrafe', null, 'Hoy'));
   if (deHoy) {
-    contenido.push(tarjetaReunion(deHoy, { esHoy: true }));
+    // Sin el «Hoy ·» delante: el epígrafe de arriba ya lo dice.
+    contenido.push(tarjetaReunion(deHoy, { esHoy: true, conHoy: false }));
   } else {
     contenido.push(
       h('div.d-acta-dia.hoy', null,
         h('div.d-acta-dia-cab', null,
           h('div.grow', null,
-            h('p.d-acta-dia-cuando', null, 'Hoy · sin empezar'),
+            h('p.d-acta-dia-cuando', null, 'Sin empezar'),
             h('p.d-acta-dia-fecha', null, `${diaDeLaSemana(hoy, { mayuscula: true })}, ${fechaDeActa(hoy)}`),
           ),
         ),
@@ -79,7 +80,7 @@ export async function render() {
     );
     if (df) {
       const empezar = h('button.d-boton-negro', {
-        style: { marginTop: '10px' },
+        style: { marginTop: '12px' },
         onclick: async () => {
           empezar.disabled = true;
           try {
@@ -90,7 +91,7 @@ export async function render() {
             toast(e.codigo === 'red' ? 'Sin conexión: la obra se lleva en directo' : e.message, 'err');
           }
         },
-      }, icon('plus'), 'Empezar la reunión de hoy');
+      }, 'Empezar la reunión de hoy');
       contenido.push(empezar);
     } else {
       contenido.push(h('p.d-nota-pie', null,
@@ -119,7 +120,7 @@ export async function render() {
       // la palabra «null» en mitad de la pantalla.
       if (pendientes.length > DE_PRIMERAS && !todas) {
         nodos.push(h('button.d-fantasma', {
-          style: { marginTop: '10px' },
+          style: { marginTop: '8px' },
           onclick: () => { todas = true; pintar(); },
         }, `Ver las ${pendientes.length} pendientes`));
       }
@@ -142,13 +143,24 @@ export async function render() {
 }
 
 /** La tarjeta de una reunión, con la misma piel que los partes por
-    día. La portada la pinta también, para la última reunión. */
-export function tarjetaReunion(r, { esHoy }) {
+    día. La portada la pinta también, para la última reunión: allí el
+    «Hoy ·» se queda (`conHoy`), porque no hay epígrafe que lo diga. */
+export function tarjetaReunion(r, { esHoy, conHoy = true }) {
   const chip = (n, texto, clase) => (n ? h('span.d-chip', { class: clase }, `${n} ${texto}`) : null);
+  const estado = r.terminada ? 'terminada' : 'en marcha';
   const cuando = esHoy
-    ? (r.terminada ? 'Hoy · terminada' : 'Hoy · en marcha')
+    ? (conHoy ? `Hoy · ${estado}` : estado.charAt(0).toUpperCase() + estado.slice(1))
     : diaDeLaSemana(r.fecha, { mayuscula: true });
 
+  // En la pila salen también los invitados: la línea de abajo los
+  // cuenta, y que las caras dijeran tres donde el texto dice cuatro
+  // descuadraba al que cuenta cabezas.
+  const gente = [
+    ...(r.asistentes || []).map((id) => store.persona(id)),
+    ...(r.invitados || []).map((nombre) => ({ nombre })),
+  ];
+
+  const hechas = r.encargos - r.pendientes;
   return h('button.d-acta-dia', {
     class: esHoy ? 'hoy' : '',
     onclick: () => ir(`#/obra/r/${r.id}`),
@@ -158,13 +170,14 @@ export function tarjetaReunion(r, { esHoy }) {
         h('p.d-acta-dia-cuando', null, cuando),
         h('p.d-acta-dia-fecha', null, fechaDeActa(r.fecha)),
       ),
-      grupoAvatares((r.asistentes || []).map((id) => store.persona(id)), { tam: 40, max: 3, solape: 13 }),
+      grupoAvatares(gente, { tam: 40, max: 3, solape: 13 }),
     ),
     h('p.d-acta-dia-villas', null, lineaDeGente(r)),
+    // Pendientes y hechas bastan: el total es la suma y no añade nada.
     h('div.d-acta-dia-chips', null,
-      chip(r.encargos, r.encargos === 1 ? 'tarea' : 'tareas', ''),
       chip(r.pendientes, r.pendientes === 1 ? 'pendiente' : 'pendientes', 'ambar'),
-      chip(r.encargos - r.pendientes, r.encargos - r.pendientes === 1 ? 'hecha' : 'hechas', 'verde'),
+      chip(hechas, hechas === 1 ? 'hecha' : 'hechas', 'verde'),
+      r.encargos === 0 ? h('span.d-chip', null, 'sin tareas') : null,
     ),
   );
 }

@@ -14,49 +14,46 @@
   }
   .m-rotulo { font: 600 13px/1 var(--d-font); color: #6d6a64; margin: 0 0 8px 6px; letter-spacing: 0.04em; text-transform: uppercase; }
 
-  /* ── Piezas SOLO de maqueta: la grabación y las fotos (tanda 2).
-        Todo lo demás son las piezas reales de app.css. ── */
+  /* ── Piezas SOLO de maqueta: la grabación (tanda 2). Todo lo demás
+        son las piezas reales de app.css, fotos incluidas (.d-mini). ── */
   .m-grabando {
     background: var(--d-tinta); color: #fff; border-radius: var(--d-radio);
     padding: 16px; display: flex; align-items: center; gap: 14px;
   }
   .m-punto { width: 10px; height: 10px; flex: none; align-self: flex-start; margin-top: 10px; border-radius: 999px; background: var(--d-rojo); box-shadow: 0 0 0 5px rgba(219,62,50,0.22); }
   .m-grab-tiempo { font: 500 28px/1 var(--d-font); letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
-  .m-grab-sub { font: 400 12.5px/1.4 var(--d-font); color: rgba(255,255,255,0.66); margin-top: 5px; }
+  .m-grab-sub { font: 400 12.5px/1.4 var(--d-font); color: #bfbfbf; margin-top: 5px; }
+  .m-grab-sub span { display: block; }
   .m-parar {
     margin-left: auto; flex: none; background: #fff; color: var(--d-tinta); border: 0;
-    border-radius: 999px; font: 500 15px/1 var(--d-font); padding: 0 20px; height: 42px;
+    border-radius: 999px; font: 500 16px/1 var(--d-font); padding: 0 24px; height: 48px;
   }
   .m-grabando.quieta { background: #fff; color: var(--d-tinta); }
-  .m-grabando.quieta svg { width: 24px; height: 24px; flex: none; color: var(--d-beige-tinta); }
+  .m-grabando.quieta > svg { width: 24px; height: 24px; flex: none; color: var(--d-beige-tinta); }
   .m-grabando.quieta .m-grab-titulo { font: 500 16px/1.2 var(--d-font); }
   .m-grabando.quieta .m-grab-sub { color: var(--d-gris); }
   .m-grabar {
     margin-left: auto; flex: none; background: var(--d-tinta); color: #fff; border: 0;
-    border-radius: 999px; font: 500 15px/1 var(--d-font); padding: 0 20px; height: 42px;
-    display: flex; align-items: center; gap: 8px;
+    border-radius: 999px; font: 500 16px/1 var(--d-font); padding: 0 24px; height: 48px;
   }
-  .m-grabar svg { width: 18px; height: 18px; color: #fff !important; }
 
-  .m-fotos { display: flex; gap: 8px; }
-  .m-foto { position: relative; width: 94px; height: 94px; border-radius: 14px; overflow: hidden; flex: 0 0 auto; }
-  .m-foto img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .m-foto .tag {
-    position: absolute; left: 6px; bottom: 6px; background: rgba(0,0,0,0.72); color: #fff;
+  /* La tira de fotos son las piezas reales .d-minis/.d-mini; aquí solo
+     la etiqueta sobre la primera y la loseta punteada de añadir, con
+     las mismas señas que el resto de punteados del sistema. */
+  .d-mini .m-tag {
+    position: absolute; left: 6px; bottom: 6px; max-width: calc(100% - 12px);
+    box-sizing: border-box; background: rgba(0,0,0,0.72); color: #fff;
     font: 500 10px/1 var(--d-font); padding: 4px 7px; border-radius: 999px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  .m-foto.mas { display: grid; place-items: center; background: #eceae6; color: var(--d-beige-tinta); border: 1.5px dashed #c9c4bb; box-sizing: border-box; }
-  .m-foto.mas svg { width: 22px; height: 22px; }
+  .d-mini.m-mas {
+    display: grid; place-items: center; color: var(--d-beige-tinta);
+    border: 1.5px dashed #b9b3a8; background: #e9e7e4; box-sizing: border-box;
+  }
+  .d-mini.m-mas svg { width: 22px; height: 22px; }
 
   /* El chip de estado a la derecha de una tarea, sin que empuje al texto. */
   .d-encargo .d-chip { flex: none; margin-left: 2px; }
-
-  /* Las caras solapadas, con el borde del color del fondo en que viven:
-     blanco dentro de una tarjeta, el del lienzo en la mesa. */
-  .m-solape { display: flex; }
-  .m-solape .avatar { border: 2.5px solid var(--m-borde, #fff); }
-  .m-solape .avatar + .avatar { margin-left: -12px; }
-  .d-mesa .m-solape { --m-borde: var(--d-fondo); }
 </style>
 </head>
 <body>
@@ -65,12 +62,15 @@
   <div><p class="m-rotulo">3 · La reunión en marcha</p><div class="telefono pantalla-diseno" id="p3"></div></div>
 
 <script type="module">
-import { h, icon, avatar } from '../../js/ui.js';
+import { h, icon, avatar, grupoAvatares } from '../../js/ui.js';
 
-const F = { nombre: 'Fran Juárez' };
+/* Nombres reales del equipo: así cada cara sale con su color de
+   verdad (COLOR_DEL_EQUIPO en ui.js) y la maqueta no miente. */
+const F = { nombre: 'Francisco Juárez del Dago' };
 const A = { nombre: 'Alba García' };
 const FE = { nombre: 'Felipe Remacha' };
-const I = { nombre: 'Íñigo Soler' };
+const T = { nombre: 'Tomás Bordes' };
+const PACO = { nombre: 'Paco' };   // el invitado sin cuenta
 
 /* ── Las piezas reales, montadas igual que en la app ── */
 
@@ -91,9 +91,6 @@ const epigrafe = (t) => h('p.d-epigrafe', null, t);
 const notaPie = (t, estilo) => h('p.d-nota-pie', { style: estilo || null }, t);
 const chip = (t, c) => h('span.d-chip', { class: c || '' }, t);
 
-const mesa = (...piezas) => h('div.d-mesa', null, ...piezas);
-const caras = (gente, tam = 44) => h('div.m-solape', null, gente.map((g) => avatar(g, { tam })));
-
 const encargo = (texto, sub, { hecha = false, chipTexto = null, chipClase = '' } = {}) =>
   h('div.d-encargo', { class: hecha ? 'hecho' : '' },
     h('button.d-encargo-bola', null, icon('check')),
@@ -104,19 +101,37 @@ const encargo = (texto, sub, { hecha = false, chipTexto = null, chipClase = '' }
     chipTexto ? chip(chipTexto, chipClase) : null,
   );
 
-const tarjetaDia = ({ hoy, cuando, fecha, gente, linea, chips }) => h('button.d-acta-dia', { class: hoy ? 'hoy' : '' },
+const tarjetaDia = ({ cuando, fecha, gente, linea, chips }) => h('button.d-acta-dia', null,
   h('div.d-acta-dia-cab', null,
     h('div.grow', null,
       h('p.d-acta-dia-cuando', null, cuando),
       h('p.d-acta-dia-fecha', null, fecha),
     ),
-    gente.length ? caras(gente, 40) : null,
+    grupoAvatares(gente, { tam: 40, max: 3, solape: 13 }),
   ),
   h('p.d-acta-dia-villas', null, linea),
   h('div.d-acta-dia-chips', null, chips.map(([t, c]) => chip(t, c))),
 );
 
-const foto = (src, tag) => h('div.m-foto', null, h('img', { src }), tag ? h('span.tag', null, tag) : null);
+const foto = (src, tag) => h('div.d-mini', {
+  style: { backgroundImage: `url(${src})` },
+}, tag ? h('span.m-tag', null, tag) : null);
+
+const notaSello = () => notaPie('El acta se sella sola a las 23:59 y a esa hora sale su PDF. '
+  + 'Hasta entonces la DF y tú podéis añadir o corregir; tachar lo hecho se puede siempre.');
+
+const subGrabacion = () => h('div.m-grab-sub', null,
+  h('span', null, 'Se transcribe al terminar la reunión'),
+  h('span', null, 'y el audio se borra a los 30 días'),
+);
+
+/* Las tres pendientes que arrastra la obra: las mismas en las tres
+   láminas, que la historia no baile. */
+const PENDIENTES = [
+  ['Pedir el vidrio del lucernario', 'General · para Felipe · de la reunión del martes 25 de agosto'],
+  ['Limpiar la obra entera', 'General · para Sinergia · de la reunión del martes 25 de agosto'],
+  ['Empastar el pladur en las villas de abajo', 'General · para Sinergia · antes del 5 de septiembre · de la reunión del martes 25 de agosto'],
+];
 
 /* ─── 1 · La mañana, sin empezar ─── */
 document.getElementById('p1').append(
@@ -127,32 +142,30 @@ document.getElementById('p1').append(
   h('div.d-acta-dia.hoy', null,
     h('div.d-acta-dia-cab', null,
       h('div.grow', null,
-        h('p.d-acta-dia-cuando', null, 'Hoy · sin empezar'),
+        h('p.d-acta-dia-cuando', null, 'Sin empezar'),
         h('p.d-acta-dia-fecha', null, 'Miércoles, 26 de agosto'),
       ),
     ),
     h('p.d-acta-dia-villas', null, 'La reunión de cada mañana, con su acta'),
   ),
-  h('button.d-boton-negro', { style: { marginTop: '10px' } }, icon('plus'), 'Empezar la reunión de hoy'),
+  h('button.d-boton-negro', { style: { marginTop: '12px' } }, 'Empezar la reunión de hoy'),
 
-  epigrafe('Tareas de obra pendientes'),
-  encargo('Limpiar la obra entera', 'General · para Sinergia · de la reunión del martes 25'),
-  encargo('Empastar el pladur en las villas de abajo', 'General · para Sinergia · antes del 5 de septiembre'),
-  h('button.d-fantasma', { style: { marginTop: '10px' } }, 'Ver las 12 pendientes'),
+  epigrafe('3 tareas de obra pendientes'),
+  ...PENDIENTES.map(([t, s]) => encargo(t, s)),
 
   epigrafe('Reuniones anteriores'),
   h('div.d-actas-dias', null,
     tarjetaDia({
-      hoy: false, cuando: 'Martes', fecha: '25 de agosto',
-      gente: [F, A, FE],
-      linea: 'Fran, Alba, Felipe y Paco (invitado)',
-      chips: [['9 tareas', ''], ['3 pendientes', 'ambar'], ['6 hechas', 'verde']],
+      cuando: 'Martes', fecha: '25 de agosto',
+      gente: [F, A, FE, PACO],
+      linea: 'Francisco, Alba, Felipe y Paco (invitado)',
+      chips: [['3 pendientes', 'ambar'], ['6 hechas', 'verde']],
     }),
     tarjetaDia({
-      hoy: false, cuando: 'Lunes', fecha: '24 de agosto',
-      gente: [F, I],
-      linea: 'Fran e Íñigo',
-      chips: [['5 tareas', ''], ['5 hechas', 'verde']],
+      cuando: 'Lunes', fecha: '24 de agosto',
+      gente: [F, T],
+      linea: 'Francisco y Tomás',
+      chips: [['5 hechas', 'verde']],
     }),
   ),
 );
@@ -161,11 +174,11 @@ document.getElementById('p1').append(
 document.getElementById('p2').append(
   cabDentro(),
   h('h1.d-saludo', null, 'Reunión de hoy'),
-  notaPie('Miércoles, 26 de agosto · empezada a las 08:57', { margin: '-4px 6px 0' }),
+  notaPie('Miércoles, 26 de agosto de 2026 · empezada a las 08:57 h', { margin: '-4px 6px 0' }),
 
   epigrafe('En la mesa'),
-  mesa(
-    caras([F]),
+  h('div.d-mesa', null,
+    grupoAvatares([F], { tam: 44, max: 6, solape: 12 }),
     h('button.d-mesa-mas', null, '+ Añadir'),
   ),
   notaPie('Estás tú solo. Según se vaya sentando la gente, añádela: el acta dirá quién estuvo.'),
@@ -175,33 +188,38 @@ document.getElementById('p2').append(
     icon('mic'),
     h('div.grow', null,
       h('div.m-grab-titulo', null, 'Sin grabar todavía'),
-      h('div.m-grab-sub', null, 'Se transcribe al cerrar · el audio se borra a los 30 días'),
+      subGrabacion(),
     ),
     h('button.m-grabar', null, 'Grabar'),
   ),
+
+  epigrafe('Fotos de la reunión'),
+  h('div.d-minis', null, h('div.d-mini.m-mas', null, icon('camera'))),
+  notaPie('Las fotos que hagas aquí salen en el acta.'),
 
   epigrafe('Tareas de esta reunión'),
   notaPie('Todavía ninguna. Lo que se acuerde, apúntalo aquí: con responsable y fecha no se pierde.', { margin: '0 6px' }),
   h('button.d-fantasma', { style: { marginTop: '12px' } }, icon('plus'), 'Apuntar una tarea'),
 
-  epigrafe('Pendiente de reuniones anteriores'),
-  encargo('Pedir el vidrio del lucernario', 'Del martes 25 · para Felipe', { chipTexto: 'sigue pendiente', chipClase: 'ambar' }),
-  encargo('Limpiar la obra entera', 'Del martes 25 · para Sinergia', { chipTexto: 'sigue pendiente', chipClase: 'ambar' }),
-  notaPie('Mientras llegan los demás, buen momento para repasar esta lista.'),
+  epigrafe('Pendientes de reuniones anteriores'),
+  ...PENDIENTES.map(([t, s]) => encargo(t, s)),
+  notaPie('Mientras llegan los demás, buen momento para revisar esta lista.'),
 
-  h('button.d-boton-negro', { style: { marginTop: '24px' } }, icon('check'), 'Terminar la reunión'),
-  notaPie('El acta se sella sola a las 23:59: hasta entonces la DF y tú podéis añadir o corregir. Tachar lo hecho se puede siempre.'),
+  /* Recién empezada, terminar es lo único que NO toca todavía: se
+     queda en pastilla de borde, sin gritar. */
+  h('button.d-fantasma', { style: { marginTop: '24px' } }, 'Terminar la reunión'),
+  notaSello(),
 );
 
 /* ─── 3 · En marcha ─── */
 document.getElementById('p3').append(
   cabDentro(),
   h('h1.d-saludo', null, 'Reunión de hoy'),
-  notaPie('Miércoles, 26 de agosto · empezada a las 09:02', { margin: '-4px 6px 0' }),
+  notaPie('Miércoles, 26 de agosto de 2026 · empezada a las 08:57 h', { margin: '-4px 6px 0' }),
 
   epigrafe('En la mesa'),
-  mesa(
-    caras([F, A, FE, I]),
+  h('div.d-mesa', null,
+    grupoAvatares([F, A, FE, T], { tam: 44, max: 6, solape: 12 }),
     h('span.d-invitado', null, 'Paco (invitado)'),
     h('button.d-mesa-mas', null, '+ Añadir'),
   ),
@@ -211,31 +229,32 @@ document.getElementById('p3').append(
     h('span.m-punto'),
     h('div.grow', null,
       h('div.m-grab-tiempo', null, '41:23'),
-      h('div.m-grab-sub', null, 'Se transcribe al cerrar · el audio se borra a los 30 días'),
+      subGrabacion(),
     ),
     h('button.m-parar', null, 'Parar'),
   ),
 
   epigrafe('Fotos de la reunión'),
-  h('div.m-fotos', null,
+  h('div.d-minis', null,
     foto('../../assets/ejemplos/cinta-pladur.jpg', 'Libro de órdenes'),
     foto('../../assets/ejemplos/cajon-cocina.jpg'),
     foto('../../assets/ejemplos/termo-sin-fijar.jpg'),
-    h('div.m-foto.mas', null, icon('camera')),
+    h('div.d-mini.m-mas', null, icon('camera')),
   ),
 
   epigrafe('Tareas de esta reunión'),
-  encargo('Repasar el canto del escalón del acceso', 'Villa 14 · para Íñigo · antes del viernes 28'),
-  encargo('Reponer la bomba de la piscina', 'Villa 14 · para Sinergia (Paco) · sin fecha'),
-  h('button.d-fantasma', { style: { marginTop: '10px' } }, icon('plus'), 'Apuntar una tarea'),
+  encargo('Rematar el canto del escalón del acceso', 'Villa 14 · para Tomás · antes del 28 de agosto'),
+  encargo('Reponer la bomba de la piscina', 'Villa 14 · para Sinergia (Paco) · antes del 31 de agosto'),
+  h('button.d-fantasma', { style: { marginTop: '8px' } }, icon('plus'), 'Apuntar una tarea'),
 
-  epigrafe('Pendiente de reuniones anteriores'),
-  encargo('Pedir el vidrio del lucernario', 'Del martes 25 · para Felipe', { chipTexto: 'sigue pendiente', chipClase: 'ambar' }),
-  encargo('Confirmar la llegada del pladur', 'Del martes 25 · para Alba · la tachó Alba', { hecha: true, chipTexto: 'hecha', chipClase: 'verde' }),
+  epigrafe('Pendientes de reuniones anteriores'),
+  encargo(...PENDIENTES[0]),
+  encargo(...PENDIENTES[2]),
+  encargo('Limpiar la obra entera', 'General · para Sinergia · de la reunión del martes 25 de agosto · la tachó Alba', { hecha: true }),
   notaPie('Lo que se tache aquí queda tachado también en su acta de origen.'),
 
   h('button.d-boton-negro', { style: { marginTop: '24px' } }, icon('check'), 'Terminar la reunión'),
-  notaPie('El acta se sella sola a las 23:59: hasta entonces la DF y tú podéis añadir o corregir. A esa hora se genera el PDF solo.'),
+  notaSello(),
 );
 </script>
 </body>
