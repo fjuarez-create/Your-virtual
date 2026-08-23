@@ -406,16 +406,28 @@ def repaso_de_la_ficha(app, version)
     # El nombre y la política de privacidad no cuelgan de la versión
     # sino de la «ficha» de la app, que va por su cuenta y tiene su
     # propia copia editable y su copia publicada.
+    porque = nil
     info = begin
       app.fetch_edit_app_info
-    rescue StandardError
+    rescue StandardError => e
+      porque = e.message
       nil
     end
     info ||= begin
       app.fetch_live_app_info
-    rescue StandardError
+    rescue StandardError => e
+      porque = e.message
       nil
     end
+
+    # Si no se ha podido leer, se dice. Saltarse cuatro comprobaciones
+    # en silencio deja un informe más limpio y menos de fiar, que es lo
+    # contrario de para lo que está esto.
+    if info.nil?
+      dudas << "la ficha de la app: nombre, política de privacidad, categoría y edad recomendada" \
+               "#{porque ? " (#{porque})" : ""}"
+    end
+
     if info
       begin
         info.get_app_info_localizations.each do |l|
