@@ -138,6 +138,84 @@ platform :ios do
     end
   end
 
+  desc "Envía a revisión la versión en curso. Se planta si algo no está en su sitio."
+  lane :enviar do
+    require "spaceship"
+
+    Spaceship::ConnectAPI.auth(
+      key_id: ENV.fetch("APPSTORE_CLAVE_ID"),
+      issuer_id: ENV.fetch("APPSTORE_EMISOR_ID"),
+      key: ENV.fetch("APPSTORE_CLAVE_P8")
+    )
+
+    app = Spaceship::ConnectAPI::App.find(IDENTIFICADOR)
+    UI.user_error!("En esta cuenta de Apple no aparece ninguna app con el identificador #{IDENTIFICADOR}.") if app.nil?
+
+    version = app.get_app_store_versions.to_a
+                 .sort_by { |v| v.created_date.to_s }.reverse
+                 .find { |v| !PUBLICADAS.include?(estado_de(v).to_s) }
+    UI.user_error!("No hay ninguna versión en curso que enviar.") if version.nil?
+
+    # Antes de tocar nada, los cerrojos. Enviar a revisión con un hueco
+    # sin rellenar no es un fallo que se arregle repitiendo: es una
+    # semana de cola de Apple tirada y un rechazo en el expediente.
+    estado = estado_de(version).to_s
+    unless %w[READY_FOR_REVIEW PREPARE_FOR_SUBMISSION].include?(estado)
+      UI.user_error!("La versión #{version.version_string} está «#{en_cristiano_tienda(estado)}». No es momento de enviarla.")
+    end
+
+    build = begin
+      version.build
+    rescue StandardError
+      nil
+    end
+    UI.user_error!("La versión #{version.version_string} no tiene ninguna compilación pegada.") if build.nil?
+
+    detalle = begin
+      version.fetch_app_store_review_detail
+    rescue StandardError
+      nil
+    end
+    if detalle.nil? || !(lleno?(detalle.demo_account_name) && lleno?(detalle.demo_account_password))
+      UI.user_error!("La ficha no lleva cuenta de prueba para el revisor. Sin ella no entra y la rechazan.")
+    end
+
+    UI.message("Enviando a revisión la versión #{version.version_string} con la compilación #{build.version}…")
+
+    # Apple cambió hace poco la manera de enviar: antes se creaba un
+    # «envío de versión» y ahora un «envío de revisión» que puede llevar
+    # varias cosas dentro. Se intenta el nuevo y, si esta librería aún no
+    # lo trae, el de antes.
+    hecho = false
+    begin
+      envio = Spaceship::ConnectAPI::ReviewSubmission.create(
+        app_id: app.id,
+        platform: Spaceship::ConnectAPI::Platform::IOS
+      )
+      envio.add_app_store_version_to_review_items(app_store_version_id: version.id)
+      envio.submit_for_review
+      hecho = true
+    rescue StandardError => e
+      UI.important("Por la vía nueva no ha podido ser (#{e.message}); se prueba la de antes.")
+    end
+
+    unless hecho
+      version.create_app_store_version_submission
+      hecho = true
+    end
+
+    UI.success("Enviada. La versión #{version.version_string} está en la cola de revisión de Apple.")
+    if ENV["GITHUB_STEP_SUMMARY"]
+      File.open(ENV["GITHUB_STEP_SUMMARY"], "a") do |f|
+        f.puts("## Enviada a revisión", "",
+               "La versión **#{version.version_string}** con la compilación " \
+               "**#{build.version}** está en la cola de Apple.", "",
+               "Suelen tardar entre uno y tres días. Cuando contesten, el robot " \
+               "«Mirar la App Store» lo dirá.", "")
+      end
+    end
+  end
+
   # ─── Los pasos, uno a uno ──────────────────────────────────────
 
   # Apple solo admite dos o tres certificados de distribución vivos. Como

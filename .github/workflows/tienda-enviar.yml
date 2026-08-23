@@ -1,0 +1,136 @@
+name: Enviar la app a revisión
+
+# Envía a Apple la versión en curso. Es la única cosa de todo el
+# proyecto que no se puede deshacer con otro empujón: una vez enviada,
+# entra en la cola de revisión y lo que salga queda en el expediente de
+# la app. Por eso este robot:
+#
+#   - No tiene fichero-señal ni se dispara al empujar nada. Solo a mano.
+#   - Pide escribir ENVIAR en una casilla para arrancar.
+#   - Antes de enviar, comprueba de verdad que el revisor de Apple PUEDE
+#     ENTRAR en la app. Si no entra, no envía. Ese es el motivo número
+#     uno de rechazo y el más tonto: la ficha dice una contraseña y el
+#     servidor no la conoce.
+#
+# Secretos: los tres APPSTORE_* de siempre, y REVISION_EMAIL y
+# REVISION_PASSWORD, que son los que hacen que esa cuenta exista en el
+# servidor.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmar:
+        description: 'Escribe ENVIAR para confirmar que quieres mandarla a la cola de revisión de Apple'
+        required: true
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tienda-enviar
+  cancel-in-progress: false
+
+jobs:
+  enviar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Confirmar que se quiere enviar
+        env:
+          CONFIRMAR: ${{ inputs.confirmar }}
+        run: |
+          set -eu
+          if [ "$CONFIRMAR" != "ENVIAR" ]; then
+            echo "::error::Para enviar la app a revisión hay que escribir ENVIAR en la casilla. No se ha enviado nada."
+            exit 1
+          fi
+          echo "Confirmado."
+
+      - name: Comprobar que están los secretos
+        env:
+          CLAVE_ID: ${{ secrets.APPSTORE_CLAVE_ID }}
+          EMISOR: ${{ secrets.APPSTORE_EMISOR_ID }}
+          CLAVE_P8: ${{ secrets.APPSTORE_CLAVE_P8 }}
+          REVISION_EMAIL: ${{ secrets.REVISION_EMAIL }}
+          REVISION_PASSWORD: ${{ secrets.REVISION_PASSWORD }}
+        run: |
+          set -eu
+          falta=""
+          [ -n "$CLAVE_ID" ]          || falta="$falta APPSTORE_CLAVE_ID"
+          [ -n "$EMISOR" ]            || falta="$falta APPSTORE_EMISOR_ID"
+          [ -n "$CLAVE_P8" ]          || falta="$falta APPSTORE_CLAVE_P8"
+          [ -n "$REVISION_EMAIL" ]    || falta="$falta REVISION_EMAIL"
+          [ -n "$REVISION_PASSWORD" ] || falta="$falta REVISION_PASSWORD"
+          if [ -n "$falta" ]; then
+            {
+              echo "## No se ha enviado nada"
+              echo ""
+              echo "Faltan estos secretos:"
+              echo ""
+              for s in $falta; do echo "- \`$s\`"; done
+              echo ""
+              echo "\`REVISION_EMAIL\` y \`REVISION_PASSWORD\` son los que hacen que la cuenta"
+              echo "del revisor exista en el servidor. Sin ellos, Apple no puede entrar."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::Faltan secretos:$falta"
+            exit 1
+          fi
+
+      # El cerrojo de verdad. Aquí no vale un aviso: si el revisor no
+      # entra, no se envía y punto.
+      - name: Comprobar que el revisor de Apple puede entrar
+        timeout-minutes: 3
+        env:
+          REVISION_EMAIL: ${{ secrets.REVISION_EMAIL }}
+          REVISION_PASSWORD: ${{ secrets.REVISION_PASSWORD }}
+        run: |
+          set -eu
+          CUERPO="$(python3 -c 'import json,os; print(json.dumps({"email": os.environ["REVISION_EMAIL"], "password": os.environ["REVISION_PASSWORD"]}))')"
+          CODIGO=000
+          for intento in 1 2 3; do
+            CODIGO=$(printf '%s' "$CUERPO" | curl -s -o respuesta.json -w '%{http_code}' \
+              --max-time 25 -X POST -H 'Content-Type: application/json' \
+              --data-binary @- "https://repasos.unikdi.com/api/auth/login" || echo 000)
+            [ "$CODIGO" = 200 ] && break
+            echo "Intento ${intento}: el servidor ha contestado ${CODIGO}."
+            sleep $((intento * 5))
+          done
+          if [ "$CODIGO" != 200 ]; then
+            echo "::error::El revisor de Apple NO puede entrar (el servidor contesta ${CODIGO}). No se envía nada."
+            exit 1
+          fi
+          python3 - <<'PY'
+          import json, os, sys
+
+          d = (json.load(open("respuesta.json")) or {}).get("usuario") or {}
+          esperado = os.environ["REVISION_EMAIL"].strip().lower()
+          if (d.get("email") or "").strip().lower() != esperado:
+              sys.exit("::error::Ha entrado alguien, pero no es la cuenta de revisión. No se envía nada.")
+          if int(d.get("verifica") or 0) != 1:
+              sys.exit("::error::El revisor entra pero sin permiso de verificación: no vería media aplicación. No se envía nada.")
+          print("El revisor de Apple entra y ve la aplicación entera.")
+          PY
+          rm -f respuesta.json
+
+      - name: Traer el repositorio
+        uses: actions/checkout@v4
+
+      - name: Preparar Ruby y fastlane
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+          working-directory: movil
+
+      - name: Enviar a revisión
+        working-directory: movil
+        env:
+          APPSTORE_CLAVE_ID: ${{ secrets.APPSTORE_CLAVE_ID }}
+          APPSTORE_EMISOR_ID: ${{ secrets.APPSTORE_EMISOR_ID }}
+          APPSTORE_CLAVE_P8: ${{ secrets.APPSTORE_CLAVE_P8 }}
+          TZ: Europe/Madrid
+          FASTLANE_SKIP_UPDATE_CHECK: '1'
+          FASTLANE_HIDE_CHANGELOG: '1'
+          FASTLANE_DISABLE_COLORS: '1'
+        run: bundle exec fastlane ios enviar

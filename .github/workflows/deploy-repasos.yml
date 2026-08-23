@@ -333,3 +333,63 @@ jobs:
           fi
           echo "::error::El servidor sigue sirviendo una portada sin el sello ${BUILD}. Puede ser una caché del hosting."
           exit 1
+
+      # La comprobación que decide si Apple aprueba o rechaza: que el
+      # revisor pueda ENTRAR. Que el fichero de la cuenta esté subido no
+      # basta —la cuenta la crea el servidor al arrancar, leyéndolo— y si
+      # algo fallara por el camino nos enteraríamos por un rechazo tres
+      # días después, sin saber de qué.
+      #
+      # La contraseña va de los secretos al servidor y no se escribe en
+      # ningún sitio: ni en el registro, ni en un fichero, ni en la
+      # línea de órdenes.
+      - name: Comprobar que el revisor de Apple puede entrar
+        timeout-minutes: 3
+        env:
+          REVISION_EMAIL: ${{ secrets.REVISION_EMAIL }}
+          REVISION_PASSWORD: ${{ secrets.REVISION_PASSWORD }}
+        run: |
+          set -eu
+          if [ -z "${REVISION_EMAIL:-}" ] || [ -z "${REVISION_PASSWORD:-}" ]; then
+            echo "::warning::La cuenta del revisor de Apple NO está publicada: faltan los secretos REVISION_EMAIL y REVISION_PASSWORD. Mientras sigan vacíos, el servidor mantiene esa cuenta desactivada; si la app se enviara a revisión ahora, el revisor no podría entrar y la rechazarían."
+            {
+              echo "## Ojo: el revisor de Apple no podría entrar"
+              echo ""
+              echo "Faltan los secretos \`REVISION_EMAIL\` y \`REVISION_PASSWORD\`, así que"
+              echo "el servidor mantiene la cuenta del revisor desactivada. No envíes la"
+              echo "app a revisión hasta que estén puestos y este paso salga en verde."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          CUERPO="$(python3 -c 'import json,os; print(json.dumps({"email": os.environ["REVISION_EMAIL"], "password": os.environ["REVISION_PASSWORD"]}))')"
+          CODIGO=000
+          for intento in 1 2 3; do
+            CODIGO=$(printf '%s' "$CUERPO" | curl -s -o respuesta.json -w '%{http_code}' \
+              --max-time 25 -X POST -H 'Content-Type: application/json' \
+              --data-binary @- "https://repasos.unikdi.com/api/auth/login" || echo 000)
+            [ "$CODIGO" = 200 ] && break
+            echo "Intento ${intento}: el servidor ha contestado ${CODIGO}."
+            sleep $((intento * 5))
+          done
+
+          if [ "$CODIGO" != 200 ]; then
+            echo "::error::El revisor de Apple NO puede entrar: el servidor contesta ${CODIGO}. No envíes la app a revisión hasta arreglarlo."
+            exit 1
+          fi
+
+          python3 - <<'PY'
+          import json, os, sys
+
+          d = (json.load(open("respuesta.json")) or {}).get("usuario") or {}
+          esperado = os.environ["REVISION_EMAIL"].strip().lower()
+          if (d.get("email") or "").strip().lower() != esperado:
+              sys.exit("::error::Ha entrado alguien, pero no es la cuenta de revisión.")
+          # Sin permiso de verificación el revisor no ve los botones de
+          # verificar ni de rechazar, que son media aplicación, y se lleva
+          # la impresión de que la app no hace nada.
+          if int(d.get("verifica") or 0) != 1:
+              sys.exit("::error::El revisor entra pero sin permiso de verificación: no vería media aplicación.")
+          print("El revisor de Apple entra y ve la aplicación entera.")
+          PY
+          rm -f respuesta.json
