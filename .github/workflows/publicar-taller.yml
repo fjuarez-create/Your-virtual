@@ -97,6 +97,13 @@ jobs:
           test -f publish-taller/api/uploads/.htaccess || { echo "Falta el .htaccess de uploads." >&2; exit 1; }
           test -f publish-taller/api/datos/.htaccess   || { echo "Falta el .htaccess de datos." >&2; exit 1; }
 
+          # La API del taller vive en /taller/api, y su .htaccess trae la
+          # base de reescritura clavada en /api: sin este ajuste, Apache
+          # contesta 404 a todas las rutas (le pasó al primer despliegue).
+          sed -i 's|RewriteBase /api/|RewriteBase /taller/api/|' publish-taller/api/.htaccess
+          grep -q 'RewriteBase /taller/api/' publish-taller/api/.htaccess \
+            || { echo "No se pudo ajustar la base de reescritura del taller." >&2; exit 1; }
+
           # Las páginas de instalación no pintan nada en el taller, y la
           # configuración se escribe aquí: SQLite, sin una credencial.
           rm -f publish-taller/api/config.php publish-taller/api/config.example.php
