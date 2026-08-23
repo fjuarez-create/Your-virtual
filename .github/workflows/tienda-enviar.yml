@@ -23,6 +23,14 @@ on:
         description: 'Escribe ENVIAR para confirmar que quieres mandarla a la cola de revisión de Apple'
         required: true
         default: ''
+  # El empujón del fichero-señal NO envía nada: el trabajo de abajo solo
+  # se ejecuta cuando el disparo es a mano. Está aquí porque GitHub no
+  # da de alta un robot hasta que lo ve arrancar una vez, y uno que solo
+  # se dispara a mano no arranca nunca: no se puede pedir a mano lo que
+  # todavía no existe. Así se da de alta sin poder hacer daño.
+  push:
+    branches: [claude/uniq-repasos-app-2ja8y2]
+    paths: ['.github/LANZAR-TIENDA-ENVIAR.txt']
 
 permissions:
   contents: read
@@ -33,6 +41,7 @@ concurrency:
 
 jobs:
   enviar:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
