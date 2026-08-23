@@ -131,6 +131,30 @@ platform :ios do
       lineas << "No se ha podido repasar la ficha: #{e.message}"
     end
 
+    # Los envíos de revisión abiertos. Un envío es la carpeta con la que
+    # se manda una versión a Apple; puede haber una a medio preparar sin
+    # que nadie lo sepa, y entonces la versión no se puede meter en otra.
+    begin
+      envios = app.get_review_submissions(includes: "items")
+      if envios && !envios.empty?
+        lineas << ""
+        lineas << "### Envíos de revisión abiertos"
+        lineas << ""
+        envios.first(5).each do |e|
+          dentro = begin
+            (e.items || []).map { |i| i.app_store_version && i.app_store_version.version_string }.compact
+          rescue StandardError
+            []
+          end
+          detalle = dentro.empty? ? "vacío" : "con la versión #{dentro.join(', ')}"
+          lineas << "- `#{e.id}` — #{en_cristiano_envio(e.state)}, #{detalle}"
+        end
+      end
+    rescue StandardError => e
+      lineas << ""
+      lineas << "No se han podido leer los envíos de revisión: #{e.message}"
+    end
+
     # Si Apple ha dicho algo —un rechazo, una pega, una pregunta— está
     # en el Resolution Center de su web. Leerlo sí se puede por aquí;
     # contestar no, eso sigue siendo a mano.
@@ -644,6 +668,18 @@ def lo_que_dice_apple(app)
   lineas << ""
   lineas << "Contestar a esto hay que hacerlo desde la web de Apple; por aquí solo se lee."
   lineas
+end
+
+def en_cristiano_envio(estado)
+  {
+    "READY_FOR_REVIEW" => "preparado pero SIN mandar todavía",
+    "WAITING_FOR_REVIEW" => "mandado, en la cola de Apple",
+    "IN_REVIEW" => "Apple lo está revisando",
+    "UNRESOLVED_ISSUES" => "devuelto con pegas por resolver",
+    "CANCELING" => "retirándose",
+    "COMPLETING" => "terminándose",
+    "COMPLETE" => "terminado"
+  }.fetch(estado.to_s, "estado «#{estado}»")
 end
 
 def en_cristiano_build(procesado, en_testflight)
