@@ -40,3 +40,6 @@ formulario.
   borrar a alguien es borrar su fila y su clip.
 - El audio de reuniones se borra solo a los 30 días (decisión de Fran);
   transcripción y acta se quedan.
+- Fran ya pegó la clave de pyannote en el TALLER (agosto 2026). Al
+  hacer el volcado grande a la app real habrá que pegarla una vez en
+  los Ajustes de producción: las claves no viajan entre entornos.
