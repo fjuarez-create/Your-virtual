@@ -1909,6 +1909,39 @@ function exigir_reunion_abierta(array $reunion): void
     }
 }
 
+/**
+ * ¿Vale todavía firmar o redactar el acta de esta reunión? Sí mientras
+ * está abierta y, ya sellada, solo en la prórroga de cortesía: es la
+ * reunión de ayer, no son las 00:45 y hay grabación —el conducto
+ * estaba trabajando cuando cruzó la medianoche—. Todo lo demás del
+ * acta (asistentes, tareas a mano) se sella a las 23:59 en seco.
+ */
+function exigir_acta_entregable(array $reunion): void
+{
+    if ((string) $reunion['fecha'] >= hoy_obra()) {
+        return;
+    }
+    if (acta_en_cortesia($reunion)) {
+        return;
+    }
+    responder_error(403, 'El acta de ese día ya está sellada: a las 23:59 se cierra sola.', 'sellada');
+}
+
+/** Lo mismo, en pregunta: para que el móvil sepa si enseñar la firma. */
+function acta_en_cortesia(array $reunion): bool
+{
+    if ((string) $reunion['fecha'] >= hoy_obra()) {
+        return false;
+    }
+    $ahora = new DateTimeImmutable('now', new DateTimeZone('Europe/Madrid'));
+    if (!dentro_de_cortesia((string) $reunion['fecha'], $ahora)) {
+        return false;
+    }
+    $sent = bd()->prepare('SELECT COUNT(*) FROM grabaciones WHERE reunion_id = ? AND borrada = 0');
+    $sent->execute([$reunion['id']]);
+    return (int) $sent->fetchColumn() > 0;
+}
+
 function reunion_o_404(string $id): array
 {
     if (!es_uuid($id)) {
@@ -2122,6 +2155,7 @@ function ver_reunion(string $id): void
         'grabaciones' => $grabaciones,
         'resumen'     => (string) ($reunion['resumen'] ?? ''),
         'propuesta'   => is_array($propuesta) ? $propuesta : null,
+        'actaEnCortesia' => acta_en_cortesia($reunion),
     ]);
 }
 
@@ -2658,7 +2692,7 @@ function redactar_acta(string $reunionId): void
 {
     exigir_df();
     $reunion = reunion_o_404($reunionId);
-    exigir_reunion_abierta($reunion);
+    exigir_acta_entregable($reunion);
 
     // Todo lo transcrito de esta reunión, en orden y CON NOMBRE cuando
     // se sabe: primero el que puso la identificación automática en cada
@@ -2793,7 +2827,7 @@ function aceptar_acta(string $reunionId): void
 {
     $yo = exigir_df();
     $reunion = reunion_o_404($reunionId);
-    exigir_reunion_abierta($reunion);
+    exigir_acta_entregable($reunion);
     $c = cuerpo();
 
     $resumen = mb_substr(trim((string) ($c['resumen'] ?? '')), 0, 8000);

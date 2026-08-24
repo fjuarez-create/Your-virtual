@@ -94,7 +94,7 @@ export async function render({ reunionId }) {
      siguiente. Si algo falla, queda apuntado en FALLIDAS y la fila
      ofrece reintentar en vez de volver a intentarlo en bucle. */
   const necesitaActa = !r.actaFirmada && !propuesta;
-  if (edita && !CONDUCTO_VIVO && !REDACTANDO.has(r.id)) {
+  if (df && (abierta || datos.actaEnCortesia) && !CONDUCTO_VIVO && !REDACTANDO.has(r.id)) {
     const g = grabaciones.find((x) => !x.audioBorrado && !FALLIDAS.has(x.id)
       // Sin un byte de audio no hay nada que exprimir: una grabación
       // vacía nunca cambia de estado y volvería a cogerse en cada
@@ -180,9 +180,14 @@ export async function render({ reunionId }) {
     }
   }
 
-  /* ─── La propuesta del acta ─── */
+  /* ─── La propuesta del acta ───
+     La firma vale con el acta abierta y también en la prórroga de
+     cortesía (hasta las 00:45, si la transcripción estaba en el horno
+     al cruzar la medianoche): lo decide el servidor, aquí solo se
+     enseña. */
   const hayTranscrito = grabaciones.some((g) => g.estado === 'transcrita');
-  if (edita && propuesta) {
+  const puedeFirmar = df && (abierta || datos.actaEnCortesia);
+  if (puedeFirmar && propuesta) {
     contenido.push(...bloquePropuesta(r, propuesta));
   } else if (edita && hayTranscrito && !propuesta && !CONDUCTO.size) {
     const redactando = REDACTANDO.has(r.id);
