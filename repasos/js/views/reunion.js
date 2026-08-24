@@ -72,6 +72,10 @@ export async function render({ reunionId }) {
   const abierta = !r.sellada;
   const df = puedeVerificar(store.sesion());
   const edita = df && abierta;
+  // ¿Puede el conducto llegar a exprimir esta reunión? Con el acta ya
+  // sellada (y sin cortesía), no: una grabación en cola aquí no está
+  // esperando nada, y su girito no debe girar como si trabajara.
+  const exprimible = abierta || !!datos.actaEnCortesia;
 
   // El registro de voces solo hace falta si hay algo transcrito.
   let voces = [];
@@ -181,7 +185,7 @@ export async function render({ reunionId }) {
     }
 
     for (const g of grabaciones) {
-      contenido.push(tarjetaGrabacion(g, { edita, promoId: r.promoId }));
+      contenido.push(tarjetaGrabacion(g, { edita, exprimible, promoId: r.promoId }));
     }
   }
 
@@ -403,7 +407,7 @@ function motivoDe(e) {
 }
 
 /* ─── La tarjeta de una grabación ─── */
-function tarjetaGrabacion(g, { edita, promoId }) {
+function tarjetaGrabacion(g, { edita, exprimible = true, promoId }) {
   const enConducto = CONDUCTO.get(g.id);
   const fallo = FALLIDAS.get(g.id);
   const min = Math.max(1, Math.round(g.duracion / 60));
@@ -451,9 +455,18 @@ function tarjetaGrabacion(g, { edita, promoId }) {
     }
   } else if (g.estado === 'lista') {
     // El estado va en su bola a la derecha, elegido por Fran sobre
-    // tres propuestas: girito esperando turno, check transcrita.
-    chip = h('span.d-grab-estado.cola',
-      { 'aria-label': edita ? 'En cola' : 'Sin transcribir' }, h('span.d-giro'));
+    // tres propuestas: girito esperando turno, check transcrita. El
+    // girito SOLO gira si el turno puede llegar: en una reunión ya
+    // sellada la cola no avanza nunca, y ahí la bola se queda quieta
+    // con su pausa y la letra pequeña lo cuenta (le pasó a Fran con
+    // una grabación que se quedó en cola al cruzar las 23:59).
+    if (exprimible) {
+      chip = h('span.d-grab-estado.cola',
+        { 'aria-label': edita ? 'En cola' : 'Sin transcribir' }, h('span.d-giro'));
+    } else {
+      sub.push('sin transcribir: el acta ya se selló');
+      chip = h('span.d-grab-estado.quieta', { 'aria-label': 'Sin transcribir' }, icon('pausa'));
+    }
   } else if (g.estado === 'transcrita') {
     chip = h('span.d-grab-estado.hecha', { 'aria-label': 'Transcrita' }, icon('check'));
   }

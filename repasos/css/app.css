@@ -3110,6 +3110,10 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 .d-grab-estado.hecha { background: var(--d-beige-tinta); color: #fff; }
 .d-grab-estado.hecha svg { width: 20px; height: 20px; }
 .d-grab-estado.cola { background: var(--d-gris-suave); }
+/* Quieta: en cola de una reunión ya sellada, donde el turno no va a
+   llegar. Pausa en vez de girito: aquí no hay nada trabajando. */
+.d-grab-estado.quieta { background: var(--d-gris-suave); color: var(--d-gris); }
+.d-grab-estado.quieta svg { width: 18px; height: 18px; }
 .d-grab-estado.mal {
   background: var(--d-rojo-suave); color: #651d17;
   font: 700 18px/1 var(--d-font);
