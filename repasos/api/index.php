@@ -1889,16 +1889,18 @@ function exigir_df(): array
     return $yo;
 }
 
-/** El día de hoy en la obra: la fecha se corta con el reloj de Madrid. */
+/** El día de hoy en la obra: la fecha se corta con el reloj CANARIO.
+    La obra vive en Canarias (decidido por Fran, agosto de 2026): su día,
+    su sello de las 23:59 y su cortesía se cuentan en su hora. */
 function hoy_obra(): string
 {
-    return (new DateTimeImmutable('now', new DateTimeZone('Europe/Madrid')))->format('Y-m-d');
+    return (new DateTimeImmutable('now', new DateTimeZone('Atlantic/Canary')))->format('Y-m-d');
 }
 
 /**
  * El sello de las 23:59. Al acabar el día, el acta queda cerrada: se
- * compara la fecha de la reunión con el día de hoy en Madrid, aquí en
- * el servidor. Lo único que sobrevive al sello es tachar encargos como
+ * compara la fecha de la reunión con el día de hoy en Canarias, aquí
+ * en el servidor. Lo único que sobrevive al sello es tachar encargos como
  * hechos —o destacharlos—, que no cambia lo acordado: solo cuenta cómo
  * va cumpliéndose.
  */
@@ -1933,7 +1935,7 @@ function acta_en_cortesia(array $reunion): bool
     if ((string) $reunion['fecha'] >= hoy_obra()) {
         return false;
     }
-    $ahora = new DateTimeImmutable('now', new DateTimeZone('Europe/Madrid'));
+    $ahora = new DateTimeImmutable('now', new DateTimeZone('Atlantic/Canary'));
     if (!dentro_de_cortesia((string) $reunion['fecha'], $ahora)) {
         return false;
     }
