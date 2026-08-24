@@ -19,6 +19,7 @@ import * as store from '../store.js';
 import * as api from '../api.js';
 import { PROMOCIONES, unidad, estado } from '../catalog.js';
 import { avisoLocal, barraSync, bannerMordido as banner, cabecera, tarjetaVilla, cuandoVilla, tramoAvance } from '../piezas.js';
+import { fechaDeActa, diaDeLaSemana } from './historial.js';
 import { ir, conFiltros, refrescar } from '../app.js';
 
 /* El saludo de cazar repasos se retiró en agosto de 2026, cuando la
@@ -80,12 +81,13 @@ function tarjetaUltimaReunion(r, hoy) {
   const t = tramoAvance(pct);
   const chipPct = pct === 100 && r.encargos ? 'macizo' : t.clase;
   const esDeHoy = r.fecha === hoy;
-  // El cuándo, con el reloj de las villas; mientras la mesa sigue
-  // sentada no hay hora de cierre que dar, y se dice —a secas: con la
+  // La hora que se enseña es la de EMPEZAR, decidido por Fran: el
+  // acta se cierra siempre a las 23:59 (salvo la cortesía), así que
+  // la hora de cierre no cuenta nada. En marcha, a secas: con la
   // hora al lado no cabía junto a las caras en un móvil estrecho.
-  const cuando = !r.terminada && esDeHoy
-    ? 'En marcha'
-    : cuandoVilla(r.terminada || r.empezada);
+  const cuando = esDeHoy
+    ? (r.terminada ? cuandoVilla(r.empezada) : 'En marcha')
+    : `Empezada a las ${hora(r.empezada)} h`;
   // El punto vivo va solo en la de hoy: terminada o no, hasta las
   // 23:59 sigue abierta, y eso es justo lo que la luz cuenta. Es
   // hermano del título, no hijo: dentro lo recortaría el overflow de
@@ -100,7 +102,12 @@ function tarjetaUltimaReunion(r, hoy) {
       h('span.d-tarjeta-caras', null, grupoAvatares(gente, { tam: 36, max: 3, solape: 12 })),
     ),
     esDeHoy ? h('span.d-punto-vivo') : null,
-    h('div.d-tarjeta-titulo', null, 'Reunión de obra'),
+    // La de hoy se llama por su nombre; una pasada, por su día: lo
+    // que uno se pregunta al verla es de cuándo es. Eligió Fran la
+    // fecha de título entre cinco nombres (agosto de 2026).
+    h('div.d-tarjeta-titulo', null, esDeHoy
+      ? 'Reunión de obra'
+      : `${diaDeLaSemana(r.fecha, { mayuscula: true })} ${fechaDeActa(r.fecha)}`),
     h('div.d-tarjeta-pie', null,
       // En minúscula, como el mismo chip de la pantalla de obra: la
       // misma reunión no puede decir la misma palabra con dos cajas.
