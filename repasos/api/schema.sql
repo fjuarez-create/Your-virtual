@@ -181,6 +181,7 @@ CREATE TABLE IF NOT EXISTS reuniones (
   actualizado       CHAR(24)     NOT NULL,
   creado_por        CHAR(36)     DEFAULT NULL,
   creado_por_nombre VARCHAR(120) NOT NULL DEFAULT '',
+  acta_firmada      VARCHAR(32)  DEFAULT NULL,
   PRIMARY KEY (id),
   UNIQUE KEY ix_reuniones_dia (promo_id, fecha)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

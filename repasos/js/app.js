@@ -10,6 +10,7 @@ import * as store from './store.js';
 import * as api from './api.js';
 import { borrarBase } from './db.js';
 import { hayFotosSinMandar } from './pendientes.js';
+import { hayGrabacionEnMarcha } from './grabadora.js';
 import { fijarPlantas } from './catalog.js';
 
 /* ─── Rutas ───────────────────────────────────────────────────── */
@@ -610,6 +611,9 @@ export async function versionEsperando() {
 /** ¿Hay algo empezado que una recarga se llevaría por delante? */
 function hayAlgoAMedias() {
   if (hayFotosSinMandar()) return true;
+  // Grabando una reunión: una recarga aquí se lleva el audio que
+  // todavía no ha subido, y una reunión no se repite.
+  if (hayGrabacionEnMarcha()) return true;
   if (document.querySelector('.sheet, .viewer.on, .informe, .pantalla-recorrido, .d-visor, .d-menu-velo, .d-velo, .d-hoja-acciones')) return true;
   if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return true;
   if (location.hash.includes('/recorrido')) return true;

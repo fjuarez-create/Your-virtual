@@ -35,6 +35,17 @@ const FALLIDAS = new Map();    // grabacionId → por qué se quedó a medias
 const REDACTANDO = new Set();  // reunionId, para el botón de reserva
 const BORRADOR = new Map();    // reunionId → { sello, resumen, tareas }
 
+/* Un conducto vivo y solo uno en toda la app: dos a la vez sobre la
+   misma reunión escribirían —y pagarían— dos actas. */
+let CONDUCTO_VIVO = null;
+
+/* Cuántas vueltas lleva dada cada grabación en esta sesión. Es el
+   freno de emergencia: si por lo que sea el conducto no consigue
+   avanzar, a la tercera se planta y lo dice, en vez de encadenar
+   llamadas a la IA que cuestan dinero de verdad. */
+const VUELTAS = new Map();
+const TOPE_VUELTAS = 3;
+
 export async function render({ reunionId }) {
   let datos = null;
   let error = null;
@@ -82,12 +93,19 @@ export async function render({ reunionId }) {
      Arranca UNA grabación cada vez; al terminar, el repintado coge la
      siguiente. Si algo falla, queda apuntado en FALLIDAS y la fila
      ofrece reintentar en vez de volver a intentarlo en bucle. */
-  const necesitaActa = !resumen && !propuesta;
-  if (edita) {
-    const g = grabaciones.find((x) => !x.audioBorrado
-      && !CONDUCTO.has(x.id) && !FALLIDAS.has(x.id)
-      && (x.estado === 'lista' || (x.estado === 'transcrita' && necesitaActa)));
-    if (g) setTimeout(() => conducir(g, r, { firmada: !!resumen }), 0);
+  const necesitaActa = !r.actaFirmada && !propuesta;
+  if (edita && !CONDUCTO_VIVO && !REDACTANDO.has(r.id)) {
+    const g = grabaciones.find((x) => !x.audioBorrado && !FALLIDAS.has(x.id)
+      // Sin un byte de audio no hay nada que exprimir: una grabación
+      // vacía nunca cambia de estado y volvería a cogerse en cada
+      // repintado, encadenando actas pagadas.
+      && x.partes.some((p) => p.tam > 0)
+      && (x.estado === 'lista'
+        // Transcrita pero sin acta: solo cuando no se está grabando
+        // otro rato, porque entonces el acta espera a propósito y
+        // relanzar el conducto sería dar vueltas en balde.
+        || (x.estado === 'transcrita' && necesitaActa && !hayGrabacionEnMarcha())));
+    if (g) setTimeout(() => conducir(g, r), 0);
   }
 
   const tachar = async (e) => { if (await tacharEncargo(e)) refrescar(); };
@@ -138,7 +156,7 @@ export async function render({ reunionId }) {
               // grabadora se pliega y se para desde cualquier
               // pantalla, y el audio no puede quedarse esperando a
               // que alguien vuelva a abrir la reunión.
-              alTerminar: (grabacion) => conducir(grabacion, r, { firmada: !!resumen }),
+              alTerminar: (grabacion) => { if (grabacion) conducir(grabacion, r); },
             });
             refrescar();
           },
@@ -184,9 +202,9 @@ export async function render({ reunionId }) {
         }
       },
     }, icon('edit'), redactando ? 'Escribiendo el acta…'
-      : resumen ? 'Volver a proponer el acta' : 'Proponer el acta con la IA');
+      : r.actaFirmada ? 'Volver a proponer el acta' : 'Proponer el acta con la IA');
     contenido.push(boton,
-      h('p.d-nota-pie', null, resumen
+      h('p.d-nota-pie', null, r.actaFirmada
         ? 'El acta de esta reunión ya está firmada. Si has grabado algo más, aquí se '
           + 'vuelve a proponer con todo lo que hay.'
         : 'La IA lee la transcripción y propone el resumen y las tareas, con responsable '
@@ -262,14 +280,26 @@ export async function render({ reunionId }) {
 
    Si la app se cierra a la mitad, al volver a entrar se retoma donde
    se quedó: los pasos ya hechos no se repiten. */
-async function conducir(g, r, { firmada }) {
-  if (CONDUCTO.has(g.id)) return;
+async function conducir(g, r) {
+  if (CONDUCTO_VIVO || CONDUCTO.has(g.id)) return;
+
+  // El freno de emergencia, antes de nada: tres vueltas sin llegar a
+  // buen puerto y esta grabación se queda quieta hasta que alguien
+  // pulse «Reintentar».
+  const vueltas = (VUELTAS.get(g.id) || 0) + 1;
+  VUELTAS.set(g.id, vueltas);
+  if (vueltas > TOPE_VUELTAS) {
+    FALLIDAS.set(g.id, 'no consigue avanzar; pruébalo tú');
+    repintarSi(r);
+    return;
+  }
+  CONDUCTO_VIVO = g.id;
 
   const partes = Math.max(1, g.partes.filter((p) => p.tam > 0).length);
   const min = Math.max(1, Math.round(g.duracion / 60));
   const marcar = (fase, detalle, avance) => {
     CONDUCTO.set(g.id, { fase, detalle, avance });
-    refrescar();
+    repintarSi(r);
   };
   marcar('transcribiendo', `Transcribiendo la parte 1 de ${partes} · ${min} min de reunión`, 0.06);
 
@@ -289,17 +319,25 @@ async function conducir(g, r, { firmada }) {
 
     /* 2 · Quién habla en cada tramo, si hay huellas que comparar. */
     marcar('voces', 'Reconociendo las voces de la mesa…', 0.68);
-    for (let paso = 0; paso < 240; paso++) {
+    // Tope de unos siete minutos: si el servicio de voces se atasca,
+    // el acta sale igual y las voces se ponen a mano. Vale más un
+    // acta sin nombres que una pantalla congelada.
+    let vocesHechas = false;
+    for (let paso = 0; paso < 60; paso++) {
       const res = await api.identificarGrabacion(g.id);
-      if (!res.disponible || res.quedan === 0) break;
-      // Los trabajos acústicos tardan un rato: se pregunta con calma.
+      if (!res.disponible || res.quedan === 0) { vocesHechas = true; break; }
       await new Promise((listo) => setTimeout(listo, res.paso === 'en-cola' ? 8000 : 1500));
+    }
+    if (!vocesHechas) {
+      toast('Las voces tardan; el acta sale igual y se ponen a mano');
     }
 
     /* 3 · El acta y sus tareas.
        No se reescribe lo que ya está firmado, y si se está grabando
        otro rato se espera: la propone el conducto de esa grabación,
        ya con todo dentro. */
+    const fresco = await api.verReunion(r.id).catch(() => null);
+    const firmada = fresco ? !!fresco.reunion.actaFirmada : true;
     if (!firmada && !hayGrabacionEnMarcha()) {
       marcar('redactando', 'Escribiendo el acta y sus tareas…', 0.86);
       await api.redactarActa(r.id, unidades(r.promoId).map((u) => ({ id: u.id, nombre: u.nombre })));
@@ -315,8 +353,19 @@ async function conducir(g, r, { firmada }) {
     avisarDeError(e);
   } finally {
     CONDUCTO.delete(g.id);
-    refrescar();
+    CONDUCTO_VIVO = null;
+    repintarSi(r);
   }
+}
+
+/**
+ * Repinta solo si se sigue mirando esta reunión. El conducto puede
+ * terminar con Fran en otra pantalla —apuntando un repaso con fotos
+ * sin guardar, por ejemplo— y un repintado ahí se llevaría por
+ * delante lo que estuviera a medias.
+ */
+function repintarSi(r) {
+  if (location.hash.startsWith(`#/obra/r/${r.id}`)) refrescar();
 }
 
 /** Por qué se quedó a medias, en una línea que quepa en la fila. */
@@ -365,7 +414,7 @@ function tarjetaGrabacion(g, { edita, promoId }) {
     chip = h('span.d-chip.rojo', null, 'a medias');
     if (edita) {
       accion = h('button.d-chip.ambar', {
-        onclick: () => { FALLIDAS.delete(g.id); refrescar(); },
+        onclick: () => { FALLIDAS.delete(g.id); VUELTAS.delete(g.id); refrescar(); },
       }, 'Reintentar');
     }
   } else if (g.estado === 'grabando') {

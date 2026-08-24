@@ -138,6 +138,11 @@ export async function empezarGrabadora({ reunionId, titulo, alTerminar }) {
   };
 
   /* ─── El final: todo subido → cerrar en el servidor ─── */
+  // Cerrar la grabación se reintenta, pero no eternamente: un error
+  // que no es de red —el acta ya sellada, por ejemplo— no se arregla
+  // insistiendo, y dejar la app llamando al servidor cada ocho
+  // segundos hasta el fin de los tiempos no ayuda a nadie.
+  let intentosCierre = 0;
   const rematar = async () => {
     try {
       const dur = Math.round((Date.now() - s.t0) / 1000);
@@ -145,8 +150,13 @@ export async function empezarGrabadora({ reunionId, titulo, alTerminar }) {
       desmontar();
       alTerminar?.(r.grabacion);
     } catch (e) {
-      toast(e.codigo === 'red' ? 'Sin conexión: se reintenta en unos segundos' : e.message, 'err');
-      setTimeout(rematar, 8000);
+      intentosCierre += 1;
+      const insiste = e.codigo === 'red' && intentosCierre < 5;
+      toast(insiste
+        ? 'Sin conexión: se reintenta en unos segundos'
+        : `${e.message} · el audio está guardado; vuelve a entrar en la reunión`, 'err');
+      if (insiste) setTimeout(rematar, 8000);
+      else desmontar();
     }
   };
 

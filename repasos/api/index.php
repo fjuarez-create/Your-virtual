@@ -2330,6 +2330,10 @@ function reunion_salida(array $f): array
         'asistentes' => json_decode((string) $f['asistentes'], true) ?: [],
         'invitados' => json_decode((string) $f['invitados'], true) ?: [],
         'sellada' => (string) $f['fecha'] < hoy_obra(),
+        // Firmada de verdad, aunque el resumen quedara vacío: sin este
+        // sello, un acta sin texto parecía sin firmar y se redactaba
+        // otra vez, duplicando las tareas.
+        'actaFirmada' => (string) ($f['acta_firmada'] ?? '') !== '',
         'creado' => $f['creado'], 'actualizado' => $f['actualizado'],
         'creadoPor' => $f['creado_por'], 'creadoPorNombre' => $f['creado_por_nombre'],
     ];
@@ -2506,6 +2510,14 @@ function cerrar_grabacion(string $id): void
     exigir_df();
     $g = grabacion_o_404($id);
     if ($g['estado'] === 'grabando') {
+        // Sin un byte de audio no hay grabación que valga: es el botón
+        // pulsado sin querer. Se retira en vez de dejar una fila que
+        // nadie puede transcribir.
+        if (!partes_de($g)) {
+            bd()->prepare('UPDATE grabaciones SET borrada = 1, actualizado = ? WHERE id = ?')
+                ->execute([ahora_iso(), $id]);
+            responder(['grabacion' => null, 'vacia' => true]);
+        }
         $duracion = max((int) $g['duracion'], entero(cuerpo(), 'duracion'));
         bd()->prepare("UPDATE grabaciones SET estado = 'lista', duracion = ?, actualizado = ? WHERE id = ?")
             ->execute([$duracion, ahora_iso(), $id]);
@@ -2534,6 +2546,16 @@ function transcribir_grabacion(string $id): void
     $partes = partes_de($g);
     $pendientes = array_values(array_filter($partes, static fn ($p) => ($p['estado'] ?? '') !== 'transcrita'));
     if (!$pendientes) {
+        // Aquí se marca también, y no solo al transcribir la última
+        // parte: una grabación sin nada dentro —el botón mal pulsado—
+        // se quedaba en «lista» para siempre y el arranque automático
+        // del móvil la recogía en cada repintado. Un bucle con
+        // factura, porque cada vuelta terminaba llamando a Claude.
+        if ($g['estado'] !== 'transcrita') {
+            bd()->prepare("UPDATE grabaciones SET estado = 'transcrita', actualizado = ? WHERE id = ?")
+                ->execute([ahora_iso(), $id]);
+            $g = grabacion_o_404($id);
+        }
         responder(['grabacion' => grabacion_salida($g), 'quedan' => 0]);
     }
 
@@ -2819,8 +2841,8 @@ function aceptar_acta(string $reunionId): void
         $creadas[] = encargo_salida($registro);
     }
 
-    bd()->prepare('UPDATE reuniones SET resumen = ?, propuesta = NULL, actualizado = ? WHERE id = ?')
-        ->execute([$resumen !== '' ? $resumen : null, ahora_iso(), $reunionId]);
+    bd()->prepare('UPDATE reuniones SET resumen = ?, propuesta = NULL, acta_firmada = ?, actualizado = ? WHERE id = ?')
+        ->execute([$resumen !== '' ? $resumen : null, ahora_iso(), ahora_iso(), $reunionId]);
 
     responder(['encargos' => $creadas, 'resumen' => $resumen]);
 }
@@ -3100,28 +3122,7 @@ function identificar_grabacion(string $id): void
     }
 
     if ($pendiente === null) {
-        // Todo casado: el mapa automático sale de los propios segmentos.
-        $mapa = $hablantes['mapa'] ?? [];
-        foreach ($partes as $p) {
-            $votos = [];
-            foreach ((array) ($p['dicho'] ?? []) as $seg) {
-                if (!empty($seg['quien'])) {
-                    $votos[$seg['h']][$seg['quien']] = ($votos[$seg['h']][$seg['quien']] ?? 0) + 1;
-                }
-            }
-            foreach ($votos as $h => $cuenta) {
-                arsort($cuenta);
-                $vozId = (string) array_key_first($cuenta);
-                $etiqueta = $p['n'] . ':' . $h;
-                if (isset($nombres[$vozId]) && empty($mapa[$etiqueta]['nombre'])) {
-                    $mapa[$etiqueta] = $nombres[$vozId] + ['auto' => true];
-                }
-            }
-        }
-        $hablantes['mapa'] = $mapa;
-        unset($hablantes['_auto']);
-        bd()->prepare('UPDATE grabaciones SET hablantes = ?, actualizado = ? WHERE id = ?')
-            ->execute([json_encode($hablantes, JSON_UNESCAPED_UNICODE), ahora_iso(), $id]);
+        consolidar_hablantes($id, $partes, $hablantes, $nombres);
         responder(['disponible' => true, 'quedan' => 0, 'grabacion' => grabacion_salida(grabacion_o_404($id))]);
     }
 
@@ -3178,7 +3179,46 @@ function identificar_grabacion(string $id): void
 
     unset($hablantes['_auto']);
     guardar_partes($id, $partes, ['hablantes' => json_encode($hablantes, JSON_UNESCAPED_UNICODE)]);
-    responder(['disponible' => true, 'quedan' => contar_partes_sin_voces($partes, -1), 'paso' => 'casada']);
+
+    // Si esta era la última parte, el mapa se cierra AQUÍ. Antes se
+    // dejaba para la llamada siguiente… que el móvil ya no hacía, al
+    // ver que no quedaba nada: los nombres reconocidos no llegaban a
+    // guardarse nunca.
+    $quedan = contar_partes_sin_voces($partes, -1);
+    if ($quedan === 0) {
+        consolidar_hablantes($id, $partes, $hablantes, $nombres);
+    }
+    responder(['disponible' => true, 'quedan' => $quedan, 'paso' => 'casada']);
+}
+
+/**
+ * El mapa «esta voz es esta persona» de toda la grabación, por mayoría
+ * de segmentos. No pisa lo que se haya puesto a mano: quien asignó una
+ * voz con su nombre manda sobre lo que dedujo la máquina.
+ */
+function consolidar_hablantes(string $id, array $partes, array $hablantes, array $nombres): void
+{
+    $mapa = $hablantes['mapa'] ?? [];
+    foreach ($partes as $p) {
+        $votos = [];
+        foreach ((array) ($p['dicho'] ?? []) as $seg) {
+            if (!empty($seg['quien'])) {
+                $votos[$seg['h']][$seg['quien']] = ($votos[$seg['h']][$seg['quien']] ?? 0) + 1;
+            }
+        }
+        foreach ($votos as $h => $cuenta) {
+            arsort($cuenta);
+            $vozId = (string) array_key_first($cuenta);
+            $etiqueta = $p['n'] . ':' . $h;
+            if (isset($nombres[$vozId]) && empty($mapa[$etiqueta]['nombre'])) {
+                $mapa[$etiqueta] = $nombres[$vozId] + ['auto' => true];
+            }
+        }
+    }
+    $hablantes['mapa'] = $mapa;
+    unset($hablantes['_auto']);
+    bd()->prepare('UPDATE grabaciones SET hablantes = ?, actualizado = ? WHERE id = ?')
+        ->execute([json_encode($hablantes, JSON_UNESCAPED_UNICODE), ahora_iso(), $id]);
 }
 
 function contar_partes_sin_voces(array $partes, int $menos): int

@@ -43,3 +43,19 @@ formulario.
 - Fran ya pegó la clave de pyannote en el TALLER (agosto 2026). Al
   hacer el volcado grande a la app real habrá que pegarla una vez en
   los Ajustes de producción: las claves no viajan entre entornos.
+
+## Bordes conocidos del conducto de audio (agosto 2026)
+
+- **Si el conducto cruza las 23:59**, el acta de ese día ya está
+  sellada y la propuesta no se puede escribir: la transcripción queda
+  guardada, pero las tareas hay que apuntarlas a mano en la reunión
+  siguiente. La fila lo dice con su motivo. Si llegara a molestar, se
+  puede dar una prórroga de cortesía al sello para actas que ya
+  estaban en el horno.
+- **Reintentar** repite la parte que falló. Si el fallo llegó DESPUÉS
+  de que OpenAI hiciera su trabajo (un corte al recibir la respuesta),
+  esa parte se paga dos veces. Es raro y barato; arreglarlo del todo
+  pediría guardar la respuesta antes de contestar al móvil.
+- **El servicio de voces con cola larga**: a los ~7 minutos el
+  conducto sigue adelante sin nombres y avisa; las voces se ponen a
+  mano y quedan aprendidas igual.

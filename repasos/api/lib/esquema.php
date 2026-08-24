@@ -18,7 +18,7 @@
 declare(strict_types=1);
 
 /** Se sube al añadir campos o tablas. */
-const ESQUEMA_VERSION = 11;
+const ESQUEMA_VERSION = 12;
 
 /**
  * Campos que tienen que existir, por tabla, con el tipo que usa MySQL.
@@ -62,6 +62,10 @@ const ESQUEMA_CAMPOS = [
         // Nulos hasta que existen: una reunión sin audio no los usa.
         'resumen'   => 'MEDIUMTEXT',
         'propuesta' => 'MEDIUMTEXT',
+        // Cuándo se firmó. Un acta puede firmarse con el resumen en
+        // blanco, así que el resumen no sirve para saber si está
+        // firmada: hace falta su propio sello.
+        'acta_firmada' => 'VARCHAR(32) DEFAULT NULL',
     ],
 ];
 
