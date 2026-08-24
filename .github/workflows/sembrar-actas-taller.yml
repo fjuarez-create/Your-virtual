@@ -220,11 +220,11 @@ jobs:
           ENTRADA_PASSWORD: ${{ secrets.REVISION_PASSWORD }}
         run: |
           set -eu
-          HOY="$(php -r 'echo (new DateTimeImmutable("now", new DateTimeZone("Europe/Madrid")))->format("Y-m-d");')"
-          HACE5="$(php -r 'echo (new DateTimeImmutable("now", new DateTimeZone("Europe/Madrid")))->modify("-5 days")->format("Y-m-d");')"
-          HACE6="$(php -r 'echo (new DateTimeImmutable("now", new DateTimeZone("Europe/Madrid")))->modify("-6 days")->format("Y-m-d");')"
-          HACE16M="$(php -r 'echo (new DateTimeImmutable("now", new DateTimeZone("Europe/Madrid")))->modify("-16 months")->format("Y-m-d");')"
-          VISPERA16M="$(php -r 'echo (new DateTimeImmutable("now", new DateTimeZone("Europe/Madrid")))->modify("-16 months")->modify("-1 day")->format("Y-m-d");')"
+          HOY="$(php -r 'echo (new DateTimeImmutable("now", new DateTimeZone("Atlantic/Canary")))->format("Y-m-d");')"
+          HACE5="$(php -r 'echo (new DateTimeImmutable("now", new DateTimeZone("Atlantic/Canary")))->modify("-5 days")->format("Y-m-d");')"
+          HACE6="$(php -r 'echo (new DateTimeImmutable("now", new DateTimeZone("Atlantic/Canary")))->modify("-6 days")->format("Y-m-d");')"
+          HACE16M="$(php -r 'echo (new DateTimeImmutable("now", new DateTimeZone("Atlantic/Canary")))->modify("-16 months")->format("Y-m-d");')"
+          VISPERA16M="$(php -r 'echo (new DateTimeImmutable("now", new DateTimeZone("Atlantic/Canary")))->modify("-16 months")->modify("-1 day")->format("Y-m-d");')"
 
           CUERPO="$(python3 -c 'import json,os; print(json.dumps({"email": os.environ["ENTRADA_EMAIL"], "password": os.environ["ENTRADA_PASSWORD"]}))')"
           printf '%s' "$CUERPO" | curl -fsS --max-time 25 -X POST \

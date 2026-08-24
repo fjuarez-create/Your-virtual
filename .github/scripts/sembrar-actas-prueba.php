@@ -32,11 +32,11 @@ $uuid = static function (): string {
     return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($b), 4));
 };
 
-/* Una hora de Madrid, guardada como se guarda en la app: UTC con Z. */
-$madrid = new DateTimeZone('Europe/Madrid');
+/* Una hora canaria, guardada como se guarda en la app: UTC con Z. */
+$canaria = new DateTimeZone('Atlantic/Canary');
 $utc = new DateTimeZone('UTC');
-$sello = static function (string $fecha, string $hora) use ($madrid, $utc): string {
-    return (new DateTimeImmutable("{$fecha} {$hora}", $madrid))
+$sello = static function (string $fecha, string $hora) use ($canaria, $utc): string {
+    return (new DateTimeImmutable("{$fecha} {$hora}", $canaria))
         ->setTimezone($utc)->format('Y-m-d\TH:i:s.000\Z');
 };
 
@@ -60,7 +60,7 @@ $asistentes = array_column($mesa, 'id');
 $quien = $mesa[0]['id'];
 $nombreQuien = $mesa[0]['nombre'];
 
-$hoy = new DateTimeImmutable('now', $madrid);
+$hoy = new DateTimeImmutable('now', $canaria);
 
 /* Las tres actas. Cada tarea: [texto, hecha, responsable]. */
 $actas = [
