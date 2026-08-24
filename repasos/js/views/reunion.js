@@ -121,10 +121,15 @@ export async function render({ reunionId }) {
       volver: '#/obra',
       titulo: esHoy ? 'Reunión de hoy' : `Acta · ${diaDeLaSemana(r.fecha)} ${Number(r.fecha.slice(8, 10))}`,
     }),
-    h('p.d-nota-pie', { style: { margin: '0 6px' } },
-      `${diaDeLaSemana(r.fecha, { mayuscula: true })}, ${fechaDeActa(r.fecha, { conAno: true })}`
-      + ` · empezada a las ${hora(r.empezada)} h`
-      + (r.terminada ? ` · terminada a las ${hora(r.terminada)} h` : '')),
+    // El calendario y el reloj en gris pequeñito, como pidió Fran: la
+    // fecha con su icono y las horas con el suyo, sin frase.
+    h('div.d-reunion-datos', null,
+      h('span', null, icon('calendario'),
+        `${diaDeLaSemana(r.fecha, { mayuscula: true })}, ${fechaDeActa(r.fecha, { conAno: true })}`),
+      h('span', null, icon('reloj'), r.terminada
+        ? `${hora(r.empezada)} – ${hora(r.terminada)} h`
+        : `empezada a las ${hora(r.empezada)} h`),
+    ),
     avisoLocal() || barraSync(),
 
     /* ─── La mesa ─── */
@@ -427,7 +432,7 @@ function tarjetaGrabacion(g, { edita, promoId }) {
     // Se quedó a medias y se dice por qué: reintentar es volver a
     // soltar el conducto, que sigue por donde iba.
     sub.push(fallo);
-    chip = h('span.d-chip.rojo', null, 'a medias');
+    chip = h('span.d-grab-estado.mal', { 'aria-label': 'A medias' }, '!');
     if (edita) {
       accion = h('button.d-chip.ambar', {
         onclick: () => { FALLIDAS.delete(g.id); VUELTAS.delete(g.id); refrescar(); },
@@ -445,9 +450,12 @@ function tarjetaGrabacion(g, { edita, promoId }) {
       }, 'Cerrar');
     }
   } else if (g.estado === 'lista') {
-    chip = h('span.d-chip.ambar', null, edita ? 'en cola' : 'sin transcribir');
+    // El estado va en su bola a la derecha, elegido por Fran sobre
+    // tres propuestas: girito esperando turno, check transcrita.
+    chip = h('span.d-grab-estado.cola',
+      { 'aria-label': edita ? 'En cola' : 'Sin transcribir' }, h('span.d-giro'));
   } else if (g.estado === 'transcrita') {
-    chip = h('span.d-chip.verde', null, 'transcrita');
+    chip = h('span.d-grab-estado.hecha', { 'aria-label': 'Transcrita' }, icon('check'));
   }
   if (g.audioBorrado) {
     sub.push('audio borrado a los 30 días');

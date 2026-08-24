@@ -37,6 +37,9 @@ export const TRAZADOS = {
   caretIzquierda: '<path d="M165.66,202.34a8,8,0,0,1-11.32,11.32l-80-80a8,8,0,0,1,0-11.32l80-80a8,8,0,0,1,11.32,11.32L91.31,128Z"/>',
   // calendar-blank — el campo de fecha de la ficha de la tarea
   calendario: '<path d="M208,32H184V24a8,8,0,0,0-16,0v8H88V24a8,8,0,0,0-16,0v8H48A16,16,0,0,0,32,48V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V48A16,16,0,0,0,208,32ZM72,48v8a8,8,0,0,0,16,0V48h80v8a8,8,0,0,0,16,0V48h24V80H48V48ZM208,208H48V96H208V208Z"/>',
+  // clock — la hora de la reunión; el «clock» de abajo lleva la
+  // flecha del historial y aquí despistaría.
+  reloj: '<path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm64-88a8,8,0,0,1-8,8H128a8,8,0,0,1-8-8V72a8,8,0,0,1,16,0v48h48A8,8,0,0,1,192,128Z"/>',
   // sneaker-move · pause · brain · heart-straight · sparkle — el
   // recorrido con IA (zapatilla, pausa, cerebro), el «Conservar» del
   // borrado de fotos y el destello de la opción de IA.

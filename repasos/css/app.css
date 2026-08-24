@@ -3099,6 +3099,32 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
   display: grid; place-items: center;
 }
 
+/* El estado de una grabación, en su bola a la derecha (elegido por
+   Fran sobre tres propuestas): check en beige cuando está transcrita,
+   girito mientras espera su turno, y rojo con aviso si se quedó a
+   medias. El micro de la izquierda se queda quieto en su sitio. */
+.d-grab-estado {
+  width: 36px; height: 36px; flex: none; border-radius: 999px;
+  display: grid; place-items: center;
+}
+.d-grab-estado.hecha { background: var(--d-beige-tinta); color: #fff; }
+.d-grab-estado.hecha svg { width: 20px; height: 20px; }
+.d-grab-estado.cola { background: var(--d-gris-suave); }
+.d-grab-estado.mal {
+  background: var(--d-rojo-suave); color: #651d17;
+  font: 700 18px/1 var(--d-font);
+}
+
+/* Los datos de la reunión bajo la cabecera: el calendario y el reloj
+   en gris pequeñito, pedidos así por Fran sobre tres propuestas que
+   no le convencieron (agosto de 2026). */
+.d-reunion-datos {
+  display: flex; flex-wrap: wrap; gap: 6px 18px;
+  margin: 0 6px; color: var(--d-gris); font-size: 13px;
+}
+.d-reunion-datos > span { display: inline-flex; align-items: center; gap: 7px; }
+.d-reunion-datos svg { width: 15px; height: 15px; flex: none; }
+
 /* El acta en prosa, ya firmada. */
 .d-acta-prosa {
   background: #fff; border-radius: var(--d-radio);
