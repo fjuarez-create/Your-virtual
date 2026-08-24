@@ -1788,6 +1788,13 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
   text-align: left; display: block;
 }
 .d-banner + .d-banner { margin-top: 8px; }
+/* Cuando una banda viene justo detrás de una tarjeta —la última
+   reunión y su banda negra, en la portada— lleva el mismo aire que
+   entre dos tarjetas, 13px. En la portada solo afina el margen
+   genérico de .screen (14px); donde de verdad iban pegadas era en las
+   maquetas, que montan las piezas sin .screen y sin esta regla las
+   enseñaban como una sola pieza a dos colores. */
+.d-tarjeta + .d-banner { margin-top: 13px; }
 /* La forma mordida que comparten los banners de la home y las tarjetas
    de vivienda: la pieza se estrecha abajo a la derecha y la bola de 55
    vive fuera, en el hueco. Tres piezas ancladas abajo a la derecha,

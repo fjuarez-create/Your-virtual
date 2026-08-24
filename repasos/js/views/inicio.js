@@ -14,12 +14,11 @@
 
    La misma pantalla para técnicos y para constructora: solo cambia el
    saludo, que al jefe de obra no le baila con los días. */
-import { h, icon, avatar, toast, fechaCorta, hora } from '../ui.js';
+import { h, icon, avatar, toast, fechaCorta, hora, anillo, grupoAvatares } from '../ui.js';
 import * as store from '../store.js';
 import * as api from '../api.js';
 import { PROMOCIONES, unidad, estado } from '../catalog.js';
-import { avisoLocal, barraSync, bannerMordido as banner, cabecera, tarjetaVilla, cuandoVilla } from '../piezas.js';
-import { tarjetaReunion } from './obra.js';
+import { avisoLocal, barraSync, bannerMordido as banner, cabecera, tarjetaVilla, cuandoVilla, tramoAvance } from '../piezas.js';
 import { ir, conFiltros, refrescar } from '../app.js';
 
 /* El saludo de cazar repasos se retiró en agosto de 2026, cuando la
@@ -58,6 +57,55 @@ function juntarRafagas(muro) {
     salida.push({ ...n, cuantas: 1, mismoTexto: true });
   }
   return salida;
+}
+
+/**
+ * La última reunión de obra, con la misma piel que las tarjetas de
+ * vivienda: la grúa y el cuándo arriba, las caras de la mesa, los dos
+ * chips con las cuentas de sus tareas y el anillo del avance asomando
+ * por la esquina. El traje lo eligió Fran en agosto de 2026 entre
+ * cuatro propuestas, para que la portada hable un solo idioma.
+ */
+function tarjetaUltimaReunion(r, hoy) {
+  // En las caras van también los invitados —la mesa es la mesa, tenga
+  // cuenta o no—, pero recortadas a tres ANTES de pintar, como hace la
+  // tarjeta de vivienda: así nunca sale la bolita «+n», que esta piel
+  // no lleva y que en un móvil estrecho choca con el cuándo.
+  const gente = [
+    ...(r.asistentes || []).map((id) => store.persona(id)),
+    ...(r.invitados || []).map((nombre) => ({ nombre })),
+  ].slice(0, 3);
+  const hechas = r.encargos - r.pendientes;
+  const pct = r.encargos ? Math.round((100 * hechas) / r.encargos) : 0;
+  const t = tramoAvance(pct);
+  const chipPct = pct === 100 && r.encargos ? 'macizo' : t.clase;
+  // El cuándo, con el reloj de las villas; mientras la mesa sigue
+  // sentada no hay hora de cierre que dar, y se dice —a secas: con la
+  // hora al lado no cabía junto a las caras en un móvil estrecho.
+  const cuando = !r.terminada && r.fecha === hoy
+    ? 'En marcha'
+    : cuandoVilla(r.terminada || r.empezada);
+  return h(`button.d-tarjeta.tramo-${t.clase}`, { onclick: () => ir(`#/obra/r/${r.id}`) },
+    h('span.d-mordida'),
+    h('span.d-mordida-esquina'),
+    h('div.d-tarjeta-cab', null,
+      icon('grua'),
+      h('span', null, cuando),
+      h('span.d-tarjeta-caras', null, grupoAvatares(gente, { tam: 36, max: 3, solape: 12 })),
+    ),
+    h('div.d-tarjeta-titulo', null, 'Reunión de obra'),
+    h('div.d-tarjeta-pie', null,
+      // En minúscula, como el mismo chip de la pantalla de obra: la
+      // misma reunión no puede decir la misma palabra con dos cajas.
+      r.encargos
+        ? h('span.d-chip.grande', null, icon('listaChecks'), `${hechas} / ${r.encargos}`)
+        : h('span.d-chip.grande', null, 'sin tareas'),
+      r.encargos
+        ? h('span.d-chip.grande', { class: chipPct }, icon('fuego'), `${pct}%`)
+        : null,
+    ),
+    h('span.d-tarjeta-anillo', null, anillo(pct, { tam: 55, grosor: 5, etiqueta: false })),
+  );
 }
 
 /* Cómo se lee una tanda: «6 repasos rechazados». */
@@ -165,12 +213,14 @@ export async function render() {
       // Desplegado a mano: el pintor no aplana listas anidadas.
       ...(obra && obra.ultima ? [
         h('p.d-epigrafe', null, 'Última reunión de obra'),
-        tarjetaReunion(obra.ultima, { esHoy: obra.ultima.fecha === obra.hoy }),
+        tarjetaUltimaReunion(obra.ultima, obra.hoy),
       ] : []),
       ...(obra && obra.pendientes ? [
         banner({
           clase: 'negro',
-          rotulo: 'Tareas de obra pendientes',
+          // El texto lo fijó Fran: «órdenes» porque aquí caerán también
+          // las del libro de órdenes cuando exista.
+          rotulo: 'Tareas y órdenes pendientes',
           cifra: obra.pendientes,
           adonde: '#/obra',
         }),

@@ -65,7 +65,7 @@ export async function render() {
   contenido.push(h('p.d-epigrafe', null, 'Hoy'));
   if (deHoy) {
     // Sin el «Hoy ·» delante: el epígrafe de arriba ya lo dice.
-    contenido.push(tarjetaReunion(deHoy, { esHoy: true, conHoy: false }));
+    contenido.push(tarjetaReunion(deHoy, { esHoy: true }));
   } else {
     contenido.push(
       h('div.d-acta-dia.hoy', null,
@@ -143,13 +143,13 @@ export async function render() {
 }
 
 /** La tarjeta de una reunión, con la misma piel que los partes por
-    día. La portada la pinta también, para la última reunión: allí el
-    «Hoy ·» se queda (`conHoy`), porque no hay epígrafe que lo diga. */
-export function tarjetaReunion(r, { esHoy, conHoy = true }) {
+    día. La portada tuvo su propia copia hasta agosto de 2026; desde
+    entonces allí viste de tarjeta de vivienda y esta queda solo aquí. */
+function tarjetaReunion(r, { esHoy }) {
   const chip = (n, texto, clase) => (n ? h('span.d-chip', { class: clase }, `${n} ${texto}`) : null);
   const estado = r.terminada ? 'terminada' : 'en marcha';
   const cuando = esHoy
-    ? (conHoy ? `Hoy · ${estado}` : estado.charAt(0).toUpperCase() + estado.slice(1))
+    ? estado.charAt(0).toUpperCase() + estado.slice(1)
     : diaDeLaSemana(r.fecha, { mayuscula: true });
 
   // En la pila salen también los invitados: la línea de abajo los
