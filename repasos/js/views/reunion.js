@@ -114,21 +114,29 @@ export async function render({ reunionId }) {
     : null;
 
   const contenido = [
-    cabecera({ volver: '#/obra', titulo: '' }),
-    h('h1.d-saludo', null, esHoy ? 'Reunión de hoy' : `Acta · ${diaDeLaSemana(r.fecha)} ${Number(r.fecha.slice(8, 10))}`),
-    h('p.d-nota-pie', { style: { margin: '-4px 6px 0' } },
+    // El título viaja en la propia cabecera, junto a la flecha: la
+    // regla de la casa desde agosto de 2026 es que si hay flecha, el
+    // título va arriba, como en la ficha de una villa.
+    cabecera({
+      volver: '#/obra',
+      titulo: esHoy ? 'Reunión de hoy' : `Acta · ${diaDeLaSemana(r.fecha)} ${Number(r.fecha.slice(8, 10))}`,
+    }),
+    h('p.d-nota-pie', { style: { margin: '0 6px' } },
       `${diaDeLaSemana(r.fecha, { mayuscula: true })}, ${fechaDeActa(r.fecha, { conAno: true })}`
       + ` · empezada a las ${hora(r.empezada)} h`
       + (r.terminada ? ` · terminada a las ${hora(r.terminada)} h` : '')),
     avisoLocal() || barraSync(),
 
     /* ─── La mesa ─── */
-    h('p.d-epigrafe', null, 'En la mesa'),
+    h('p.d-epigrafe', null, 'Asistentes'),
     h('div.d-mesa', null,
-      (r.asistentes || []).map((id) => avatar(store.persona(id), { tam: 44 })),
+      (r.asistentes || []).map((id) => avatar(store.persona(id), { tam: 48 })),
       (r.invitados || []).map((n) => h('span.d-invitado', null, `${n} (invitado)`)),
       edita
-        ? h('button.d-mesa-mas', { onclick: async () => { if (await hojaMesa(r)) refrescar(); } }, '+ Añadir')
+        ? h('button.d-mesa-mas', {
+            'aria-label': 'Añadir asistentes',
+            onclick: async () => { if (await hojaMesa(r)) refrescar(); },
+          }, icon('plus'))
         : null,
       !edita && !(r.asistentes || []).length && !(r.invitados || []).length
         ? h('p.d-nota-pie', { style: { margin: '0' } }, 'Sin asistentes apuntados.')
@@ -141,13 +149,16 @@ export async function render({ reunionId }) {
     contenido.push(h('p.d-epigrafe', null, 'La grabación'));
 
     if (edita && !hayGrabacionEnMarcha() && !grabaciones.some((g) => g.estado === 'grabando')) {
+      // El micro va en el botón, no de adorno a la izquierda: dos
+      // micros en la misma fila se estorbaban. Lo del borrado a los
+      // 30 días se cuenta en la página de privacidad, no aquí.
       contenido.push(h('div.d-grab-quieta', null,
-        icon('mic'),
         h('div.grow', null,
           h('div.d-grab-quieta-titulo', null, grabaciones.length ? 'Grabar otro rato' : 'Sin grabar todavía'),
-          h('div.d-grab-quieta-sub', null, 'Se transcribe al parar · el audio se borra a los 30 días'),
+          h('div.d-grab-quieta-sub', null, 'Se transcribirá automáticamente al parar.'),
         ),
         h('button.d-grab-quieta-boton', {
+          'aria-label': 'Grabar',
           onclick: async () => {
             await empezarGrabadora({
               reunionId: r.id,
@@ -160,7 +171,7 @@ export async function render({ reunionId }) {
             });
             refrescar();
           },
-        }, 'Grabar'),
+        }, icon('mic')),
       ));
     }
 
@@ -760,7 +771,7 @@ function hojaMesa(r) {
     }, 'Guardar la mesa');
 
     return [
-      h('h2.title', null, 'En la mesa'),
+      h('h2.title', null, 'Asistentes'),
       h('p.hint', { style: { whiteSpace: 'normal' } }, 'Los del equipo llevan cuenta y cara; los de fuera se apuntan a mano.'),
       listaEquipo,
       h('p.eyebrow', { style: { marginTop: '14px' } }, 'Invitados'),

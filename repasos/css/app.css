@@ -2955,16 +2955,19 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 .d-mesa { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
 .d-mesa .avatar { border: 2.5px solid var(--d-fondo); }
 .d-invitado {
-  display: inline-flex; align-items: center; height: 44px;
+  display: inline-flex; align-items: center; height: 48px;
   font-size: 13px; font-weight: 600; color: var(--d-gris);
   background: #e9e7e2; padding: 0 14px; border-radius: 999px;
 }
+/* Añadir asistentes: una bola con el más, del mismo gris que las
+   pastillas de invitado y del mismo tamaño que las caras. El borde
+   discontinuo de antes no era del sistema y Fran lo retiró. */
 .d-mesa-mas {
-  display: inline-flex; align-items: center; height: 44px; box-sizing: border-box;
-  font-size: 13px; font-weight: 600; color: var(--d-gris);
-  background: transparent; border: 1.5px dashed #b9b3a8;
-  padding: 0 14px; border-radius: 999px;
+  width: 48px; height: 48px; flex: none; border-radius: 999px;
+  background: #e9e7e2; color: var(--d-gris);
+  display: grid; place-items: center; padding: 0;
 }
+.d-mesa-mas svg { width: 20px; height: 20px; }
 
 /* La tarea de una reunión: pastilla blanca con su redondel para
    tachar. El redondel es un botón propio, porque tachar puede hacerlo
@@ -3052,10 +3055,14 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 .d-grab-quieta .grow { flex: 1; min-width: 0; }
 .d-grab-quieta-titulo { font-size: 16px; font-weight: 500; color: var(--d-tinta); }
 .d-grab-quieta-sub { margin-top: 3px; font-size: 12.5px; line-height: 1.4; color: var(--d-gris); }
+/* Grabar es una bola negra con el micro dentro, como las bolas de
+   acción de toda la app: la palabra sobraba teniendo el dibujo. */
 .d-grab-quieta-boton {
-  flex: none; height: 48px; padding: 0 24px; border-radius: 999px;
-  background: var(--d-tinta); color: #fff; font-size: 16px; font-weight: 500;
+  flex: none; width: 48px; height: 48px; border-radius: 999px;
+  background: var(--d-tinta); color: #fff;
+  display: grid; place-items: center; padding: 0;
 }
+.d-grab-quieta-boton svg { width: 22px; height: 22px; }
 
 /* El girito de «esto está trabajando» y la barra de lo que lleva.
    Van juntos en la fila de la grabación mientras se exprime el audio:
