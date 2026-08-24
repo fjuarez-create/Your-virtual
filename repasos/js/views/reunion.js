@@ -30,7 +30,9 @@ import { ir, refrescar } from '../app.js';
    El conducto de una grabación (transcribiendo, poniendo voces…) y el
    borrador de la propuesta en edición viven aquí, a nivel de módulo:
    cada refrescar() repinta la vista, pero esto no se olvida. */
-const CONDUCTO = new Map();    // grabacionId → { fase, detalle }
+const CONDUCTO = new Map();    // grabacionId → { fase, detalle, avance }
+const FALLIDAS = new Map();    // grabacionId → por qué se quedó a medias
+const REDACTANDO = new Set();  // reunionId, para el botón de reserva
 const BORRADOR = new Map();    // reunionId → { sello, resumen, tareas }
 
 export async function render({ reunionId }) {
@@ -69,6 +71,23 @@ export async function render({ reunionId }) {
       voces = rv.voces;
       hayServicioVoces = rv.servicio.hay;
     } catch { /* sin registro no se rompe nada */ }
+  }
+
+  /* ─── El audio se exprime solo ───
+     Nada más parar la grabadora, sin que nadie pulse: se transcribe,
+     se reconocen las voces y se propone el acta con sus tareas. El
+     audio no se quiere para nada más, así que cuanto antes se le
+     saquen las tareas, mejor.
+
+     Arranca UNA grabación cada vez; al terminar, el repintado coge la
+     siguiente. Si algo falla, queda apuntado en FALLIDAS y la fila
+     ofrece reintentar en vez de volver a intentarlo en bucle. */
+  const necesitaActa = !resumen && !propuesta;
+  if (edita) {
+    const g = grabaciones.find((x) => !x.audioBorrado
+      && !CONDUCTO.has(x.id) && !FALLIDAS.has(x.id)
+      && (x.estado === 'lista' || (x.estado === 'transcrita' && necesitaActa)));
+    if (g) setTimeout(() => conducir(g, r, { firmada: !!resumen }), 0);
   }
 
   const tachar = async (e) => { if (await tacharEncargo(e)) refrescar(); };
@@ -115,7 +134,11 @@ export async function render({ reunionId }) {
             await empezarGrabadora({
               reunionId: r.id,
               titulo: esHoy ? 'Reunión de hoy' : `Reunión del ${Number(r.fecha.slice(8, 10))}`,
-              alTerminar: (g) => { conducir(g.id, r.promoId); refrescar(); },
+              // El conducto arranca aquí mismo, no al repintar: la
+              // grabadora se pliega y se para desde cualquier
+              // pantalla, y el audio no puede quedarse esperando a
+              // que alguien vuelva a abrir la reunión.
+              alTerminar: (grabacion) => conducir(grabacion, r, { firmada: !!resumen }),
             });
             refrescar();
           },
@@ -143,28 +166,31 @@ export async function render({ reunionId }) {
   const hayTranscrito = grabaciones.some((g) => g.estado === 'transcrita');
   if (edita && propuesta) {
     contenido.push(...bloquePropuesta(r, propuesta));
-  } else if (edita && hayTranscrito && !resumen) {
-    const redactando = CONDUCTO.get('redactar:' + r.id);
+  } else if (edita && hayTranscrito && !propuesta && !CONDUCTO.size) {
+    const redactando = REDACTANDO.has(r.id);
     const boton = h('button.d-boton-negro', {
       style: { marginTop: '18px' },
       disabled: !!redactando,
       onclick: async () => {
-        CONDUCTO.set('redactar:' + r.id, { fase: 'redactando' });
+        REDACTANDO.add(r.id);
         refrescar();
         try {
           await api.redactarActa(r.id, unidades(r.promoId).map((u) => ({ id: u.id, nombre: u.nombre })));
           BORRADOR.delete(r.id);
           toast('Propuesta de acta lista: revísala');
         } catch (e) { avisarDeError(e); } finally {
-          CONDUCTO.delete('redactar:' + r.id);
+          REDACTANDO.delete(r.id);
           refrescar();
         }
       },
-    }, icon('edit'), redactando ? 'Redactando el acta…' : 'Redactar el acta con la IA');
+    }, icon('edit'), redactando ? 'Escribiendo el acta…'
+      : resumen ? 'Volver a proponer el acta' : 'Proponer el acta con la IA');
     contenido.push(boton,
-      h('p.d-nota-pie', null,
-        'La IA lee la transcripción y propone el resumen y las tareas, con responsable '
-        + 'cuando quedó claro. Nada se crea hasta que tú lo firmes.'));
+      h('p.d-nota-pie', null, resumen
+        ? 'El acta de esta reunión ya está firmada. Si has grabado algo más, aquí se '
+          + 'vuelve a proponer con todo lo que hay.'
+        : 'La IA lee la transcripción y propone el resumen y las tareas, con responsable '
+          + 'cuando quedó claro. Nada se crea hasta que tú lo firmes.'));
   }
 
   /* ─── El acta ya firmada ─── */
@@ -180,9 +206,11 @@ export async function render({ reunionId }) {
     h('p.d-epigrafe', null, 'Tareas de esta reunión'),
     encargos.length
       ? h('div', null, encargos.map((e) => filaEncargo(e, { alTachar: tachar, alAbrir: abrir })))
-      : h('p.d-nota-pie', null, edita
-          ? 'Todavía ninguna. Lo que se acuerde, apúntalo aquí: con responsable y fecha no se pierde.'
-          : 'Esta reunión no dejó tareas apuntadas.'),
+      : h('p.d-nota-pie', null, CONDUCTO.size
+          ? 'Todavía ninguna. En un momento las propone la IA de lo que se habló.'
+          : edita
+            ? 'Todavía ninguna. Lo que se acuerde, apúntalo aquí: con responsable y fecha no se pierde.'
+            : 'Esta reunión no dejó tareas apuntadas.'),
     edita
       ? h('button.d-fantasma', {
           style: { marginTop: '8px' },
@@ -225,53 +253,126 @@ export async function render({ reunionId }) {
   return { sinTabs: true, clase: 'pantalla-diseno', contenido };
 }
 
-/* ═══ El conducto: transcribir → voces, empujado desde el móvil ═══
-   Un hosting compartido no tiene trabajadores de fondo, así que el
-   móvil pide un paso corto cada vez hasta que no queda nada. Si la
-   app se cierra a la mitad, el botón de la tarjeta lo retoma. */
-async function conducir(grabacionId, promoId) {
-  if (CONDUCTO.has(grabacionId)) return;
-  CONDUCTO.set(grabacionId, { fase: 'transcribiendo', detalle: '' });
-  refrescar();
+/* ═══ El conducto: transcribir → voces → acta, sin pulsar nada ═══
+   En cuanto una grabación se cierra, esto arranca solo: el audio no
+   se quiere para otra cosa, así que cuanto antes se le saquen las
+   tareas, mejor. Un hosting compartido no tiene trabajadores de
+   fondo, de modo que el móvil pide un paso corto cada vez y va
+   contando por dónde va en la propia fila de la grabación.
+
+   Si la app se cierra a la mitad, al volver a entrar se retoma donde
+   se quedó: los pasos ya hechos no se repiten. */
+async function conducir(g, r, { firmada }) {
+  if (CONDUCTO.has(g.id)) return;
+
+  const partes = Math.max(1, g.partes.filter((p) => p.tam > 0).length);
+  const min = Math.max(1, Math.round(g.duracion / 60));
+  const marcar = (fase, detalle, avance) => {
+    CONDUCTO.set(g.id, { fase, detalle, avance });
+    refrescar();
+  };
+  marcar('transcribiendo', `Transcribiendo la parte 1 de ${partes} · ${min} min de reunión`, 0.06);
+
   try {
+    /* 1 · El texto, parte a parte. */
     let quedan = 1;
     while (quedan > 0) {
-      const r = await api.transcribirGrabacion(grabacionId);
-      quedan = r.quedan;
-      CONDUCTO.set(grabacionId, { fase: 'transcribiendo', detalle: quedan ? `quedan ${quedan}` : '' });
+      const res = await api.transcribirGrabacion(g.id);
+      quedan = res.quedan;
+      const hechas = partes - quedan;
+      marcar('transcribiendo',
+        quedan
+          ? `Transcribiendo la parte ${Math.min(hechas + 1, partes)} de ${partes} · ${min} min de reunión`
+          : `${min} min de reunión, palabra por palabra`,
+        0.06 + 0.56 * (hechas / partes));
     }
-    // La identificación automática, si hay huellas con las que comparar.
-    CONDUCTO.set(grabacionId, { fase: 'voces', detalle: '' });
-    refrescar();
+
+    /* 2 · Quién habla en cada tramo, si hay huellas que comparar. */
+    marcar('voces', 'Reconociendo las voces de la mesa…', 0.68);
     for (let paso = 0; paso < 240; paso++) {
-      const r = await api.identificarGrabacion(grabacionId);
-      if (!r.disponible || r.quedan === 0) break;
+      const res = await api.identificarGrabacion(g.id);
+      if (!res.disponible || res.quedan === 0) break;
       // Los trabajos acústicos tardan un rato: se pregunta con calma.
-      await new Promise((listo) => setTimeout(listo, r.paso === 'en-cola' ? 8000 : 1500));
+      await new Promise((listo) => setTimeout(listo, res.paso === 'en-cola' ? 8000 : 1500));
     }
-    toast('Grabación transcrita');
+
+    /* 3 · El acta y sus tareas.
+       No se reescribe lo que ya está firmado, y si se está grabando
+       otro rato se espera: la propone el conducto de esa grabación,
+       ya con todo dentro. */
+    if (!firmada && !hayGrabacionEnMarcha()) {
+      marcar('redactando', 'Escribiendo el acta y sus tareas…', 0.86);
+      await api.redactarActa(r.id, unidades(r.promoId).map((u) => ({ id: u.id, nombre: u.nombre })));
+      BORRADOR.delete(r.id);
+      toast('Acta propuesta: repásala y fírmala');
+    } else {
+      toast('Grabación transcrita');
+    }
   } catch (e) {
+    // Se apunta el motivo y NO se reintenta solo: un fallo en bucle
+    // gasta dinero de verdad. La fila ofrece reintentar a mano.
+    FALLIDAS.set(g.id, motivoDe(e));
     avisarDeError(e);
   } finally {
-    CONDUCTO.delete(grabacionId);
+    CONDUCTO.delete(g.id);
     refrescar();
   }
+}
+
+/** Por qué se quedó a medias, en una línea que quepa en la fila. */
+function motivoDe(e) {
+  const porCodigo = {
+    'sin-clave': 'falta una clave de IA en Ajustes → Servidor',
+    'clave-mala': 'la clave de IA no vale',
+    'sin-cupo': 'la cuenta de IA se quedó sin cupo',
+    'red': 'sin conexión con el servidor',
+    'sellada': 'el acta de ese día ya está sellada',
+    'audio-borrado': 'el audio ya se borró (30 días)',
+  };
+  return porCodigo[e?.codigo] || e?.message || 'no se pudo terminar';
 }
 
 /* ─── La tarjeta de una grabación ─── */
 function tarjetaGrabacion(g, { edita, promoId }) {
   const enConducto = CONDUCTO.get(g.id);
+  const fallo = FALLIDAS.get(g.id);
   const min = Math.max(1, Math.round(g.duracion / 60));
+
+  /* Exprimiendo: la fila entera se pone a trabajar. El micro deja su
+     sitio al girito, el título dice lo que está pasando, la línea de
+     debajo por dónde va y la barra cuánto lleva. Aquí no hay nada que
+     pulsar, que era justo el problema de antes. */
+  if (enConducto) {
+    return h('div.d-encargo', null,
+      h('div.d-grab-fila-icono', null, h('span.d-giro')),
+      h('div.grow', null,
+        h('div.d-encargo-texto', null, 'Exprimiendo el audio…'),
+        h('div.d-encargo-sub', { style: { whiteSpace: 'normal' } }, enConducto.detalle),
+        h('div.d-barra-fina', null,
+          h('i', { style: { width: `${Math.round(Math.min(1, enConducto.avance) * 100)}%` } })),
+      ),
+    );
+  }
+
   const sub = [`${min} min`];
   let chip = null;
   let accion = null;
 
-  if (enConducto) {
-    chip = h('span.d-chip.ambar', null,
-      enConducto.fase === 'voces' ? 'poniendo voces…' : `transcribiendo… ${enConducto.detalle || ''}`.trim());
+  if (fallo) {
+    // Se quedó a medias y se dice por qué: reintentar es volver a
+    // soltar el conducto, que sigue por donde iba.
+    sub.push(fallo);
+    chip = h('span.d-chip.rojo', null, 'a medias');
+    if (edita) {
+      accion = h('button.d-chip.ambar', {
+        onclick: () => { FALLIDAS.delete(g.id); refrescar(); },
+      }, 'Reintentar');
+    }
   } else if (g.estado === 'grabando') {
-    chip = h('span.d-chip.ambar', null, 'a medias');
+    chip = h('span.d-chip.ambar', null, 'grabando');
     if (edita && !hayGrabacionEnMarcha()) {
+      // Una grabación que quedó abierta de una sesión anterior: se
+      // cierra y el conducto la coge en el siguiente repintado.
       accion = h('button.d-chip', {
         onclick: async () => {
           try { await api.cerrarGrabacion(g.id, g.duracion); refrescar(); } catch (e) { avisarDeError(e); }
@@ -279,10 +380,7 @@ function tarjetaGrabacion(g, { edita, promoId }) {
       }, 'Cerrar');
     }
   } else if (g.estado === 'lista') {
-    chip = h('span.d-chip', null, 'sin transcribir');
-    if (edita) {
-      accion = h('button.d-chip.ambar', { onclick: () => conducir(g.id, promoId) }, 'Transcribir');
-    }
+    chip = h('span.d-chip.ambar', null, edita ? 'en cola' : 'sin transcribir');
   } else if (g.estado === 'transcrita') {
     chip = h('span.d-chip.verde', null, 'transcrita');
   }
@@ -295,7 +393,7 @@ function tarjetaGrabacion(g, { edita, promoId }) {
     h('div.d-grab-fila-icono', null, icon('mic', 20)),
     h('div.grow', null,
       h('div.d-encargo-texto', null, `Grabación de las ${hora(g.creado)} h`),
-      h('div.d-encargo-sub', null, sub.join(' · ')),
+      h('div.d-encargo-sub', { style: fallo ? { whiteSpace: 'normal' } : null }, sub.join(' · ')),
     ),
     accion, chip,
   );

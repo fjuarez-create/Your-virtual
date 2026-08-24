@@ -3023,6 +3023,34 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
   background: var(--d-tinta); color: #fff; font-size: 16px; font-weight: 500;
 }
 
+/* El girito de «esto está trabajando» y la barra de lo que lleva.
+   Van juntos en la fila de la grabación mientras se exprime el audio:
+   sin ellos, quien mira no sabe si la app hace algo o se ha quedado
+   pensando, que era justo la queja. */
+.d-giro {
+  width: 18px; height: 18px; flex: none; border-radius: 999px;
+  border: 2.5px solid #e4d9c6; border-top-color: var(--d-beige-tinta);
+  animation: d-gira 0.9s linear infinite;
+}
+@keyframes d-gira { to { transform: rotate(360deg); } }
+
+.d-barra-fina {
+  height: 5px; border-radius: 999px; background: #eceae6;
+  margin-top: 10px; overflow: hidden;
+}
+.d-barra-fina i {
+  display: block; height: 100%; border-radius: 999px;
+  background: var(--d-beige-tinta);
+  transition: width 0.45s var(--sal-estandar);
+}
+
+/* Quien no quiera animaciones tampoco las tiene aquí: el girito se
+   queda quieto y la barra salta a su sitio sin deslizarse. */
+@media (prefers-reduced-motion: reduce) {
+  .d-giro { animation: none; }
+  .d-barra-fina i { transition: none; }
+}
+
 /* El icono redondo de la fila de una grabación ya hecha. */
 .d-grab-fila-icono {
   width: 36px; height: 36px; flex: none; border-radius: 999px;
