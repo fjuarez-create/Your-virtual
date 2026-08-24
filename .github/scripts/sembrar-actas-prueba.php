@@ -99,6 +99,32 @@ $actas = [
             ['Entregar el plan de acopios a la contrata (prueba)', true],
         ],
     ],
+    // Un par más de esas mismas épocas, pedidas por Fran: la víspera
+    // de cada una, para que el archivo se vea con varias seguidas.
+    [
+        'fecha' => $hoy->modify('-6 days')->format('Y-m-d'),
+        'empieza' => '09:05', 'termina' => '09:33',
+        'invitados' => ['Ginés'],
+        'resumen' => 'Replanteo de la semana: se cerró el orden de repasos por villas '
+            . 'y la llegada del vidrio. (Acta de prueba.)',
+        'firmada' => true,
+        'tareas' => [
+            ['Marcar los repasos de la villa 7 con la contrata (prueba)', true],
+            ['Pedir la plataforma para el lucernario (prueba)', true],
+        ],
+    ],
+    [
+        'fecha' => $hoy->modify('-16 months')->modify('-1 day')->format('Y-m-d'),
+        'empieza' => '09:10', 'termina' => '09:44',
+        'invitados' => ['Marisa'],
+        'resumen' => 'Preparación del arranque de cubiertas: acopios y seguridad. '
+            . '(Acta de prueba.)',
+        'firmada' => true,
+        'tareas' => [
+            ['Revisar las líneas de vida de cubierta (prueba)', true],
+            ['Cerrar el calendario de hormigonados (prueba)', true],
+        ],
+    ],
 ];
 
 $hay = $pdo->prepare("SELECT id FROM reuniones WHERE promo_id = 'brassie' AND fecha = ? AND borrada = 0 LIMIT 1");
