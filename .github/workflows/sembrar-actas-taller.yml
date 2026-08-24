@@ -23,7 +23,9 @@ name: Sembrar actas de prueba en el taller
 on:
   push:
     branches: [claude/obra-en-taller]
-    paths: ['.github/workflows/sembrar-actas-taller.yml']
+    paths:
+      - '.github/workflows/sembrar-actas-taller.yml'
+      - '.github/scripts/sembrar-actas-prueba.php'
   workflow_dispatch: {}
 
 permissions:

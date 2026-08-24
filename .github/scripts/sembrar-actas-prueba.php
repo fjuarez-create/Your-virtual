@@ -101,7 +101,8 @@ $actas = [
     ],
 ];
 
-$hay = $pdo->prepare("SELECT COUNT(*) FROM reuniones WHERE promo_id = 'brassie' AND fecha = ? AND borrada = 0");
+$hay = $pdo->prepare("SELECT id FROM reuniones WHERE promo_id = 'brassie' AND fecha = ? AND borrada = 0 LIMIT 1");
+$cuantasTareas = $pdo->prepare('SELECT COUNT(*) FROM encargos WHERE reunion_id = ? AND borrada = 0');
 $reunion = $pdo->prepare(
     'INSERT INTO reuniones (id, promo_id, fecha, empezada, terminada, asistentes, invitados,
         resumen, acta_firmada, borrada, creado, actualizado, creado_por, creado_por_nombre)
@@ -116,8 +117,26 @@ $encargo = $pdo->prepare(
 
 foreach ($actas as $a) {
     $hay->execute([$a['fecha']]);
-    if ((int) $hay->fetchColumn() > 0) {
-        echo "· {$a['fecha']}: ya tenía reunión, se deja como está.\n";
+    $existente = $hay->fetchColumn();
+    if ($existente) {
+        // Un día con reunión propia no se pisa. La única cortesía es
+        // con la de HOY: si está vacía —sigue viva y Fran pidió verla
+        // con carne—, se le apuntan las dos tareas de prueba.
+        $esHoy = $a['fecha'] === $hoy->format('Y-m-d');
+        $cuantasTareas->execute([$existente]);
+        $n = (int) $cuantasTareas->fetchColumn();
+        if (!$esHoy || $n > 0) {
+            echo "· {$a['fecha']}: ya tenía reunión" . ($n ? " con {$n} tareas" : '') . ", se deja como está.\n";
+            continue;
+        }
+        $ahora = gmdate('Y-m-d\TH:i:s') . '.000Z';
+        foreach ($a['tareas'] as [$texto, $hecha]) {
+            $encargo->execute([$uuid(), $existente, $texto,
+                $hecha ? 'hecho' : 'pendiente',
+                $hecha ? $ahora : null, $hecha ? $nombreQuien : '',
+                $ahora, $ahora, $quien, $nombreQuien]);
+        }
+        echo "· {$a['fecha']}: la reunión ya existía y estaba sin tareas; se le apuntan las dos de prueba.\n";
         continue;
     }
     $empezada = $sello($a['fecha'], $a['empieza']);
