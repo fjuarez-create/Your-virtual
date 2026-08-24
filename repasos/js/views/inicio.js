@@ -86,7 +86,12 @@ function tarjetaUltimaReunion(r, hoy) {
   const cuando = !r.terminada && esDeHoy
     ? 'En marcha'
     : cuandoVilla(r.terminada || r.empezada);
-  return h(`button.d-tarjeta.tramo-${t.clase}`, { onclick: () => ir(`#/obra/r/${r.id}`) },
+  // El punto vivo va solo en la de hoy: terminada o no, hasta las
+  // 23:59 sigue abierta, y eso es justo lo que la luz cuenta. Es
+  // hermano del título, no hijo: dentro lo recortaría el overflow de
+  // los puntos suspensivos y el aura saldría rebanada.
+  return h(`button.d-tarjeta.tramo-${t.clase}${esDeHoy ? '.viva' : ''}`,
+    { onclick: () => ir(`#/obra/r/${r.id}`) },
     h('span.d-mordida'),
     h('span.d-mordida-esquina'),
     h('div.d-tarjeta-cab', null,
@@ -94,11 +99,8 @@ function tarjetaUltimaReunion(r, hoy) {
       h('span', null, cuando),
       h('span.d-tarjeta-caras', null, grupoAvatares(gente, { tam: 36, max: 3, solape: 12 })),
     ),
-    // El punto vivo va solo en la de hoy: terminada o no, hasta las
-    // 23:59 sigue abierta, y eso es justo lo que la luz cuenta.
-    h('div.d-tarjeta-titulo', null,
-      esDeHoy ? h('span.d-punto-vivo') : null,
-      'Reunión de obra'),
+    esDeHoy ? h('span.d-punto-vivo') : null,
+    h('div.d-tarjeta-titulo', null, 'Reunión de obra'),
     h('div.d-tarjeta-pie', null,
       // En minúscula, como el mismo chip de la pantalla de obra: la
       // misma reunión no puede decir la misma palabra con dos cajas.

@@ -1894,13 +1894,20 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
    con un aura que late. La eligió Fran entre seis propuestas y solo
    la lleva la tarjeta del día. El verde es más vivo que el verde
    bosque de la casa a propósito: esto es una luz, no una tinta. Con
-   «reducir movimiento» puesto en el móvil, el aura se queda quieta. */
+   «reducir movimiento» puesto en el móvil, el aura se queda quieta.
+
+   OJO: el punto NO puede vivir dentro de .d-tarjeta-titulo, que
+   recorta con overflow por los puntos suspensivos y le rebanaba el
+   aura por la izquierda. Va anclado a la tarjeta, que no recorta, y
+   el título se hace a un lado con la clase .viva. */
 .d-punto-vivo {
-  display: inline-block; width: 11px; height: 11px; border-radius: 999px;
-  background: #2ec96a; margin-right: 11px; vertical-align: 2px;
+  position: absolute; top: 71px; left: 16px;
+  width: 11px; height: 11px; border-radius: 999px;
+  background: #2ec96a;
   box-shadow: 0 0 0 4px rgba(46, 201, 106, 0.22);
   animation: d-latido 2s ease-out infinite;
 }
+.d-tarjeta.viva .d-tarjeta-titulo { left: 38px; }
 @keyframes d-latido {
   0% { box-shadow: 0 0 0 1px rgba(46, 201, 106, 0.4); }
   70% { box-shadow: 0 0 0 10px rgba(46, 201, 106, 0); }
