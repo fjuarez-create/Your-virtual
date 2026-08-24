@@ -159,7 +159,7 @@ export async function render({ reunionId }) {
       // 30 días se cuenta en la página de privacidad, no aquí.
       contenido.push(h('div.d-grab-quieta', null,
         h('div.grow', null,
-          h('div.d-grab-quieta-titulo', null, grabaciones.length ? 'Grabar otro rato' : 'Sin grabar todavía'),
+          h('div.d-grab-quieta-titulo', null, grabaciones.length ? 'Nueva grabación' : 'Sin grabar todavía'),
           h('div.d-grab-quieta-sub', null, 'Se transcribirá automáticamente al parar.'),
         ),
         h('button.d-grab-quieta-boton', {
