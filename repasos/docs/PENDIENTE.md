@@ -46,12 +46,12 @@ formulario.
 
 ## Bordes conocidos del conducto de audio (agosto 2026)
 
-- **Si el conducto cruza las 23:59**, el acta de ese día ya está
-  sellada y la propuesta no se puede escribir: la transcripción queda
-  guardada, pero las tareas hay que apuntarlas a mano en la reunión
-  siguiente. La fila lo dice con su motivo. Si llegara a molestar, se
-  puede dar una prórroga de cortesía al sello para actas que ya
-  estaban en el horno.
+- **Prórroga de cortesía (aceptada por Fran, agosto 2026)**: si la
+  transcripción estaba en el horno al cruzar la medianoche, redactar y
+  firmar el acta de AYER vale hasta las 00:45, siempre que la reunión
+  tenga grabación. Todo lo demás del acta se sella a las 23:59 en
+  seco, como siempre. Pasadas las 00:45, la transcripción queda y las
+  tareas se apuntan a mano.
 - **Reintentar** repite la parte que falló. Si el fallo llegó DESPUÉS
   de que OpenAI hiciera su trabajo (un corte al recibir la respuesta),
   esa parte se paga dos veces. Es raro y barato; arreglarlo del todo
