@@ -1,0 +1,250 @@
+name: Sembrar actas de prueba en el taller
+
+# Añade al banco del taller tres actas de prueba (la de hoy, una de
+# hace 5 días y una de hace 16 meses), pedidas por Fran para ver la
+# portada y el archivo con carne dentro. AÑADE, no borra: los días que
+# ya tengan reunión se dejan tal cual, y el resto del banco (repasos,
+# grabaciones, claves) no se toca.
+#
+# Cómo lo hace: se baja el banco SQLite por FTP, lo consolida (el
+# banco corre en diario WAL: si hubiera un diario suelto, se baja y se
+# funde antes de tocar nada), siembra con el guion de al lado, y lo
+# vuelve a subir retirando cualquier diario viejo del servidor. El
+# minuto que dura la subida es el único momento delicado: algo escrito
+# en el taller justo en ese instante se perdería, así que este robot
+# se lanza a mano y a horas tranquilas.
+#
+# Secretos: los REPASOS_FTP_* de siempre, y REVISION_EMAIL/PASSWORD
+# para comprobar por HTTP que las tres actas han llegado.
+
+# Corre al llegar (o cambiar) este fichero a la rama del taller, y
+# también lanzado a mano. Como sembrar dos veces no duplica nada,
+# repetirse es inofensivo.
+on:
+  push:
+    branches: [claude/obra-en-taller]
+    paths: ['.github/workflows/sembrar-actas-taller.yml']
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+# El mismo carril que el robot de publicar: si hay un despliegue en
+# marcha, este espera su turno en vez de pisarle el banco.
+concurrency:
+  group: hosting-taller
+  cancel-in-progress: false
+
+jobs:
+  sembrar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DOMINIO: https://repasos.unikdi.com
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Comprobar que están los secretos
+        env:
+          SERVER: ${{ secrets.REPASOS_FTP_SERVER }}
+          USERNAME: ${{ secrets.REPASOS_FTP_USERNAME }}
+          PASSWORD: ${{ secrets.REPASOS_FTP_PASSWORD }}
+          ENTRADA_EMAIL: ${{ secrets.REVISION_EMAIL }}
+          ENTRADA_PASSWORD: ${{ secrets.REVISION_PASSWORD }}
+        run: |
+          set -eu
+          falta=""
+          [ -n "$SERVER" ]           || falta="$falta REPASOS_FTP_SERVER"
+          [ -n "$USERNAME" ]         || falta="$falta REPASOS_FTP_USERNAME"
+          [ -n "$PASSWORD" ]         || falta="$falta REPASOS_FTP_PASSWORD"
+          [ -n "$ENTRADA_EMAIL" ]    || falta="$falta REVISION_EMAIL"
+          [ -n "$ENTRADA_PASSWORD" ] || falta="$falta REVISION_PASSWORD"
+          if [ -n "$falta" ]; then
+            echo "Faltan secretos:$falta" >&2
+            exit 1
+          fi
+          echo "Los cinco secretos están puestos."
+
+      - name: Instalar lftp
+        timeout-minutes: 6
+        run: |
+          set -eu
+          if command -v lftp > /dev/null; then
+            echo "lftp ya está en la imagen: $(lftp --version | head -1)"
+            exit 0
+          fi
+          if timeout 120 sudo apt-get install -y -qq lftp; then exit 0; fi
+          for intento in 1 2 3; do
+            if timeout 120 sudo apt-get update -qq \
+               && timeout 120 sudo apt-get install -y -qq lftp; then exit 0; fi
+            sleep $((intento * 10))
+          done
+          echo "No se ha podido instalar lftp tras tres intentos." >&2
+          exit 1
+
+      # Las mismas mañas FTP que el robot de publicar el taller.
+      - name: Preparar el camino al servidor
+        env:
+          FTP_SERVER: ${{ secrets.REPASOS_FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.REPASOS_FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.REPASOS_FTP_PASSWORD }}
+          FTP_SERVER_DIR: ${{ secrets.REPASOS_FTP_SERVER_DIR }}
+        run: |
+          set -eu
+          cat > "$RUNNER_TEMP/ftp.sh" <<'FTPSH'
+          SETTINGS='
+            set ssl:verify-certificate no;
+            set ftp:passive-mode true;
+            set net:timeout 20;
+            set net:max-retries 3;
+            set net:reconnect-interval-base 4;
+            set net:reconnect-interval-multiplier 2;
+            set xfer:clobber on;
+            set cmd:fail-exit true;
+          '
+          TLS="$SETTINGS set ftp:ssl-allow true; set ftp:ssl-force true; set ftp:ssl-protect-data false;"
+          PLAIN="$SETTINGS set ftp:ssl-allow false;"
+
+          run_lftp() {
+            printf '%s\nopen -u "%s","%s" "%s"\n%s\nbye\n' \
+              "$1" "$FTP_USERNAME" "$FTP_PASSWORD" "$FTP_SERVER" "$2" | lftp
+          }
+
+          elegir_camino() {
+            if run_lftp "$TLS" "pwd" >/dev/null 2>&1; then
+              echo tls > "$RUNNER_TEMP/ftp-modo"
+            else
+              echo "El servidor no aceptó FTPS; se usa FTP plano."
+              echo plain > "$RUNNER_TEMP/ftp-modo"
+            fi
+          }
+
+          cargar_camino() {
+            case "$(cat "$RUNNER_TEMP/ftp-modo" 2>/dev/null || echo tls)" in
+              plain) OPTS="$PLAIN" ;;
+              *)     OPTS="$TLS" ;;
+            esac
+            DIR="$(cat "$RUNNER_TEMP/ftp-dir" 2>/dev/null || echo .)"
+          }
+
+          buscar_carpeta() {
+            DIR="${FTP_SERVER_DIR:-}"
+            case "$DIR" in "" | "." | "./") DIR="" ;; esac
+            if [ -z "$DIR" ]; then
+              if run_lftp "$OPTS" "cls -1" 2>/dev/null | tr -d '\r/' | grep -qx httpdocs; then
+                DIR=httpdocs
+              else
+                DIR=.
+              fi
+            fi
+            echo "$DIR" > "$RUNNER_TEMP/ftp-dir"
+            echo "Carpeta del dominio: $DIR"
+          }
+          FTPSH
+          . "$RUNNER_TEMP/ftp.sh"
+          elegir_camino
+          cargar_camino
+          buscar_carpeta
+
+      - name: Bajar el banco del taller y consolidarlo
+        env:
+          FTP_SERVER: ${{ secrets.REPASOS_FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.REPASOS_FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.REPASOS_FTP_PASSWORD }}
+        run: |
+          set -eu
+          . "$RUNNER_TEMP/ftp.sh"
+          cargar_camino
+
+          run_lftp "$OPTS" "cd \"$DIR\"; get taller/api/datos/repasos.sqlite -o \"$PWD/banco.sqlite\""
+          test -s banco.sqlite || { echo "El banco bajado está vacío." >&2; exit 1; }
+
+          # El diario WAL, si el servidor lo tuviera suelto: se baja y
+          # se funde en el fichero principal antes de tocar nada, que
+          # sembrar sobre un banco a medias perdería lo del diario.
+          if run_lftp "$OPTS" "cd \"$DIR\"; get taller/api/datos/repasos.sqlite-wal -o \"$PWD/banco.sqlite-wal\"" 2>/dev/null; then
+            echo "Había diario WAL ($(stat -c%s banco.sqlite-wal) bytes): se funde."
+          else
+            echo "No había diario WAL suelto."
+            rm -f banco.sqlite-wal
+          fi
+          php -r '
+            $p = new PDO("sqlite:banco.sqlite");
+            $p->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+            $p->exec("PRAGMA wal_checkpoint(TRUNCATE)");
+            $ok = $p->query("PRAGMA integrity_check")->fetchColumn();
+            if ($ok !== "ok") { fwrite(STDERR, "Integridad: {$ok}\n"); exit(1); }
+            $n = (int) $p->query("SELECT COUNT(*) FROM usuarios")->fetchColumn();
+            if ($n === 0) { fwrite(STDERR, "El banco bajado no tiene usuarios: mala señal.\n"); exit(1); }
+            echo "Banco íntegro, con {$n} cuentas.\n";
+          '
+
+      - name: Sembrar las tres actas
+        run: |
+          set -eu
+          php .github/scripts/sembrar-actas-prueba.php banco.sqlite
+          # Que no quede diario local a medias antes de subir.
+          php -r '
+            $p = new PDO("sqlite:banco.sqlite");
+            $p->exec("PRAGMA wal_checkpoint(TRUNCATE)");
+          '
+          if [ -s banco.sqlite-wal ]; then
+            echo "El diario local no quedó fundido." >&2
+            exit 1
+          fi
+
+      - name: Subir el banco sembrado
+        env:
+          FTP_SERVER: ${{ secrets.REPASOS_FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.REPASOS_FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.REPASOS_FTP_PASSWORD }}
+        run: |
+          set -eu
+          . "$RUNNER_TEMP/ftp.sh"
+          cargar_camino
+
+          run_lftp "$OPTS" "cd \"$DIR\"; put \"$PWD/banco.sqlite\" -o taller/api/datos/repasos.sqlite"
+          # Un diario viejo junto al banco nuevo sería una mezcla de dos
+          # épocas: fuera con él (y con su memoria compartida).
+          run_lftp "$OPTS" "cd \"$DIR\"; rm taller/api/datos/repasos.sqlite-wal" 2>/dev/null \
+            && echo "Diario WAL viejo retirado." || echo "No había diario WAL que retirar."
+          run_lftp "$OPTS" "cd \"$DIR\"; rm taller/api/datos/repasos.sqlite-shm" 2>/dev/null \
+            && echo "Memoria compartida vieja retirada." || echo "No había memoria compartida que retirar."
+
+      - name: Comprobar por la puerta de la app que las actas están
+        timeout-minutes: 4
+        env:
+          ENTRADA_EMAIL: ${{ secrets.REVISION_EMAIL }}
+          ENTRADA_PASSWORD: ${{ secrets.REVISION_PASSWORD }}
+        run: |
+          set -eu
+          HOY="$(php -r 'echo (new DateTimeImmutable("now", new DateTimeZone("Europe/Madrid")))->format("Y-m-d");')"
+          HACE5="$(php -r 'echo (new DateTimeImmutable("now", new DateTimeZone("Europe/Madrid")))->modify("-5 days")->format("Y-m-d");')"
+          HACE16M="$(php -r 'echo (new DateTimeImmutable("now", new DateTimeZone("Europe/Madrid")))->modify("-16 months")->format("Y-m-d");')"
+
+          CUERPO="$(python3 -c 'import json,os; print(json.dumps({"email": os.environ["ENTRADA_EMAIL"], "password": os.environ["ENTRADA_PASSWORD"]}))')"
+          printf '%s' "$CUERPO" | curl -fsS --max-time 25 -X POST \
+            -H 'Content-Type: application/json' --data-binary @- \
+            -c galletas.txt -o /dev/null \
+            "$DOMINIO/taller/api/auth/login"
+
+          curl -fsS --max-time 25 -b galletas.txt \
+            "$DOMINIO/taller/api/obra/reuniones?promo=brassie" -o reuniones.json
+
+          for FECHA in "$HOY" "$HACE5" "$HACE16M"; do
+            jq -e --arg f "$FECHA" '.reuniones | map(.fecha) | index($f) != null' reuniones.json > /dev/null \
+              || { echo "::error::Falta la reunión del $FECHA en el taller." >&2; exit 1; }
+            echo "La reunión del $FECHA está en el taller."
+          done
+          rm -f galletas.txt reuniones.json
+
+      - name: Contarlo en el resumen
+        run: |
+          {
+            echo "## Las tres actas de prueba están en el taller"
+            echo ""
+            echo "- La de hoy (terminada, sin firmar: sigue viva hasta las 23:59)."
+            echo "- La de hace 5 días, firmada, con una tarea aún pendiente (se ve el arrastre)."
+            echo "- La de hace 16 meses, firmada y con todo hecho (se ve el año en la fecha)."
+            echo "- Nada más se ha tocado: los días con reunión propia se dejan como estaban."
+          } >> "$GITHUB_STEP_SUMMARY"
