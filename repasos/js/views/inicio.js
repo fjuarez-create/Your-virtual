@@ -79,10 +79,11 @@ function tarjetaUltimaReunion(r, hoy) {
   const pct = r.encargos ? Math.round((100 * hechas) / r.encargos) : 0;
   const t = tramoAvance(pct);
   const chipPct = pct === 100 && r.encargos ? 'macizo' : t.clase;
+  const esDeHoy = r.fecha === hoy;
   // El cuándo, con el reloj de las villas; mientras la mesa sigue
   // sentada no hay hora de cierre que dar, y se dice —a secas: con la
   // hora al lado no cabía junto a las caras en un móvil estrecho.
-  const cuando = !r.terminada && r.fecha === hoy
+  const cuando = !r.terminada && esDeHoy
     ? 'En marcha'
     : cuandoVilla(r.terminada || r.empezada);
   return h(`button.d-tarjeta.tramo-${t.clase}`, { onclick: () => ir(`#/obra/r/${r.id}`) },
@@ -93,7 +94,11 @@ function tarjetaUltimaReunion(r, hoy) {
       h('span', null, cuando),
       h('span.d-tarjeta-caras', null, grupoAvatares(gente, { tam: 36, max: 3, solape: 12 })),
     ),
-    h('div.d-tarjeta-titulo', null, 'Reunión de obra'),
+    // El punto vivo va solo en la de hoy: terminada o no, hasta las
+    // 23:59 sigue abierta, y eso es justo lo que la luz cuenta.
+    h('div.d-tarjeta-titulo', null,
+      esDeHoy ? h('span.d-punto-vivo') : null,
+      'Reunión de obra'),
     h('div.d-tarjeta-pie', null,
       // En minúscula, como el mismo chip de la pantalla de obra: la
       // misma reunión no puede decir la misma palabra con dos cajas.
