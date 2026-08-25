@@ -142,9 +142,11 @@ function oido_forma(string $ruta, string $mime): array
  * Manda la grabación a transcribir y devuelve lo que se dijo.
  *
  * `$ruta` es el fichero temporal de la subida; `$mime` lo que declaró el
- * móvil al grabarlo.
+ * móvil al grabarlo. Con `$exigir_voz` en false, el silencio no es un
+ * error sino un texto vacío: una parte callada de una reunión larga es
+ * una obra callada, no un fallo.
  */
-function oido_transcribir(string $ruta, string $mime): array
+function oido_transcribir(string $ruta, string $mime, bool $exigir_voz = true): array
 {
     $clave = oido_clave();
     if ($clave === '') {
@@ -193,7 +195,7 @@ function oido_transcribir(string $ruta, string $mime): array
     }
 
     $texto = trim((string) ($json['text'] ?? ''));
-    if ($texto === '') {
+    if ($texto === '' && $exigir_voz) {
         responder_error(422, 'No se ha entendido nada en la grabación. Escribe tú lo que dijiste.', 'sin-voz');
     }
 
@@ -224,4 +226,105 @@ function oido_por_que_no_sale(int $errno, string $detalle): string
         return 'El servidor no puede salir a internet: el cortafuegos del hosting bloquea la salida.';
     }
     return 'No se ha podido llamar a OpenAI' . ($detalle !== '' ? " ({$detalle})" : '.');
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   El oído de las reuniones: transcribir SEPARANDO VOCES
+   ═══════════════════════════════════════════════════════════════
+   Para los recorridos basta el texto; en una reunión importa además
+   QUIÉN dijo cada cosa. El modelo hermano `gpt-4o-transcribe-diarize`
+   devuelve los segmentos con hablante anónimo (A, B, C…) y sus tiempos
+   — con la misma clave de OpenAI de siempre.
+
+   Quién es A y quién es B no lo sabe OpenAI: eso lo pone la capa de
+   voces (las huellas de pyannote, o Fran a mano en la pantalla de
+   «¿quién es quién?»). Aquí solo se separa.
+
+   Si la API rechazara el modelo o el formato (cambian de nombre a
+   veces), se cae solo al oído plano de siempre: la reunión queda
+   transcrita aunque sea sin voces, que siempre es mejor que un error. */
+
+const OIDO_MODELO_REUNION = 'gpt-4o-transcribe-diarize';
+
+/**
+ * Transcribe separando hablantes. Devuelve:
+ *   ['texto' => string, 'dicho' => [[h, texto, ini, fin], …], 'diarizado' => bool]
+ * Con `dicho` vacío y diarizado=false si hubo que caer al oído plano.
+ */
+function oido_transcribir_reunion(string $ruta, string $mime): array
+{
+    $clave = oido_clave();
+    if ($clave === '') {
+        responder_error(400, 'No hay clave de OpenAI puesta. Ponla en Ajustes → Servidor.', 'sin-clave');
+    }
+    if (!function_exists('curl_init')) {
+        responder_error(500, 'Este servidor no tiene cURL y no puede llamar a la API.', 'php-curl');
+    }
+    @set_time_limit(OIDO_MARGEN_PHP);
+
+    $forma = [
+        'file' => new CURLFile($ruta, $mime ?: 'application/octet-stream', oido_nombre($mime)),
+        'model' => OIDO_MODELO_REUNION,
+        'language' => OIDO_IDIOMA,
+        'prompt' => 'Reunión de obra de una promoción de viviendas en España. ' . oido_vocabulario(),
+        'response_format' => 'diarized_json',
+    ];
+
+    $ch = curl_init('https://api.openai.com/v1/audio/transcriptions');
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $clave],
+        CURLOPT_POSTFIELDS => $forma,
+        CURLOPT_TIMEOUT => 240,
+        CURLOPT_CONNECTTIMEOUT => 15,
+    ]);
+    $salida = curl_exec($ch);
+    $estado = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $fallo = curl_errno($ch);
+    $detalle = curl_error($ch);
+    curl_close($ch);
+
+    if ($fallo) {
+        responder_error(502, oido_por_que_no_sale($fallo, $detalle), 'sin-salida');
+    }
+    if ($estado === 401) {
+        responder_error(401, 'La clave de OpenAI no es válida. Vuelve a ponerla en Ajustes.', 'clave-mala');
+    }
+    if ($estado === 429) {
+        responder_error(429, 'La cuenta de OpenAI se ha quedado sin crédito o sin cupo.', 'sin-cupo');
+    }
+
+    $json = json_decode((string) $salida, true);
+
+    // Un 400 aquí suele ser que el modelo o el formato han cambiado de
+    // nombre: se transcribe con el oído plano y se anota, sin romper.
+    if ($estado >= 400) {
+        error_log('UNIK repasos · el oído diarizado no entró (' . $estado . '): '
+            . substr((string) ($json['error']['message'] ?? ''), 0, 200) . ' — se cae al plano');
+        $plano = oido_transcribir($ruta, $mime, false);
+        return ['texto' => $plano['texto'], 'dicho' => [], 'diarizado' => false];
+    }
+
+    // La respuesta diarizada: segments[] con speaker, text, start, end.
+    $dicho = [];
+    $texto = '';
+    foreach ((array) ($json['segments'] ?? []) as $s) {
+        $frase = trim((string) ($s['text'] ?? ''));
+        if ($frase === '') {
+            continue;
+        }
+        $dicho[] = [
+            'h' => (string) ($s['speaker'] ?? '?'),
+            'texto' => $frase,
+            'ini' => round((float) ($s['start'] ?? 0), 2),
+            'fin' => round((float) ($s['end'] ?? 0), 2),
+        ];
+        $texto .= ($texto === '' ? '' : ' ') . $frase;
+    }
+    if ($texto === '') {
+        $texto = trim((string) ($json['text'] ?? ''));
+    }
+
+    return ['texto' => $texto, 'dicho' => $dicho, 'diarizado' => count($dicho) > 0];
 }

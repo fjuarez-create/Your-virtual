@@ -10,6 +10,7 @@ import * as store from './store.js';
 import * as api from './api.js';
 import { borrarBase } from './db.js';
 import { hayFotosSinMandar } from './pendientes.js';
+import { hayGrabacionEnMarcha } from './grabadora.js';
 import { fijarPlantas } from './catalog.js';
 
 /* ─── Rutas ───────────────────────────────────────────────────── */
@@ -35,6 +36,8 @@ const RUTAS = [
   { patron: /^\/ajustes$/,                    vista: () => import('./views/ajustes.js'),      params: () => ({}) },
   { patron: /^\/usuarios$/,                   vista: () => import('./views/usuarios.js'),     params: () => ({}) },
   { patron: /^\/estancias$/,                  vista: () => import('./views/estancias.js'),    params: () => ({}) },
+  { patron: /^\/obra$/,                       vista: () => import('./views/obra.js'),         params: () => ({}) },
+  { patron: /^\/obra\/r\/([^/]+)$/,           vista: () => import('./views/reunion.js'),      params: (m) => ({ reunionId: m[1] }) },
 ];
 
 /**
@@ -177,10 +180,14 @@ function pintar({ contenido, tab, fab, sinTabs, clase, alSalir = null }) {
   // Se conservan los nodos flotantes (aviso, hoja, visor) entre pantallas.
   // La cápsula también, si seguimos en una sección con botonera: así la
   // bolita se desliza hasta la nueva en vez de reaparecer de cero.
+  //
+  // OJO: el aviso se llama `.aviso` (con `.toast`, su nombre de antes
+  // del rediseño, aquí se barría recién nacido: todo aviso seguido de
+  // un repintado moría al primer cuadro).
   const barraViva = sinTabs ? null : app.querySelector('.tabbar');
   [...app.children].forEach((n) => {
     if (n === barraViva) return;
-    if (!n.matches('.toast, .veil, .sheet, .viewer')) n.remove();
+    if (!n.matches('.aviso, .veil, .sheet, .viewer')) n.remove();
   });
   app.prepend(screen);
   if (fab) screen.after(fab);
@@ -344,6 +351,10 @@ export function refrescar() {
 
 /* ─── Arranque ────────────────────────────────────────────────── */
 async function arrancar() {
+  // El sello del taller: si la app corre en /taller se dice bien claro,
+  // con un rótulo flotante. Nadie debe poder confundir el banco de
+  // pruebas con la obra real, ni un segundo.
+  if (location.pathname.startsWith('/taller')) document.body.classList.add('es-taller');
   await store.cargarSesion();
   // El directorio del equipo antes de pintar: si no, la primera
   // pantalla saldría con iniciales y las caras aparecerían al
@@ -369,7 +380,7 @@ async function arrancar() {
   window.addEventListener('purga-sin-foto', (e) => {
     const n = e.detail?.borradas || 0;
     if (n) {
-      toast(`${n} ${n === 1 ? 'tarea sin fotografía borrada' : 'tareas sin fotografía borradas'} para siempre`,
+      toast(`${n} ${n === 1 ? 'repaso sin fotografía borrado' : 'repasos sin fotografía borrados'} para siempre`,
         '', { icono: 'trash' });
     }
   });
@@ -604,6 +615,9 @@ export async function versionEsperando() {
 /** ¿Hay algo empezado que una recarga se llevaría por delante? */
 function hayAlgoAMedias() {
   if (hayFotosSinMandar()) return true;
+  // Grabando una reunión: una recarga aquí se lleva el audio que
+  // todavía no ha subido, y una reunión no se repite.
+  if (hayGrabacionEnMarcha()) return true;
   if (document.querySelector('.sheet, .viewer.on, .informe, .pantalla-recorrido, .d-visor, .d-menu-velo, .d-velo, .d-hoja-acciones')) return true;
   if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return true;
   if (location.hash.includes('/recorrido')) return true;

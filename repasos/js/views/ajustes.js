@@ -9,6 +9,7 @@ import {
   ctaAccion, ctaCancelar, abrirPagina,
 } from '../piezas.js';
 import * as ejemplos from '../ejemplos.js';
+import { mimeSoportado } from '../media.js';
 import { PROMOCIONES } from '../catalog.js';
 import {
   usaIA, ponerUsaIA, juntaFotos, ponerJuntaFotos,
@@ -28,9 +29,24 @@ export async function render() {
   // qué falta en vez de desaparecer sin explicación.
   let claude = null;
   let oido = null;
+  let voces = null;
+  let obra = null;
   if (admin && api.HAY_SERVIDOR && !u.local) {
     try { claude = await api.claudeEstado(); } catch { claude = { puesta: false, final: '' }; }
     try { oido = await api.oidoEstado(); } catch { oido = { puesta: false, final: '' }; }
+    try { voces = await api.vocesEstado(); } catch { voces = { puesta: false, final: '' }; }
+    try { obra = (await api.ajustesObra()).ajustes; } catch { obra = null; }
+  }
+
+  // La voz propia, para la fila del entrenador: si ya está aprendida,
+  // se dice ahí mismo sin tener que entrar a mirar.
+  const promoActiva = PROMOCIONES.find((x) => x.activa) || null;
+  let vozMia = null;
+  if (api.HAY_SERVIDOR && !u.local && promoActiva) {
+    try {
+      const rv = await api.listarVoces(promoActiva.id);
+      vozMia = rv.voces.find((v) => v.personaId === u.id) || null;
+    } catch { /* sin respuesta, la fila sale con su texto de estreno */ }
   }
 
   /** Una fila de tarjeta: icono, rótulo, detalle y lo que haya a la derecha. */
@@ -98,6 +114,8 @@ export async function render() {
             if (await hojaFoto(u)) { await store.refrescarSesion(); refrescar(); }
           }) : null,
         api.HAY_SERVIDOR && !u.local ? item('key', 'Cambiar mi contraseña', null, () => cambiarPassword()) : null,
+        api.HAY_SERVIDOR && !u.local && promoActiva ? item('mic', 'Entrenar mi voz',
+          subEntrenador(vozMia), () => hojaEntrenarVoz(u, promoActiva.id)) : null,
         admin && api.HAY_SERVIDOR && !u.local
           ? item('users', 'Usuarios', 'Alta y baja del equipo', () => ir('#/usuarios'))
           : null,
@@ -112,12 +130,12 @@ export async function render() {
       h('div.d-grupo', null,
         h('p.d-grupo-titulo', null, 'Preferencias'),
         api.HAY_SERVIDOR ? item('edit', 'Que la IA proponga el texto',
-          'Al crear una tarea desde una foto o la galería', null, { derecha: casillaIA }) : null,
+          'Al crear un repaso desde una foto o la galería', null, { derecha: casillaIA }) : null,
         // En un recorrido es normal sacar dos fotos de lo mismo: una de
         // lejos para situarlo y otra de cerca. Encendido, eso es una
         // tarea con dos fotos; apagado, dos tareas.
         api.HAY_SERVIDOR ? item('image', 'Juntar las fotos de un mismo repaso',
-          'En un recorrido, varias fotos de la misma cosa salen como una sola tarea',
+          'En un recorrido, varias fotos de la misma cosa salen como un solo repaso',
           null, { derecha: casillaJuntar }) : null,
         // Cómo sale partida la hoja que se imprime o se manda por
         // WhatsApp. El detalle dice lo que hay puesto ahora mismo.
@@ -155,13 +173,24 @@ export async function render() {
         h('p.d-grupo-titulo', null, 'Datos de ejemplo'),
         item('edit', 'Arreglar los textos de prueba',
           'Cambia lo escrito a lo loco por repasos de verdad', () => arreglarPruebas()),
-        item('trash', 'Borrar las tareas sin fotografía',
-          'Para siempre: una tarea sin foto no existe', () => borrarSinFoto()),
-        item('users', 'Crear actas de ejemplo',
-          'Tres actas firmadas por el equipo, para ver cómo queda', () => montarEjemplos()),
-        hayEjemplos ? item('trash', 'Quitar las actas de ejemplo',
-          `${hayEjemplos} ${hayEjemplos === 1 ? 'acta puesta' : 'actas puestas'}`,
+        item('trash', 'Borrar los repasos sin fotografía',
+          'Para siempre: un repaso sin foto no existe', () => borrarSinFoto()),
+        item('users', 'Crear partes de ejemplo',
+          'Tres partes firmados por el equipo, para ver cómo queda', () => montarEjemplos()),
+        hayEjemplos ? item('trash', 'Quitar los partes de ejemplo',
+          `${hayEjemplos} ${hayEjemplos === 1 ? 'parte puesto' : 'partes puestos'}`,
           () => quitarEjemplos()) : null,
+      ) : null,
+
+      // Quién escucha y quién borra los audios de las reuniones: lo
+      // decide el administrador para toda la obra, y el servidor es
+      // quien lo hace cumplir en cada petición.
+      admin && api.HAY_SERVIDOR && !u.local && obra ? h('div.d-grupo', null,
+        h('p.d-grupo-titulo', null, 'Reuniones de obra'),
+        item('play', 'Quién puede escuchar los audios',
+          ROTULO_ESCUCHA[obra.escuchaAudios], () => elegirEscucha(obra)),
+        item('trash', 'Quién puede borrar los audios',
+          ROTULO_BORRA[obra.borraAudios], () => elegirBorra(obra)),
       ) : null,
 
       admin && api.HAY_SERVIDOR && !u.local ? h('div.d-grupo', null,
@@ -174,6 +203,9 @@ export async function render() {
         item('mic', 'Clave de OpenAI',
           oido?.puesta ? `Puesta · termina en ${oido.final}` : 'Sin poner · lo que digas no se transcribe',
           () => hojaClaveOido(oido)),
+        item('users', 'Clave de pyannote (huellas de voz)',
+          voces?.puesta ? `Puesta · termina en ${voces.final}` : 'Sin poner · las voces se asignan a mano cada día',
+          () => hojaClaveVoces(voces)),
       ) : null,
 
       h('div.d-grupo', null,
@@ -307,7 +339,7 @@ function hojaClave(estado) {
     return [
       h('h2.title', null, 'Clave de Anthropic'),
       h('p.sub', { style: { marginTop: '6px' } },
-        'Con ella, al terminar un recorrido las tareas salen escritas a partir '
+        'Con ella, al terminar un recorrido los repasos salen escritos a partir '
         + 'de lo que dijiste, y tú solo repasas. Se guarda en el servidor y no '
         + 'vuelve a salir de ahí.'),
       estado?.puesta
@@ -379,7 +411,7 @@ function hojaClaveOido(estado) {
       h('h2.title', null, 'Clave de OpenAI'),
       h('p.sub', { style: { marginTop: '6px' } },
         'Es la que pasa a texto lo que vas diciendo durante el recorrido, para '
-        + 'que las tareas salgan de tus palabras y no solo de lo que se ve en '
+        + 'que los repasos salgan de tus palabras y no solo de lo que se ve en '
         + 'la foto. Se guarda en el servidor y no vuelve a salir de ahí.'),
       estado?.puesta
         ? h('p.hint', { style: { marginTop: '10px' } },
@@ -395,6 +427,77 @@ function hojaClaveOido(estado) {
             style: { marginTop: '8px' },
             onclick: async () => {
               await api.oidoQuitarClave();
+              cerrar(true);
+              toast('Clave retirada');
+              refrescar();
+            },
+          }, 'Quitar la clave del servidor')
+        : null,
+      ctaCancelar(() => cerrar(false)),
+    ];
+  });
+}
+
+/**
+ * La clave de pyannote: la memoria de las voces. Sin ella, la pantalla
+ * de «¿quién es quién?» funciona igual pero pregunta cada día; con
+ * ella, la app enrola cada voz asignada y en la reunión siguiente pone
+ * los nombres sola.
+ */
+function hojaClaveVoces(estado) {
+  return sheet((cerrar) => {
+    const campo = h('input.input', {
+      type: 'password', placeholder: 'Clave de api.pyannote.ai…',
+      autocomplete: 'off', autocapitalize: 'off', autocorrect: 'off', spellcheck: 'false',
+    });
+    const aviso = h('p.hint.err', { style: { display: 'none' } });
+    const guardar = ctaAccion('GUARDAR LA CLAVE', { icono: 'check' });
+
+    const fallo = (texto) => {
+      aviso.textContent = texto;
+      aviso.style.display = 'block';
+      guardar.disabled = false;
+      guardar.querySelector('.grow').textContent = 'GUARDAR LA CLAVE';
+    };
+
+    guardar.addEventListener('click', async () => {
+      aviso.style.display = 'none';
+      const clave = campo.value.trim();
+      if (!clave) return fallo('No has pegado nada.');
+      guardar.disabled = true;
+      guardar.querySelector('.grow').textContent = 'GUARDANDO…';
+      try {
+        await api.vocesPonerClave(clave);
+        cerrar(true);
+        toast('Clave guardada · la app irá aprendiendo las voces');
+        refrescar();
+      } catch (e) {
+        fallo(e?.message || 'No se ha podido guardar.');
+      }
+    });
+
+    return [
+      h('h2.title', null, 'Clave de pyannote'),
+      h('p.sub', { style: { marginTop: '6px' } },
+        'Es la memoria de las voces de la obra: con ella, cada voz que asignes '
+        + 'en un acta queda aprendida y en la reunión siguiente sale ya con su '
+        + 'nombre. La huella se guarda en NUESTRO servidor, no en el suyo. '
+        + 'La cuenta se hace en pyannote.ai (hay prueba gratuita de 30 días).'),
+      estado?.puesta
+        ? h('p.hint', { style: { marginTop: '10px' } },
+            `Ahora hay una puesta que termina en ${estado.final}. Si pegas otra, la sustituye.`)
+        : null,
+      h('div.stack', { style: { marginTop: '14px' } }, campo),
+      aviso,
+      h('p.hint', { style: { marginTop: '10px' } },
+        'Ojo: la voz es un dato personal. Avisa al equipo y apunta su conformidad '
+        + 'antes de enrolar a nadie; quitar a alguien es borrar su voz en Ajustes.'),
+      guardar,
+      estado?.puesta
+        ? h('button.btn.ghost.full', {
+            style: { marginTop: '8px' },
+            onclick: async () => {
+              await api.vocesQuitarClave();
               cerrar(true);
               toast('Clave retirada');
               refrescar();
@@ -452,6 +555,211 @@ function cambiarPassword() {
   });
 }
 
+/* ─── Los audios de las reuniones: quién escucha y quién borra ────
+   Decidido por Fran (agosto de 2026): por defecto los escuchan la DF
+   y el administrador, y los borra solo el administrador. Desde aquí
+   el administrador lo cambia para toda la obra; quien manda de verdad
+   es el servidor, en cada petición. */
+
+const ROTULO_ESCUCHA = {
+  admin: 'Solo el administrador',
+  df: 'La dirección facultativa y el administrador',
+  mesa: 'Todo el equipo',
+};
+const ROTULO_BORRA = {
+  admin: 'Solo el administrador',
+  escuchan: 'Los que pueden escucharlos',
+};
+
+async function elegirEscucha(obra) {
+  const elegido = await menuTarjeta('Quién puede escuchar los audios', [
+    { id: 'df', icono: obra.escuchaAudios === 'df' ? 'check' : 'users',
+      rotulo: ROTULO_ESCUCHA.df, sub: 'Lo de fábrica' },
+    { id: 'admin', icono: obra.escuchaAudios === 'admin' ? 'check' : 'user',
+      rotulo: ROTULO_ESCUCHA.admin, sub: 'Nadie más los oye' },
+    { id: 'mesa', icono: obra.escuchaAudios === 'mesa' ? 'check' : 'hilo',
+      rotulo: ROTULO_ESCUCHA.mesa, sub: 'Cualquiera con cuenta en la app' },
+  ]);
+  if (!elegido || elegido === obra.escuchaAudios) return;
+  try {
+    await api.guardarAjustesObra({ escuchaAudios: elegido });
+    toast('Los audios los escucha: ' + ROTULO_ESCUCHA[elegido].toLowerCase());
+    refrescar();
+  } catch (e) {
+    toast(e?.message || 'No se ha podido guardar', 'err');
+  }
+}
+
+async function elegirBorra(obra) {
+  const elegido = await menuTarjeta('Quién puede borrar los audios', [
+    { id: 'admin', icono: obra.borraAudios === 'admin' ? 'check' : 'user',
+      rotulo: ROTULO_BORRA.admin, sub: 'Lo de fábrica' },
+    { id: 'escuchan', icono: obra.borraAudios === 'escuchan' ? 'check' : 'users',
+      rotulo: ROTULO_BORRA.escuchan, sub: 'El mismo círculo que la escucha' },
+  ]);
+  if (!elegido || elegido === obra.borraAudios) return;
+  try {
+    await api.guardarAjustesObra({ borraAudios: elegido });
+    toast('Los audios los borra: ' + ROTULO_BORRA[elegido].toLowerCase());
+    refrescar();
+  } catch (e) {
+    toast(e?.message || 'No se ha podido guardar', 'err');
+  }
+}
+
+/* ─── El entrenador de voz ────────────────────────────────────────
+   Cada uno entrena la suya: lee en voz alta el texto de la pantalla
+   —cosas de obra, un minuto como tope— y ese clip queda como su
+   muestra. Con la clave de pyannote puesta, la huella se encarga en el
+   momento; sin ella, el clip espera y se enrola al activarlas. */
+
+const LECTURA_DE_OBRA = 'En la obra repasamos cada mañana la estructura: '
+  + 'pilares, forjados y vigas de hormigón. El aparejador revisa la cubierta '
+  + 'y la carpintería exterior mientras el arquitecto replantea la fachada. '
+  + 'Hoy llegan el vidrio del lucernario, la grúa pequeña y seis palés de '
+  + 'azulejo. Si la junta queda bien sellada, firmamos el acta y cerramos '
+  + 'la jornada sin repasos pendientes.';
+
+/** Lo que cuenta la fila del entrenador según cómo esté la voz. */
+function subEntrenador(voz) {
+  if (voz?.conHuella) return 'Aprendida · la app te pone el nombre sola';
+  if (voz?.enrolando) return 'Aprendiéndose · queda lista en unos minutos';
+  if (voz?.conClip) return 'Grabada · se aprenderá al activar las huellas';
+  return 'Lee un texto de un minuto y la app te reconocerá';
+}
+
+async function hojaEntrenarVoz(u, promoId) {
+  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+    return toast('Este navegador no graba audio: entra desde el móvil', 'err');
+  }
+  let stream = null;
+  let rec = null;
+  let trozos = [];
+  let t0 = 0;
+  let tick = null;
+  let resultado = null;
+
+  const salida = await sheet((cerrar) => {
+    const crono = h('div.display.mono-num', { style: { fontSize: '34px' } }, '0:00');
+    const pista = h('p.sub.center', null, 'Toca el micro y lee el texto en voz alta.');
+    const aviso = h('p.hint.err', { style: { display: 'none' } });
+    const hueco = h('div');   // aquí aparece la escucha al terminar
+    const bola = h('button.icon-btn.accent', {
+      style: { width: '72px', height: '72px', flex: '0 0 72px' },
+      'aria-label': 'Grabar',
+    }, icon('mic', 26));
+    const guardar = ctaAccion('GUARDAR MI VOZ', { icono: 'check' });
+    guardar.disabled = true;
+    let grabando = false;
+
+    const pintarCrono = () => {
+      const s = Math.floor((Date.now() - t0) / 1000);
+      crono.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    };
+
+    const parar = () => {
+      if (!grabando) return;
+      grabando = false;
+      clearInterval(tick);
+      try { rec.stop(); } catch { /* ya parado */ }
+      stream?.getTracks().forEach((t) => t.stop());
+      bola.style.display = 'none';
+    };
+
+    const empezar = async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch {
+        toast('No se pudo acceder al micrófono', 'err');
+        return;
+      }
+      const mime = mimeSoportado();
+      rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+      trozos = [];
+      rec.ondataavailable = (e) => { if (e.data.size) trozos.push(e.data); };
+      rec.onstop = () => {
+        const blob = new Blob(trozos, { type: rec.mimeType || mime || 'audio/webm' });
+        resultado = { blob, duracion: Math.round((Date.now() - t0) / 1000) };
+        guardar.disabled = false;
+        pista.textContent = 'Ya está. Escúchala si quieres, y guárdala.';
+        hueco.replaceChildren(h('audio', {
+          controls: true, src: URL.createObjectURL(blob), style: { width: '100%' },
+        }));
+      };
+      rec.start();
+      grabando = true;
+      t0 = Date.now();
+      tick = setInterval(() => {
+        pintarCrono();
+        // El tope que pidió Fran: un minuto como mucho. Con el texto
+        // de arriba sobra la mitad.
+        if (Date.now() - t0 > 60 * 1000) {
+          parar();
+          pista.textContent = 'Un minuto es el tope, y con eso llega de sobra.';
+        }
+      }, 200);
+      bola.replaceChildren(icon('stop', 24));
+      bola.className = 'icon-btn ink';
+      bola.style.width = bola.style.height = '72px';
+      pista.textContent = 'Grabando… lee con tu voz de siempre.';
+    };
+
+    bola.addEventListener('click', () => (grabando ? parar() : empezar()));
+
+    guardar.addEventListener('click', async () => {
+      if (!resultado) return;
+      // Menos de tres segundos no retratan una voz: casi seguro que
+      // fue un toque sin querer.
+      if (resultado.duracion < 3) {
+        aviso.textContent = 'Ha quedado demasiado corta: vuelve a abrir y lee el texto entero.';
+        aviso.style.display = 'block';
+        return;
+      }
+      guardar.disabled = true;
+      guardar.querySelector('.grow').textContent = 'GUARDANDO…';
+      try {
+        const rv = await api.crearVoz({ promoId, personaId: u.id, personaNombre: u.nombre });
+        const rs = await api.subirMuestraVoz(rv.voz.id, resultado.blob);
+        cerrar(true);
+        toast(rs.enrolando
+          ? 'Tu voz se está aprendiendo · queda lista en unos minutos'
+          : 'Tu voz queda grabada · se aprenderá al activar las huellas');
+        refrescar();
+      } catch (e) {
+        aviso.textContent = e?.message || 'No se ha podido guardar.';
+        aviso.style.display = 'block';
+        guardar.disabled = false;
+        guardar.querySelector('.grow').textContent = 'GUARDAR MI VOZ';
+      }
+    });
+
+    return [
+      h('h2.title', null, 'Entrenar mi voz'),
+      h('p.sub', { style: { marginTop: '6px' } },
+        'Lee el texto en voz alta, con el móvil cerca y sin ruido alrededor. '
+        + 'Con eso la app aprende tu voz y en las actas de reunión pone tu '
+        + 'nombre sola.'),
+      h('p.lectura-voz', null, LECTURA_DE_OBRA),
+      h('div.center', { style: { padding: '6px 0 0' } }, crono),
+      pista,
+      hueco,
+      h('div', { style: { display: 'flex', justifyContent: 'center', padding: '8px 0 2px' } }, bola),
+      aviso,
+      guardar,
+      h('p.hint', null,
+        'Tu voz es un dato personal: la huella se guarda en el servidor de '
+        + 'UNIK, no sale de ahí, y se borra si lo pides.'),
+      ctaCancelar(() => cerrar(false)),
+    ];
+  });
+
+  // Se cierre como se cierre la hoja —botón, velo o gesto—, ni el
+  // temporizador ni el micrófono pueden quedarse encendidos.
+  clearInterval(tick);
+  stream?.getTracks().forEach((t) => t.stop());
+  return salida;
+}
+
 async function vaciarCache() {
   const pendientes = await db.numPendientes();
   if (pendientes > 0) {
@@ -491,8 +799,8 @@ async function montarEjemplos() {
   if (!p) return toast('No hay ninguna promoción activa', 'err');
 
   const seguir = await confirmSheet({
-    title: '¿Crear actas de ejemplo?',
-    text: 'Se montan tres actas en viviendas que no tengan nada, firmadas por '
+    title: '¿Crear partes de ejemplo?',
+    text: 'Se montan tres partes en viviendas que no tengan nada, firmados por '
       + 'gente del equipo, para ver cómo queda la app con varias personas. '
       + 'Se llaman «Ejemplo · …» y se pueden quitar desde aquí mismo.',
     ok: 'Crear',
@@ -501,7 +809,7 @@ async function montarEjemplos() {
 
   try {
     const { actas, tareas } = await ejemplos.crear(p.id);
-    toast(`${actas} actas y ${tareas} tareas de ejemplo`);
+    toast(`${actas} partes y ${tareas} repasos de ejemplo`);
     refrescar();
   } catch (e) {
     toast(e.message || 'No se pudieron crear', 'err');
@@ -526,7 +834,7 @@ async function arreglarPruebas() {
   const marcadas = new Set(candidatos.map((c) => c.tarea.id));
   const contador = h('span');
   const pintarContador = () => {
-    contador.textContent = marcadas.size === 1 ? 'Arreglar 1 tarea' : `Arreglar ${marcadas.size} tareas`;
+    contador.textContent = marcadas.size === 1 ? 'Arreglar 1 repaso' : `Arreglar ${marcadas.size} repasos`;
   };
 
   const seguir = await sheet((cerrar) => {
@@ -537,7 +845,7 @@ async function arreglarPruebas() {
     return [
       h('h2.title', null, 'Textos de prueba'),
       h('p.sub', null,
-        `${candidatos.length} ${candidatos.length === 1 ? 'tarea parece' : 'tareas parecen'} `
+        `${candidatos.length} ${candidatos.length === 1 ? 'repaso parece' : 'repasos parecen'} `
         + 'escritas para probar. Cada una pasaría a ser un repaso de verdad, '
         + 'con su oficio y su estancia. Quita las que sí valgan.'),
       h('div.stack', { style: { marginTop: '14px', gap: '10px' } },
@@ -565,7 +873,7 @@ async function arreglarPruebas() {
   const elegidos = candidatos.filter((c) => marcadas.has(c.tarea.id));
   toast('Arreglando…');
   const { hechas, conFoto } = await ejemplos.arreglarTextos(elegidos);
-  toast(`${hechas} ${hechas === 1 ? 'tarea arreglada' : 'tareas arregladas'}`
+  toast(`${hechas} ${hechas === 1 ? 'repaso arreglado' : 'repasos arreglados'}`
     + (conFoto ? ` · ${conFoto} con foto` : ''));
   store.sincronizar({ forzar: true });
   refrescar();
@@ -586,7 +894,7 @@ async function borrarSinFoto() {
   if (!p) return toast('No hay ninguna promoción activa', 'err');
 
   const cojas = await ejemplos.tareasSinFotografia(p.id);
-  if (!cojas.length) return toast('Ninguna tarea está sin fotografía');
+  if (!cojas.length) return toast('Ningún repaso está sin fotografía');
 
   const marcadas = new Set(cojas.map((t) => t.id));
   const contador = h('span');
@@ -598,10 +906,10 @@ async function borrarSinFoto() {
     const boton = h('button.btn.danger.full', { onclick: () => cerrar(true) }, contador);
     pintarContador();
     return [
-      h('h2.title', null, 'Tareas sin fotografía'),
+      h('h2.title', null, 'Repasos sin fotografía'),
       h('p.sub', null,
-        `${cojas.length} ${cojas.length === 1 ? 'tarea no tiene' : 'tareas no tienen'} ninguna imagen. `
-        + 'Una tarea sin foto no existe: las marcadas se borran para siempre, '
+        `${cojas.length} ${cojas.length === 1 ? 'repaso no tiene' : 'repasos no tienen'} ninguna imagen. `
+        + 'Un repaso sin foto no existe: los marcados se borran para siempre, '
         + 'en todos los móviles. No se pueden recuperar.'),
       h('div.stack', { style: { marginTop: '14px', gap: '10px' } },
         cojas.map((t) => {
@@ -625,7 +933,7 @@ async function borrarSinFoto() {
   for (const t of cojas.filter((x) => marcadas.has(x.id))) {
     await store.borrarTarea(t.id);
   }
-  toast(`${marcadas.size} ${marcadas.size === 1 ? 'tarea borrada' : 'tareas borradas'} para siempre`, '', { icono: 'trash' });
+  toast(`${marcadas.size} ${marcadas.size === 1 ? 'repaso borrado' : 'repasos borrados'} para siempre`, '', { icono: 'trash' });
   store.sincronizar({ forzar: true });
   refrescar();
 }
@@ -653,13 +961,13 @@ async function ponerVersionNueva(registro) {
 
 async function quitarEjemplos() {
   const seguir = await confirmSheet({
-    title: '¿Quitar las actas de ejemplo?',
+    title: '¿Quitar los partes de ejemplo?',
     text: 'Solo se retiran las que empiezan por «Ejemplo · ». El repaso real no se toca.',
     ok: 'Quitar', danger: true,
   });
   if (!seguir) return;
   const n = await ejemplos.borrar();
-  toast(n ? `${n} ${n === 1 ? 'acta retirada' : 'actas retiradas'}` : 'No había ninguna');
+  toast(n ? `${n} ${n === 1 ? 'parte retirado' : 'partes retirados'}` : 'No había ninguna');
   refrescar();
 }
 

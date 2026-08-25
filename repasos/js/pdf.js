@@ -586,7 +586,7 @@ export function hojaDePuerta({ vivienda, promocion, fecha, autor, tareas, orden 
   // Pie con la numeración, ya sabiendo cuántas páginas hay.
   paginas.forEach((p, i) => {
     p.texto(MARGEN, MARGEN - 14,
-      `${tareas.length} ${tareas.length === 1 ? 'tarea' : 'tareas'}  ·  Página ${i + 1} de ${paginas.length}`,
+      `${tareas.length} ${tareas.length === 1 ? 'repaso' : 'repasos'}  ·  Página ${i + 1} de ${paginas.length}`,
       { tam: 8.5, gris: 0.55 });
   });
 
@@ -631,7 +631,7 @@ export function actaDelDia({ titulo, diaSemana, promocion, gente, conteo, villas
       pag.relleno(0, A4.alto - 168, A4.ancho, 168, COLOR.beige);
       let by = A4.alto - 52;
       pag.texto(MARGEN, by, 'UNIK WORKS', { tam: 8.5, negrita: true, color: COLOR.topo, espaciado: 2.2 });
-      pag.texto(A4.ancho - MARGEN - anchoTexto('ACTA DE OBRA', 8.5, true) - 24, by, 'ACTA DE OBRA',
+      pag.texto(A4.ancho - MARGEN - anchoTexto('PARTE DE REPASOS', 8.5, true) - 24, by, 'PARTE DE REPASOS',
         { tam: 8.5, negrita: true, color: COLOR.topo, espaciado: 2.2 });
       by -= 44;
       pag.texto(MARGEN, by, titulo, { tam: 30, negrita: true, color: COLOR.tinta });
@@ -639,7 +639,7 @@ export function actaDelDia({ titulo, diaSemana, promocion, gente, conteo, villas
       pag.texto(MARGEN, by, `${diaSemana} · ${promocion}`, { tam: 12.5, color: COLOR.topo });
       y = A4.alto - 168 - 34;
     } else {
-      pag.texto(MARGEN, A4.alto - 44, `Acta del ${titulo}`, { tam: 9, negrita: true, color: COLOR.topo, espaciado: 1.2 });
+      pag.texto(MARGEN, A4.alto - 44, `Parte del ${titulo}`, { tam: 9, negrita: true, color: COLOR.topo, espaciado: 1.2 });
       pag.linea(MARGEN, A4.alto - 54, A4.ancho - MARGEN, A4.alto - 54, 0.7, 0.85);
       y = A4.alto - 78;
     }
@@ -858,7 +858,7 @@ export function hojaDeReparto({
       pag.texto(A4.ancho - MARGEN - anchoTexto(promocion, 12.5, false, 'eiko'), y - 20, promocion,
         { tam: 12.5, fuente: 'eiko', color: COLOR.topo });
       y -= 42;
-      const resumen = `${tareas.length} ${tareas.length === 1 ? 'tarea pendiente' : 'tareas pendientes'}`
+      const resumen = `${tareas.length} ${tareas.length === 1 ? 'repaso pendiente' : 'repasos pendientes'}`
         + (ejecutadas.length ? `  ·  ${ejecutadas.length} ${ejecutadas.length === 1 ? 'ejecutada' : 'ejecutadas'}` : '')
         + (filtros ? `  ·  Filtrado: ${filtros}` : '');
       pag.texto(MARGEN, y, resumen, { tam: 9.5, negrita: true, gris: 0.3, fuente: 'haas' });

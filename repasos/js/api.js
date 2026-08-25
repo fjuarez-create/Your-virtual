@@ -23,7 +23,7 @@ export class ApiError extends Error {
   }
 }
 
-async function pedir(ruta, { metodo = 'GET', json, form, signal } = {}) {
+async function pedir(ruta, { metodo = 'GET', json, form, crudo, signal } = {}) {
   if (!HAY_SERVIDOR) throw new ApiError('Sin servidor configurado', 0, 'sin-servidor');
   const opciones = { method: metodo, credentials: 'include', signal, headers: {} };
   if (json !== undefined) {
@@ -31,23 +31,43 @@ async function pedir(ruta, { metodo = 'GET', json, form, signal } = {}) {
     opciones.body = JSON.stringify(json);
   } else if (form) {
     opciones.body = form;
+  } else if (crudo) {
+    // El cuerpo tal cual, sin envolver: así viajan las partes de audio.
+    opciones.headers['Content-Type'] = 'application/octet-stream';
+    opciones.body = crudo;
   }
-  let res;
-  try {
-    res = await fetch(API_BASE + ruta, opciones);
-  } catch (e) {
-    throw new ApiError('Sin conexión con el servidor', 0, 'red');
+  // Mientras se publica una versión el servidor reescribe ficheros
+  // unos segundos, y una lectura puede toparse un 404 o un 5xx que un
+  // momento después ya no está (le pasó a Fran con la WiFi perfecta).
+  // Las LECTURAS se reintentan una vez; un POST no, que repetirlo
+  // duplicaría lo hecho.
+  for (let intento = 0; ; intento++) {
+    const reintentable = metodo === 'GET' && intento === 0;
+    let res;
+    try {
+      res = await fetch(API_BASE + ruta, opciones);
+    } catch (e) {
+      if (reintentable && e?.name !== 'AbortError') {
+        await new Promise((listo) => setTimeout(listo, 1600));
+        continue;
+      }
+      throw new ApiError('Sin conexión con el servidor', 0, 'red');
+    }
+    if (!res.ok && reintentable && [404, 500, 502, 503, 504].includes(res.status)) {
+      await new Promise((listo) => setTimeout(listo, 1600));
+      continue;
+    }
+    const texto = await res.text();
+    let datos = null;
+    if (texto) {
+      try { datos = JSON.parse(texto); } catch { /* respuesta no-JSON */ }
+    }
+    if (!res.ok) {
+      const msg = datos?.error || `Error ${res.status}`;
+      throw new ApiError(msg, res.status, datos?.codigo);
+    }
+    return datos;
   }
-  const texto = await res.text();
-  let datos = null;
-  if (texto) {
-    try { datos = JSON.parse(texto); } catch { /* respuesta no-JSON */ }
-  }
-  if (!res.ok) {
-    const msg = datos?.error || `Error ${res.status}`;
-    throw new ApiError(msg, res.status, datos?.codigo);
-  }
-  return datos;
 }
 
 /* ─── Sesión ──────────────────────────────────────────────────── */
@@ -149,6 +169,94 @@ export const urlMedio = (id) => API_BASE + 'medios/' + encodeURIComponent(id) + 
  * saber, pero lo que se mide es la salida del hosting, no la del móvil.
  */
 export const salidaAInternet = () => pedir('diagnostico/salida');
+
+/* ─── La obra: reuniones y encargos ───────────────────────────────
+   En pantalla los encargos se llaman «tareas» —las que nacen de una
+   reunión—, pero por dentro llevan nombre propio para no chocar con
+   las tareas de siempre, que son repasos (ver CLAUDE.md).
+
+   Todo esto va SIEMPRE en línea, sin outbox: el servidor es la única
+   verdad y el sello de las 23:59 se decide con su reloj, no con el
+   del móvil. */
+export const obraEstado = (promoId) =>
+  pedir('obra/estado?promo=' + encodeURIComponent(promoId));
+export const obraReuniones = (promoId) =>
+  pedir('obra/reuniones?promo=' + encodeURIComponent(promoId));
+export const empezarReunion = (promoId) =>
+  pedir('obra/reuniones', { metodo: 'POST', json: { promoId } });
+export const verReunion = (id) =>
+  pedir('obra/reuniones/' + encodeURIComponent(id));
+/** Cambia asistentes, invitados o el terminada de la reunión. */
+export const editarReunion = (id, datos) =>
+  pedir('obra/reuniones/' + encodeURIComponent(id), { metodo: 'PATCH', json: datos });
+/** Toca la mesa por diferencias: {poner, quitar, invitar, desinvitar}.
+    Así dos personas añadiendo a la vez no se pisan la lista. */
+export const tocarMesa = (id, deltas) =>
+  pedir('obra/reuniones/' + encodeURIComponent(id) + '/mesa', { metodo: 'POST', json: deltas });
+export const crearEncargo = (datos) =>
+  pedir('obra/encargos', { metodo: 'POST', json: datos });
+export const editarEncargo = (id, datos) =>
+  pedir('obra/encargos/' + encodeURIComponent(id), { metodo: 'PATCH', json: datos });
+
+/* La grabación de la reunión: el audio sube por PARTES (el móvil rota
+   la grabadora cada tanto y cada parte es un fichero completo), la
+   transcripción va parte a parte y el acta la redacta la IA como
+   propuesta que la DF firma. */
+export const empezarGrabacion = (reunionId, mime) =>
+  pedir(`obra/reuniones/${encodeURIComponent(reunionId)}/grabaciones`, { metodo: 'POST', json: { mime } });
+export const subirParteGrabacion = (id, n, dur, blob) =>
+  pedir(`obra/grabaciones/${encodeURIComponent(id)}/parte?n=${n}&dur=${Math.round(dur)}`, { metodo: 'POST', crudo: blob });
+export const cerrarGrabacion = (id, duracion) =>
+  pedir(`obra/grabaciones/${encodeURIComponent(id)}/cerrar`, { metodo: 'POST', json: { duracion: Math.round(duracion) } });
+/** Transcribe UNA parte pendiente; se llama en bucle hasta que `quedan` sea 0. */
+export const transcribirGrabacion = (id) =>
+  pedir(`obra/grabaciones/${encodeURIComponent(id)}/transcribir`, { metodo: 'POST', json: {} });
+export const redactarActa = (reunionId, unidades) =>
+  pedir(`obra/reuniones/${encodeURIComponent(reunionId)}/redactar`, { metodo: 'POST', json: { unidades } });
+export const aceptarActa = (reunionId, datos) =>
+  pedir(`obra/reuniones/${encodeURIComponent(reunionId)}/acta`, { metodo: 'POST', json: datos });
+export const urlAudioGrabacion = (id, parte = 0) =>
+  `${API_BASE}obra/grabaciones/${encodeURIComponent(id)}/audio?parte=${parte}`;
+/** Borra la grabación entera: fila y ficheros. Quién puede, lo dicen
+    los ajustes de la obra; el servidor es quien manda. */
+export const borrarGrabacion = (id) =>
+  pedir('obra/grabaciones/' + encodeURIComponent(id), { metodo: 'DELETE' });
+
+/* Los adjuntos del acta: fotos del libro de órdenes, PDF y vídeos.
+   Los sube la DF o el administrador con el acta abierta; los ve todo
+   el equipo. El fichero viaja tal cual, con su nombre en la URL. */
+export const subirAdjunto = (reunionId, fichero) =>
+  pedir(`obra/reuniones/${encodeURIComponent(reunionId)}/adjuntos`
+    + `?nombre=${encodeURIComponent(fichero.name || '')}&mime=${encodeURIComponent(fichero.type || '')}`,
+  { metodo: 'POST', crudo: fichero });
+export const urlAdjunto = (id) =>
+  `${API_BASE}obra/adjuntos/${encodeURIComponent(id)}/fichero`;
+export const borrarAdjunto = (id) =>
+  pedir('obra/adjuntos/' + encodeURIComponent(id), { metodo: 'DELETE' });
+
+/* Los ajustes de la obra: quién escucha y quién borra los audios. Los
+   lee cualquiera (para pintar lo suyo); los guarda solo el admin. */
+export const ajustesObra = () => pedir('obra/ajustes');
+export const guardarAjustesObra = (datos) =>
+  pedir('obra/ajustes', { metodo: 'POST', json: datos });
+
+/* Quién es quién: el mapa manual de cada grabación, el registro de
+   voces de la obra y —con la clave de pyannote puesta— las huellas que
+   hacen que la app reconozca las voces sola en la reunión siguiente. */
+export const listarVoces = (promoId) =>
+  pedir('obra/voces?promo=' + encodeURIComponent(promoId));
+export const crearVoz = (datos) => pedir('obra/voces', { metodo: 'POST', json: datos });
+export const subirMuestraVoz = (id, blob) =>
+  pedir(`obra/voces/${encodeURIComponent(id)}/muestra`, { metodo: 'POST', crudo: blob });
+export const guardarHablantes = (grabacionId, mapa) =>
+  pedir(`obra/grabaciones/${encodeURIComponent(grabacionId)}/hablantes`, { metodo: 'POST', json: { mapa } });
+/** Un paso de identificación automática; se llama en bucle hasta quedan 0. */
+export const identificarGrabacion = (id) =>
+  pedir(`obra/grabaciones/${encodeURIComponent(id)}/identificar`, { metodo: 'POST', json: {} });
+export const vocesEstado = () => pedir('obra/voces/clave');
+export const vocesPonerClave = (clave) =>
+  pedir('obra/voces/clave', { metodo: 'POST', json: { clave } });
+export const vocesQuitarClave = () => pedir('obra/voces/clave', { metodo: 'DELETE' });
 
 /* ─── Claude ──────────────────────────────────────────────────────
    La clave vive en el servidor y no vuelve nunca: de aquí solo sale

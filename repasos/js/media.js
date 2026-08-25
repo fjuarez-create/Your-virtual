@@ -38,6 +38,10 @@ export const hacerFoto = () => pedirFicheros({ accept: 'image/*', capture: 'envi
 export const elegirFotos = () => pedirFicheros({ accept: 'image/*', multiple: true });
 export const grabarVideo = () => pedirFicheros({ accept: 'video/*', capture: 'environment' });
 export const elegirVideo = () => pedirFicheros({ accept: 'video/*' });
+/** Adjuntos del acta de obra: fotos, PDF o vídeos, varios de una vez. */
+export const elegirAdjuntos = () => pedirFicheros({
+  accept: 'image/*,video/*,application/pdf', multiple: true,
+});
 
 /**
  * Botón de subida de verdad: un <label> con el <input type="file">
@@ -283,7 +287,7 @@ function metadatosMedia(file, tipo) {
 }
 
 /* ─── Grabadora de audio ──────────────────────────────────────── */
-function mimeSoportado() {
+export function mimeSoportado() {
   const candidatos = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'];
   return candidatos.find((m) => window.MediaRecorder?.isTypeSupported?.(m)) || '';
 }

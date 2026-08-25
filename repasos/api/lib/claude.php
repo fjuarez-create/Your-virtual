@@ -464,3 +464,156 @@ function claude_pedir(string $clave, array $cuerpo, bool $con_fallback): array
 
     return ['json' => $json, 'reintentar_sin_fallback' => false];
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   El acta de una reunión de obra
+   ═══════════════════════════════════════════════════════════════
+   De la transcripción de la reunión salen tres cosas: el resumen del
+   acta, las tareas que se acordaron —con responsable y fecha cuando se
+   dijeron— y nada más. Todo llega como PROPUESTA: quien firma el acta
+   es la DF o el administrador al revisarla, nunca el modelo.
+
+   OJO con el diccionario de la casa: lo que se saca de aquí son TAREAS
+   de reunión (encargos por dentro), no repasos de vivienda. */
+
+/** El acta cabe de sobra: resumen más unas decenas de tareas. */
+const CLAUDE_TOPE_ACTA = 8000;
+
+function claude_instrucciones_acta(string $fecha, array $gente, array $equipo, array $unidades): string
+{
+    $mesa = $gente ? implode(', ', $gente) : 'sin lista de asistentes';
+    $plantilla = '';
+    foreach ($equipo as $p) {
+        $plantilla .= "  - {$p['nombre']}" . ($p['empresa'] !== '' ? " ({$p['empresa']})" : '') . "\n";
+    }
+    $villas = '';
+    foreach (array_slice($unidades, 0, 80) as $u) {
+        $villas .= "  - {$u['nombre']}\n";
+    }
+
+    return <<<TXT
+Eres el secretario de obra de una promoción de viviendas en España. Te
+paso la transcripción de la reunión de obra del día {$fecha}. En la mesa
+estaban: {$mesa}.
+
+El equipo con cuenta en la aplicación (para atribuir responsables):
+{$plantilla}
+Las viviendas de la promoción (por si una tarea es de una concreta):
+{$villas}
+Devuelve exactamente el JSON del esquema:
+
+1. `resumen`: el acta en prosa llana, de 5 a 12 frases: qué se revisó,
+   qué se decidió, qué compromisos se tomaron y cualquier aviso de
+   plazos o materiales. Español de España, sin florituras ni jerga de
+   consultora. No inventes NADA que no esté en la transcripción.
+
+2. `tareas`: SOLO los encargos accionables que se acordaron de verdad
+   («hay que…», «que X haga…», «para el viernes…»). Cada una:
+   - `texto`: la tarea en imperativo de obra, corta y concreta.
+   - `general`: true si es de toda la obra; false si es de una vivienda.
+   - `unidadNombre`: el nombre EXACTO de la vivienda de la lista de
+     arriba si la tarea es de una, o "" si es general o no queda claro.
+   - `responsableNombre`: el nombre de quien queda a cargo, SOLO si en
+     la conversación queda claro; si no, "". Puede ser alguien del
+     equipo (usa su nombre tal cual aparece arriba) o alguien de fuera
+     (escribe el nombre que se oyó, p. ej. «Paco (Sinergia)»).
+   - `fechaLimite`: "AAAA-MM-DD" solo si se dijo un plazo (calcula la
+     fecha real a partir del {$fecha}); si no, "".
+   - `seguro`: true si la tarea, su responsable y su alcance están
+     claros en la transcripción; false si has tenido que interpretar.
+
+Reglas de oro: mejor pocas tareas buenas que muchas dudosas; una
+conversación sobre un tema NO es una tarea salvo que alguien quede en
+hacer algo; no dupliques tareas que se repiten con otras palabras; y lo
+que no se dijo, no existe.
+TXT;
+}
+
+function claude_esquema_acta(): array
+{
+    return [
+        'type' => 'object',
+        'additionalProperties' => false,
+        'required' => ['resumen', 'tareas'],
+        'properties' => [
+            'resumen' => ['type' => 'string'],
+            'tareas' => [
+                'type' => 'array',
+                'items' => [
+                    'type' => 'object',
+                    'additionalProperties' => false,
+                    'required' => ['texto', 'general', 'unidadNombre', 'responsableNombre', 'fechaLimite', 'seguro'],
+                    'properties' => [
+                        'texto' => ['type' => 'string'],
+                        'general' => ['type' => 'boolean'],
+                        'unidadNombre' => ['type' => 'string'],
+                        'responsableNombre' => ['type' => 'string'],
+                        'fechaLimite' => ['type' => 'string'],
+                        'seguro' => ['type' => 'boolean'],
+                    ],
+                ],
+            ],
+        ],
+    ];
+}
+
+/** La transcripción entera → resumen y tareas propuestas. */
+function claude_redactar_acta(string $fecha, array $gente, string $transcripcion, array $equipo, array $unidades): array
+{
+    $clave = claude_clave();
+    if ($clave === '') {
+        responder_error(400, 'No hay clave de Anthropic guardada. Ponla en Ajustes.', 'sin-clave');
+    }
+    if (!function_exists('curl_init')) {
+        responder_error(500, 'Este servidor no tiene cURL y no puede llamar a la API.', 'php-curl');
+    }
+    @set_time_limit(CLAUDE_MARGEN_PHP);
+
+    $cuerpo = [
+        'model' => CLAUDE_MODELO,
+        'max_tokens' => CLAUDE_TOPE_ACTA,
+        'system' => claude_instrucciones_acta($fecha, $gente, $equipo, $unidades),
+        'messages' => [
+            ['role' => 'user', 'content' => "Transcripción de la reunión:\n\n" . $transcripcion],
+        ],
+        'output_config' => [
+            'effort' => CLAUDE_ESFUERZO,
+            'format' => ['type' => 'json_schema', 'schema' => claude_esquema_acta()],
+        ],
+    ];
+
+    $respuesta = claude_pedir($clave, $cuerpo, true);
+    if ($respuesta['reintentar_sin_fallback']) {
+        $respuesta = claude_pedir($clave, $cuerpo, false);
+    }
+    $json = $respuesta['json'];
+
+    if (($json['stop_reason'] ?? '') === 'refusal') {
+        responder_error(422, 'El modelo ha declinado redactar el acta. Escríbela a mano.', 'declinado');
+    }
+    if (($json['stop_reason'] ?? '') === 'max_tokens') {
+        responder_error(502, 'La reunión es tan larga que la respuesta se ha cortado. Avisa a Claude Code.', 'sin-sitio');
+    }
+
+    $texto_salida = '';
+    foreach (($json['content'] ?? []) as $bloque) {
+        if (($bloque['type'] ?? '') === 'text') {
+            $texto_salida .= $bloque['text'];
+        }
+    }
+    $datos = json_decode($texto_salida, true);
+    if (!is_array($datos) || !isset($datos['resumen'], $datos['tareas']) || !is_array($datos['tareas'])) {
+        error_log('UNIK repasos · el acta de Claude no encaja: ' . substr($texto_salida, 0, 400));
+        responder_error(502, 'La respuesta del modelo no se ha entendido. Vuelve a intentarlo.', 'respuesta-rara');
+    }
+
+    return [
+        'resumen' => (string) $datos['resumen'],
+        'tareas' => $datos['tareas'],
+        'gasto' => [
+            'entrada' => (int) ($json['usage']['input_tokens'] ?? 0),
+            'salida' => (int) ($json['usage']['output_tokens'] ?? 0),
+            'modelo' => (string) ($json['model'] ?? CLAUDE_MODELO),
+        ],
+    ];
+}

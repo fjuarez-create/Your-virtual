@@ -160,3 +160,119 @@ CREATE TABLE IF NOT EXISTS lecturas (
   KEY ix_lecturas_mensaje (mensaje_id),
   KEY ix_lecturas_actualizado (actualizado)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ═══ La obra: reuniones y encargos ═══════════════════════════════
+-- Una reunión de obra al día, con su acta. Los ENCARGOS son las tareas
+-- que nacen de una reunión: en pantalla se llaman «tareas», pero por
+-- dentro llevan nombre propio para no chocar jamás con la tabla
+-- `tareas`, que guarda repasos (ver CLAUDE.md, el diccionario).
+CREATE TABLE IF NOT EXISTS reuniones (
+  id                CHAR(36)     NOT NULL,
+  promo_id          VARCHAR(40)  NOT NULL,
+  fecha             CHAR(10)     NOT NULL,
+  empezada          CHAR(24)     NOT NULL,
+  terminada         CHAR(24)     DEFAULT NULL,
+  asistentes        TEXT         NOT NULL,
+  invitados         TEXT         NOT NULL,
+  resumen           MEDIUMTEXT,
+  propuesta         MEDIUMTEXT,
+  borrada           TINYINT(1)   NOT NULL DEFAULT 0,
+  creado            CHAR(24)     NOT NULL,
+  actualizado       CHAR(24)     NOT NULL,
+  creado_por        CHAR(36)     DEFAULT NULL,
+  creado_por_nombre VARCHAR(120) NOT NULL DEFAULT '',
+  acta_firmada      VARCHAR(32)  DEFAULT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY ix_reuniones_dia (promo_id, fecha)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS encargos (
+  id                 CHAR(36)     NOT NULL,
+  reunion_id         CHAR(36)     NOT NULL,
+  promo_id           VARCHAR(40)  NOT NULL,
+  texto              TEXT         NOT NULL,
+  general            TINYINT(1)   NOT NULL DEFAULT 1,
+  unidad_id          VARCHAR(60)  NOT NULL DEFAULT '',
+  responsable_id     CHAR(36)     DEFAULT NULL,
+  responsable_nombre VARCHAR(120) NOT NULL DEFAULT '',
+  fecha_limite       CHAR(10)     NOT NULL DEFAULT '',
+  estado             VARCHAR(12)  NOT NULL DEFAULT 'pendiente',
+  hecho_en           CHAR(24)     DEFAULT NULL,
+  hecho_por_nombre   VARCHAR(120) NOT NULL DEFAULT '',
+  borrada            TINYINT(1)   NOT NULL DEFAULT 0,
+  creado             CHAR(24)     NOT NULL,
+  actualizado        CHAR(24)     NOT NULL,
+  creado_por         CHAR(36)     DEFAULT NULL,
+  creado_por_nombre  VARCHAR(120) NOT NULL DEFAULT '',
+  PRIMARY KEY (id),
+  KEY ix_encargos_reunion (reunion_id),
+  KEY ix_encargos_estado (promo_id, estado)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ═══ El audio de las reuniones y el registro de voces ═══════════
+-- Una grabación por reunión, guardada por PARTES: cada parte es un
+-- fichero de audio completo (el móvil rota la grabadora cada media
+-- hora), porque los trozos de un mp4 de iPhone no se pueden pegar en
+-- el servidor. `partes` y `hablantes` van en JSON: cambian de forma
+-- con el proveedor de voces y no se consultan por columnas.
+CREATE TABLE IF NOT EXISTS grabaciones (
+  id                CHAR(36)     NOT NULL,
+  reunion_id        CHAR(36)     NOT NULL,
+  promo_id          VARCHAR(40)  NOT NULL,
+  estado            VARCHAR(14)  NOT NULL DEFAULT 'grabando',
+  mime              VARCHAR(60)  NOT NULL DEFAULT '',
+  duracion          INT          NOT NULL DEFAULT 0,
+  tam               BIGINT       NOT NULL DEFAULT 0,
+  partes            MEDIUMTEXT,
+  hablantes         TEXT,
+  audio_borrado     TINYINT(1)   NOT NULL DEFAULT 0,
+  borrada           TINYINT(1)   NOT NULL DEFAULT 0,
+  creado            VARCHAR(32)  NOT NULL,
+  actualizado       VARCHAR(32)  NOT NULL,
+  creado_por        CHAR(36)     DEFAULT NULL,
+  creado_por_nombre VARCHAR(120) NOT NULL DEFAULT '',
+  PRIMARY KEY (id),
+  KEY ix_grabaciones_reunion (reunion_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- A quién suena cada voz de la obra. La huella (`huella_id`) es el
+-- identificador del voiceprint en el proveedor acústico, si lo hay;
+-- la muestra apunta a un tramo de una grabación para poder escucharla
+-- al asignar, sin recortar ficheros.
+CREATE TABLE IF NOT EXISTS voces (
+  id                   CHAR(36)     NOT NULL,
+  promo_id             VARCHAR(40)  NOT NULL,
+  persona_id           CHAR(36)     DEFAULT NULL,
+  persona_nombre       VARCHAR(120) NOT NULL DEFAULT '',
+  huella               MEDIUMTEXT,
+  huella_trabajo       VARCHAR(80)  NOT NULL DEFAULT '',
+  muestra_grabacion_id CHAR(36)     DEFAULT NULL,
+  muestra_parte        INT          NOT NULL DEFAULT 0,
+  muestra_desde        DOUBLE       NOT NULL DEFAULT 0,
+  muestra_hasta        DOUBLE       NOT NULL DEFAULT 0,
+  borrada              TINYINT(1)   NOT NULL DEFAULT 0,
+  creado               VARCHAR(32)  NOT NULL,
+  actualizado          VARCHAR(32)  NOT NULL,
+  PRIMARY KEY (id),
+  KEY ix_voces_promo (promo_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Los adjuntos del acta de una reunión: fotos del libro de órdenes o
+-- de documentos, PDF y vídeos. El fichero vive en la carpeta de medios
+-- (adjuntos/<id>.<ext>); aquí, su ficha.
+CREATE TABLE IF NOT EXISTS adjuntos (
+  id                CHAR(36)     NOT NULL,
+  reunion_id        CHAR(36)     NOT NULL,
+  promo_id          VARCHAR(40)  NOT NULL,
+  tipo              VARCHAR(10)  NOT NULL DEFAULT 'otro',
+  nombre            VARCHAR(160) NOT NULL DEFAULT '',
+  mime              VARCHAR(80)  NOT NULL DEFAULT '',
+  tam               BIGINT       NOT NULL DEFAULT 0,
+  borrada           TINYINT(1)   NOT NULL DEFAULT 0,
+  creado            VARCHAR(32)  NOT NULL,
+  actualizado       VARCHAR(32)  NOT NULL,
+  creado_por        CHAR(36)     DEFAULT NULL,
+  creado_por_nombre VARCHAR(120) NOT NULL DEFAULT '',
+  PRIMARY KEY (id),
+  KEY ix_adjuntos_reunion (reunion_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

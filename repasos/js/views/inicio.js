@@ -14,25 +14,17 @@
 
    La misma pantalla para técnicos y para constructora: solo cambia el
    saludo, que al jefe de obra no le baila con los días. */
-import { h, icon, avatar, toast, fechaCorta, hora } from '../ui.js';
+import { h, icon, avatar, toast, fechaCorta, hora, anillo, grupoAvatares } from '../ui.js';
 import * as store from '../store.js';
-import { PROMOCIONES, unidad, estado, puedeVerificar } from '../catalog.js';
-import { avisoLocal, barraSync, bannerMordido as banner, cabecera, tarjetaVilla, cuandoVilla } from '../piezas.js';
+import * as api from '../api.js';
+import { PROMOCIONES, unidad, estado } from '../catalog.js';
+import { avisoLocal, barraSync, bannerMordido as banner, cabecera, tarjetaVilla, cuandoVilla, tramoAvance } from '../piezas.js';
+import { fechaDeActa, diaDeLaSemana } from './historial.js';
 import { ir, conFiltros, refrescar } from '../app.js';
 
-/**
- * El saludo, con las frases literales del diseño: lunes y viernes
- * tienen la suya y el resto de la semana comparte una. El jefe de obra
- * ve siempre la misma — a él la frase no le informa de nada y una que
- * cambia sola acaba leyéndose como ruido.
- */
-function saludo(usuario) {
-  if (!puedeVerificar(usuario)) return 'A por los repasos pendientes! 💪🏼';
-  const dia = new Date().getDay();
-  if (dia === 1) return 'Qué bien sienta un lunes de repasos. 🪖';
-  if (dia === 5) return 'Magnífico viernes para pillar repasos. 🔪';
-  return 'Hoy vamos a cazar cada repaso! 👋🏻';
-}
+/* El saludo de cazar repasos se retiró en agosto de 2026, cuando la
+   portada dejó de ser solo de repasos: desde entonces el que manda es
+   el nombre del proyecto, decidido por Fran sobre la maqueta. */
 
 /* El banner con el mordisco se mudó a piezas.js: lo comparte con el
    aviso de recorrido a medias de la ficha de la vivienda. Aquí llega
@@ -68,6 +60,68 @@ function juntarRafagas(muro) {
   return salida;
 }
 
+/**
+ * La última reunión de obra, con la misma piel que las tarjetas de
+ * vivienda: la grúa y el cuándo arriba, las caras de la mesa, los dos
+ * chips con las cuentas de sus tareas y el anillo del avance asomando
+ * por la esquina. El traje lo eligió Fran en agosto de 2026 entre
+ * cuatro propuestas, para que la portada hable un solo idioma.
+ */
+function tarjetaUltimaReunion(r, hoy) {
+  // En las caras van también los invitados —la mesa es la mesa, tenga
+  // cuenta o no—, pero recortadas a tres ANTES de pintar, como hace la
+  // tarjeta de vivienda: así nunca sale la bolita «+n», que esta piel
+  // no lleva y que en un móvil estrecho choca con el cuándo.
+  const gente = [
+    ...(r.asistentes || []).map((id) => store.persona(id)),
+    ...(r.invitados || []).map((nombre) => ({ nombre })),
+  ].slice(0, 3);
+  const hechas = r.encargos - r.pendientes;
+  const pct = r.encargos ? Math.round((100 * hechas) / r.encargos) : 0;
+  const t = tramoAvance(pct);
+  const chipPct = pct === 100 && r.encargos ? 'macizo' : t.clase;
+  const esDeHoy = r.fecha === hoy;
+  // La hora que se enseña es la de EMPEZAR, decidido por Fran: el
+  // acta se cierra siempre a las 23:59 (salvo la cortesía), así que
+  // la hora de cierre no cuenta nada. En marcha, a secas: con la
+  // hora al lado no cabía junto a las caras en un móvil estrecho.
+  const cuando = esDeHoy
+    ? (r.terminada ? cuandoVilla(r.empezada) : 'En marcha')
+    : `Empezada a las ${hora(r.empezada)} h`;
+  // El punto vivo va solo en la de hoy: terminada o no, hasta las
+  // 23:59 sigue abierta, y eso es justo lo que la luz cuenta. Es
+  // hermano del título, no hijo: dentro lo recortaría el overflow de
+  // los puntos suspensivos y el aura saldría rebanada.
+  return h(`button.d-tarjeta.tramo-${t.clase}${esDeHoy ? '.viva' : ''}`,
+    { onclick: () => ir(`#/obra/r/${r.id}`) },
+    h('span.d-mordida'),
+    h('span.d-mordida-esquina'),
+    h('div.d-tarjeta-cab', null,
+      icon('grua'),
+      h('span', null, cuando),
+      h('span.d-tarjeta-caras', null, grupoAvatares(gente, { tam: 36, max: 3, solape: 12 })),
+    ),
+    esDeHoy ? h('span.d-punto-vivo') : null,
+    // La de hoy se llama por su nombre; una pasada, por su día: lo
+    // que uno se pregunta al verla es de cuándo es. Eligió Fran la
+    // fecha de título entre cinco nombres (agosto de 2026).
+    h('div.d-tarjeta-titulo', null, esDeHoy
+      ? 'Reunión de obra'
+      : `${diaDeLaSemana(r.fecha, { mayuscula: true })} ${fechaDeActa(r.fecha)}`),
+    h('div.d-tarjeta-pie', null,
+      // En minúscula, como el mismo chip de la pantalla de obra: la
+      // misma reunión no puede decir la misma palabra con dos cajas.
+      r.encargos
+        ? h('span.d-chip.grande', null, icon('listaChecks'), `${hechas} / ${r.encargos}`)
+        : h('span.d-chip.grande', null, 'sin tareas'),
+      r.encargos
+        ? h('span.d-chip.grande', { class: chipPct }, icon('fuego'), `${pct}%`)
+        : null,
+    ),
+    h('span.d-tarjeta-anillo', null, anillo(pct, { tam: 55, grosor: 5, etiqueta: false })),
+  );
+}
+
 /* Cómo se lee una tanda: «6 repasos rechazados». */
 const PARTICIPIO = {
   rechazada: 'rechazados',
@@ -99,6 +153,13 @@ export async function render() {
   const yo = store.sesion();
   const d = await store.datosHome(p.id);
   const c = d.conteo;
+
+  /* La obra en la portada: la última reunión y sus tareas pendientes.
+     Se pregunta al servidor —la obra va siempre en línea— y, si no hay
+     cobertura o todavía no hubo ninguna reunión, la portada sale sin
+     este bloque: lo de repasos vive en el almacén local y no espera. */
+  let obra = null;
+  try { obra = await api.obraEstado(p.id); } catch { obra = null; }
 
   const pct = c.total ? Math.round((100 * c.hechas) / c.total) : 0;
 
@@ -160,34 +221,50 @@ export async function render() {
       /* La cabecera del diseño: la cara y las tres bolas. */
       cabecera({ seccion: 'inicio' }),
 
-      h('h1.d-saludo', null, saludo(yo)),
+      h('h1.d-saludo', null, p.nombre),
       avisoLocal() || barraSync(),
+
+      // Desplegado a mano: el pintor no aplana listas anidadas.
+      ...(obra && obra.ultima ? [
+        h('p.d-epigrafe', null, 'Última reunión de obra'),
+        tarjetaUltimaReunion(obra.ultima, obra.hoy),
+      ] : []),
+      ...(obra && obra.pendientes ? [
+        banner({
+          clase: 'negro',
+          // El texto lo fijó Fran: «órdenes» porque aquí caerán también
+          // las del libro de órdenes cuando exista.
+          rotulo: 'Tareas y órdenes pendientes',
+          cifra: obra.pendientes,
+          adonde: '#/obra',
+        }),
+      ] : []),
 
       h('p.d-epigrafe', null, 'Pendiente de revisión por la DF'),
       banner({
         clase: 'beige',
-        rotulo: 'Tareas completadas por verificar',
+        rotulo: 'Repasos completados por verificar',
         cifra: c.esperando,
         adonde: '#/tareas/resuelta',
       }),
 
-      h('p.d-epigrafe', null, 'Tareas revisadas por la DF'),
+      h('p.d-epigrafe', null, 'Repasos revisados por la DF'),
       banner({
         clase: 'verde',
-        rotulo: 'Tareas verificadas',
+        rotulo: 'Repasos verificados',
         cifra: c.hechas,
         adonde: '#/tareas/verificada',
       }),
       banner({
         clase: 'rojo',
-        rotulo: 'Tareas rechazadas',
+        rotulo: 'Repasos rechazados',
         cifra: c.rechazadas,
         adonde: '#/tareas/rechazada',
       }),
 
       h('p.d-epigrafe', null, p.nombre),
       tarjetaVilla({
-        titulo: `${d.sinVerificar} ${d.sinVerificar === 1 ? 'tarea pendiente' : 'tareas pendientes'}`,
+        titulo: `${d.sinVerificar} ${d.sinVerificar === 1 ? 'repaso pendiente' : 'repasos pendientes'}`,
         cuando: cuandoVilla(d.ultimaSinVerificar),
         caras: d.caras,
         hechas: c.hechas,

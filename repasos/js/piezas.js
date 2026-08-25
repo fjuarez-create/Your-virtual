@@ -207,7 +207,13 @@ export function barraSync() {
     } else if (e.error === 'sesion') {
       texto.textContent = 'Sesión caducada · vuelve a entrar';
     } else if (e.error) {
-      texto.textContent = `No se pudo sincronizar · ${e.pendientes} en espera`;
+      // Nada se pierde: la cola queda guardada en el móvil y el motor
+      // reintenta solo (cada minuto, al volver la cobertura y al
+      // volver a la app). El texto tiene que decirlo, porque «no se
+      // pudo sincronizar» a secas suena a pérdida y asusta de más.
+      texto.textContent = e.pendientes
+        ? `No se pudo subir · ${e.pendientes} en espera · se reintenta solo`
+        : 'No se pudo bajar lo nuevo · se reintenta solo';
     } else if (e.pendientes > 0) {
       texto.textContent = `Subiendo ${e.pendientes} ${e.pendientes === 1 ? 'cambio' : 'cambios'}…`;
     } else {
@@ -254,10 +260,10 @@ export function filaLista(lista, conteo, { mostrarVivienda = false } = {}) {
   const partes = [lista.creadoPorNombre];
   if (conteo) {
     partes.push(conteo.total === 0
-      ? 'sin tareas'
+      ? 'sin repasos'
       : conteo.pendientes > 0
         ? `${conteo.pendientes} de ${conteo.total} pendientes`
-        : `${conteo.total} ${conteo.total === 1 ? 'tarea resuelta' : 'tareas resueltas'}`);
+        : `${conteo.total} ${conteo.total === 1 ? 'repaso resuelto' : 'repasos resueltos'}`);
   }
 
   return h('button.row', { onclick: () => ir('#/l/' + lista.id) },
@@ -348,8 +354,8 @@ export function tarjetaActa({ lista, conteo, gente }, { dentroDeVivienda = false
   // abriendo. Dentro de la vivienda eso ya se sabe, y lo que distingue
   // un acta de otra es su fecha.
   const porDefecto = dentroDeVivienda
-    ? `Acta de ${fechaCorta(lista.creado)}`
-    : `Acta ${u?.nombre || lista.unidadId}`;
+    ? `Parte de ${fechaCorta(lista.creado)}`
+    : `Parte ${u?.nombre || lista.unidadId}`;
   const titulo = lista.nombre || porDefecto;
 
   return h('button.acta', { onclick: () => ir(conFiltros('#/l/' + lista.id, filtros || {})) },
@@ -1120,8 +1126,9 @@ export function cabecera({ seccion, volver, titulo = '', menu, derecha } = {}) {
       avatar(store.sesion(), { tam: CAB_BOLA, onclick: () => ir('#/ajustes') }),
       h('div.d-cab-menu', null,
         bola('inicio', 'brujula', 'Inicio', '#/'),
-        bola('viviendas', 'casa', 'Viviendas', '#/viviendas'),
-        bola('listas', 'periodico', 'Actas', '#/listas'),
+        bola('obra', 'grua', 'Reuniones de obra', '#/obra'),
+        bola('viviendas', 'casa', 'Repasos de viviendas', '#/viviendas'),
+        bola('listas', 'periodico', 'Partes', '#/listas'),
       ),
     );
   }
@@ -1406,7 +1413,7 @@ export function hojaFiltroTareas({ vivienda = '', oficios = [], viviendas = [], 
 
     const carta = h('div.d-carta.tareas', null,
       h('div.d-carta-cab', null,
-        h('span', null, 'Filtrar tareas'),
+        h('span', null, 'Filtrar repasos'),
         h('button.x', { 'aria-label': 'Cerrar', onclick: () => { cerrar(); resolve(null); } }, icon('x')),
       ),
       // Dentro de una vivienda no se elige vivienda: ya estás en ella,

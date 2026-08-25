@@ -132,7 +132,7 @@ function altaUsuario() {
 
       h('p.eyebrow', { style: { marginTop: '18px', marginBottom: '8px' } }, 'Permisos'),
       h('div.chips', null, chipVerifica, chipAdmin),
-      h('p.hint', null, 'Sin «Puede verificar», el usuario solo podrá mover tareas entre pendiente y resuelta.'),
+      h('p.hint', null, 'Sin «Puede verificar», el usuario solo podrá mover repasos entre pendiente y resuelto.'),
 
       aviso,
       h('button.btn.accent.full', {
@@ -283,8 +283,8 @@ function editarUsuario(u) {
           h('div.row-title', null, u.verifica ? 'Quitarle el permiso de verificar' : 'Dejarle verificar'),
           h('div.row-sub', { style: { whiteSpace: 'normal' } },
             u.verifica
-              ? 'Pasará a mover tareas solo entre pendiente y resuelta'
-              : 'Podrá dar tareas por verificadas y rechazarlas'),
+              ? 'Pasará a mover repasos solo entre pendiente y resuelto'
+              : 'Podrá dar repasos por verificados y rechazarlos'),
         ),
       ),
       h('button.row', {

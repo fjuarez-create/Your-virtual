@@ -177,6 +177,28 @@ function contrasena_inicial(string $nombre, string $empresa): string
     return llano($nombre) . $primera;
 }
 
+/**
+ * La prórroga de cortesía del acta: 45 minutos pasada la medianoche.
+ *
+ * El acta se sella a las 23:59 (regla de Fran), pero si la reunión fue
+ * tardía y la transcripción estaba en el horno al cruzar la medianoche,
+ * rechazar la propuesta por llegar unos minutos tarde castiga el caso
+ * honesto. La cortesía vale SOLO para la reunión de ayer y solo hasta
+ * las 00:45; a las 00:46, sellada de verdad. Quien decide si además
+ * hacía falta una grabación es quien llama: esto es solo el reloj.
+ */
+const CORTESIA_ACTA_MINUTOS = 45;
+
+function dentro_de_cortesia(string $fechaReunion, DateTimeImmutable $ahora): bool
+{
+    $ayer = $ahora->modify('-1 day')->format('Y-m-d');
+    if ($fechaReunion !== $ayer) {
+        return false;
+    }
+    return (int) $ahora->format('G') === 0
+        && (int) $ahora->format('i') < CORTESIA_ACTA_MINUTOS;
+}
+
 function texto(array $origen, string $clave, int $max = 255, string $porDefecto = ''): string
 {
     $v = $origen[$clave] ?? $porDefecto;

@@ -194,7 +194,7 @@ export async function render({ promoId, unidadId }) {
     if (!tarjetas.length) {
       chat.append(h('p', {
         style: { color: 'var(--d-gris)', textAlign: 'center', padding: '20px 0', fontSize: '15px' },
-      }, aguja ? 'Ningún mensaje dice eso.' : 'Nada escrito todavía. Aquí va lo que hay que contar de esta vivienda y no es una tarea.'));
+      }, aguja ? 'Ningún mensaje dice eso.' : 'Nada escrito todavía. Aquí va lo que hay que contar de esta vivienda y no es un repaso.'));
     }
   };
   await pintarChat();
@@ -220,7 +220,7 @@ export async function render({ promoId, unidadId }) {
   /* ─── El menú de los tres puntos: el PDF y las actas firmadas ─── */
   const menu = async () => {
     const extra = actas.length ? h('div.d-menu-extra', null,
-      h('p.d-epigrafe', null, 'Actas de la vivienda'),
+      h('p.d-epigrafe', null, 'Partes de la vivienda'),
       h('div.stack', { style: { gap: '8px' } },
         ...actas.map((a) => tarjetaActa(a, { dentroDeVivienda: true, filtros: { estado, oficio: oficioId } }))),
     ) : null;
@@ -239,10 +239,10 @@ export async function render({ promoId, unidadId }) {
     ].filter(Boolean).join(' · ');
 
     const elegido = await menuTarjeta(u.nombre, [
-      { id: 'pdf', icono: 'documento', rotulo: 'PDF de tareas pendientes',
-        sub: `${vivas.length} ${vivas.length === 1 ? 'tarea por hacer' : 'tareas por hacer'}, con sus fotos` },
+      { id: 'pdf', icono: 'documento', rotulo: 'PDF de repasos pendientes',
+        sub: `${vivas.length} ${vivas.length === 1 ? 'repaso por hacer' : 'repasos por hacer'}, con sus fotos` },
       hayFiltros ? { id: 'pdf-filtrado', icono: 'cursores', rotulo: 'PDF con los filtros puestos',
-        sub: `${fraseFiltros} · ${conFiltro.length} ${conFiltro.length === 1 ? 'tarea' : 'tareas'}` } : null,
+        sub: `${fraseFiltros} · ${conFiltro.length} ${conFiltro.length === 1 ? 'repaso' : 'repasos'}` } : null,
       { id: 'pdf-historico', icono: 'listaChecks', rotulo: 'PDF con todo el histórico',
         sub: `Pendientes primero y las ${hechas9.length} ejecutadas al final` },
     ].filter(Boolean), { extra });

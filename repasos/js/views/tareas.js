@@ -52,22 +52,22 @@ export async function render({ listaId }) {
     listado.replaceChildren();
     if (!visibles.length) {
       listado.append(h('p.sub.center', { style: { padding: '26px 0' } },
-        'Ninguna tarea de esta lista encaja con este filtro.'));
+        'Ningún repaso de este parte encaja con este filtro.'));
     } else {
       visibles.forEach((t) => listado.append(
         tarjetaTarea(t, tareas.indexOf(t) + 1, portadas.get(t.id), tipos.get(t.id), listaId,
           { estado: filtro, oficio: oficioId })));
     }
     contador.textContent = visibles.length === tareas.length
-      ? `${tareas.length} ${tareas.length === 1 ? 'tarea' : 'tareas'}`
-      : `${visibles.length} de ${tareas.length} tareas`;
+      ? `${tareas.length} ${tareas.length === 1 ? 'repaso' : 'repasos'}`
+      : `${visibles.length} de ${tareas.length} repasos`;
   };
 
   const chips = filtroEstado((v) => { filtro = v; cambio(); }, filtro);
   const selector = filtroOficio((v) => { oficioId = v; cambio(); }, oficioId);
   pintar();
 
-  const fab = h('button.fab', { onclick: () => nuevaTarea(listaId) }, icon('camera'), 'Nueva tarea');
+  const fab = h('button.fab', { onclick: () => nuevaTarea(listaId) }, icon('camera'), 'Nuevo repaso');
 
   return {
     sinTabs: true,
@@ -77,11 +77,11 @@ export async function render({ listaId }) {
       // lista de actas, lo primero que hay que reconocer es de qué casa
       // se está hablando. Y empieza por «ACTA» porque, si no, el acta y
       // la vivienda se llaman igual y no hay forma de saber dónde estás.
-      ...cabeceraDentro(lista.nombre || `ACTA ${(u?.nombre || '').toUpperCase()}`.trim(), {
+      ...cabeceraDentro(lista.nombre || `PARTE ${(u?.nombre || '').toUpperCase()}`.trim(), {
         volverA: conFiltros(`#/p/${lista.promoId}/v/${String(lista.unidadId).split(':')[1]}`, filtrosDeRuta()),
         sub: fechaCorta(lista.creado),
         acciones: [h('button.icon-btn', {
-          'aria-label': 'Opciones del acta',
+          'aria-label': 'Opciones del parte',
           onclick: () => menuLista(lista, tareas),
         }, icon('gear'))],
       }),
@@ -101,8 +101,8 @@ export async function render({ listaId }) {
       conteo.total ? selector : null,
       conteo.total ? contador : null,
       tareas.length ? listado : emptyState('camera', 'Lista vacía',
-        'Recorre la vivienda y añade una tarea por cada remate, defecto o detalle que encuentres.',
-        h('button.btn.accent', { onclick: () => nuevaTarea(listaId) }, icon('camera'), 'Primera tarea')),
+        'Recorre la vivienda y añade un repaso por cada remate, defecto o detalle que encuentres.',
+        h('button.btn.accent', { onclick: () => nuevaTarea(listaId) }, icon('camera'), 'Primer repaso')),
     ],
   };
 }
@@ -255,7 +255,7 @@ export async function nuevaTarea(listaId) {
       tipo: 'imagen', blob: img.blob, mime: img.mime, ancho: img.ancho, alto: img.alto,
     });
   }
-  toast('Tarea añadida');
+  toast('Repaso añadido');
   await refrescar();
 }
 
@@ -288,7 +288,7 @@ function hojaTexto(imagenes, oficioPrevio, propuesta = null) {
     // Una sola salida. Antes había un segundo botón para encadenar la
     // siguiente tarea, y con dos llamadas a la acción seguidas ninguna
     // era la principal.
-    const guardar = ctaAccion('GUARDAR TAREA', { icono: 'check' });
+    const guardar = ctaAccion('GUARDAR REPASO', { icono: 'check' });
     const pista = h('p.hint');
 
     // Los mismos chips que los filtros y que la hoja del selector de
@@ -327,7 +327,7 @@ function hojaTexto(imagenes, oficioPrevio, propuesta = null) {
       const hayTexto = texto.value.trim().length > 0;
       const vale = hayFoto && hayTexto && !!elegido;
       guardar.disabled = !vale;
-      pista.textContent = !hayFoto ? 'Esta tarea necesita al menos una foto.'
+      pista.textContent = !hayFoto ? 'Este repaso necesita al menos una foto.'
         : !hayTexto ? 'Escribe qué hay que hacer aquí.'
         : !elegido ? 'Elige el oficio para poder guardar.'
         : '';
@@ -386,7 +386,7 @@ async function descargarHoja(lista, tareas) {
     // un toque recién dado, no uno de hace unos segundos.
     entregarFichero(fichero, nombre);
   } catch (e) {
-    console.error('No se pudo generar el PDF del acta:', e);
+    console.error('No se pudo generar el PDF del parte:', e);
     toast('No se pudo generar el PDF', 'err', {
       detalle: 'Toca para volver a intentarlo',
       alTocar: () => descargarHoja(lista, tareas),
@@ -417,7 +417,7 @@ async function menuLista(lista, tareas) {
       h('button.row', { onclick: () => cerrar('nombre') },
         h('div.row-lead', null, icon('edit', 18)),
         h('div.grow', null,
-          h('div.row-title', null, 'Cambiar el nombre del acta'),
+          h('div.row-title', null, 'Cambiar el nombre del parte'),
           h('div.row-sub', null, lista.nombre || `Ahora se llama como la vivienda`),
         ),
       ),
@@ -425,7 +425,7 @@ async function menuLista(lista, tareas) {
         h('div.row-lead', null, icon('check', 18)),
         h('div.grow', null,
           h('div.row-title', null, 'Marcar todas como…'),
-          h('div.row-sub', null, 'Cambia el estado de las ' + tareas.length + ' tareas'),
+          h('div.row-sub', null, 'Cambia el estado de los ' + tareas.length + ' repasos'),
         ),
       ),
       h('button.row', { onclick: () => cerrar('cerrar') },
@@ -479,7 +479,7 @@ async function menuLista(lista, tareas) {
   if (accion === 'borrar') {
     const ok = await confirmSheet({
       title: '¿Borrar la lista?',
-      text: `Se borrarán también sus ${tareas.length} tareas con sus fotos. No se puede deshacer.`,
+      text: `Se borrarán también sus ${tareas.length} repasos con sus fotos. No se puede deshacer.`,
       ok: 'Borrar', danger: true,
     });
     if (!ok) return;
@@ -500,15 +500,15 @@ function hojaNombre(lista) {
     const u = unidad(lista.unidadId);
     const campo = h('input.input', {
       type: 'text', value: lista.nombre || '',
-      placeholder: u?.nombre || 'Nombre del acta',
+      placeholder: u?.nombre || 'Nombre del parte',
       maxlength: 80, autocapitalize: 'sentences',
     });
     setTimeout(() => campo.focus(), 320);
 
     return [
-      h('h2.title', null, 'Nombre del acta'),
+      h('h2.title', null, 'Nombre del parte'),
       campo,
-      h('p.hint', null, `Si lo dejas vacío, el acta se llama como la vivienda (${u?.nombre || ''}).`),
+      h('p.hint', null, `Si lo dejas vacío, el parte se llama como la vivienda (${u?.nombre || ''}).`),
       h('button.btn.accent.full', { onclick: () => cerrar(campo.value.trim()) }, 'Guardar'),
       h('button.btn.ghost.full', { onclick: () => cerrar(null) }, 'Cancelar'),
     ];

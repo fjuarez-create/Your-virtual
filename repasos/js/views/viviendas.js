@@ -73,7 +73,7 @@ export async function render({ promoId, desdeTab = false }) {
     const n = visibles.length;
     epigrafe.textContent = vista === 'finalizadas'
       ? `${n} ${n === 1 ? 'vivienda lista' : 'viviendas listas'} para entregar`
-      : `${n} ${n === 1 ? 'vivienda' : 'viviendas'} con tareas pendientes`;
+      : `${n} ${n === 1 ? 'vivienda' : 'viviendas'} con repasos pendientes`;
 
     pintarFiltros();
     conmutador.querySelectorAll('button').forEach((b) =>
@@ -136,7 +136,7 @@ export async function render({ promoId, desdeTab = false }) {
     clase: 'pantalla-diseno',
     contenido: [
       cabecera({ seccion: 'viviendas' }),
-      h('h1.d-saludo', null, 'Viviendas'),
+      h('h1.d-saludo', null, 'Repasos de viviendas'),
       avisoLocal() || barraSync(),
       h('div.d-fila-selector', null, conmutador, bolaFiltros),
       aplicados,

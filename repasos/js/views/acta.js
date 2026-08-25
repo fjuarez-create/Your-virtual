@@ -41,8 +41,8 @@ export async function render({ fecha }) {
   const esHoy = acta.fecha === store.diaDe(new Date().toISOString());
 
   const menu = async () => {
-    const elegido = await menuTarjeta(`Acta del ${fechaDeActa(acta.fecha)}`, [
-      { id: 'pdf', icono: 'download', rotulo: 'Bajar el acta en PDF', sub: 'Para mandarla o archivarla' },
+    const elegido = await menuTarjeta(`Parte del ${fechaDeActa(acta.fecha)}`, [
+      { id: 'pdf', icono: 'download', rotulo: 'Bajar el parte en PDF', sub: 'Para mandarla o archivarla' },
     ]);
     if (elegido === 'pdf') bajar();
   };
@@ -73,12 +73,12 @@ export async function render({ fecha }) {
       })),
     });
     const url = URL.createObjectURL(blob);
-    const a = h('a', { href: url, download: nombreDeFichero(`acta-${p.nombre}`, acta.fecha) });
+    const a = h('a', { href: url, download: nombreDeFichero(`parte-${p.nombre}`, acta.fecha) });
     document.body.append(a);
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 4000);
-    toast('Acta descargada');
+    toast('Parte descargado');
   });
 
   const cifra = (n, rotulo, clase) => (n ? h('div.d-acta-cifra', { class: clase },
@@ -89,12 +89,12 @@ export async function render({ fecha }) {
     sinTabs: true,
     clase: 'pantalla-diseno',
     contenido: [
-      cabecera({ volver: '#/listas', titulo: 'Acta', menu }),
+      cabecera({ volver: '#/listas', titulo: 'Parte', menu }),
       avisoLocal() || barraSync(),
 
       // La portada del acta: la fecha grande, como en el papel.
       h('div.d-acta-portada', { class: esHoy ? 'hoy' : '' },
-        h('p.d-acta-eyebrow', null, esHoy ? 'Acta de hoy · en curso' : 'Acta de obra'),
+        h('p.d-acta-eyebrow', null, esHoy ? 'Parte de hoy · en curso' : 'Parte de repasos'),
         h('h1.d-acta-fecha', null, fechaDeActa(acta.fecha, { conAno: true })),
         h('p.d-acta-sub', null, `${diaDeLaSemana(acta.fecha, { mayuscula: true })} · ${p.nombre}`),
       ),
@@ -120,7 +120,7 @@ export async function render({ fecha }) {
       ...acta.villas.flatMap((v) => bloqueDeVilla(v)),
 
       h('button.d-boton-negro', { onclick: bajar, style: { marginTop: '22px' } },
-        'Bajar el acta en PDF'),
+        'Bajar el parte en PDF'),
     ],
   };
 }

@@ -1,0 +1,218 @@
+name: Arrancar limpio (entorno real)
+
+# Deja la app real recién estrenada, por orden de Fran (25-08-2026):
+# borra repasos, partes, comentarios, fichas de fotos, reuniones,
+# tareas de reunión, adjuntos y grabaciones, y CONSERVA usuarios,
+# permisos, estancias, gremios, claves, voces y mensajes.
+#
+# ANTES de borrar nada, el propio servidor escribe un volcado completo
+# de la base en api/datos/ (la carpeta que el navegador tiene
+# prohibida): nada sale del servidor y todo tiene vuelta atrás. Los
+# ficheros de fotos y audios tampoco se tocan.
+#
+# Solo se lanza A MANO, y hay que escribir BORRAR en la casilla. Usa la
+# misma llave de un solo uso que la copia nocturna: se pone por FTP, se
+# llama, y se retira pase lo que pase.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmar:
+        description: 'Escribe BORRAR (en mayúsculas) para confirmar'
+        required: true
+
+concurrency:
+  group: hosting-repasos-limpieza
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  DOMINIO: https://repasos.unikdi.com
+
+jobs:
+  limpiar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: La confirmación va en serio
+        env:
+          CONFIRMAR: ${{ inputs.confirmar }}
+        run: |
+          set -eu
+          if [ "$CONFIRMAR" != "BORRAR" ]; then
+            echo "No se ha escrito BORRAR: no se toca nada." >&2
+            exit 1
+          fi
+          echo "Confirmado: se arranca limpio."
+
+      - name: Comprobar que están los secretos
+        env:
+          SERVER: ${{ secrets.REPASOS_FTP_SERVER }}
+          USERNAME: ${{ secrets.REPASOS_FTP_USERNAME }}
+          PASSWORD: ${{ secrets.REPASOS_FTP_PASSWORD }}
+        run: |
+          set -eu
+          [ -n "$SERVER" ] && [ -n "$USERNAME" ] && [ -n "$PASSWORD" ] \
+            || { echo "Faltan secretos REPASOS_FTP_*." >&2; exit 1; }
+          echo "Secretos en su sitio."
+
+      - name: Instalar lftp
+        timeout-minutes: 6
+        run: |
+          set -eu
+          command -v lftp > /dev/null && exit 0
+          if timeout 120 sudo apt-get install -y -qq lftp; then exit 0; fi
+          for intento in 1 2 3; do
+            if timeout 120 sudo apt-get update -qq \
+               && timeout 120 sudo apt-get install -y -qq lftp; then exit 0; fi
+            sleep $((intento * 10))
+          done
+          echo "No se ha podido instalar lftp." >&2
+          exit 1
+
+      - name: Preparar el camino al servidor
+        env:
+          FTP_SERVER: ${{ secrets.REPASOS_FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.REPASOS_FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.REPASOS_FTP_PASSWORD }}
+          FTP_SERVER_DIR: ${{ secrets.REPASOS_FTP_SERVER_DIR }}
+        run: |
+          set -eu
+          cat > "$RUNNER_TEMP/ftp.sh" <<'FTPSH'
+          SETTINGS='
+            set ssl:verify-certificate no;
+            set ftp:passive-mode true;
+            set net:timeout 20;
+            set net:max-retries 3;
+            set net:reconnect-interval-base 4;
+            set net:reconnect-interval-multiplier 2;
+            set xfer:clobber on;
+            set cmd:fail-exit true;
+          '
+          TLS="$SETTINGS set ftp:ssl-allow true; set ftp:ssl-force true; set ftp:ssl-protect-data false;"
+          PLAIN="$SETTINGS set ftp:ssl-allow false;"
+
+          run_lftp() {
+            printf '%s\nopen -u "%s","%s" "%s"\n%s\nbye\n' \
+              "$1" "$FTP_USERNAME" "$FTP_PASSWORD" "$FTP_SERVER" "$2" | lftp
+          }
+
+          elegir_camino() {
+            if run_lftp "$TLS" "pwd" >/dev/null 2>&1; then
+              echo tls > "$RUNNER_TEMP/ftp-modo"
+            else
+              echo "El servidor no aceptó FTPS; se usa FTP plano."
+              echo plain > "$RUNNER_TEMP/ftp-modo"
+            fi
+          }
+
+          cargar_camino() {
+            case "$(cat "$RUNNER_TEMP/ftp-modo" 2>/dev/null || echo tls)" in
+              plain) OPTS="$PLAIN" ;;
+              *)     OPTS="$TLS" ;;
+            esac
+            DIR="$(cat "$RUNNER_TEMP/ftp-dir" 2>/dev/null || echo .)"
+          }
+
+          buscar_carpeta() {
+            DIR="${FTP_SERVER_DIR:-}"
+            case "$DIR" in "" | "." | "./") DIR="" ;; esac
+            if [ -z "$DIR" ]; then
+              if run_lftp "$OPTS" "cls -1" 2>/dev/null | tr -d '\r/' | grep -qx httpdocs; then
+                DIR=httpdocs
+              else
+                DIR=.
+              fi
+            fi
+            echo "$DIR" > "$RUNNER_TEMP/ftp-dir"
+            echo "Carpeta del dominio: $DIR"
+          }
+          FTPSH
+          . "$RUNNER_TEMP/ftp.sh"
+          elegir_camino
+          cargar_camino
+          buscar_carpeta
+
+      - name: Poner la llave, limpiar con copia previa, y contar lo hecho
+        env:
+          FTP_SERVER: ${{ secrets.REPASOS_FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.REPASOS_FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.REPASOS_FTP_PASSWORD }}
+        run: |
+          set -eu
+          . "$RUNNER_TEMP/ftp.sh"
+          cargar_camino
+
+          TOKEN="$(openssl rand -hex 32)"
+          printf '%s\n' "$TOKEN" > "$RUNNER_TEMP/copia.clave"
+          run_lftp "$OPTS" "cd \"$DIR\"; put \"$RUNNER_TEMP/copia.clave\" -o api/datos/copia.clave"
+
+          CODIGO=$(curl -s -o respuesta.json -w '%{http_code}' --max-time 300 \
+            -X POST -H "X-Clave-Copia: $TOKEN" "$DOMINIO/api/arranque-limpio" || echo 000)
+          if [ "$CODIGO" != 200 ] || ! jq -e '.ok == true' respuesta.json > /dev/null 2>&1; then
+            echo "::error::El arranque limpio ha contestado ${CODIGO}. NO se ha borrado nada sin su copia previa."
+            cat respuesta.json 2>/dev/null || true
+            exit 1
+          fi
+
+          {
+            echo "## Entorno real: arrancado limpio"
+            echo ""
+            echo "- Copia previa guardada en el servidor: \`api/datos/$(jq -r .copia respuesta.json)\`"
+            echo "- Filas retiradas (−1 = la tabla no existía):"
+            echo ""
+            jq -r '.borrado | to_entries[] | "  - \(.key): \(.value)"' respuesta.json
+            echo ""
+            echo "- Se conservan usuarios, permisos, estancias, claves, voces y mensajes."
+            echo "- Las fotos y audios viejos siguen en disco, invisibles: con la copia previa, todo tiene vuelta atrás."
+          } >> "$GITHUB_STEP_SUMMARY"
+          jq . respuesta.json
+          rm -f respuesta.json
+
+      # Corre AUNQUE algo haya fallado antes: una llave olvidada es una
+      # puerta abierta.
+      - name: Retirar la llave del servidor
+        if: always()
+        env:
+          FTP_SERVER: ${{ secrets.REPASOS_FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.REPASOS_FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.REPASOS_FTP_PASSWORD }}
+        run: |
+          set -u
+          [ -f "$RUNNER_TEMP/ftp.sh" ] || { echo "No se llegó a abrir el camino FTP."; exit 0; }
+          [ -f "$RUNNER_TEMP/copia.clave" ] || { echo "No se llegó a poner ninguna llave."; exit 0; }
+          . "$RUNNER_TEMP/ftp.sh"
+          cargar_camino
+          if run_lftp "$OPTS" "cd \"$DIR\"; cls -1 api/datos/copia.clave" 2>/dev/null | grep -q copia.clave; then
+            run_lftp "$OPTS" "cd \"$DIR\"; rm api/datos/copia.clave" 2>/dev/null \
+              && echo "Llave retirada." \
+              || echo "::warning::No se ha podido retirar api/datos/copia.clave: bórrala a mano."
+          else
+            echo "La llave ya estaba retirada."
+          fi
+
+      - name: Comprobar que la app respira y está a cero
+        timeout-minutes: 4
+        env:
+          ENTRADA_EMAIL: ${{ secrets.REVISION_EMAIL }}
+          ENTRADA_PASSWORD: ${{ secrets.REVISION_PASSWORD }}
+        run: |
+          set -eu
+          if [ -z "${ENTRADA_EMAIL:-}" ] || [ -z "${ENTRADA_PASSWORD:-}" ]; then
+            echo "::warning::Sin REVISION_EMAIL/REVISION_PASSWORD no se puede comprobar desde dentro."
+            exit 0
+          fi
+          CUERPO="$(python3 -c 'import json,os; print(json.dumps({"email": os.environ["ENTRADA_EMAIL"], "password": os.environ["ENTRADA_PASSWORD"]}))')"
+          printf '%s' "$CUERPO" | curl -fsS --max-time 25 -c galletas.txt -X POST \
+            -H 'Content-Type: application/json' --data-binary @- \
+            "$DOMINIO/api/auth/login" > /dev/null
+          echo "El login funciona: los usuarios están intactos."
+          R="$(curl -fsS --max-time 25 -b galletas.txt "$DOMINIO/api/obra/reuniones?promo=brassie")"
+          REUNIONES=$(echo "$R" | jq '.reuniones | length')
+          PENDIENTES=$(echo "$R" | jq '.tareasPendientes | length')
+          echo "Reuniones: $REUNIONES · tareas de obra pendientes: $PENDIENTES"
+          [ "$REUNIONES" = 0 ] && [ "$PENDIENTES" = 0 ] \
+            || { echo "::error::La obra no está a cero." >&2; exit 1; }
+          echo "Todo a cero y funcionando."

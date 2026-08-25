@@ -35,7 +35,7 @@ export async function render() {
     sinTabs: true,
     fab: error ? null : h('button.fab', { onclick: () => nuevaPlanta(lienzo) }, icon('plus'), 'Nueva planta'),
     contenido: [
-      cabeceraClasica('Estancias', 'Las que ofrece la app al crear tareas', { volverA: '#/ajustes' }),
+      cabeceraClasica('Estancias', 'Las que ofrece la app al crear repasos', { volverA: '#/ajustes' }),
       h('h1.display', { style: { marginTop: '10px' } }, 'Estancias'),
 
       error
@@ -52,14 +52,14 @@ export async function render() {
 
       error ? null : h('p.hint', { style: { marginTop: '18px', whiteSpace: 'normal' } },
         (deFabrica ? 'Ahora mismo se usa la lista de fábrica. ' : '') +
-        'El orden de aquí es el del selector y el del PDF. Las tareas ya escritas conservan su estancia aunque se renombre o se quite de la lista.'),
+        'El orden de aquí es el del selector y el del PDF. Los repasos ya escritos conservan su estancia aunque se renombre o se quite de la lista.'),
 
       error || deFabrica ? null : h('button.btn.ghost.full', {
         style: { marginTop: '10px' },
         onclick: async () => {
           if (!await confirmSheet({
             title: '¿Volver a la lista de fábrica?',
-            text: 'Se pierde la lista editada. Las tareas ya escritas no se tocan.',
+            text: 'Se pierde la lista editada. Los repasos ya escritos no se tocan.',
             ok: 'Volver a la de fábrica',
           })) return;
           await guardar(null);
@@ -93,7 +93,7 @@ function bloquePlanta(lienzo, p, i) {
           if (!await confirmSheet({
             title: `¿Borrar «${p.nombre}»?`,
             text: p.zonas.length
-              ? `Se van también sus ${p.zonas.length} estancias. Las tareas ya escritas no se tocan.`
+              ? `Se van también sus ${p.zonas.length} estancias. Los repasos ya escritos no se tocan.`
               : 'La planta está vacía.',
             ok: 'Borrar', danger: true,
           })) return;
@@ -145,7 +145,7 @@ function filaZona(lienzo, i, z, j) {
         if (cuenta(lienzo) === 1) { toast('Tiene que quedar al menos una estancia', 'err'); return; }
         if (!await confirmSheet({
           title: `¿Quitar «${z}»?`,
-          text: 'Las tareas que ya la llevan conservan su texto.',
+          text: 'Los repasos que ya la llevan conservan su texto.',
           ok: 'Quitar', danger: true,
         })) return;
         const nuevas = copia(lienzo);

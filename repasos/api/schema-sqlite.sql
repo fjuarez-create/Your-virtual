@@ -143,3 +143,104 @@ CREATE TABLE IF NOT EXISTS lecturas (
 );
 CREATE INDEX IF NOT EXISTS ix_lecturas_mensaje ON lecturas (mensaje_id);
 CREATE INDEX IF NOT EXISTS ix_lecturas_actualizado ON lecturas (actualizado);
+
+-- ═══ La obra: reuniones y encargos ═══════════════════════════════
+-- Una reunión de obra al día, con su acta. Los ENCARGOS son las tareas
+-- que nacen de una reunión: en pantalla se llaman «tareas», pero por
+-- dentro llevan nombre propio para no chocar jamás con la tabla
+-- `tareas`, que guarda repasos (ver CLAUDE.md, el diccionario).
+CREATE TABLE IF NOT EXISTS reuniones (
+  id                TEXT NOT NULL PRIMARY KEY,
+  promo_id          TEXT NOT NULL,
+  fecha             TEXT NOT NULL,
+  empezada          TEXT NOT NULL,
+  terminada         TEXT,
+  asistentes        TEXT NOT NULL,
+  invitados         TEXT NOT NULL,
+  resumen           TEXT,
+  propuesta         TEXT,
+  borrada           INTEGER NOT NULL DEFAULT 0,
+  creado            TEXT NOT NULL,
+  actualizado       TEXT NOT NULL,
+  creado_por        TEXT,
+  creado_por_nombre TEXT NOT NULL DEFAULT '',
+  acta_firmada      TEXT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS ix_reuniones_dia ON reuniones (promo_id, fecha);
+
+CREATE TABLE IF NOT EXISTS encargos (
+  id                 TEXT NOT NULL PRIMARY KEY,
+  reunion_id         TEXT NOT NULL,
+  promo_id           TEXT NOT NULL,
+  texto              TEXT NOT NULL,
+  general            INTEGER NOT NULL DEFAULT 1,
+  unidad_id          TEXT NOT NULL DEFAULT '',
+  responsable_id     TEXT,
+  responsable_nombre TEXT NOT NULL DEFAULT '',
+  fecha_limite       TEXT NOT NULL DEFAULT '',
+  estado             TEXT NOT NULL DEFAULT 'pendiente',
+  hecho_en           TEXT,
+  hecho_por_nombre   TEXT NOT NULL DEFAULT '',
+  borrada            INTEGER NOT NULL DEFAULT 0,
+  creado             TEXT NOT NULL,
+  actualizado        TEXT NOT NULL,
+  creado_por         TEXT,
+  creado_por_nombre  TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS ix_encargos_reunion ON encargos (reunion_id);
+CREATE INDEX IF NOT EXISTS ix_encargos_estado ON encargos (promo_id, estado);
+
+-- ═══ El audio de las reuniones y el registro de voces ═══════════
+-- (ver el comentario del esquema de MySQL: partes por fichero completo
+-- y JSON para lo que cambia de forma con el proveedor)
+CREATE TABLE IF NOT EXISTS grabaciones (
+  id                TEXT NOT NULL PRIMARY KEY,
+  reunion_id        TEXT NOT NULL,
+  promo_id          TEXT NOT NULL,
+  estado            TEXT NOT NULL DEFAULT 'grabando',
+  mime              TEXT NOT NULL DEFAULT '',
+  duracion          INTEGER NOT NULL DEFAULT 0,
+  tam               INTEGER NOT NULL DEFAULT 0,
+  partes            TEXT,
+  hablantes         TEXT,
+  audio_borrado     INTEGER NOT NULL DEFAULT 0,
+  borrada           INTEGER NOT NULL DEFAULT 0,
+  creado            TEXT NOT NULL,
+  actualizado       TEXT NOT NULL,
+  creado_por        TEXT,
+  creado_por_nombre TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS ix_grabaciones_reunion ON grabaciones (reunion_id);
+
+CREATE TABLE IF NOT EXISTS voces (
+  id                   TEXT NOT NULL PRIMARY KEY,
+  promo_id             TEXT NOT NULL,
+  persona_id           TEXT,
+  persona_nombre       TEXT NOT NULL DEFAULT '',
+  huella               TEXT,
+  huella_trabajo       TEXT NOT NULL DEFAULT '',
+  muestra_grabacion_id TEXT,
+  muestra_parte        INTEGER NOT NULL DEFAULT 0,
+  muestra_desde        REAL NOT NULL DEFAULT 0,
+  muestra_hasta        REAL NOT NULL DEFAULT 0,
+  borrada              INTEGER NOT NULL DEFAULT 0,
+  creado               TEXT NOT NULL,
+  actualizado          TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_voces_promo ON voces (promo_id);
+
+CREATE TABLE IF NOT EXISTS adjuntos (
+  id                TEXT NOT NULL PRIMARY KEY,
+  reunion_id        TEXT NOT NULL,
+  promo_id          TEXT NOT NULL,
+  tipo              TEXT NOT NULL DEFAULT 'otro',
+  nombre            TEXT NOT NULL DEFAULT '',
+  mime              TEXT NOT NULL DEFAULT '',
+  tam               INTEGER NOT NULL DEFAULT 0,
+  borrada           INTEGER NOT NULL DEFAULT 0,
+  creado            TEXT NOT NULL,
+  actualizado       TEXT NOT NULL,
+  creado_por        TEXT,
+  creado_por_nombre TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS ix_adjuntos_reunion ON adjuntos (reunion_id);

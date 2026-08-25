@@ -376,7 +376,7 @@ export async function cambiarEstado(tareaId, nuevo, nota = {}) {
   if (t.estado === nuevo) return t;
 
   if ((nuevo === 'verificada' || nuevo === 'rechazada') && !puedeVerificar(usuario)) {
-    throw new Error('No tienes permiso para verificar ni rechazar tareas.');
+    throw new Error('No tienes permiso para verificar ni rechazar repasos.');
   }
 
   const rechazo = nuevo === 'rechazada';

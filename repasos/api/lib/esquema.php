@@ -18,7 +18,7 @@
 declare(strict_types=1);
 
 /** Se sube al añadir campos o tablas. */
-const ESQUEMA_VERSION = 9;
+const ESQUEMA_VERSION = 13;
 
 /**
  * Campos que tienen que existir, por tabla, con el tipo que usa MySQL.
@@ -55,6 +55,17 @@ const ESQUEMA_CAMPOS = [
     ],
     'medios' => [
         'comentario_id' => 'CHAR(36) DEFAULT NULL',
+    ],
+    'reuniones' => [
+        // El acta que sale de la grabación: el resumen ya aceptado y,
+        // aparte, la propuesta de la IA a la espera de revisión (JSON).
+        // Nulos hasta que existen: una reunión sin audio no los usa.
+        'resumen'   => 'MEDIUMTEXT',
+        'propuesta' => 'MEDIUMTEXT',
+        // Cuándo se firmó. Un acta puede firmarse con el resumen en
+        // blanco, así que el resumen no sirve para saber si está
+        // firmada: hace falta su propio sello.
+        'acta_firmada' => 'VARCHAR(32) DEFAULT NULL',
     ],
 ];
 
@@ -181,11 +192,6 @@ function esquema_arreglar_datos(PDO $pdo): array
 {
     $hechos = [];
 
-    // Antes, rechazar una tarea la devolvía a «pendiente» con una bandera
-    // encima. Ahora «rechazada» es un estado, y sin esto las tareas que
-    // ya habían rebotado se quedarían contadas como pendientes: no
-    // saldrían en el contador de rechazadas ni en su filtro, que es justo
-    // para lo que se hizo el estado.
     // La lista de estancias de la obra vive en meta con la clave «zonas»,
     // en JSON, y no cabe en un VARCHAR(255): en MySQL se ensancha la
     // columna a TEXT. En SQLite ya es TEXT de nacimiento. Repetirlo no
@@ -195,6 +201,11 @@ function esquema_arreglar_datos(PDO $pdo): array
         $hechos[] = 'meta.valor pasa a TEXT';
     }
 
+    // Antes, rechazar una tarea la devolvía a «pendiente» con una bandera
+    // encima. Ahora «rechazada» es un estado, y sin esto las tareas que
+    // ya habían rebotado se quedarían contadas como pendientes: no
+    // saldrían en el contador de rechazadas ni en su filtro, que es justo
+    // para lo que se hizo el estado.
     if (in_array('rechazada', esquema_columnas($pdo, 'tareas'), true)) {
         $sent = $pdo->prepare(
             "UPDATE tareas SET estado = 'rechazada' WHERE estado = 'pendiente' AND rechazada = 1"

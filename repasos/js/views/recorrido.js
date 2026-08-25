@@ -60,15 +60,15 @@ function resumen(dichas, vistas, total, sinMirar) {
     : '';
 
   if (!escritas) {
-    return `No ha salido ninguna tarea: no había nada dicho y en las fotos no se distingue el defecto. Escríbelas mirándolas.${largo}`;
+    return `No ha salido ningún repaso: no había nada dicho y en las fotos no se distingue el defecto. Escríbelos mirándolas.${largo}`;
   }
   if (!vistas) {
-    return `${escritas} ${escritas === 1 ? 'tarea' : 'tareas'} de lo que dijiste. Repásalas antes de crearlas.${cola}${largo}`;
+    return `${escritas} ${escritas === 1 ? 'repaso' : 'repasos'} de lo que dijiste. Repásalos antes de crearlos.${cola}${largo}`;
   }
   if (!dichas) {
-    return `${escritas} ${escritas === 1 ? 'tarea leída' : 'tareas leídas'} de las fotos. Repásalas con calma: salen de lo que se ve, no de lo que dijiste.${cola}${largo}`;
+    return `${escritas} ${escritas === 1 ? 'repaso leído' : 'repasos leídos'} de las fotos. Repásalos con calma: salen de lo que se ve, no de lo que dijiste.${cola}${largo}`;
   }
-  return `${escritas} redactadas: ${dichas} de lo que dijiste y ${vistas} ${vistas === 1 ? 'leída' : 'leídas'} de la foto. Repasa sobre todo ${vistas === 1 ? 'esa' : 'esas'}.${cola}${largo}`;
+  return `${escritas} redactadas: ${dichas} de lo que dijiste y ${vistas} ${vistas === 1 ? 'leído' : 'leídos'} de la foto. Repasa sobre todo ${vistas === 1 ? 'ese' : 'esos'}.${cola}${largo}`;
 }
 
 export async function render({ promoId, unidadId, seguir = false }) {
@@ -172,7 +172,7 @@ export async function render({ promoId, unidadId, seguir = false }) {
   /* ─── Abrir el acta sin grabar nada ─── */
   const actaSuelta = async () => {
     const l = await store.crearLista({ unidadId, promoId, fase: FASE_UNICA });
-    toast('Acta abierta · se firma con tu nombre y la fecha de hoy');
+    toast('Parte abierto · se firma con tu nombre y la fecha de hoy');
     ir('#/l/' + l.id);
   };
 
@@ -184,9 +184,9 @@ export async function render({ promoId, unidadId, seguir = false }) {
         h('div.rec-intro', null,
           h('div.rec-ico', null, icon('camera', 30)),
           h('h2.title', null, 'Este navegador no puede grabar'),
-          h('p.sub', null, 'Abre el acta y añade las tareas a mano.'),
+          h('p.sub', null, 'Abre el parte y añade los repasos a mano.'),
         ),
-        h('button.d-boton-negro', { style: { marginTop: '14px' }, onclick: actaSuelta }, 'Abrir el acta sin recorrido'),
+        h('button.d-boton-negro', { style: { marginTop: '14px' }, onclick: actaSuelta }, 'Abrir el parte sin recorrido'),
       );
       return;
     }
@@ -535,7 +535,7 @@ export async function render({ promoId, unidadId, seguir = false }) {
         h('button.d-boton-negro.claro', { style: { marginTop: '14px' }, onclick: () => pintarFicha() },
           cerradas().length
             ? `Seguir el repaso (${cerradas().length} de ${cuantas})`
-            : `Escribir ${cuantas === 1 ? 'la tarea' : 'las tareas'} yo`),
+            : `Escribir ${cuantas === 1 ? 'el repaso' : 'los repasos'} yo`),
       ].filter(Boolean));
     };
 
@@ -549,7 +549,7 @@ export async function render({ promoId, unidadId, seguir = false }) {
 
       // «Tarea», no «repaso»: lo que se está haciendo aquí es crear
       // tareas, una por foto.
-      cab.ponerTitulo(`Tarea ${n} de ${l.length}`);
+      cab.ponerTitulo(`Repaso ${n} de ${l.length}`);
       // La flecha vuelve a la ficha anterior, y desde la primera sale de
       // la pantalla. Salir ya no cuesta nada: está todo apuntado.
       cab.ponerVuelta(() => (vecina(-1) ? irAFicha(vecina(-1)) : salir()));
@@ -688,11 +688,11 @@ export async function render({ promoId, unidadId, seguir = false }) {
           if (sig) { irAFicha(sig); return; }
           await cerrarElRepaso();
         },
-      }, f.guardada ? 'Creada · seguir' : 'Crear tarea');
+      }, f.guardada ? 'Creada · seguir' : 'Crear repaso');
 
       const descartarBtn = h('button.d-boton-hueco', {
         onclick: () => quitarFicha(f),
-      }, 'Descartar tarea');
+      }, 'Descartar repaso');
 
       const validar = () => { guardarBtn.disabled = !(f.texto.trim() && f.oficio && f.zona); };
       validar();
@@ -718,7 +718,7 @@ export async function render({ promoId, unidadId, seguir = false }) {
               onclick: async (ev) => {
                 ev.stopPropagation();
                 if (!await confirmar({
-                  texto: 'Esta foto vuelve a ser un repaso aparte, con su propia tarea. '
+                  texto: 'Esta foto vuelve a ir por su cuenta, con su propio repaso. '
                     + 'El texto de éste se queda como está.',
                   ok: 'Separarla en otro repaso',
                   icono: 'cursores',
@@ -757,7 +757,7 @@ export async function render({ promoId, unidadId, seguir = false }) {
         // cualquier ficha sin tener que llegar hasta la última.
         abiertas().length ? null : h('button.d-boton-negro.claro', {
           onclick: () => crearLasTareas(),
-        }, `Crear ${cerradas().length === 1 ? 'la tarea' : `las ${cerradas().length} tareas`}`),
+        }, `Crear ${cerradas().length === 1 ? 'el repaso' : `los ${cerradas().length} repasos`}`),
       ].filter(Boolean));
       requestAnimationFrame(() => { if (f.texto) crecer(); });
       lienzo.closest('.screen')?.scrollTo?.({ top: 0 });
@@ -775,9 +775,9 @@ export async function render({ promoId, unidadId, seguir = false }) {
     const quitarFicha = async (f) => {
       if (!f) return;
       if (!await confirmar({
-        ok: 'Descartar tarea',
+        ok: 'Descartar repaso',
         rojo: true,
-        conservar: 'Conservar tarea',
+        conservar: 'Conservar repaso',
       })) return;
       f.fuera = true;
       await apuntar({ ya: true });
@@ -798,7 +798,7 @@ export async function render({ promoId, unidadId, seguir = false }) {
         titulo: '¿Descartar el recorrido?',
         texto: `Se borra el paseo entero: ${rec.marcas.length} `
           + `${rec.marcas.length === 1 ? 'foto' : 'fotos'} y ${grabadora.reloj(rec.duracion)} `
-          + `de grabación${listas ? `, con ${listas} ${listas === 1 ? 'tarea ya lista' : 'tareas ya listas'}` : ''}. `
+          + `de grabación${listas ? `, con ${listas} ${listas === 1 ? 'repaso ya listo' : 'repasos ya listos'}` : ''}. `
           + 'No se puede recuperar.',
         ok: 'Descartar el recorrido',
         rojo: true,
@@ -819,9 +819,9 @@ export async function render({ promoId, unidadId, seguir = false }) {
       if (!buenas.length) { await tirarElRecorrido(); return; }
       const quiere = await confirmar({
         titulo: 'Ese era el último',
-        texto: `Se crearán ${buenas.length} ${buenas.length === 1 ? 'tarea' : 'tareas'} en ${u.nombre}. `
+        texto: `Se crearán ${buenas.length} ${buenas.length === 1 ? 'repaso' : 'repasos'} en ${u.nombre}. `
           + 'Puedes seguir revisándolas antes, que no se pierde nada.',
-        ok: `Crear ${buenas.length === 1 ? 'la tarea' : `las ${buenas.length} tareas`}`,
+        ok: `Crear ${buenas.length === 1 ? 'el repaso' : `los ${buenas.length} repasos`}`,
         icono: 'check',
         conservar: 'Seguir revisando',
         iconoConservar: 'edit',
@@ -834,7 +834,7 @@ export async function render({ promoId, unidadId, seguir = false }) {
     const crearLasTareas = async () => {
       const buenas = cerradas();
       if (!buenas.length) return;
-      toast('Creando las tareas…');
+      toast('Creando los repasos…');
 
       /* Todo el tramo va vigilado, y no por manía. Aquí antes no había
          try/catch, y el día que una foto llegó muerta del disco —Safari
@@ -873,7 +873,7 @@ export async function render({ promoId, unidadId, seguir = false }) {
         else sinCrear += 1;
       }
       if (!conVida.length) {
-        toast('Ninguna foto ha sobrevivido y sin foto no se crean tareas. Vuelve a hacer el recorrido.', 'err');
+        toast('Ninguna foto ha sobrevivido y sin foto no se crean repasos. Vuelve a hacer el recorrido.', 'err');
         return;
       }
 
@@ -895,16 +895,16 @@ export async function render({ promoId, unidadId, seguir = false }) {
         await store.marcarRecorridoUsado(rec.id, lista.id);
       } catch (e) {
         console.error(e);
-        toast('No se han podido crear las tareas. Nada se ha perdido: vuelve a intentarlo.', 'err');
+        toast('No se han podido crear los repasos. Nada se ha perdido: vuelve a intentarlo.', 'err');
         return;
       }
       guardarAlSalir = null;
       const yo = store.sesion();
       await hojaBienHecho({
         titulo: `Excelente${nombreCorto(yo) ? ', ' + nombreCorto(yo) : ''}`,
-        frase: `${conVida.length} ${conVida.length === 1 ? 'tarea creada' : 'tareas creadas'}. `
+        frase: `${conVida.length} ${conVida.length === 1 ? 'repaso creado' : 'repasos creados'}. `
           + (sinCrear
-            ? `${sinCrear === 1 ? 'Una se ha quedado fuera porque su foto se perdió' : `${sinCrear} se han quedado fuera porque sus fotos se perdieron`}: sin foto no se crean tareas.`
+            ? `${sinCrear === 1 ? 'Una se ha quedado fuera porque su foto se perdió' : `${sinCrear} se han quedado fuera porque sus fotos se perdieron`}: sin foto no se crean repasos.`
             : 'Que empiecen los remates.'),
         usuario: yo,
         boton: `Volver a ${u.nombre}`,
@@ -974,12 +974,12 @@ export async function render({ promoId, unidadId, seguir = false }) {
       const paso = pantallaTrabajando([
         'Escuchando la grabación',
         'Insertando fotos',
-        'Creando tareas',
+        'Creando repasos',
       ]);
       let rendido = false;
       paso.alRendirse(() => {
         rendido = true;
-        toast('Seguimos sin la IA: escribe tú las tareas');
+        toast('Seguimos sin la IA: escribe tú los repasos');
         pintarFicha();
       });
       let nota = '';
@@ -1134,7 +1134,7 @@ export async function render({ promoId, unidadId, seguir = false }) {
       return h('div.rec-dictado', null,
         h('p.d-epigrafe', { style: { margin: '0 0 4px' } }, 'Que las escriba solas'),
         h('p.sub', { style: { marginTop: '4px' } },
-          'Se escucha lo que dijiste, se miran las fotos y sale una tarea de cada '
+          'Se escucha lo que dijiste, se miran las fotos y sale un repaso de cada '
           + 'una con su estancia y su gremio. Un solo toque.'),
         h('div', { style: { marginTop: '10px' } }, campo),
         aviso,
@@ -1177,7 +1177,7 @@ export async function render({ promoId, unidadId, seguir = false }) {
       /* «Descartar esta tarea» solo cuando hay una ficha delante. En la
          antesala no hay ninguna «esta», y una fila que no sabe a qué se
          refiere es peor que no estar. */
-      enFicha && mirando && vivas().includes(mirando) ? filaMenu('trash', 'Descartar esta tarea', () => {
+      enFicha && mirando && vivas().includes(mirando) ? filaMenu('trash', 'Descartar este repaso', () => {
         const f = mirando;
         cerrar();
         quitarFicha(f);

@@ -23,7 +23,7 @@ import { fotosDe, soltarFotos } from '../pendientes.js';
 
 export async function render({ listaId, tareaId }) {
   const t = await store.tarea(tareaId);
-  if (!t) { toast('La tarea ya no existe', 'err'); ir('#/l/' + listaId, { reemplazar: true }); return { contenido: [] }; }
+  if (!t) { toast('El repaso ya no existe', 'err'); ir('#/l/' + listaId, { reemplazar: true }); return { contenido: [] }; }
 
   const lista = await store.lista(listaId);
   const u = lista ? unidad(lista.unidadId) : null;
@@ -70,7 +70,7 @@ export async function render({ listaId, tareaId }) {
       caja.replaceChildren(
         h('div.d-foto-tarea.generica', ruta ? { style: { backgroundImage: `url("${ruta}")` } } : null,
           ruta ? null : icon('image', 30)),
-        h('p.d-foto-aviso', null, 'Esta tarea se creó sin foto. La imagen es del oficio, no del remate.'),
+        h('p.d-foto-aviso', null, 'Este repaso se creó sin foto. La imagen es del oficio, no del remate.'),
       );
       return;
     }
@@ -94,7 +94,7 @@ export async function render({ listaId, tareaId }) {
             if (!await confirmSheet({ title: '¿Borrar esta foto?', ok: 'Borrar', danger: true })) return;
             const r = await store.borrarMedio(m.id);
             if (r?.bloqueado) {
-              toast('Una tarea no puede quedarse sin foto: añade otra antes de borrar esta', 'err');
+              toast('Un repaso no puede quedarse sin foto: añade otra antes de borrar esta', 'err');
               return;
             }
             refrescar();
@@ -132,7 +132,7 @@ export async function render({ listaId, tareaId }) {
     onclick: () => hojaFotoAcciones(meterFotos),
   }, icon('plus'), rotuloFoto);
   const accion = h('button.d-boton-negro', { disabled: true },
-    puedeVerificarla ? 'Verificar tarea' : 'Dar por completada');
+    puedeVerificarla ? 'Verificar repaso' : 'Dar por completada');
   if (puedeVerificarla) accion.classList.add('verde');
 
   const pintarCarrete = () => {
@@ -155,7 +155,7 @@ export async function render({ listaId, tareaId }) {
     carrete.classList.toggle('una', fotosNuevas.length === 1);
     rotuloFoto.textContent = fotosNuevas.length
       ? 'Añadir más fotos (opcional)'
-      : (puedeVerificarla ? 'Añadir foto para verificar tarea' : 'Añadir foto para completar tarea');
+      : (puedeVerificarla ? 'Añadir foto para verificar repaso' : 'Añadir foto para completar repaso');
     // Sin foto no se completa ni se verifica: es la prueba, no un adorno.
     accion.disabled = !fotosNuevas.length;
   };
@@ -228,7 +228,7 @@ export async function render({ listaId, tareaId }) {
     } catch (err) { toast(err.message, 'err'); accion.disabled = false; }
   });
 
-  const rechazar = h('button.d-boton-negro.rojo', { disabled: true }, 'Rechazar tarea');
+  const rechazar = h('button.d-boton-negro.rojo', { disabled: true }, 'Rechazar repaso');
   rechazar.addEventListener('click', async () => {
     const nota = await hojaRechazo(t);
     if (!nota) return;
@@ -264,7 +264,7 @@ export async function render({ listaId, tareaId }) {
   const bloqueAccion = [];
   if (puedeCompletar || puedeVerificarla) {
     bloqueAccion.push(
-      h('p.d-epigrafe', null, puedeVerificarla ? 'Verificar tarea' : 'Completar tarea'),
+      h('p.d-epigrafe', null, puedeVerificarla ? 'Verificar repaso' : 'Completar repaso'),
       h('div.d-escribir.d-chat', { style: { marginTop: '0' } }, cajaMensaje, mandarNota),
       botonFoto,
       carrete,
@@ -281,12 +281,12 @@ export async function render({ listaId, tareaId }) {
       // que saber al abrirla; de qué casa es ya lo dice su chip.
       cabecera({
         volver: rutaVilla,
-        titulo: `Tarea ${e.nombre.toLowerCase()}`,
+        titulo: `Repaso ${e.nombre.toLowerCase()}`,
         menu: () => menuTarea(t, listaId, suya),
       }),
 
       h('p.d-creada', null,
-        `Creada por ${t.creadoPorNombre || 'alguien'}, ${cuandoTarea(t.creado).toLowerCase()}`),
+        `Creado por ${t.creadoPorNombre || 'alguien'}, ${cuandoTarea(t.creado).toLowerCase()}`),
 
       rebotada(t) ? avisoRechazo(comentarios) : null,
 
@@ -420,7 +420,7 @@ function hojaRechazo(t) {
     setTimeout(() => area.focus(), 320);
 
     return [
-      h('h2.title', null, 'Rechazar la tarea'),
+      h('h2.title', null, 'Rechazar el repaso'),
       h('p.sub', null, 'Explica qué sigue mal: quien la dio por completada verá el aviso y tu explicación, y tendrá que volver a completarla.'),
       area,
       previa,
@@ -597,7 +597,7 @@ function editarTexto(t) {
     area.value = t.texto || '';
     setTimeout(() => area.focus(), 320);
     return [
-      h('h2.title', null, 'Descripción de la tarea'),
+      h('h2.title', null, 'Descripción del repaso'),
       area,
       h('button.btn.accent.full', {
         onclick: async () => {
@@ -675,7 +675,7 @@ async function guardarFotos(t, ficheros) {
   const yaHay = (await store.mediosDeTarea(t.id)).filter((m) => m.tipo === 'imagen').length;
   const hueco = TOPE_FOTOS_TAREA - yaHay;
   if (hueco <= 0) {
-    toast(`Esta tarea ya tiene ${TOPE_FOTOS_TAREA} fotos`, 'err');
+    toast(`Este repaso ya tiene ${TOPE_FOTOS_TAREA} fotos`, 'err');
     return;
   }
   if (ficheros.length > hueco) {
@@ -747,8 +747,8 @@ async function reponerFoto(t) {
   if (quedan.length) return;
 
   const origen = await sheet((cerrar) => [
-    h('h2.title', null, 'Esta tarea se ha quedado sin foto'),
-    h('p.sub', null, 'Una tarea sin foto no se puede comprobar en obra. Saca otra ahora o elige una de la galería.'),
+    h('h2.title', null, 'Este repaso se ha quedado sin foto'),
+    h('p.sub', null, 'Un repaso sin foto no se puede comprobar en obra. Saca otra ahora o elige una de la galería.'),
     h('div.stack', { style: { marginTop: '14px' } },
       media.botonFichero({
         clase: 'row', accept: 'image/*', capture: 'environment',
@@ -765,7 +765,7 @@ async function reponerFoto(t) {
   ]);
 
   if (!origen?.length) {
-    toast('La tarea se queda sin foto. Añádele una en cuanto puedas.', 'err');
+    toast('El repaso se queda sin foto. Añádele una en cuanto puedas.', 'err');
     return;
   }
   await guardarFotos(t, origen);
@@ -777,7 +777,7 @@ async function menuTarea(t, listaId, suya) {
   // que uno escribió no lo cambia otro: una tarea es lo que alguien
   // dijo haber visto, y si un tercero la reescribe deja de serlo.
   const edita = suya;
-  const accion = await menuTarjeta('Tarea', [
+  const accion = await menuTarjeta('Repaso', [
     edita ? { id: 'texto', icono: 'edit', rotulo: 'Editar la descripción' } : null,
     edita ? { id: 'estancia', icono: 'casa', rotulo: 'Cambiar la estancia o el oficio' } : null,
     // La voz y el vídeo viven aquí, en el menú, y no en la pantalla:
@@ -785,13 +785,13 @@ async function menuTarea(t, listaId, suya) {
     // hacer con ella. Pero un remate que se explica mejor hablando
     // —o moviendo la cámara por la grieta— tiene que poder grabarse
     // sin salir de la tarea.
-    { id: 'voz', icono: 'mic', rotulo: 'Grabar una nota de voz', sub: 'Se oye al final de la tarea' },
+    { id: 'voz', icono: 'mic', rotulo: 'Grabar una nota de voz', sub: 'Se oye al final del repaso' },
     { id: 'video', icono: 'video', rotulo: 'Añadir un vídeo' },
     visuales.length > 1
-      ? { id: 'portada', icono: 'image', rotulo: 'Elegir la foto del listado', sub: 'La que se ve sin abrir la tarea' }
+      ? { id: 'portada', icono: 'image', rotulo: 'Elegir la foto del listado', sub: 'La que se ve sin abrir el repaso' }
       : null,
     visuales.length ? { id: 'borrar-medio', icono: 'trash', rotulo: 'Borrar una foto o vídeo', rojo: true } : null,
-    edita ? { id: 'borrar', icono: 'trash', rotulo: 'Borrar la tarea entera', rojo: true } : null,
+    edita ? { id: 'borrar', icono: 'trash', rotulo: 'Borrar el repaso entero', rojo: true } : null,
   ]);
 
   if (accion === 'texto') return editarTexto(t);
@@ -826,7 +826,7 @@ async function menuTarea(t, listaId, suya) {
       if (!await confirmSheet({ title: '¿Borrar este material?', ok: 'Borrar', danger: true })) return;
       const r = await store.borrarMedio(elegido);
       if (r?.bloqueado) {
-        toast('Una tarea no puede quedarse sin foto: añade otra antes de borrar esta', 'err');
+        toast('Un repaso no puede quedarse sin foto: añade otra antes de borrar esta', 'err');
         return;
       }
       toast('Material borrado');
@@ -837,12 +837,12 @@ async function menuTarea(t, listaId, suya) {
 
   if (accion === 'borrar') {
     if (!await confirmSheet({
-      title: '¿Borrar la tarea?',
+      title: '¿Borrar el repaso?',
       text: 'Se borrarán también sus fotos, vídeos y notas de voz.',
       ok: 'Borrar', danger: true,
     })) return;
     await store.borrarTarea(t.id);
-    toast('Tarea borrada');
+    toast('Repaso borrado');
     ir(conFiltros('#/l/' + listaId, filtrosDeRuta()));
   }
 }
