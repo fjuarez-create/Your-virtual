@@ -40,9 +40,12 @@ on:
 permissions:
   contents: read
 
+# cancel-in-progress NO: cancelar un despliegue en mitad del
+# intercambio de carpetas dejaría el taller descabalado. Los empujones
+# seguidos se ponen a la cola y listo, que cada uno tarda un minuto.
 concurrency:
   group: hosting-taller
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   publicar:
@@ -316,7 +319,13 @@ jobs:
             echo "La llave ya estaba retirada."
           fi
 
-      - name: Subir el taller
+      # ANTES esto reescribía el taller VIVO fichero a fichero: durante
+      # el minuto que tardaba, quien estuviera usando la app pillaba
+      # 404 con la WiFi perfecta (le pasó a Fran el 25-08-2026 a las
+      # 8:04, grabando una reunión). Ahora todo sube a una carpeta
+      # aparte y al final se INTERCAMBIAN las carpetas: un puñado de
+      # renombrados, cosa de un segundo.
+      - name: Subir el taller a una carpeta aparte e intercambiar
         timeout-minutes: 12
         env:
           FTP_SERVER: ${{ secrets.REPASOS_FTP_SERVER }}
@@ -327,21 +336,50 @@ jobs:
           . "$RUNNER_TEMP/ftp.sh"
           cargar_camino
 
-          # Todo el taller menos el banco y las fotos, que tienen vida
-          # propia en el servidor y no se pisan en cada empujón.
+          # Restos de un intento anterior muerto a medias, fuera.
+          run_lftp "$OPTS" "cd \"$DIR\"; rm -r -f taller-nuevo; rm -r -f taller-viejo" 2>/dev/null || true
+
+          # 1) La subida larga, contra taller-nuevo: el taller vivo ni
+          #    se entera. El banco y las fotos no viajan (cruzan luego
+          #    por renombrado), salvo banco recién sembrado, que va en
+          #    la carpeta.
+          if [ "${SEMBRADO:-no}" = si ]; then
+            run_lftp "$OPTS" "cd \"$DIR\"; mirror -R --no-perms publish-taller taller-nuevo"
+          else
+            run_lftp "$OPTS" "cd \"$DIR\";
+              mirror -R --no-perms -x ^api/datos/ -x ^api/uploads/ publish-taller taller-nuevo"
+          fi
+
+          # 2) El intercambio. Si hay taller vivo, su banco y sus fotos
+          #    pasan a la carpeta nueva por renombrado (un instante, no
+          #    una copia) y las carpetas se permutan.
+          HAY_TALLER=no
+          if run_lftp "$OPTS" "cd \"$DIR\"; cls -1 -d taller" 2>/dev/null | tr -d '\r/' | grep -qx taller; then
+            HAY_TALLER=si
+          fi
+          ORDENES="cd \"$DIR\";"
+          if [ "$HAY_TALLER" = si ]; then
+            if [ "${SEMBRADO:-no}" != si ]; then
+              ORDENES="$ORDENES mkdir -p taller/api/datos taller/api/uploads;"
+              ORDENES="$ORDENES mv taller/api/datos taller-nuevo/api/datos;"
+              ORDENES="$ORDENES mv taller/api/uploads taller-nuevo/api/uploads;"
+            fi
+            ORDENES="$ORDENES mv taller taller-viejo;"
+          fi
+          ORDENES="$ORDENES mv taller-nuevo taller;"
+          run_lftp "$OPTS" "$ORDENES"
+          echo "Intercambio hecho: el taller nuevo está sirviendo."
+
+          # Cinturón: los .htaccess de datos/ y uploads/ tienen que
+          # estar pase lo que pase (sin ellos, el banco sería público).
           run_lftp "$OPTS" "cd \"$DIR\";
-            mirror -R --transfer-all --delete --no-perms \
-              -x ^api/datos/ -x ^api/uploads/ \
-              publish-taller taller;
-            mkdir -p taller/api/datos taller/api/uploads;
             put publish-taller/api/datos/.htaccess -o taller/api/datos/.htaccess;
             put publish-taller/api/uploads/.htaccess -o taller/api/uploads/.htaccess;"
 
-          if [ "${SEMBRADO:-no}" = si ]; then
-            echo "Se sube el banco recién sembrado."
-            run_lftp "$OPTS" "cd \"$DIR\"; put publish-taller/api/datos/repasos.sqlite -o taller/api/datos/repasos.sqlite"
-          else
-            echo "El banco del servidor se queda como está."
+          # 3) Lo viejo ya no lo mira nadie: fuera.
+          if [ "$HAY_TALLER" = si ]; then
+            run_lftp "$OPTS" "cd \"$DIR\"; rm -r -f taller-viejo" \
+              || echo "::warning::taller-viejo se ha quedado en el servidor: bórralo a mano cuando quieras."
           fi
 
       - name: Comprobar que el taller respira

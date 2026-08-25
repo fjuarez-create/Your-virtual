@@ -36,22 +36,38 @@ async function pedir(ruta, { metodo = 'GET', json, form, crudo, signal } = {}) {
     opciones.headers['Content-Type'] = 'application/octet-stream';
     opciones.body = crudo;
   }
-  let res;
-  try {
-    res = await fetch(API_BASE + ruta, opciones);
-  } catch (e) {
-    throw new ApiError('Sin conexión con el servidor', 0, 'red');
+  // Mientras se publica una versión el servidor reescribe ficheros
+  // unos segundos, y una lectura puede toparse un 404 o un 5xx que un
+  // momento después ya no está (le pasó a Fran con la WiFi perfecta).
+  // Las LECTURAS se reintentan una vez; un POST no, que repetirlo
+  // duplicaría lo hecho.
+  for (let intento = 0; ; intento++) {
+    const reintentable = metodo === 'GET' && intento === 0;
+    let res;
+    try {
+      res = await fetch(API_BASE + ruta, opciones);
+    } catch (e) {
+      if (reintentable && e?.name !== 'AbortError') {
+        await new Promise((listo) => setTimeout(listo, 1600));
+        continue;
+      }
+      throw new ApiError('Sin conexión con el servidor', 0, 'red');
+    }
+    if (!res.ok && reintentable && [404, 500, 502, 503, 504].includes(res.status)) {
+      await new Promise((listo) => setTimeout(listo, 1600));
+      continue;
+    }
+    const texto = await res.text();
+    let datos = null;
+    if (texto) {
+      try { datos = JSON.parse(texto); } catch { /* respuesta no-JSON */ }
+    }
+    if (!res.ok) {
+      const msg = datos?.error || `Error ${res.status}`;
+      throw new ApiError(msg, res.status, datos?.codigo);
+    }
+    return datos;
   }
-  const texto = await res.text();
-  let datos = null;
-  if (texto) {
-    try { datos = JSON.parse(texto); } catch { /* respuesta no-JSON */ }
-  }
-  if (!res.ok) {
-    const msg = datos?.error || `Error ${res.status}`;
-    throw new ApiError(msg, res.status, datos?.codigo);
-  }
-  return datos;
 }
 
 /* ─── Sesión ──────────────────────────────────────────────────── */
@@ -201,6 +217,16 @@ export const aceptarActa = (reunionId, datos) =>
   pedir(`obra/reuniones/${encodeURIComponent(reunionId)}/acta`, { metodo: 'POST', json: datos });
 export const urlAudioGrabacion = (id, parte = 0) =>
   `${API_BASE}obra/grabaciones/${encodeURIComponent(id)}/audio?parte=${parte}`;
+/** Borra la grabación entera: fila y ficheros. Quién puede, lo dicen
+    los ajustes de la obra; el servidor es quien manda. */
+export const borrarGrabacion = (id) =>
+  pedir('obra/grabaciones/' + encodeURIComponent(id), { metodo: 'DELETE' });
+
+/* Los ajustes de la obra: quién escucha y quién borra los audios. Los
+   lee cualquiera (para pintar lo suyo); los guarda solo el admin. */
+export const ajustesObra = () => pedir('obra/ajustes');
+export const guardarAjustesObra = (datos) =>
+  pedir('obra/ajustes', { metodo: 'POST', json: datos });
 
 /* Quién es quién: el mapa manual de cada grabación, el registro de
    voces de la obra y —con la clave de pyannote puesta— las huellas que

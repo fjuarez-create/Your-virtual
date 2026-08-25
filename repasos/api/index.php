@@ -262,6 +262,17 @@ function despachar(string $metodo, array $p): void
                 aceptar_acta($p[2]);
             }
         }
+        if ($r1 === 'ajustes') {
+            if ($metodo === 'GET') {
+                ver_ajustes_obra();
+            }
+            if ($metodo === 'POST') {
+                guardar_ajustes_obra();
+            }
+        }
+        if ($r1 === 'grabaciones' && isset($p[2]) && !isset($p[3]) && $metodo === 'DELETE') {
+            borrar_grabacion($p[2]);
+        }
         if ($r1 === 'grabaciones' && isset($p[2], $p[3])) {
             if ($p[3] === 'parte' && $metodo === 'POST') {
                 subir_parte_grabacion($p[2]);
@@ -1898,6 +1909,84 @@ function exigir_df(): array
     return $yo;
 }
 
+/* ═══ Los ajustes de la obra: quién escucha y quién borra los audios ═══
+   Decididos por Fran (agosto de 2026): escuchar, por defecto, la DF y
+   el administrador; borrar, por defecto, solo el administrador. Ambos
+   los cambia el administrador desde Ajustes. Viven en un fichero de
+   datos/ —la carpeta que el navegador tiene prohibida— y sobreviven a
+   los despliegues, igual que las claves. */
+
+function ruta_ajustes_obra(): string
+{
+    return __DIR__ . '/datos/ajustes-obra.json';
+}
+
+function ajustes_obra(): array
+{
+    $salida = ['escuchaAudios' => 'df', 'borraAudios' => 'admin'];
+    $crudo = @file_get_contents(ruta_ajustes_obra());
+    $datos = is_string($crudo) ? (json_decode($crudo, true) ?: []) : [];
+    if (in_array($datos['escuchaAudios'] ?? '', ['admin', 'df', 'mesa'], true)) {
+        $salida['escuchaAudios'] = $datos['escuchaAudios'];
+    }
+    if (in_array($datos['borraAudios'] ?? '', ['admin', 'escuchan'], true)) {
+        $salida['borraAudios'] = $datos['borraAudios'];
+    }
+    return $salida;
+}
+
+function puede_escuchar_audios(array $yo): bool
+{
+    switch (ajustes_obra()['escuchaAudios']) {
+        case 'admin':
+            return $yo['rol'] === 'admin';
+        case 'mesa':
+            return true;   // todo el equipo con sesión
+        default:
+            return es_df($yo);
+    }
+}
+
+function puede_borrar_audios(array $yo): bool
+{
+    if ($yo['rol'] === 'admin') {
+        return true;
+    }
+    return ajustes_obra()['borraAudios'] === 'escuchan' && puede_escuchar_audios($yo);
+}
+
+function ver_ajustes_obra(): void
+{
+    exigir_sesion();
+    responder(['ajustes' => ajustes_obra()]);
+}
+
+function guardar_ajustes_obra(): void
+{
+    $yo = exigir_sesion();
+    if ($yo['rol'] !== 'admin') {
+        responder_error(403, 'Los ajustes de la obra los cambia el administrador.', 'permiso');
+    }
+    $c = cuerpo();
+    $ajustes = ajustes_obra();
+    if (array_key_exists('escuchaAudios', $c)) {
+        if (!in_array($c['escuchaAudios'], ['admin', 'df', 'mesa'], true)) {
+            responder_error(400, 'Quién escucha: admin, df o mesa.', 'formato');
+        }
+        $ajustes['escuchaAudios'] = $c['escuchaAudios'];
+    }
+    if (array_key_exists('borraAudios', $c)) {
+        if (!in_array($c['borraAudios'], ['admin', 'escuchan'], true)) {
+            responder_error(400, 'Quién borra: admin o escuchan.', 'formato');
+        }
+        $ajustes['borraAudios'] = $c['borraAudios'];
+    }
+    if (file_put_contents(ruta_ajustes_obra(), json_encode($ajustes), LOCK_EX) === false) {
+        responder_error(500, 'No se han podido guardar los ajustes.', 'disco');
+    }
+    responder(['ajustes' => $ajustes]);
+}
+
 /** El día de hoy en la obra: la fecha se corta con el reloj CANARIO.
     La obra vive en Canarias (decidido por Fran, agosto de 2026): su día,
     su sello de las 23:59 y su cortesía se cuentan en su hora. */
@@ -2128,7 +2217,7 @@ function reunion_del_dia(string $promo, string $fecha): ?array
 
 function ver_reunion(string $id): void
 {
-    exigir_sesion();
+    $yo = exigir_sesion();
     $reunion = reunion_o_404($id);
 
     $sent = bd()->prepare('SELECT * FROM encargos WHERE reunion_id = ? AND borrada = 0 ORDER BY creado ASC');
@@ -2167,6 +2256,12 @@ function ver_reunion(string $id): void
         'resumen'     => (string) ($reunion['resumen'] ?? ''),
         'propuesta'   => is_array($propuesta) ? $propuesta : null,
         'actaEnCortesia' => acta_en_cortesia($reunion),
+        // Lo que ESTA persona puede hacer con los audios, ya decidido
+        // aquí: el móvil solo enseña o esconde.
+        'audios'      => [
+            'escuchar' => puede_escuchar_audios($yo),
+            'borrar'   => puede_borrar_audios($yo),
+        ],
     ]);
 }
 
@@ -2707,7 +2802,10 @@ function transcribir_grabacion(string $id): void
 /** El audio de una parte, con Range: sin él iOS ni empieza a sonar. */
 function servir_audio_grabacion(string $id): void
 {
-    exigir_sesion();
+    $yo = exigir_sesion();
+    if (!puede_escuchar_audios($yo)) {
+        responder_error(403, 'Escuchar los audios está reservado; lo decide el administrador en Ajustes.', 'permiso');
+    }
     $g = grabacion_o_404($id);
     if ((int) $g['audio_borrado'] === 1) {
         responder_error(410, 'El audio de esta grabación ya se borró.', 'audio-borrado');
@@ -2766,6 +2864,33 @@ function servir_audio_grabacion(string $id): void
 }
 
 /**
+ * Borra una grabación entera: su fila desaparece de la reunión y los
+ * ficheros de audio se eliminan del disco en el momento —un audio que
+ * fue una prueba o un error no tiene por qué quedarse ni un día—. Por
+ * defecto solo el administrador; en Ajustes se puede abrir a los que
+ * escuchan. El sello de las 23:59 no manda aquí: la voz es un dato
+ * personal y quitarla tiene que poderse siempre.
+ */
+function borrar_grabacion(string $id): void
+{
+    $yo = exigir_sesion();
+    if (!puede_borrar_audios($yo)) {
+        responder_error(403, 'Borrar los audios está reservado; lo decide el administrador en Ajustes.', 'permiso');
+    }
+    $g = grabacion_o_404($id);
+    $conSenales = (string) $g['actualizado'] >= gmdate('Y-m-d\TH:i:s', time() - 1800);
+    if ((string) $g['estado'] === 'grabando' && $conSenales) {
+        responder_error(409, 'Esa grabación está en marcha: que la pare quien graba antes de borrarla.', 'grabando');
+    }
+    foreach (partes_de($g) as $p) {
+        @unlink(ruta_de_parte($g, (int) ($p['n'] ?? 0)));
+    }
+    bd()->prepare('UPDATE grabaciones SET borrada = 1, audio_borrado = 1, actualizado = ? WHERE id = ?')
+        ->execute([ahora_iso(), $id]);
+    responder(['ok' => true]);
+}
+
+/**
  * La IA redacta la propuesta de acta: resumen y tareas con responsable
  * y fecha cuando se dijeron. Se guarda como PROPUESTA en la reunión:
  * no crea nada hasta que la DF o el administrador la revisan y firman.
@@ -2791,7 +2916,11 @@ function redactar_acta(string $reunionId): void
     $sent = bd()->prepare("SELECT * FROM grabaciones WHERE reunion_id = ? AND borrada = 0 AND estado = 'transcrita' ORDER BY creado ASC");
     $sent->execute([$reunionId]);
     $texto = '';
+    $cubre = [];
     foreach ($sent->fetchAll() as $g) {
+        // Qué grabaciones entraron en esta propuesta: si luego se graba
+        // otro rato, el móvil sabe que falta y ofrece rehacerla.
+        $cubre[] = (string) $g['id'];
         $hablantes = json_decode((string) ($g['hablantes'] ?? ''), true) ?: [];
         $mapa = (array) ($hablantes['mapa'] ?? []);
         foreach (partes_de($g) as $p) {
@@ -2895,6 +3024,7 @@ function redactar_acta(string $reunionId): void
     $propuesta = [
         'resumen'  => mb_substr($acta['resumen'], 0, 8000),
         'tareas'   => $tareas,
+        'cubre'    => $cubre,
         'redactada' => ahora_iso(),
     ];
     bd()->prepare('UPDATE reuniones SET propuesta = ?, actualizado = ? WHERE id = ?')

@@ -35,9 +35,17 @@ export async function render() {
   try {
     datos = await api.obraReuniones(p.id);
   } catch (e) {
+    // Tres males distintos, tres verdades distintas: sin cobertura; el
+    // servidor renqueando (pasa unos segundos mientras se publica una
+    // versión); o un error con nombre. «Sin conexión · Error 404» era
+    // mentira a medias y asustaba con la WiFi perfecta.
     error = e.codigo === 'red'
-      ? 'Las reuniones de obra se llevan en directo con el servidor: hace falta cobertura para verlas.'
-      : e.message;
+      ? { titulo: 'Sin conexión',
+          texto: 'Las reuniones de obra se llevan en directo con el servidor: hace falta cobertura para verlas.' }
+      : (e.status === 404 || e.status >= 500)
+        ? { titulo: 'El servidor no contesta',
+            texto: 'Suele ser cosa de unos segundos (por ejemplo, mientras se publica una versión nueva). Vuelve a intentarlo ahora mismo.' }
+        : { titulo: 'No se ha podido', texto: e.message };
   }
 
   const contenido = [
@@ -48,8 +56,8 @@ export async function render() {
 
   if (error) {
     contenido.push(
-      h('p.d-epigrafe', null, 'Sin conexión'),
-      h('p.d-nota-pie', { style: { whiteSpace: 'normal' } }, error),
+      h('p.d-epigrafe', null, error.titulo),
+      h('p.d-nota-pie', { style: { whiteSpace: 'normal' } }, error.texto),
       h('button.d-fantasma', { style: { marginTop: '14px' }, onclick: () => refrescar() },
         'Volver a intentarlo'),
     );

@@ -30,10 +30,12 @@ export async function render() {
   let claude = null;
   let oido = null;
   let voces = null;
+  let obra = null;
   if (admin && api.HAY_SERVIDOR && !u.local) {
     try { claude = await api.claudeEstado(); } catch { claude = { puesta: false, final: '' }; }
     try { oido = await api.oidoEstado(); } catch { oido = { puesta: false, final: '' }; }
     try { voces = await api.vocesEstado(); } catch { voces = { puesta: false, final: '' }; }
+    try { obra = (await api.ajustesObra()).ajustes; } catch { obra = null; }
   }
 
   // La voz propia, para la fila del entrenador: si ya está aprendida,
@@ -178,6 +180,17 @@ export async function render() {
         hayEjemplos ? item('trash', 'Quitar los partes de ejemplo',
           `${hayEjemplos} ${hayEjemplos === 1 ? 'parte puesto' : 'partes puestos'}`,
           () => quitarEjemplos()) : null,
+      ) : null,
+
+      // Quién escucha y quién borra los audios de las reuniones: lo
+      // decide el administrador para toda la obra, y el servidor es
+      // quien lo hace cumplir en cada petición.
+      admin && api.HAY_SERVIDOR && !u.local && obra ? h('div.d-grupo', null,
+        h('p.d-grupo-titulo', null, 'Reuniones de obra'),
+        item('play', 'Quién puede escuchar los audios',
+          ROTULO_ESCUCHA[obra.escuchaAudios], () => elegirEscucha(obra)),
+        item('trash', 'Quién puede borrar los audios',
+          ROTULO_BORRA[obra.borraAudios], () => elegirBorra(obra)),
       ) : null,
 
       admin && api.HAY_SERVIDOR && !u.local ? h('div.d-grupo', null,
@@ -540,6 +553,58 @@ function cambiarPassword() {
       h('button.btn.ghost.full', { onclick: () => cerrar(false) }, 'Cancelar'),
     ];
   });
+}
+
+/* ─── Los audios de las reuniones: quién escucha y quién borra ────
+   Decidido por Fran (agosto de 2026): por defecto los escuchan la DF
+   y el administrador, y los borra solo el administrador. Desde aquí
+   el administrador lo cambia para toda la obra; quien manda de verdad
+   es el servidor, en cada petición. */
+
+const ROTULO_ESCUCHA = {
+  admin: 'Solo el administrador',
+  df: 'La dirección facultativa y el administrador',
+  mesa: 'Todo el equipo',
+};
+const ROTULO_BORRA = {
+  admin: 'Solo el administrador',
+  escuchan: 'Los que pueden escucharlos',
+};
+
+async function elegirEscucha(obra) {
+  const elegido = await menuTarjeta('Quién puede escuchar los audios', [
+    { id: 'df', icono: obra.escuchaAudios === 'df' ? 'check' : 'users',
+      rotulo: ROTULO_ESCUCHA.df, sub: 'Lo de fábrica' },
+    { id: 'admin', icono: obra.escuchaAudios === 'admin' ? 'check' : 'user',
+      rotulo: ROTULO_ESCUCHA.admin, sub: 'Nadie más los oye' },
+    { id: 'mesa', icono: obra.escuchaAudios === 'mesa' ? 'check' : 'hilo',
+      rotulo: ROTULO_ESCUCHA.mesa, sub: 'Cualquiera con cuenta en la app' },
+  ]);
+  if (!elegido || elegido === obra.escuchaAudios) return;
+  try {
+    await api.guardarAjustesObra({ escuchaAudios: elegido });
+    toast('Los audios los escucha: ' + ROTULO_ESCUCHA[elegido].toLowerCase());
+    refrescar();
+  } catch (e) {
+    toast(e?.message || 'No se ha podido guardar', 'err');
+  }
+}
+
+async function elegirBorra(obra) {
+  const elegido = await menuTarjeta('Quién puede borrar los audios', [
+    { id: 'admin', icono: obra.borraAudios === 'admin' ? 'check' : 'user',
+      rotulo: ROTULO_BORRA.admin, sub: 'Lo de fábrica' },
+    { id: 'escuchan', icono: obra.borraAudios === 'escuchan' ? 'check' : 'users',
+      rotulo: ROTULO_BORRA.escuchan, sub: 'El mismo círculo que la escucha' },
+  ]);
+  if (!elegido || elegido === obra.borraAudios) return;
+  try {
+    await api.guardarAjustesObra({ borraAudios: elegido });
+    toast('Los audios los borra: ' + ROTULO_BORRA[elegido].toLowerCase());
+    refrescar();
+  } catch (e) {
+    toast(e?.message || 'No se ha podido guardar', 'err');
+  }
 }
 
 /* ─── El entrenador de voz ────────────────────────────────────────
