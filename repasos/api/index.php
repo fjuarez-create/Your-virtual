@@ -273,6 +273,9 @@ function despachar(string $metodo, array $p): void
             if ($p[3] === 'mesa' && $metodo === 'POST') {
                 tocar_mesa($p[2]);
             }
+            if ($p[3] === 'propuesta' && $metodo === 'POST') {
+                tocar_propuesta($p[2]);
+            }
             if ($p[3] === 'grabaciones' && $metodo === 'POST') {
                 empezar_grabacion($p[2]);
             }
@@ -2362,6 +2365,22 @@ function ver_reunion(string $id): void
     $adjuntos = array_map('adjunto_salida', $sent->fetchAll());
 
     $propuesta = json_decode((string) ($reunion['propuesta'] ?? ''), true);
+    // Las propuestas de antes no llevaban id en sus tareas, y el
+    // retoque compartido las localiza por él: se les pone y se guarda.
+    if (is_array($propuesta) && is_array($propuesta['tareas'] ?? null)) {
+        $curada = false;
+        foreach ($propuesta['tareas'] as &$cada) {
+            if (is_array($cada) && empty($cada['id'])) {
+                $cada['id'] = uuid();
+                $curada = true;
+            }
+        }
+        unset($cada);
+        if ($curada) {
+            bd()->prepare('UPDATE reuniones SET propuesta = ? WHERE id = ?')
+                ->execute([json_encode($propuesta, JSON_UNESCAPED_UNICODE), $id]);
+        }
+    }
 
     responder([
         'hoy'         => hoy_obra(),
@@ -3288,6 +3307,9 @@ function redactar_acta(string $reunionId): void
             }
         }
         $tareas[] = [
+            // Con id propio: el retoque compartido localiza cada tarea
+            // por él, que los índices bailan al quitar.
+            'id'                => uuid(),
             'texto'             => mb_substr(trim((string) $t['texto']), 0, 2000),
             'general'           => $unidadId === '',
             'unidadId'          => $unidadId,
@@ -3315,6 +3337,102 @@ function redactar_acta(string $reunionId): void
  * asigna— y lo que llega aquí se convierte en tareas de verdad y en el
  * resumen guardado. La propuesta se retira: ya cumplió.
  */
+/**
+ * El retoque compartido de la propuesta: el borrador del acta vive en
+ * el servidor, y cada corrección —el resumen, una tarea editada, una
+ * quitada— se guarda al momento y la ven todos los móviles con la
+ * sonda del directo. Antes cada teléfono guardaba su borrador local y
+ * en la caseta se vieron tres propuestas distintas de la misma acta.
+ * Se opera por el id de cada tarea, en transacción y releyendo dentro:
+ * dos retoques a la vez no se pisan.
+ */
+function tocar_propuesta(string $reunionId): void
+{
+    exigir_df();
+    $reunion = reunion_o_404($reunionId);
+    exigir_acta_entregable($reunion);
+    $c = cuerpo();
+    $op = (string) ($c['op'] ?? '');
+
+    $bd = bd();
+    $bd->beginTransaction();
+    try {
+        $sent = $bd->prepare('SELECT propuesta FROM reuniones WHERE id = ?');
+        $sent->execute([$reunion['id']]);
+        $prop = json_decode((string) $sent->fetchColumn(), true);
+        if (!is_array($prop)) {
+            $bd->rollBack();
+            responder_error(409, 'La propuesta ya no está: quizá se acaba de firmar.', 'sin-propuesta');
+        }
+        $prop['tareas'] = array_values(is_array($prop['tareas'] ?? null) ? $prop['tareas'] : []);
+        foreach ($prop['tareas'] as &$cada) {
+            if (is_array($cada) && empty($cada['id'])) {
+                $cada['id'] = uuid();
+            }
+        }
+        unset($cada);
+
+        if ($op === 'resumen') {
+            $prop['resumen'] = mb_substr((string) ($c['resumen'] ?? ''), 0, 8000);
+        } elseif ($op === 'quitar') {
+            // Quitar lo ya quitado no es un error: dos personas a la vez.
+            $prop['tareas'] = array_values(array_filter($prop['tareas'],
+                static fn ($t) => ($t['id'] ?? '') !== (string) ($c['id'] ?? '')));
+        } elseif ($op === 'editar') {
+            $donde = null;
+            foreach ($prop['tareas'] as $i => $t) {
+                if (($t['id'] ?? '') === (string) ($c['id'] ?? '')) {
+                    $donde = $i;
+                    break;
+                }
+            }
+            if ($donde === null) {
+                $bd->rollBack();
+                responder_error(409, 'Esa tarea ya no está en la propuesta.', 'no-esta');
+            }
+            $v = is_array($c['valores'] ?? null) ? $c['valores'] : [];
+            $t = $prop['tareas'][$donde];
+            if (array_key_exists('texto', $v)) {
+                $texto = mb_substr(trim((string) $v['texto']), 0, 2000);
+                if ($texto !== '') {
+                    $t['texto'] = $texto;
+                }
+            }
+            if (array_key_exists('general', $v) || array_key_exists('unidadId', $v)) {
+                $general = array_key_exists('general', $v) ? (bool) $v['general'] : (bool) ($t['general'] ?? true);
+                $unidad = $general ? '' : mb_substr(trim((string) ($v['unidadId'] ?? ($t['unidadId'] ?? ''))), 0, 80);
+                $t['general'] = $general || $unidad === '';
+                $t['unidadId'] = $t['general'] ? '' : $unidad;
+            }
+            if (array_key_exists('responsableId', $v)) {
+                $t['responsableId'] = es_uuid($v['responsableId'] ?? null) ? $v['responsableId'] : null;
+            }
+            if (array_key_exists('responsableNombre', $v)) {
+                $t['responsableNombre'] = mb_substr(trim((string) $v['responsableNombre']), 0, 120);
+            }
+            if (array_key_exists('fechaLimite', $v)) {
+                $t['fechaLimite'] = fecha_de_dia($v['fechaLimite']);
+            }
+            $t['seguro'] = true;   // la ha revisado una persona
+            $prop['tareas'][$donde] = $t;
+        } else {
+            $bd->rollBack();
+            responder_error(400, 'Operación desconocida.', 'formato');
+        }
+
+        $prop['editada'] = ahora_iso();
+        $bd->prepare('UPDATE reuniones SET propuesta = ?, actualizado = ? WHERE id = ?')
+            ->execute([json_encode($prop, JSON_UNESCAPED_UNICODE), ahora_iso(), $reunion['id']]);
+        $bd->commit();
+        responder(['propuesta' => $prop]);
+    } catch (Throwable $e) {
+        if ($bd->inTransaction()) {
+            $bd->rollBack();
+        }
+        throw $e;
+    }
+}
+
 function aceptar_acta(string $reunionId): void
 {
     $yo = exigir_df();

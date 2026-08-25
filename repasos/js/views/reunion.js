@@ -33,7 +33,6 @@ import { ir, refrescar } from '../app.js';
 const CONDUCTO = new Map();    // grabacionId → { fase, detalle, avance }
 const FALLIDAS = new Map();    // grabacionId → por qué se quedó a medias
 const REDACTANDO = new Set();  // reunionId, para el botón de reserva
-const BORRADOR = new Map();    // reunionId → { sello, resumen, tareas }
 
 /* Un conducto vivo y solo uno en toda la app: dos a la vez sobre la
    misma reunión escribirían —y pagarían— dos actas. */
@@ -77,24 +76,28 @@ export async function render({ reunionId }) {
   const { reunion: r, encargos, arrastre, grabaciones, resumen, propuesta } = datos;
 
   // La sonda calla con la pestaña oculta, con una hoja o un menú
-  // abiertos (repintar debajo de una hoja tira lo que estés tocando) y
+  // abiertos (repintar debajo de una hoja tira lo que estés tocando),
+  // mientras se escribe en un campo (repintar pisaría lo tecleado) y
   // mientras el conducto trabaja (ese ya repinta lo suyo); y muere en
   // cuanto se sale de la reunión. Un bache de red no la rompe: al
-  // siguiente tic vuelve a preguntar.
+  // siguiente tic vuelve a preguntar. Cada 6 segundos: es lo que hace
+  // que los retoques de la mesa, la propuesta, los adjuntos y las
+  // grabaciones se vean casi en el momento en los demás móviles.
+  const tecleando = () => /^(TEXTAREA|INPUT)$/.test(document.activeElement?.tagName || '');
   clearInterval(SONDA);
   SONDA_FOTO = JSON.stringify(datos);
   const rutaSonda = `#/obra/r/${r.id}`;
   SONDA = setInterval(async () => {
     if (location.hash !== rutaSonda) { clearInterval(SONDA); return; }
-    if (document.hidden || CONDUCTO_VIVO
+    if (document.hidden || CONDUCTO_VIVO || tecleando()
       || document.querySelector('.sheet, .d-hoja-acciones, [role="dialog"]')) return;
     try {
       const nuevos = await api.verReunion(r.id);
       if (location.hash !== rutaSonda) { clearInterval(SONDA); return; }
-      if (JSON.stringify(nuevos) !== SONDA_FOTO
+      if (JSON.stringify(nuevos) !== SONDA_FOTO && !tecleando()
         && !document.querySelector('.sheet, .d-hoja-acciones, [role="dialog"]')) refrescar();
     } catch { /* sin cobertura un momento: se reintenta al siguiente tic */ }
-  }, 12000);
+  }, 6000);
 
   const esHoy = r.fecha === datos.hoy;
   const abierta = !r.sellada;
@@ -250,7 +253,6 @@ export async function render({ reunionId }) {
     refrescar();
     try {
       await api.redactarActa(r.id, unidades(r.promoId).map((u) => ({ id: u.id, nombre: u.nombre })));
-      BORRADOR.delete(r.id);
       toast('Propuesta de acta lista: revísala');
     } catch (e) { avisarDeError(e); } finally {
       REDACTANDO.delete(r.id);
@@ -461,7 +463,6 @@ async function conducir(g, r) {
     if (!firmada && !hayGrabacionEnMarcha()) {
       marcar('redactando', 'Escribiendo el acta y sus tareas…', 0.86);
       await api.redactarActa(r.id, unidades(r.promoId).map((u) => ({ id: u.id, nombre: u.nombre })));
-      BORRADOR.delete(r.id);
       toast('Acta propuesta: repásala y fírmala');
     } else {
       toast('Grabación transcrita');
@@ -867,97 +868,111 @@ function bloqueQuienEsQuien(g, { reunion, voces, hayServicioVoces, escuchar = tr
   return nodos;
 }
 
-/* ─── La propuesta del acta: revisar y firmar ─── */
+/* ─── La propuesta del acta: revisar y firmar ───
+   El borrador vive en el SERVIDOR desde agosto de 2026: cada retoque
+   —el resumen, un responsable, una tarea quitada— se guarda al momento
+   con api.tocarPropuesta y los demás móviles lo ven con la sonda del
+   directo. Antes cada teléfono guardaba su borrador local y en la
+   caseta se vieron tres propuestas distintas de la misma acta. */
 function bloquePropuesta(r, propuesta) {
-  // El borrador local sobrevive a los repintados; si el servidor trae
-  // una propuesta más nueva (re-redactada), el borrador viejo se tira.
-  let borrador = BORRADOR.get(r.id);
-  if (!borrador || borrador.sello !== propuesta.redactada) {
-    borrador = {
-      sello: propuesta.redactada,
-      resumen: propuesta.resumen,
-      tareas: propuesta.tareas.map((t) => ({ ...t })),
-    };
-    BORRADOR.set(r.id, borrador);
-  }
+  const tareas = propuesta.tareas || [];
 
+  const retocar = async (retoque) => {
+    try {
+      await api.tocarPropuesta(r.id, retoque);
+    } catch (e) {
+      avisarDeError(e);
+    }
+    // Repintar siempre: si el retoque entró se ve, y si chocó con el
+    // de otro (tarea ya quitada, acta recién firmada) se ve la verdad.
+    refrescar();
+  };
+
+  // El resumen se guarda con calma: al dejar de escribir un momento y
+  // al soltar el campo. Mientras se teclea, la sonda no repinta (mira
+  // el teclado), así que nadie pisa a quien escribe.
   const area = h('textarea.d-area', { rows: 6, style: { marginTop: '0' } });
-  area.value = borrador.resumen;
-  area.addEventListener('input', () => { borrador.resumen = area.value; });
+  area.value = propuesta.resumen;
+  let temporResumen = 0;
+  const guardarResumen = async () => {
+    clearTimeout(temporResumen);
+    if (area.value === propuesta.resumen) return;
+    try {
+      const res = await api.tocarPropuesta(r.id, { op: 'resumen', resumen: area.value });
+      propuesta.resumen = res.propuesta.resumen;
+    } catch (e) { avisarDeError(e); }
+  };
+  area.addEventListener('input', () => {
+    clearTimeout(temporResumen);
+    temporResumen = setTimeout(guardarResumen, 1200);
+  });
+  area.addEventListener('blur', guardarResumen);
 
   const lista = h('div');
-  const pintarTareas = () => {
+  if (!tareas.length) {
     // Que un acta sin tareas no parezca una pantalla rota: se dice.
-    if (!borrador.tareas.length) {
-      lista.replaceChildren(h('p.d-nota-pie', { style: { whiteSpace: 'normal' } },
-        'De lo grabado no salió ninguna tarea clara. Puedes firmar el acta así y apuntar a mano las que falten.'));
-      return;
-    }
-    lista.replaceChildren(...borrador.tareas.map((t, i) => {
-      const dudas = [];
-      if (!t.responsableNombre) dudas.push('sin responsable');
-      if (!t.seguro) dudas.push('revísala');
-      return h('div.d-encargo', null,
-        h('button.d-encargo-bola', {
-          'aria-label': 'Quitar esta tarea de la propuesta',
-          style: { color: 'var(--d-gris)', borderColor: '#c9c4bb' },
-          onclick: () => { borrador.tareas.splice(i, 1); pintarTareas(); pintarFirma(); },
-        }, icon('x', 16)),
-        h('button.grow', {
-          onclick: async () => {
-            const salida = await hojaDatosDeTarea({
-              promoId: r.promoId,
-              valores: t,
-              titulo: 'Revisar la tarea propuesta',
-              botonTexto: 'Así está bien',
-              conBorrar: true,
-              textoBorrar: 'Quitarla de la propuesta',
-            });
-            if (!salida) return;
-            if (salida.borrar) borrador.tareas.splice(i, 1);
-            else borrador.tareas[i] = { ...t, ...salida.valores, seguro: true };
-            pintarTareas();
-            pintarFirma();
-          },
+    lista.append(h('p.d-nota-pie', { style: { whiteSpace: 'normal' } },
+      'De lo grabado no salió ninguna tarea clara. Puedes firmar el acta así y apuntar a mano las que falten.'));
+  }
+  for (const t of tareas) {
+    const dudas = [];
+    if (!t.responsableNombre) dudas.push('sin responsable');
+    if (!t.seguro) dudas.push('revísala');
+    lista.append(h('div.d-encargo', null,
+      h('button.d-encargo-bola', {
+        'aria-label': 'Quitar esta tarea de la propuesta',
+        style: { color: 'var(--d-gris)', borderColor: '#c9c4bb' },
+        onclick: () => retocar({ op: 'quitar', id: t.id }),
+      }, icon('x', 16)),
+      h('button.grow', {
+        onclick: async () => {
+          const salida = await hojaDatosDeTarea({
+            promoId: r.promoId,
+            valores: t,
+            titulo: 'Revisar la tarea propuesta',
+            botonTexto: 'Así está bien',
+            conBorrar: true,
+            textoBorrar: 'Quitarla de la propuesta',
+          });
+          if (!salida) return;
+          if (salida.borrar) retocar({ op: 'quitar', id: t.id });
+          else retocar({ op: 'editar', id: t.id, valores: salida.valores });
         },
-          h('div.d-encargo-texto', null, t.texto),
-          h('div.d-encargo-sub', null, subDeEncargo({
-            general: t.general, unidadId: t.unidadId,
-            responsableNombre: t.responsableNombre, fechaLimite: t.fechaLimite,
-          })),
-        ),
-        dudas.length ? h('span.d-chip.ambar', null, dudas.join(' · ')) : null,
-      );
-    }));
-  };
-  pintarTareas();
+      },
+        h('div.d-encargo-texto', null, t.texto),
+        h('div.d-encargo-sub', null, subDeEncargo({
+          general: t.general, unidadId: t.unidadId,
+          responsableNombre: t.responsableNombre, fechaLimite: t.fechaLimite,
+        })),
+      ),
+      dudas.length ? h('span.d-chip.ambar', null, dudas.join(' · ')) : null,
+    ));
+  }
 
+  const n = tareas.length;
   const firmar = h('button.d-boton-negro', {
     style: { marginTop: '16px' },
     onclick: async () => {
       firmar.disabled = true;
       try {
-        const res = await api.aceptarActa(r.id, { resumen: borrador.resumen.trim(), tareas: borrador.tareas });
-        BORRADOR.delete(r.id);
+        // Lo tecleado y aún sin soltar viaja con la firma.
+        await guardarResumen();
+        const res = await api.aceptarActa(r.id, { resumen: area.value.trim(), tareas });
         toast(res.encargos.length === 1
           ? 'Acta firmada: una tarea creada'
           : `Acta firmada: ${res.encargos.length} tareas creadas`);
         refrescar();
       } catch (e) { firmar.disabled = false; avisarDeError(e); }
     },
-  });
-  const pintarFirma = () => {
-    const n = borrador.tareas.length;
-    firmar.replaceChildren(icon('check'),
-      n === 0 ? 'Firmar el acta (sin tareas)' : n === 1 ? 'Firmar el acta · 1 tarea' : `Firmar el acta · ${n} tareas`);
-  };
-  pintarFirma();
+  }, icon('check'),
+    n === 0 ? 'Firmar el acta (sin tareas)' : n === 1 ? 'Firmar el acta · 1 tarea' : `Firmar el acta · ${n} tareas`);
 
   return [
     h('p.d-epigrafe', null, 'La propuesta del acta'),
     h('p.d-nota-pie', { style: { margin: '0 6px 10px' } },
       'La ha escrito la IA a partir de la grabación. Toca una tarea para corregirla, '
-      + 'el redondel para quitarla, y firma: solo entonces se crean.'),
+      + 'el redondel para quitarla, y firma: solo entonces se crean. Los retoques '
+      + 'los veis todos: la propuesta es la misma en cada móvil.'),
     area,
     lista,
     firmar,

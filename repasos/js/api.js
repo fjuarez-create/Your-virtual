@@ -217,6 +217,10 @@ export const redactarActa = (reunionId, unidades) =>
   pedir(`obra/reuniones/${encodeURIComponent(reunionId)}/redactar`, { metodo: 'POST', json: { unidades } });
 export const aceptarActa = (reunionId, datos) =>
   pedir(`obra/reuniones/${encodeURIComponent(reunionId)}/acta`, { metodo: 'POST', json: datos });
+/** Un retoque del borrador COMPARTIDO del acta:
+    {op:'resumen', resumen} · {op:'editar', id, valores} · {op:'quitar', id}. */
+export const tocarPropuesta = (reunionId, retoque) =>
+  pedir(`obra/reuniones/${encodeURIComponent(reunionId)}/propuesta`, { metodo: 'POST', json: retoque });
 export const urlAudioGrabacion = (id, parte = 0) =>
   `${API_BASE}obra/grabaciones/${encodeURIComponent(id)}/audio?parte=${parte}`;
 /** Borra la grabación entera: fila y ficheros. Quién puede, lo dicen
