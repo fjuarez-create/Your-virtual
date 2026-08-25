@@ -62,10 +62,11 @@ function juntarRafagas(muro) {
 
 /**
  * La última reunión de obra, con la misma piel que las tarjetas de
- * vivienda: la grúa y el cuándo arriba, las caras de la mesa, los dos
- * chips con las cuentas de sus tareas y el anillo del avance asomando
- * por la esquina. El traje lo eligió Fran en agosto de 2026 entre
- * cuatro propuestas, para que la portada hable un solo idioma.
+ * vivienda: el cuándo arriba (sin icono: lo quitó Fran el día del
+ * estreno), las caras de la mesa, los dos chips con las cuentas de sus
+ * tareas y el anillo del avance asomando por la esquina. El traje lo
+ * eligió Fran en agosto de 2026 entre cuatro propuestas, para que la
+ * portada hable un solo idioma.
  */
 function tarjetaUltimaReunion(r, hoy) {
   // En las caras van también los invitados —la mesa es la mesa, tenga
@@ -83,11 +84,12 @@ function tarjetaUltimaReunion(r, hoy) {
   const esDeHoy = r.fecha === hoy;
   // La hora que se enseña es la de EMPEZAR, decidido por Fran: el
   // acta se cierra siempre a las 23:59 (salvo la cortesía), así que
-  // la hora de cierre no cuenta nada. En marcha, a secas: con la
-  // hora al lado no cabía junto a las caras en un móvil estrecho.
+  // la hora de cierre no cuenta nada. «Comenzada», con el verbo de su
+  // propio botón («Comenzar reunión»): antes decía «En marcha» a
+  // secas y Fran pidió la hora — el hueco lo dejó libre el icono.
   const cuando = esDeHoy
-    ? (r.terminada ? cuandoVilla(r.empezada) : 'En marcha')
-    : `Empezada a las ${hora(r.empezada)} h`;
+    ? `Comenzada hoy a las ${hora(r.empezada)} h`
+    : `Comenzada a las ${hora(r.empezada)} h`;
   // El punto vivo va solo en la de hoy: terminada o no, hasta las
   // 23:59 sigue abierta, y eso es justo lo que la luz cuenta. Es
   // hermano del título, no hijo: dentro lo recortaría el overflow de
@@ -97,7 +99,6 @@ function tarjetaUltimaReunion(r, hoy) {
     h('span.d-mordida'),
     h('span.d-mordida-esquina'),
     h('div.d-tarjeta-cab', null,
-      icon('grua'),
       h('span', null, cuando),
       h('span.d-tarjeta-caras', null, grupoAvatares(gente, { tam: 36, max: 3, solape: 12 })),
     ),
