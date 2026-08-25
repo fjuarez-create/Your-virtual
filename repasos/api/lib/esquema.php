@@ -158,6 +158,15 @@ function esquema_aplicar(PDO $pdo): array
     if ($sql === false) {
         throw new RuntimeException('No se encuentra el fichero de esquema.');
     }
+    // Fuera las líneas de comentario ANTES de partir por «;»: un punto
+    // y coma dentro de un comentario partía el fichero por la mitad y
+    // el trozo suelto —texto ya sin su «--»— reventaba la migración
+    // entera (pasó el 25-08-2026 con la tabla de adjuntos: MariaDB
+    // 1064 en «aquí, su ficha», y la versión clavada en la 9).
+    $sql = implode("\n", array_filter(
+        array_map('trim', explode("\n", $sql)),
+        static fn ($linea) => strpos($linea, '--') !== 0
+    ));
     foreach (array_filter(array_map('trim', explode(';', $sql))) as $sentencia) {
         if (stripos($sentencia, 'CREATE ') === false) {
             continue;

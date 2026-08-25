@@ -258,8 +258,9 @@ CREATE TABLE IF NOT EXISTS voces (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Los adjuntos del acta de una reunión: fotos del libro de órdenes o
--- de documentos, PDF y vídeos. El fichero vive en la carpeta de medios
--- (adjuntos/<id>.<ext>); aquí, su ficha.
+-- de documentos, PDF y vídeos. El fichero vive en la carpeta de
+-- medios y aquí va su ficha. OJO: nada de puntos y comas en los
+-- comentarios de este fichero — el aplicador parte por ellos.
 CREATE TABLE IF NOT EXISTS adjuntos (
   id                CHAR(36)     NOT NULL,
   reunion_id        CHAR(36)     NOT NULL,
