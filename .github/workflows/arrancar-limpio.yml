@@ -14,7 +14,14 @@ name: Arrancar limpio (entorno real)
 # misma llave de un solo uso que la copia nocturna: se pone por FTP, se
 # llama, y se retira pase lo que pase.
 
+# El empujón sobre su propio fichero solo REGISTRA el robot en GitHub
+# (sin registro, el lanzamiento a mano da 404); el trabajo de verdad
+# está cerrado a workflow_dispatch y el registro se salta entero.
 on:
+  push:
+    branches: [claude/uniq-repasos-app-2ja8y2]
+    paths:
+      - '.github/workflows/arrancar-limpio.yml'
   workflow_dispatch:
     inputs:
       confirmar:
@@ -33,6 +40,7 @@ env:
 
 jobs:
   limpiar:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
