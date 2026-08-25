@@ -17,7 +17,7 @@ import { h, icon, toast, hora, avatar, sheet } from '../ui.js';
 import * as api from '../api.js';
 import * as store from '../store.js';
 import { puedeVerificar, unidades, unidad } from '../catalog.js';
-import { cabecera, avisoLocal, barraSync, menuFlotante, filaMenu } from '../piezas.js';
+import { cabecera, avisoLocal, barraSync } from '../piezas.js';
 import { grabarAudio } from '../media.js';
 import { fechaDeActa, diaDeLaSemana } from './historial.js';
 import {
@@ -471,18 +471,33 @@ function tarjetaGrabacion(g, { edita, exprimible = true, promoId }) {
       }, 'Reintentar');
     }
   } else if (g.estado === 'grabando') {
-    chip = h('span.d-chip.ambar', null, 'grabando');
-    // «Cerrar» solo para restos de una sesión rota (media hora sin dar
-    // señales): con una grabación VIVA de otra persona, ese botón le
-    // cortaría el micro a media reunión.
+    // G1, elegida por Fran: la fila en rojo con su onda latiendo. Los
+    // demás ven QUIÉN graba y que aquí no hay nada que pulsar; el que
+    // graba se ve a sí mismo en primera persona. «Cerrar» solo asoma
+    // en un resto de sesión rota (media hora mudo): con una grabación
+    // viva le cortaría el micro a alguien a media reunión.
+    const yo = store.sesion();
+    const esLaMia = hayGrabacionEnMarcha() && g.creadoPor === yo?.id;
+    const pila = String(g.creadoPorNombre || 'Alguien').trim().split(/\s+/)[0] || 'Alguien';
     const rancia = Date.now() - new Date(g.actualizado).getTime() > 30 * 60 * 1000;
-    if (edita && rancia && !hayGrabacionEnMarcha()) {
-      accion = h('button.d-chip', {
-        onclick: async () => {
-          try { await api.cerrarGrabacion(g.id, g.duracion); refrescar(); } catch (e) { avisarDeError(e); }
-        },
-      }, 'Cerrar');
-    }
+    const barras = [8, 14, 22, 12, 18, 26, 10, 16, 22].map((a, i) =>
+      h('i', { style: { height: `${a}px`, animationDelay: `${(i % 5) * 0.13}s` } }));
+    return h('div.d-encargo', null,
+      h('span.d-grab-viva-bola', null, icon('mic', 20)),
+      h('div.grow', null,
+        h('div.d-encargo-texto', null, esLaMia ? 'Estás grabando…' : `${pila} está grabando…`),
+        h('div.d-encargo-sub', null, esLaMia
+          ? 'Se para desde la grabadora de abajo.'
+          : (edita ? 'Podrás grabar cuando pare.' : 'La reunión queda grabada.')),
+      ),
+      edita && rancia && !hayGrabacionEnMarcha()
+        ? h('button.d-chip', {
+            onclick: async () => {
+              try { await api.cerrarGrabacion(g.id, g.duracion); refrescar(); } catch (e) { avisarDeError(e); }
+            },
+          }, 'Cerrar')
+        : h('span.d-onda-viva', null, ...barras),
+    );
   } else if (g.estado === 'lista') {
     // El estado va en su bola a la derecha, elegido por Fran sobre
     // tres propuestas: girito esperando turno, check transcrita. El
@@ -581,25 +596,49 @@ function bloqueQuienEsQuien(g, { reunion, voces, hayServicioVoces }) {
     const puesto = mapa[etiqueta];
     const min = Math.max(1, Math.round(v.segundos / 60));
 
-    const elegir = () => menuFlotante((cerrarMenu) => [
-      ...(reunion.asistentes || []).map((id) => {
-        const p = store.persona(id);
-        return filaMenu(null, p.nombre || 'Alguien', () => {
-          cerrarMenu();
-          asignar(etiqueta, { personaId: id, nombre: p.nombre || '' });
-        });
-      }),
-      ...(reunion.invitados || []).map((n) => filaMenu(null, `${n} (invitado)`, () => {
-        cerrarMenu();
-        asignar(etiqueta, { personaId: null, nombre: n });
-      })),
-      filaMenu(null, 'Otra persona…', async () => {
-        cerrarMenu();
-        const nombre = await pedirNombre('¿Quién es esta voz?', '');
-        if (nombre) asignar(etiqueta, { personaId: null, nombre });
-      }),
-      puesto ? filaMenu(null, 'Dejarla sin nombre', () => { cerrarMenu(); asignar(etiqueta, null); }) : null,
-    ].filter(Boolean), { conX: true });
+    // La hoja de la frase grande (V2, elegida por Fran): la frase en
+    // grande, volver a escucharla, y las caras de la mesa con su
+    // nombre de pila, en cuadrícula. Tocar una cara asigna y aprende.
+    const elegir = () => sheet((cerrar) => {
+      const cara = (persona, nombre, al) => h('button.d-cara-voz', { onclick: al },
+        avatar(persona, { tam: 38 }),
+        h('span.d-cara-voz-nombre', null, nombre),
+      );
+      return [
+        h('h2.title', null, '¿Quién dice esto?'),
+        v.frase ? h('p.d-cita-voz', null,
+          `«${v.frase.slice(0, 140)}${v.frase.length > 140 ? '…' : ''}»`) : null,
+        v.mejor ? h('button.d-fantasma', {
+          onclick: () => escucharTramo(g.id, v.parte, v.mejor),
+        }, icon('play'), 'Volver a escuchar') : null,
+        h('div.d-caras-voz', null,
+          ...(reunion.asistentes || []).map((id) => {
+            const p = store.persona(id);
+            return cara(p, (p.nombre || 'Alguien').split(/\s+/)[0], () => {
+              cerrar(true);
+              asignar(etiqueta, { personaId: id, nombre: p.nombre || '' });
+            });
+          }),
+          ...(reunion.invitados || []).map((n) => cara({ nombre: n }, n, () => {
+            cerrar(true);
+            asignar(etiqueta, { personaId: null, nombre: n });
+          })),
+          h('button.d-cara-voz', {
+            onclick: async () => {
+              cerrar(true);
+              const nombre = await pedirNombre('¿Quién es esta voz?', '');
+              if (nombre) asignar(etiqueta, { personaId: null, nombre });
+            },
+          },
+            h('span.d-mesa-mas', { style: { width: '38px', height: '38px' } }, icon('plus')),
+            h('span.d-cara-voz-nombre', null, 'Otra persona…')),
+        ),
+        puesto ? h('button.d-fantasma', {
+          style: { marginTop: '12px' },
+          onclick: () => { cerrar(true); asignar(etiqueta, null); },
+        }, 'Dejarla sin nombre') : null,
+      ];
+    });
 
     const asignar = async (et, quien) => {
       if (quien === null) delete mapa[et];
