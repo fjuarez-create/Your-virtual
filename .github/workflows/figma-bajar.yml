@@ -106,6 +106,26 @@ jobs:
           done
           ls diseno-figma/pantallas/ | wc -l
 
+      # Un icono no se copia de un PNG: hace falta su trazado. Las
+      # pantallas cuyo nombre empieza por «ICONO» se bajan también en
+      # SVG, listas para pasar su path a iconos.js.
+      - name: Bajar en SVG las pantallas de iconos («ICONO …»)
+        run: |
+          mkdir -p diseno-figma/iconos
+          IDS_ICONOS=$(awk -F'\t' '$2 ~ /^ICONO/ {print $1}' diseno-figma/pantallas.txt | paste -sd, -)
+          if [ -z "$IDS_ICONOS" ]; then
+            echo "No hay pantallas ICONO en el archivo."
+          else
+            curl -sf -H "X-Figma-Token: ${{ secrets.FIGMA_TOKEN }}" \
+              "https://api.figma.com/v1/images/$ARCHIVO?ids=$IDS_ICONOS&format=svg" \
+              -o /tmp/svgs.json
+            jq -r '.images | to_entries[] | "\(.key)\t\(.value)"' /tmp/svgs.json | while IFS=$'\t' read -r id url; do
+              [ "$url" = "null" ] && continue
+              curl -sf "$url" -o "diseno-figma/iconos/$(echo "$id" | tr ':' '-').svg" || echo "no bajó $id"
+            done
+            ls diseno-figma/iconos/
+          fi
+
       - name: Bajar las imágenes sueltas del archivo (las fotos de los gremios)
         run: |
           mkdir -p diseno-figma/imagenes
