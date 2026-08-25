@@ -2,8 +2,13 @@ name: Arrancar limpio (entorno real)
 
 # Deja la app real recién estrenada, por orden de Fran (25-08-2026):
 # borra repasos, partes, comentarios, fichas de fotos, reuniones,
-# tareas de reunión, adjuntos y grabaciones, y CONSERVA usuarios,
-# permisos, estancias, gremios, claves, voces y mensajes.
+# tareas de reunión, adjuntos, grabaciones, mensajes y lecturas, y
+# CONSERVA usuarios, permisos, estancias, gremios, claves y voces.
+#
+# Con modo «mensajes» NO arranca nada: solo esconde los mensajes del
+# hilo (se marcan borrados y cada móvil los retira solo al
+# sincronizar), sin tocar el trabajo del equipo. Es para limpiar los
+# comentarios del estreno con la obra ya en marcha.
 #
 # ANTES de borrar nada, el propio servidor escribe un volcado completo
 # de la base en api/datos/ (la carpeta que el navegador tiene
@@ -27,6 +32,14 @@ on:
       confirmar:
         description: 'Escribe BORRAR (en mayúsculas) para confirmar'
         required: true
+      modo:
+        description: 'Qué se limpia: todo, o solo los mensajes del hilo'
+        required: false
+        default: completo
+        type: choice
+        options:
+          - completo
+          - mensajes
 
 concurrency:
   group: hosting-repasos-limpieza
@@ -148,10 +161,19 @@ jobs:
           FTP_SERVER: ${{ secrets.REPASOS_FTP_SERVER }}
           FTP_USERNAME: ${{ secrets.REPASOS_FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.REPASOS_FTP_PASSWORD }}
+          MODO: ${{ inputs.modo }}
         run: |
           set -eu
           . "$RUNNER_TEMP/ftp.sh"
           cargar_camino
+          MODO="${MODO:-completo}"
+
+          case "$MODO" in
+            completo) RUTA=arranque-limpio ;;
+            mensajes) RUTA=barrer-mensajes ;;
+            *) echo "::error::Modo desconocido: $MODO"; exit 1 ;;
+          esac
+          echo "Modo: $MODO (ruta /api/$RUTA)"
 
           TOKEN="$(openssl rand -hex 32)"
           printf '%s\n' "$TOKEN" > "$RUNNER_TEMP/copia.clave"
@@ -161,24 +183,35 @@ jobs:
           # corta los POST desnudos con un 403 suyo (le pasó al estreno).
           CODIGO=$(curl -s -o respuesta.json -w '%{http_code}' --max-time 300 \
             -X POST -H "X-Clave-Copia: $TOKEN" -H 'Content-Type: application/json' \
-            --data-binary '{}' "$DOMINIO/api/arranque-limpio" || echo 000)
+            --data-binary '{}' "$DOMINIO/api/$RUTA" || echo 000)
           if [ "$CODIGO" != 200 ] || ! jq -e '.ok == true' respuesta.json > /dev/null 2>&1; then
-            echo "::error::El arranque limpio ha contestado ${CODIGO}. NO se ha borrado nada sin su copia previa."
+            echo "::error::La limpieza ha contestado ${CODIGO}. NO se ha borrado nada sin su copia previa."
             cat respuesta.json 2>/dev/null || true
             exit 1
           fi
 
-          {
-            echo "## Entorno real: arrancado limpio"
-            echo ""
-            echo "- Copia previa guardada en el servidor: \`api/datos/$(jq -r .copia respuesta.json)\`"
-            echo "- Filas retiradas (−1 = la tabla no existía):"
-            echo ""
-            jq -r '.borrado | to_entries[] | "  - \(.key): \(.value)"' respuesta.json
-            echo ""
-            echo "- Se conservan usuarios, permisos, estancias, claves, voces y mensajes."
-            echo "- Las fotos y audios viejos siguen en disco, invisibles: con la copia previa, todo tiene vuelta atrás."
-          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$MODO" = mensajes ]; then
+            {
+              echo "## Entorno real: mensajes del hilo barridos"
+              echo ""
+              echo "- Copia previa guardada en el servidor: \`api/datos/$(jq -r .copia respuesta.json)\`"
+              echo "- Mensajes escondidos: $(jq -r .barridos respuesta.json) · siguen a la vista: $(jq -r .aLaVista respuesta.json)"
+              echo "- El resto del trabajo (repasos, reuniones, actas) NO se ha tocado."
+              echo "- Cada móvil los retira solo en su siguiente sincronización."
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "## Entorno real: arrancado limpio"
+              echo ""
+              echo "- Copia previa guardada en el servidor: \`api/datos/$(jq -r .copia respuesta.json)\`"
+              echo "- Filas retiradas (−1 = la tabla no existía):"
+              echo ""
+              jq -r '.borrado | to_entries[] | "  - \(.key): \(.value)"' respuesta.json
+              echo ""
+              echo "- Se conservan usuarios, permisos, estancias, claves y voces."
+              echo "- Las fotos y audios viejos siguen en disco, invisibles: con la copia previa, todo tiene vuelta atrás."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
           jq . respuesta.json
           rm -f respuesta.json
 
@@ -204,13 +237,15 @@ jobs:
             echo "La llave ya estaba retirada."
           fi
 
-      - name: Comprobar que la app respira y está a cero
+      - name: Comprobar que la app respira y la limpieza se nota
         timeout-minutes: 4
         env:
           ENTRADA_EMAIL: ${{ secrets.REVISION_EMAIL }}
           ENTRADA_PASSWORD: ${{ secrets.REVISION_PASSWORD }}
+          MODO: ${{ inputs.modo }}
         run: |
           set -eu
+          MODO="${MODO:-completo}"
           if [ -z "${ENTRADA_EMAIL:-}" ] || [ -z "${ENTRADA_PASSWORD:-}" ]; then
             echo "::warning::Sin REVISION_EMAIL/REVISION_PASSWORD no se puede comprobar desde dentro."
             exit 0
@@ -220,10 +255,44 @@ jobs:
             -H 'Content-Type: application/json' --data-binary @- \
             "$DOMINIO/api/auth/login" > /dev/null
           echo "El login funciona: los usuarios están intactos."
-          R="$(curl -fsS --max-time 25 -b galletas.txt "$DOMINIO/api/obra/reuniones?promo=brassie")"
-          REUNIONES=$(echo "$R" | jq '.reuniones | length')
-          PENDIENTES=$(echo "$R" | jq '.tareasPendientes | length')
-          echo "Reuniones: $REUNIONES · tareas de obra pendientes: $PENDIENTES"
-          [ "$REUNIONES" = 0 ] && [ "$PENDIENTES" = 0 ] \
-            || { echo "::error::La obra no está a cero." >&2; exit 1; }
-          echo "Todo a cero y funcionando."
+
+          if [ "$MODO" = mensajes ]; then
+            # Aquí NO se exige la obra a cero: el equipo ya trabaja de
+            # verdad y ese trabajo tiene que seguir donde está. Lo que
+            # se exige es que ningún mensaje del hilo quede a la vista.
+            T="$(curl -fsS --max-time 25 -b galletas.txt "$DOMINIO/api/cambios?desde=")"
+            A_LA_VISTA=$(echo "$T" | jq '[.mensajes[] | select(.borrada | not)] | length')
+            ESCONDIDOS=$(echo "$T" | jq '[.mensajes[] | select(.borrada)] | length')
+            R="$(curl -fsS --max-time 25 -b galletas.txt "$DOMINIO/api/obra/reuniones?promo=brassie")"
+            REUNIONES=$(echo "$R" | jq '.reuniones | length')
+            echo "Mensajes a la vista: $A_LA_VISTA · escondidos: $ESCONDIDOS · reuniones intactas: $REUNIONES"
+            [ "$A_LA_VISTA" = 0 ] \
+              || { echo "::error::Quedan mensajes a la vista." >&2; exit 1; }
+            echo "Ni un mensaje a la vista, y el trabajo del equipo sigue en su sitio."
+          else
+            R="$(curl -fsS --max-time 25 -b galletas.txt "$DOMINIO/api/obra/reuniones?promo=brassie")"
+            REUNIONES=$(echo "$R" | jq '.reuniones | length')
+            PENDIENTES=$(echo "$R" | jq '.tareasPendientes | length')
+            echo "Reuniones: $REUNIONES · tareas de obra pendientes: $PENDIENTES"
+            [ "$REUNIONES" = 0 ] && [ "$PENDIENTES" = 0 ] \
+              || { echo "::error::La obra no está a cero." >&2; exit 1; }
+            echo "Todo a cero y funcionando."
+          fi
+
+      # Los oficios son parte de la app, no datos: ninguna limpieza los
+      # toca. Este paso lo DEMUESTRA contra el servidor de verdad: el
+      # catálogo servido lleva los 17 y sus fotos contestan como imagen.
+      - name: Comprobar que los oficios están servidos, con sus fotos
+        timeout-minutes: 3
+        run: |
+          set -eu
+          N=$(curl -fsS --max-time 25 "$DOMINIO/js/catalog.js" | grep -c ", empresa:")
+          echo "Oficios en el catálogo servido: $N"
+          [ "$N" = 17 ] || { echo "::error::El catálogo servido no lleva los 17 oficios." >&2; exit 1; }
+          for f in pintura carp-aluminio cocinas rodapies; do
+            TIPO=$(curl -fsS -o /dev/null -w '%{content_type}' --max-time 25 "$DOMINIO/assets/gremios/$f.webp")
+            echo "assets/gremios/$f.webp → $TIPO"
+            case "$TIPO" in image/*) ;; *) echo "::error::La foto de $f no contesta como imagen." >&2; exit 1 ;; esac
+          done
+          echo "Los 17 oficios y sus fotos, en su sitio en el servidor real." >> "$GITHUB_STEP_SUMMARY"
+          echo "Los 17 oficios y sus fotos, en su sitio."

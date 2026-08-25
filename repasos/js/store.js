@@ -1543,14 +1543,14 @@ async function tirar() {
  * El sello del arranque limpio. Si el servidor lleva uno que este
  * dispositivo no conoce, el mundo se reinició: la copia local es del
  * mundo anterior y se tira ENTERA —repasos, partes, comentarios,
- * fotos y la cola de subida— para volver a bajar todo de cero. Los
- * mensajes y el directorio se quedan: el arranque no los toca en el
- * servidor. Devuelve si hubo reinicio.
+ * fotos, mensajes con sus lecturas y la cola de subida— para volver a
+ * bajar todo de cero. El directorio se queda: el arranque no lo toca
+ * en el servidor. Devuelve si hubo reinicio.
  */
 async function acatarArranque(sello) {
   if (!sello) return false;
   if ((await db.meta.get('arranque')) === sello) return false;
-  for (const almacen of ['tareas', 'listas', 'comentarios', 'medios', 'outbox']) {
+  for (const almacen of ['tareas', 'listas', 'comentarios', 'medios', 'mensajes', 'lecturas', 'outbox']) {
     await db.vaciar(almacen);
   }
   await db.meta.del('ultimoSync');

@@ -204,6 +204,10 @@ function despachar(string $metodo, array $p): void
         arranque_limpio();
     }
 
+    if ($r0 === 'barrer-mensajes' && $metodo === 'POST') {
+        barrer_mensajes();
+    }
+
     if ($r0 === 'diagnostico' && ($p[1] ?? '') === 'salida' && $metodo === 'GET') {
         diagnostico_salida();
     }
@@ -1674,13 +1678,14 @@ function volcado_completo(): array
 
 /**
  * Vuelta a empezar (orden de Fran, 25-08-2026): fuera repasos, partes,
- * comentarios, fichas de fotos, reuniones, tareas de reunión, adjuntos
- * y grabaciones; se quedan usuarios, permisos, estancias, claves,
- * voces y mensajes. Antes de borrar NADA se escribe un volcado completo
- * en datos/ —la carpeta que el navegador tiene prohibida— y los
- * ficheros de fotos y audios no se tocan: con el volcado, esto tiene
- * vuelta atrás. Solo abre con la llave de un solo uso de la copia, que
- * el robot pone y retira.
+ * comentarios, fichas de fotos, reuniones, tareas de reunión, adjuntos,
+ * grabaciones y también los mensajes del hilo con sus lecturas —el
+ * primer arranque los conservó por prudencia y Fran los quiso fuera—;
+ * se quedan usuarios, permisos, estancias, claves y voces. Antes de
+ * borrar NADA se escribe un volcado completo en datos/ —la carpeta que
+ * el navegador tiene prohibida— y los ficheros de fotos y audios no se
+ * tocan: con el volcado, esto tiene vuelta atrás. Solo abre con la
+ * llave de un solo uso de la copia, que el robot pone y retira.
  */
 function arranque_limpio(): void
 {
@@ -1692,7 +1697,7 @@ function arranque_limpio(): void
         responder_error(500, 'Sin copia previa no se borra nada.', 'disco');
     }
 
-    $tablas = ['tareas', 'listas', 'comentarios', 'medios', 'encargos', 'adjuntos', 'grabaciones', 'reuniones'];
+    $tablas = ['tareas', 'listas', 'comentarios', 'medios', 'encargos', 'adjuntos', 'grabaciones', 'reuniones', 'mensajes', 'lecturas'];
     $borrado = [];
     $pdo = bd();
     foreach ($tablas as $t) {
@@ -1729,6 +1734,34 @@ function arranque_limpio(): void
     }
 
     responder(['ok' => true, 'copia' => basename($ruta), 'borrado' => $borrado, 'arranque' => $sello, 'esquema' => $esquema]);
+}
+
+/**
+ * Barrer SOLO los mensajes del hilo (orden de Fran, 25-08-2026, con la
+ * obra ya en marcha): el arranque limpio de la mañana los conservó por
+ * prudencia y seguían a la vista. No se borra ninguna fila: se marcan
+ * borrada al día de hoy, que es el idioma que los móviles ya hablan
+ * —cada uno los esconde solo en su siguiente sincronización— y así el
+ * trabajo real del equipo no se toca. Copia previa y llave de un solo
+ * uso, como todo lo que borra.
+ */
+function barrer_mensajes(): void
+{
+    exigir_clave_copia();
+
+    $ruta = __DIR__ . '/datos/copia-antes-de-barrer-mensajes-' . gmdate('Ymd-His') . '.json';
+    $json = json_encode(volcado_completo(), JSON_UNESCAPED_UNICODE);
+    if ($json === false || file_put_contents($ruta, $json, LOCK_EX) === false) {
+        responder_error(500, 'Sin copia previa no se barre nada.', 'disco');
+    }
+
+    $pdo = bd();
+    $st = $pdo->prepare('UPDATE mensajes SET borrada = 1, actualizado = ? WHERE borrada = 0');
+    $st->execute([ahora_iso()]);
+    $barridos = $st->rowCount();
+    $aLaVista = (int) $pdo->query('SELECT COUNT(*) FROM mensajes WHERE borrada = 0')->fetchColumn();
+
+    responder(['ok' => true, 'copia' => basename($ruta), 'barridos' => $barridos, 'aLaVista' => $aLaVista]);
 }
 
 function borrar_medio(string $id): void
