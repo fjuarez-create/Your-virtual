@@ -13,12 +13,12 @@
 
    Del diccionario de la casa: lo que la IA propone y lo que se firma
    son TAREAS de reunión (encargos por dentro), nunca repasos. */
-import { h, icon, toast, hora, avatar, sheet, confirmSheet } from '../ui.js';
+import { h, icon, toast, hora, avatar, sheet, confirmSheet, openViewer, pesoLegible } from '../ui.js';
 import * as api from '../api.js';
 import * as store from '../store.js';
 import { puedeVerificar, unidades, unidad } from '../catalog.js';
-import { cabecera, avisoLocal, barraSync } from '../piezas.js';
-import { grabarAudio } from '../media.js';
+import { cabecera, avisoLocal, barraSync, abrirPagina } from '../piezas.js';
+import { grabarAudio, elegirAdjuntos } from '../media.js';
 import { fechaDeActa, diaDeLaSemana } from './historial.js';
 import {
   filaEncargo, tacharEncargo, hojaEncargo, hojaDatosDeTarea, avisarDeError, subDeEncargo, pedirNombre,
@@ -329,6 +329,43 @@ export async function render({ reunionId }) {
     );
   }
 
+  /* ─── Los adjuntos del acta: libro de órdenes, PDF, vídeos ─── */
+  const adjuntos = datos.adjuntos || [];
+  if (edita || adjuntos.length) {
+    contenido.push(h('p.d-epigrafe', null, 'Adjuntos'));
+    for (const a of adjuntos) contenido.push(filaAdjunto(a, { edita }));
+    if (edita) {
+      const anadir = h('button.d-fantasma', {
+        style: { marginTop: adjuntos.length ? '8px' : '0' },
+        onclick: async () => {
+          const ficheros = await elegirAdjuntos();
+          if (!ficheros.length) return;
+          anadir.disabled = true;
+          let subidos = 0;
+          for (const f of ficheros) {
+            anadir.replaceChildren(icon('plus'), ficheros.length > 1
+              ? `Subiendo ${subidos + 1} de ${ficheros.length}…` : 'Subiendo…');
+            try {
+              await api.subirAdjunto(r.id, f);
+              subidos += 1;
+            } catch (e) { avisarDeError(e); }
+          }
+          if (subidos) {
+            toast(subidos === 1 ? 'Adjunto guardado en el acta'
+              : `${subidos} adjuntos guardados en el acta`);
+          }
+          refrescar();
+        },
+      }, icon('plus'), 'Añadir foto, PDF o vídeo');
+      contenido.push(anadir);
+      if (!adjuntos.length) {
+        contenido.push(h('p.d-nota-pie', null,
+          'Fotos del libro de órdenes, documentos en PDF o un vídeo: quedan '
+          + 'guardados en el acta y los ve todo el equipo.'));
+      }
+    }
+  }
+
   /* ─── Terminar y el sello ─── */
   if (edita && !r.terminada) {
     const terminar = h('button.d-boton-negro', {
@@ -598,6 +635,65 @@ function tarjetaGrabacion(g, { edita, exprimible = true, promoId, audios = { esc
     caja.replaceChildren(...dentro);
   });
   return h('div', null, cuerpo, caja);
+}
+
+/* ─── Un adjunto del acta ───
+   Una foto se abre en el visor, un vídeo se despliega debajo con su
+   reproductor, y un PDF se abre en su pestaña (el navegador lo pinta
+   mejor que cualquier visor propio). El aspa de borrar solo sale para
+   quien puede tocar el acta, y pide confirmación. */
+function filaAdjunto(a, { edita }) {
+  const url = api.urlAdjunto(a.id);
+  const icono = a.tipo === 'imagen' ? 'image' : a.tipo === 'video' ? 'play' : 'documento';
+  const caja = h('div');
+  let abierto = false;
+
+  const abrir = () => {
+    if (a.tipo === 'imagen') {
+      openViewer(h('img', {
+        src: url, alt: a.nombre,
+        style: { maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' },
+      }));
+    } else if (a.tipo === 'video') {
+      abierto = !abierto;
+      caja.replaceChildren(...(abierto
+        ? [h('video', {
+            controls: true, playsinline: true, preload: 'metadata',
+            src: url,
+            style: { width: '100%', marginTop: '8px', borderRadius: '12px', background: '#000' },
+          })]
+        : []));
+    } else {
+      abrirPagina(url);
+    }
+  };
+
+  const quien = String(a.creadoPorNombre || '').trim().split(/\s+/)[0];
+  const fila = h('div.d-encargo', null,
+    h('div.d-grab-fila-icono', null, icon(icono, 20)),
+    h('button.grow', { onclick: abrir },
+      h('div.d-encargo-texto', null, a.nombre),
+      h('div.d-encargo-sub', null,
+        [pesoLegible(a.tam), quien ? `de ${quien}` : ''].filter(Boolean).join(' · ')),
+    ),
+    edita ? h('button.d-encargo-bola', {
+      'aria-label': 'Borrar este adjunto',
+      style: { color: 'var(--d-gris)', borderColor: '#c9c4bb' },
+      onclick: async () => {
+        if (!await confirmSheet({
+          title: '¿Borrar este adjunto?',
+          text: `«${a.nombre}» se elimina del acta y del servidor. No se puede recuperar.`,
+          ok: 'Borrar', danger: true,
+        })) return;
+        try {
+          await api.borrarAdjunto(a.id);
+          toast('Adjunto borrado', '', { icono: 'trash' });
+          refrescar();
+        } catch (e) { avisarDeError(e); }
+      },
+    }, icon('x', 16)) : null,
+  );
+  return h('div', null, fila, caja);
 }
 
 /* ─── ¿Quién es quién?: las voces de una grabación ─── */

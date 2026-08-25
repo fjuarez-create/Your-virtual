@@ -256,3 +256,23 @@ CREATE TABLE IF NOT EXISTS voces (
   PRIMARY KEY (id),
   KEY ix_voces_promo (promo_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Los adjuntos del acta de una reunión: fotos del libro de órdenes o
+-- de documentos, PDF y vídeos. El fichero vive en la carpeta de medios
+-- (adjuntos/<id>.<ext>); aquí, su ficha.
+CREATE TABLE IF NOT EXISTS adjuntos (
+  id                CHAR(36)     NOT NULL,
+  reunion_id        CHAR(36)     NOT NULL,
+  promo_id          VARCHAR(40)  NOT NULL,
+  tipo              VARCHAR(10)  NOT NULL DEFAULT 'otro',
+  nombre            VARCHAR(160) NOT NULL DEFAULT '',
+  mime              VARCHAR(80)  NOT NULL DEFAULT '',
+  tam               BIGINT       NOT NULL DEFAULT 0,
+  borrada           TINYINT(1)   NOT NULL DEFAULT 0,
+  creado            VARCHAR(32)  NOT NULL,
+  actualizado       VARCHAR(32)  NOT NULL,
+  creado_por        CHAR(36)     DEFAULT NULL,
+  creado_por_nombre VARCHAR(120) NOT NULL DEFAULT '',
+  PRIMARY KEY (id),
+  KEY ix_adjuntos_reunion (reunion_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

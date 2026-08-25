@@ -18,7 +18,7 @@
 declare(strict_types=1);
 
 /** Se sube al añadir campos o tablas. */
-const ESQUEMA_VERSION = 12;
+const ESQUEMA_VERSION = 13;
 
 /**
  * Campos que tienen que existir, por tabla, con el tipo que usa MySQL.

@@ -21,6 +21,15 @@ require __DIR__ . '/lib/voces.php';
  * declaran en cualquier orden, pero las constantes no: tienen que estar
  * definidas antes de la llamada a despachar(), no después.
  */
+/* Lo que vale como adjunto del acta: foto, PDF o vídeo, con la
+   extensión con la que se guarda su fichero. */
+const ADJUNTO_EXT = [
+    'image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp',
+    'image/heic' => 'heic', 'image/heif' => 'heif', 'image/gif' => 'gif',
+    'application/pdf' => 'pdf',
+    'video/mp4' => 'mp4', 'video/quicktime' => 'mov', 'video/webm' => 'webm',
+];
+
 const MIMES = [
     'imagen' => ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp', 'image/heic' => 'heic'],
     'video'  => ['video/mp4' => 'mp4', 'video/quicktime' => 'mov', 'video/webm' => 'webm', 'video/3gpp' => '3gp'],
@@ -183,6 +192,10 @@ function despachar(string $metodo, array $p): void
         volcar_copia();
     }
 
+    if ($r0 === 'arranque-limpio' && $metodo === 'POST') {
+        arranque_limpio();
+    }
+
     if ($r0 === 'diagnostico' && ($p[1] ?? '') === 'salida' && $metodo === 'GET') {
         diagnostico_salida();
     }
@@ -260,6 +273,17 @@ function despachar(string $metodo, array $p): void
             }
             if ($p[3] === 'acta' && $metodo === 'POST') {
                 aceptar_acta($p[2]);
+            }
+            if ($p[3] === 'adjuntos' && $metodo === 'POST') {
+                subir_adjunto($p[2]);
+            }
+        }
+        if ($r1 === 'adjuntos' && isset($p[2])) {
+            if (($p[3] ?? '') === 'fichero' && $metodo === 'GET') {
+                servir_adjunto($p[2]);
+            }
+            if (!isset($p[3]) && $metodo === 'DELETE') {
+                borrar_adjunto($p[2]);
             }
         }
         if ($r1 === 'ajustes') {
@@ -1589,7 +1613,13 @@ function servir_copia_fichero(string $id): void
 function volcar_copia(): void
 {
     exigir_clave_copia();
+    responder(volcado_completo());
+}
 
+/** El volcado entero de la base, tabla a tabla: lo usan la copia
+    nocturna y la copia previa al arranque limpio. */
+function volcado_completo(): array
+{
     $pdo = bd();
     $motor = (string) $pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
     $tablas = $motor === 'sqlite'
@@ -1628,7 +1658,41 @@ function volcar_copia(): void
         $envuelto = $motor === 'sqlite' ? '"' . $t . '"' : '`' . $t . '`';
         $volcado['tablas'][$t] = $pdo->query('SELECT * FROM ' . $envuelto)->fetchAll(PDO::FETCH_ASSOC);
     }
-    responder($volcado);
+    return $volcado;
+}
+
+/**
+ * Vuelta a empezar (orden de Fran, 25-08-2026): fuera repasos, partes,
+ * comentarios, fichas de fotos, reuniones, tareas de reunión, adjuntos
+ * y grabaciones; se quedan usuarios, permisos, estancias, claves,
+ * voces y mensajes. Antes de borrar NADA se escribe un volcado completo
+ * en datos/ —la carpeta que el navegador tiene prohibida— y los
+ * ficheros de fotos y audios no se tocan: con el volcado, esto tiene
+ * vuelta atrás. Solo abre con la llave de un solo uso de la copia, que
+ * el robot pone y retira.
+ */
+function arranque_limpio(): void
+{
+    exigir_clave_copia();
+
+    $ruta = __DIR__ . '/datos/copia-antes-de-limpiar-' . gmdate('Ymd-His') . '.json';
+    $json = json_encode(volcado_completo(), JSON_UNESCAPED_UNICODE);
+    if ($json === false || file_put_contents($ruta, $json, LOCK_EX) === false) {
+        responder_error(500, 'Sin copia previa no se borra nada.', 'disco');
+    }
+
+    $tablas = ['tareas', 'listas', 'comentarios', 'medios', 'encargos', 'adjuntos', 'grabaciones', 'reuniones'];
+    $borrado = [];
+    $pdo = bd();
+    foreach ($tablas as $t) {
+        try {
+            $borrado[$t] = (int) $pdo->query("SELECT COUNT(*) FROM {$t}")->fetchColumn();
+            $pdo->exec("DELETE FROM {$t}");
+        } catch (Throwable $e) {
+            $borrado[$t] = -1;   // la tabla no existe aquí: nada que borrar
+        }
+    }
+    responder(['ok' => true, 'copia' => basename($ruta), 'borrado' => $borrado]);
 }
 
 function borrar_medio(string $id): void
@@ -2245,6 +2309,11 @@ function ver_reunion(string $id): void
     $sent->execute([$id]);
     $grabaciones = array_map('grabacion_salida', $sent->fetchAll());
 
+    // Y sus adjuntos: el libro de órdenes en foto, el PDF, el vídeo.
+    $sent = bd()->prepare('SELECT * FROM adjuntos WHERE reunion_id = ? AND borrada = 0 ORDER BY creado ASC');
+    $sent->execute([$id]);
+    $adjuntos = array_map('adjunto_salida', $sent->fetchAll());
+
     $propuesta = json_decode((string) ($reunion['propuesta'] ?? ''), true);
 
     responder([
@@ -2255,6 +2324,7 @@ function ver_reunion(string $id): void
         'grabaciones' => $grabaciones,
         'resumen'     => (string) ($reunion['resumen'] ?? ''),
         'propuesta'   => is_array($propuesta) ? $propuesta : null,
+        'adjuntos'    => $adjuntos,
         'actaEnCortesia' => acta_en_cortesia($reunion),
         // Lo que ESTA persona puede hacer con los audios, ya decidido
         // aquí: el móvil solo enseña o esconde.
@@ -2816,10 +2886,19 @@ function servir_audio_grabacion(string $id): void
     if ($real === false || strpos($real, carpeta_grabaciones()) !== 0 || !is_file($real)) {
         responder_error(404, 'Esa parte no está en el servidor.');
     }
+    servir_fichero_con_range($real, (string) $g['mime'],
+        'reunion-' . $n . '.' . extension_de_audio((string) $g['mime']));
+}
 
+/**
+ * Sirve un fichero local con Range: sin él, iOS no empieza a reproducir
+ * ni audio ni vídeo. Lo usan el audio de las grabaciones y los adjuntos.
+ */
+function servir_fichero_con_range(string $real, string $mime, string $nombreDescarga): void
+{
     $tam = filesize($real);
-    header('Content-Type: ' . ((string) $g['mime'] ?: 'application/octet-stream'));
-    header('Content-Disposition: inline; filename="reunion-' . $n . '.' . extension_de_audio((string) $g['mime']) . '"');
+    header('Content-Type: ' . ($mime !== '' ? $mime : 'application/octet-stream'));
+    header('Content-Disposition: inline; filename="' . str_replace(['"', "\r", "\n"], '', $nombreDescarga) . '"');
     header('Accept-Ranges: bytes');
     header('Cache-Control: private, max-age=3600');
     header('X-Content-Type-Options: nosniff');
@@ -2846,7 +2925,7 @@ function servir_audio_grabacion(string $id): void
     header('Content-Length: ' . (string) ($fin - $inicio + 1));
     $f = fopen($real, 'rb');
     if ($f === false) {
-        responder_error(500, 'No se pudo leer el audio.');
+        responder_error(500, 'No se pudo leer el fichero.');
     }
     fseek($f, $inicio);
     $restante = $fin - $inicio + 1;
@@ -2861,6 +2940,157 @@ function servir_audio_grabacion(string $id): void
     }
     fclose($f);
     exit;
+}
+
+/* ═══ Los adjuntos del acta: fotos del libro de órdenes, PDF, vídeos ═══
+   Los sube la DF o el administrador mientras el acta está abierta; los
+   ve todo el equipo con sesión —para eso se comparten—. Borrarlos es
+   tocar el acta: DF o administrador, y solo antes del sello.
+   (Su lista de formatos, ADJUNTO_EXT, vive arriba junto a MIMES: una
+   constante declarada después del enrutador no existiría al usarla.) */
+
+function carpeta_adjuntos(): string
+{
+    $carpeta = carpeta_medios() . '/adjuntos';
+    if (!is_dir($carpeta)) {
+        @mkdir($carpeta, 0755, true);
+    }
+    return $carpeta;
+}
+
+function adjunto_salida(array $f): array
+{
+    return [
+        'id' => $f['id'], 'reunionId' => $f['reunion_id'],
+        'tipo' => $f['tipo'], 'nombre' => (string) $f['nombre'],
+        'mime' => (string) $f['mime'], 'tam' => (int) $f['tam'],
+        'creado' => $f['creado'],
+        'creadoPorNombre' => (string) ($f['creado_por_nombre'] ?? ''),
+    ];
+}
+
+function adjunto_o_404(string $id): array
+{
+    if (!es_uuid($id)) {
+        responder_error(404, 'Adjunto desconocido.');
+    }
+    $sent = bd()->prepare('SELECT * FROM adjuntos WHERE id = ? AND borrada = 0');
+    $sent->execute([$id]);
+    $fila = $sent->fetch();
+    if (!$fila) {
+        responder_error(404, 'Adjunto desconocido.');
+    }
+    return $fila;
+}
+
+function subir_adjunto(string $reunionId): void
+{
+    $yo = exigir_df();
+    $reunion = reunion_o_404($reunionId);
+    exigir_reunion_abierta($reunion);
+
+    $nombre = mb_substr(trim((string) ($_GET['nombre'] ?? '')), 0, 160);
+
+    // El cuerpo se escribe a disco por trozos: un vídeo de obra puede
+    // rondar los 80 MB y cargarlo entero en memoria tumbaría PHP en el
+    // hosting compartido.
+    $id = uuid();
+    $carpeta = carpeta_adjuntos();
+    $temporal = $carpeta . '/' . $id . '.tmp';
+    $tope = (int) (config()['max_fichero'] ?? 83886080);
+    $entrada = fopen('php://input', 'rb');
+    $salida = fopen($temporal, 'wb');
+    if ($entrada === false || $salida === false) {
+        responder_error(500, 'No se ha podido guardar el fichero.', 'disco');
+    }
+    $tam = 0;
+    while (!feof($entrada)) {
+        $trozo = fread($entrada, 262144);
+        if ($trozo === false || $trozo === '') {
+            break;
+        }
+        $tam += strlen($trozo);
+        if ($tam > $tope) {
+            fclose($entrada);
+            fclose($salida);
+            @unlink($temporal);
+            responder_error(413, 'El fichero es demasiado grande.', 'grande');
+        }
+        fwrite($salida, $trozo);
+    }
+    fclose($entrada);
+    fclose($salida);
+    if ($tam === 0) {
+        @unlink($temporal);
+        responder_error(400, 'El fichero ha llegado vacío.', 'formato');
+    }
+
+    // El tipo se deduce del contenido; si finfo no reconoce el
+    // contenedor (pasa con vídeo de móvil), vale el declarado si está
+    // en la lista blanca. Fuera de ella, no se guarda.
+    $mime = (new finfo(FILEINFO_MIME_TYPE))->file($temporal) ?: '';
+    if (!isset(ADJUNTO_EXT[$mime])) {
+        $declarado = (string) ($_GET['mime'] ?? '');
+        if (isset(ADJUNTO_EXT[$declarado])) {
+            $mime = $declarado;
+        }
+    }
+    if (!isset(ADJUNTO_EXT[$mime])) {
+        @unlink($temporal);
+        responder_error(400, 'Vale una foto, un PDF o un vídeo.', 'formato');
+    }
+    $ruta = $carpeta . '/' . $id . '.' . ADJUNTO_EXT[$mime];
+    if (!rename($temporal, $ruta)) {
+        @unlink($temporal);
+        responder_error(500, 'No se ha podido guardar el fichero.', 'disco');
+    }
+
+    $tipo = $mime === 'application/pdf' ? 'pdf'
+        : (strpos($mime, 'video/') === 0 ? 'video' : 'imagen');
+    $registro = [
+        'id' => $id,
+        'reunion_id' => $reunionId,
+        'promo_id' => (string) $reunion['promo_id'],
+        'tipo' => $tipo,
+        'nombre' => $nombre !== '' ? $nombre : 'Documento',
+        'mime' => $mime,
+        'tam' => $tam,
+        'borrada' => 0,
+        'creado' => ahora_iso(),
+        'actualizado' => ahora_iso(),
+        'creado_por' => $yo['id'],
+        'creado_por_nombre' => (string) $yo['nombre'],
+    ];
+    $columnas = array_keys($registro);
+    bd()->prepare(sprintf(
+        'INSERT INTO adjuntos (%s) VALUES (%s)',
+        implode(', ', $columnas),
+        implode(', ', array_fill(0, count($columnas), '?'))
+    ))->execute(array_values($registro));
+    responder(['adjunto' => adjunto_salida($registro)], 201);
+}
+
+function servir_adjunto(string $id): void
+{
+    exigir_sesion();
+    $a = adjunto_o_404($id);
+    $ruta = carpeta_adjuntos() . '/' . $a['id'] . '.' . (ADJUNTO_EXT[$a['mime']] ?? 'bin');
+    $real = realpath($ruta);
+    if ($real === false || strpos($real, carpeta_adjuntos()) !== 0 || !is_file($real)) {
+        responder_error(404, 'Ese fichero no está en el servidor.');
+    }
+    servir_fichero_con_range($real, (string) $a['mime'], (string) $a['nombre']);
+}
+
+function borrar_adjunto(string $id): void
+{
+    exigir_df();
+    $a = adjunto_o_404($id);
+    exigir_reunion_abierta(reunion_o_404((string) $a['reunion_id']));
+    @unlink(carpeta_adjuntos() . '/' . $a['id'] . '.' . (ADJUNTO_EXT[$a['mime']] ?? 'bin'));
+    bd()->prepare('UPDATE adjuntos SET borrada = 1, actualizado = ? WHERE id = ?')
+        ->execute([ahora_iso(), $id]);
+    responder(['ok' => true]);
 }
 
 /**

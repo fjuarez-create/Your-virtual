@@ -228,3 +228,19 @@ CREATE TABLE IF NOT EXISTS voces (
   actualizado          TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_voces_promo ON voces (promo_id);
+
+CREATE TABLE IF NOT EXISTS adjuntos (
+  id                TEXT NOT NULL PRIMARY KEY,
+  reunion_id        TEXT NOT NULL,
+  promo_id          TEXT NOT NULL,
+  tipo              TEXT NOT NULL DEFAULT 'otro',
+  nombre            TEXT NOT NULL DEFAULT '',
+  mime              TEXT NOT NULL DEFAULT '',
+  tam               INTEGER NOT NULL DEFAULT 0,
+  borrada           INTEGER NOT NULL DEFAULT 0,
+  creado            TEXT NOT NULL,
+  actualizado       TEXT NOT NULL,
+  creado_por        TEXT,
+  creado_por_nombre TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS ix_adjuntos_reunion ON adjuntos (reunion_id);

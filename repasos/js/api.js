@@ -222,6 +222,18 @@ export const urlAudioGrabacion = (id, parte = 0) =>
 export const borrarGrabacion = (id) =>
   pedir('obra/grabaciones/' + encodeURIComponent(id), { metodo: 'DELETE' });
 
+/* Los adjuntos del acta: fotos del libro de órdenes, PDF y vídeos.
+   Los sube la DF o el administrador con el acta abierta; los ve todo
+   el equipo. El fichero viaja tal cual, con su nombre en la URL. */
+export const subirAdjunto = (reunionId, fichero) =>
+  pedir(`obra/reuniones/${encodeURIComponent(reunionId)}/adjuntos`
+    + `?nombre=${encodeURIComponent(fichero.name || '')}&mime=${encodeURIComponent(fichero.type || '')}`,
+  { metodo: 'POST', crudo: fichero });
+export const urlAdjunto = (id) =>
+  `${API_BASE}obra/adjuntos/${encodeURIComponent(id)}/fichero`;
+export const borrarAdjunto = (id) =>
+  pedir('obra/adjuntos/' + encodeURIComponent(id), { metodo: 'DELETE' });
+
 /* Los ajustes de la obra: quién escucha y quién borra los audios. Los
    lee cualquiera (para pintar lo suyo); los guarda solo el admin. */
 export const ajustesObra = () => pedir('obra/ajustes');
