@@ -9,7 +9,7 @@
 import { h, icon, grupoAvatares, toast, hora, trasLaOnda } from '../ui.js';
 import * as store from '../store.js';
 import { PROMOCIONES, unidad, oficio } from '../catalog.js';
-import { cabecera, menuTarjeta, avisoLocal, barraSync } from '../piezas.js';
+import { cabecera, menuTarjeta, avisoLocal, barraSync, entregarFichero } from '../piezas.js';
 import { actaDelDia, nombreDeFichero } from '../pdf.js';
 import { ir } from '../app.js';
 import { fechaDeActa, diaDeLaSemana } from './historial.js';
@@ -72,13 +72,13 @@ export async function render({ fecha }) {
         })),
       })),
     });
-    const url = URL.createObjectURL(blob);
-    const a = h('a', { href: url, download: nombreDeFichero(`parte-${p.nombre}`, acta.fecha) });
-    document.body.append(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 4000);
-    toast('Parte descargado');
+    // La entrega, con la hoja de la casa: en el iPhone instalado como
+    // app, el enlace de descarga no enseña nada y el «Parte
+    // descargado» de antes era mentira (le pasó a Fran en obra). La
+    // hoja ofrece el Compartir de iOS —Archivos, WhatsApp, correo,
+    // imprimir— y solo avisa de descargado cuando descarga de verdad.
+    const nombre = nombreDeFichero(`parte-${p.nombre}`, acta.fecha);
+    entregarFichero(new File([blob], nombre, { type: 'application/pdf' }), nombre);
   });
 
   const cifra = (n, rotulo, clase) => (n ? h('div.d-acta-cifra', { class: clase },

@@ -21,7 +21,7 @@ import {
 import * as store from '../store.js';
 import {
   cabecera, tarjetaTarea, cuandoTarea, hojaFiltroTareas, menuFlotante, menuTarjeta, filaMenu,
-  avisoLocal, barraSync,
+  avisoLocal, barraSync, entregarFichero,
 } from '../piezas.js';
 import { ir } from '../app.js';
 import { hojaDePuerta, nombreDeFichero } from '../pdf.js';
@@ -298,12 +298,10 @@ export async function render({ promoId, estadoId = 'resuelta' }) {
         estado: x.tarea.estado,
       })),
     });
-    const url = URL.createObjectURL(blob);
-    const a = h('a', { href: url, download: nombreDeFichero(`tareas-${rotulo}`, new Date().toLocaleDateString('es-ES')) });
-    document.body.append(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    // La hoja de la casa y no un enlace de descarga: en el iPhone
+    // instalado como app el enlace no enseña nada por ningún lado.
+    const nombre = nombreDeFichero(`tareas-${rotulo}`, new Date().toLocaleDateString('es-ES'));
+    entregarFichero(new File([blob], nombre, { type: 'application/pdf' }), nombre);
   };
 
   pintar();
