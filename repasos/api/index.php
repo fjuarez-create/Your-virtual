@@ -1692,7 +1692,23 @@ function arranque_limpio(): void
             $borrado[$t] = -1;   // la tabla no existe aquí: nada que borrar
         }
     }
-    responder(['ok' => true, 'copia' => basename($ruta), 'borrado' => $borrado]);
+
+    // El repaso del esquema, a la cara: se vuelve a aplicar entero
+    // (los CREATE son IF NOT EXISTS: no toca un dato) y se cuenta qué
+    // hizo o QUÉ ERROR dio. Existe porque en el estreno la tabla de
+    // adjuntos no aparecía en MySQL y el porqué solo lo sabía el log
+    // del hosting, que nadie puede leer desde fuera.
+    $esquema = ['versionAntes' => esquema_version($pdo)];
+    try {
+        $esquema['cambios'] = esquema_aplicar($pdo);
+        esquema_guardar_version($pdo, ESQUEMA_VERSION);
+        $esquema['versionDespues'] = esquema_version($pdo);
+        $esquema['adjuntosExiste'] = esquema_columnas($pdo, 'adjuntos') !== [];
+    } catch (Throwable $e) {
+        $esquema['fallo'] = $e->getMessage();
+    }
+
+    responder(['ok' => true, 'copia' => basename($ruta), 'borrado' => $borrado, 'esquema' => $esquema]);
 }
 
 function borrar_medio(string $id): void
