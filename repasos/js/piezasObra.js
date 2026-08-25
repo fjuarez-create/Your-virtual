@@ -10,12 +10,77 @@
    Todo lo de la obra va en línea, sin outbox: cada botón habla con el
    servidor en el momento y, si no hay cobertura, lo dice en vez de
    fingir que guardó. */
-import { h, icon, toast, sheet, confirmSheet } from './ui.js';
+import { h, icon, toast, sheet, confirmSheet, hora, anillo, grupoAvatares } from './ui.js';
 import * as api from './api.js';
 import * as store from './store.js';
 import { unidades, unidad } from './catalog.js';
-import { menuFlotante, filaMenu, hojaFecha } from './piezas.js';
+import { menuFlotante, filaMenu, hojaFecha, tramoAvance } from './piezas.js';
 import { fechaDeActa, diaDeLaSemana } from './views/historial.js';
+import { ir } from './app.js';
+
+/**
+ * La tarjeta VIVA de una reunión, con la misma piel que las tarjetas
+ * de vivienda: el cuándo arriba (sin icono: lo quitó Fran el día del
+ * estreno), las caras de la mesa, los dos chips con las cuentas de sus
+ * tareas y el anillo del avance asomando por la esquina. La comparten
+ * la portada («Última reunión de obra») y el «Hoy» de la pantalla de
+ * reuniones, porque la misma reunión no puede vestir dos trajes (lo
+ * pidió Fran al ver las dos a la vez). El archivo de reuniones
+ * anteriores no la usa: lo pasado viste de parte.
+ */
+export function tarjetaReunionViva(r, hoy) {
+  // En las caras van también los invitados —la mesa es la mesa, tenga
+  // cuenta o no—, pero recortadas a tres ANTES de pintar: así nunca
+  // sale la bolita «+n», que esta piel no lleva y que en un móvil
+  // estrecho choca con el cuándo.
+  const gente = [
+    ...(r.asistentes || []).map((id) => store.persona(id)),
+    ...(r.invitados || []).map((nombre) => ({ nombre })),
+  ].slice(0, 3);
+  const hechas = r.encargos - r.pendientes;
+  const pct = r.encargos ? Math.round((100 * hechas) / r.encargos) : 0;
+  const t = tramoAvance(pct);
+  const chipPct = pct === 100 && r.encargos ? 'macizo' : t.clase;
+  const esDeHoy = r.fecha === hoy;
+  // La hora que se enseña es la de EMPEZAR, decidido por Fran: el
+  // acta se cierra siempre a las 23:59 (salvo la cortesía), así que
+  // la hora de cierre no cuenta nada. «Comenzada», con el verbo de su
+  // propio botón («Comenzar reunión»).
+  const cuando = esDeHoy
+    ? `Comenzada hoy a las ${hora(r.empezada)} h`
+    : `Comenzada a las ${hora(r.empezada)} h`;
+  // El punto vivo va solo en la de hoy: terminada o no, hasta las
+  // 23:59 sigue abierta, y eso es justo lo que la luz cuenta. Es
+  // hermano del título, no hijo: dentro lo recortaría el overflow de
+  // los puntos suspensivos y el aura saldría rebanada.
+  return h(`button.d-tarjeta.tramo-${t.clase}${esDeHoy ? '.viva' : ''}`,
+    { onclick: () => ir(`#/obra/r/${r.id}`) },
+    h('span.d-mordida'),
+    h('span.d-mordida-esquina'),
+    h('div.d-tarjeta-cab', null,
+      h('span', null, cuando),
+      h('span.d-tarjeta-caras', null, grupoAvatares(gente, { tam: 36, max: 3, solape: 12 })),
+    ),
+    esDeHoy ? h('span.d-punto-vivo') : null,
+    // La de hoy se llama por su nombre; una pasada, por su día: lo
+    // que uno se pregunta al verla es de cuándo es. Eligió Fran la
+    // fecha de título entre cinco nombres (agosto de 2026).
+    h('div.d-tarjeta-titulo', null, esDeHoy
+      ? 'Reunión de obra'
+      : `${diaDeLaSemana(r.fecha, { mayuscula: true })} ${fechaDeActa(r.fecha)}`),
+    h('div.d-tarjeta-pie', null,
+      // En minúscula, como el mismo chip de la pantalla de obra: la
+      // misma reunión no puede decir la misma palabra con dos cajas.
+      r.encargos
+        ? h('span.d-chip.grande', null, icon('listaChecks'), `${hechas} / ${r.encargos}`)
+        : h('span.d-chip.grande', null, 'sin tareas'),
+      r.encargos
+        ? h('span.d-chip.grande', { class: chipPct }, icon('fuego'), `${pct}%`)
+        : null,
+    ),
+    h('span.d-tarjeta-anillo', null, anillo(pct, { tam: 55, grosor: 5, etiqueta: false })),
+  );
+}
 
 /** «Fran, Alba y Paco (invitado)» — la línea de gente de una reunión. */
 export function lineaDeGente(r) {

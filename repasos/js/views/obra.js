@@ -15,7 +15,7 @@ import * as store from '../store.js';
 import { PROMOCIONES, puedeVerificar } from '../catalog.js';
 import { cabecera, avisoLocal, barraSync } from '../piezas.js';
 import { fechaDeActa, diaDeLaSemana } from './historial.js';
-import { lineaDeGente, filaEncargo, tacharEncargo } from '../piezasObra.js';
+import { lineaDeGente, filaEncargo, tacharEncargo, tarjetaReunionViva } from '../piezasObra.js';
 import { ir, refrescar } from '../app.js';
 
 /* Cuántas tareas pendientes se enseñan de primeras: las demás quedan
@@ -72,8 +72,10 @@ export async function render() {
   /* ─── Hoy ─── */
   contenido.push(h('p.d-epigrafe', null, 'Hoy'));
   if (deHoy) {
-    // Sin el «Hoy ·» delante: el epígrafe de arriba ya lo dice.
-    contenido.push(tarjetaReunion(deHoy, { esHoy: true }));
+    // La MISMA tarjeta viva que la portada («Comenzada hoy a las…»,
+    // caras, chips y anillo): Fran vio los dos trajes a la vez y
+    // mandó unificar. La beige de parte queda para el archivo.
+    contenido.push(tarjetaReunionViva(deHoy, hoy));
   } else if (df) {
     // Sin tarjeta de «Sin empezar»: la quitó Fran en agosto de 2026
     // porque no contaba nada que el epígrafe «Hoy» no dijera ya. Los
@@ -130,7 +132,7 @@ export async function render() {
   /* ─── El archivo ─── */
   contenido.push(h('p.d-epigrafe', null, 'Reuniones anteriores'));
   if (anteriores.length) {
-    contenido.push(h('div.d-actas-dias', null, anteriores.map((r) => tarjetaReunion(r, { esHoy: false }))));
+    contenido.push(h('div.d-actas-dias', null, anteriores.map((r) => tarjetaReunion(r))));
   } else {
     contenido.push(h('p.d-nota-pie', null,
       'Aquí se irá guardando el acta de cada día, con su gente y sus tareas.'));
@@ -139,15 +141,12 @@ export async function render() {
   return { sinTabs: true, clase: 'pantalla-diseno', contenido };
 }
 
-/** La tarjeta de una reunión, con la misma piel que los partes por
-    día. La portada tuvo su propia copia hasta agosto de 2026; desde
-    entonces allí viste de tarjeta de vivienda y esta queda solo aquí. */
-function tarjetaReunion(r, { esHoy }) {
+/** La tarjeta de una reunión PASADA, con la misma piel que los partes
+    por día: es el archivo. La de hoy ya no pasa por aquí — viste la
+    tarjeta viva compartida con la portada (piezasObra.js). */
+function tarjetaReunion(r) {
   const chip = (n, texto, clase) => (n ? h('span.d-chip', { class: clase }, `${n} ${texto}`) : null);
-  const estado = r.terminada ? 'terminada' : 'en marcha';
-  const cuando = esHoy
-    ? estado.charAt(0).toUpperCase() + estado.slice(1)
-    : diaDeLaSemana(r.fecha, { mayuscula: true });
+  const cuando = diaDeLaSemana(r.fecha, { mayuscula: true });
 
   // En la pila salen también los invitados: la línea de abajo los
   // cuenta, y que las caras dijeran tres donde el texto dice cuatro
