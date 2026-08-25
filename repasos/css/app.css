@@ -2804,6 +2804,17 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
   padding: 10px 12px; font-size: 16px; line-height: 24px;
   background: #f0f0f0; color: var(--d-tinta); gap: 0;
 }
+/* En la lista mezclada «Por cerrar» cada tarjeta lleva el color de su
+   estado —rechazada en rojo, completada-sin-verificar en beige, los
+   mismos tonos que sus notas del muro—; la pendiente se queda blanca.
+   El cuerpo de la tarjeta lo pintan las mordidas, así que el tono
+   entra por la variable --mordida, igual que en los banners. */
+.d-tarea-fila.rechazada { --mordida: var(--d-rojo-suave); }
+.d-tarea-fila.rechazada .d-tarjeta-titulo { color: var(--d-rojo-tinta); }
+.d-tarea-fila.rechazada .d-chip.tarea { background: #fff; }
+.d-tarea-fila.completada { --mordida: var(--d-beige-suave); }
+.d-tarea-fila.completada .d-tarjeta-titulo { color: var(--d-beige-tinta); }
+.d-tarea-fila.completada .d-chip.tarea { background: #fff; }
 
 /* Los filtros aplicados: pastillas beige y la X en topo. */
 .d-filtros-tareas { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }

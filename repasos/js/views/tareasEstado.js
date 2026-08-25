@@ -16,7 +16,7 @@
    pudre, y por vivienda, que convierte la lista en una ruta de obra. */
 import { h, icon, toast } from '../ui.js';
 import {
-  PROMOCIONES, promocion, unidad, unidades, oficio, estado, ESTADOS, OFICIOS,
+  PROMOCIONES, promocion, unidad, unidades, oficio, estado, ESTADOS, OFICIOS, hecha,
 } from '../catalog.js';
 import * as store from '../store.js';
 import {
@@ -25,6 +25,15 @@ import {
 } from '../piezas.js';
 import { ir } from '../app.js';
 import { hojaDePuerta, nombreDeFichero } from '../pdf.js';
+
+/* La vista-suma «Por cerrar»: todo lo que aún no tiene el visto bueno
+   de la DF —pendientes, completados y rechazados juntos—. Es la cifra
+   de la tarjeta de portada, y aterrizar aquí es lo que hace honesto su
+   número: promete 2 y enseña 2. NO es un estado (los estados viven en
+   datos de producción y no se tocan): es una vista solo de esta
+   pantalla, con su fila primera en el selector. */
+const VISTA_SUMA = { id: 'por-cerrar', nombre: 'Por cerrar', plural: 'Por cerrar' };
+const vistaDe = (id) => (id === VISTA_SUMA.id ? VISTA_SUMA : estado(id));
 
 /** Lo que dice la pantalla cuando no hay ninguna, por estado. */
 const VACIO = {
@@ -44,9 +53,18 @@ const VACIO = {
     salida: { rotulo: 'Revisar repasos completados', estado: 'resuelta' },
   },
   pendiente: {
+    // Ojo con prometer de más: «no queda trabajo» sería mentira si hay
+    // rechazados vivos, que también son trabajo de la obra.
     titulo: 'Ningún repaso pendiente',
-    frase: 'No queda trabajo por hacer en la promoción. Si eso no cuadra, revisa lo completado.',
-    salida: { rotulo: 'Revisar repasos completados', estado: 'resuelta' },
+    frase: 'Ningún repaso nuevo esperando a la obra. Los rechazados y los completados van en sus propias listas.',
+    salida: { rotulo: 'Ver todo lo por cerrar', estado: 'por-cerrar' },
+  },
+  'por-cerrar': {
+    // Sin presumir: puede que todo esté verificado o que todavía no
+    // haya ningún repaso apuntado. La frase vale para las dos cosas.
+    titulo: 'Nada por cerrar',
+    frase: 'Ningún repaso abierto ahora mismo. Lo que se apunte aparecerá aquí hasta quedar verificado.',
+    salida: { rotulo: 'Ver los verificados', estado: 'verificada' },
   },
 };
 
@@ -64,7 +82,7 @@ export async function render({ promoId, estadoId = 'resuelta' }) {
   }
   const p = promocion(promoId);
   if (!p) { toast('Promoción desconocida', 'err'); ir('#/', { reemplazar: true }); return { contenido: [] }; }
-  if (!ESTADOS.some((e) => e.id === estadoId)) estadoId = 'resuelta';
+  if (estadoId !== VISTA_SUMA.id && !ESTADOS.some((e) => e.id === estadoId)) estadoId = 'resuelta';
 
   const todas = await store.tareasDeLaObra(promoId);
 
@@ -73,7 +91,12 @@ export async function render({ promoId, estadoId = 'resuelta' }) {
   let orden = 'reciente';
 
   /* ─── Qué se ve con lo que hay puesto ─── */
-  const deEsteEstado = () => todas.filter((x) => x.tarea.estado === estadoId);
+  // La vista-suma usa el MISMO listón que la tarjeta de portada
+  // (hecha, en catalog.js): si algún día cambia qué cuenta como hecho,
+  // las dos cifras se mueven juntas y no pueden volver a descuadrarse.
+  const enLaVista = (t, vistaId = estadoId) =>
+    (vistaId === VISTA_SUMA.id ? !hecha(t) : t.estado === vistaId);
+  const deEsteEstado = () => todas.filter((x) => enLaVista(x.tarea));
   const visibles = () => {
     let lista = deEsteEstado();
     if (filtroVivienda) lista = lista.filter((x) => x.unidadId === filtroVivienda);
@@ -108,9 +131,12 @@ export async function render({ promoId, estadoId = 'resuelta' }) {
   };
 
   /* ─── La pantalla ─── */
+  // La suma va primera y con las mismas cuentas filtradas que las
+  // demás filas: así el propio menú enseña que Por cerrar = Pendientes
+  // + Completados + Rechazados, y ninguna cifra contradice a otra.
   const selector = h('button.d-selector-estado', {
-    onclick: () => menuFlotante((cerrar) => ESTADOS.map((e) => {
-      const n = todas.filter((x) => x.tarea.estado === e.id
+    onclick: () => menuFlotante((cerrar) => [VISTA_SUMA, ...ESTADOS].map((e) => {
+      const n = todas.filter((x) => enLaVista(x.tarea, e.id)
         && (!filtroVivienda || x.unidadId === filtroVivienda)
         && (!filtroOficios.length || filtroOficios.includes(x.tarea.oficio))).length;
       return filaMenu('listaChecks', `${e.plural} (${n})`, () => { cerrar(); cambiarEstado(e.id); });
@@ -155,7 +181,7 @@ export async function render({ promoId, estadoId = 'resuelta' }) {
 
   const pintar = () => {
     const items = visibles();
-    selector.querySelector('span').textContent = `${estado(estadoId).plural} (${items.length})`;
+    selector.querySelector('span').textContent = `${vistaDe(estadoId).plural} (${items.length})`;
 
     // Las pastillas de lo aplicado, con su única X.
     const piezas = [];
@@ -174,6 +200,10 @@ export async function render({ promoId, estadoId = 'resuelta' }) {
     cuantos.style.display = piezas.length ? '' : 'none';
 
     if (!items.length) { lista.replaceChildren(...pantallaVacia()); return; }
+    // En la vista mezclada cada tarjeta dice y COLOREA su estado
+    // (rechazada en rojo, completada en beige, lo pidió Fran): sin
+    // eso, una rechazada y una pendiente serían gemelas en la lista.
+    const mezclada = estadoId === VISTA_SUMA.id;
     lista.replaceChildren(...items.map((x) => {
       const u = unidad(x.unidadId);
       const o = oficio(x.tarea.oficio);
@@ -182,6 +212,14 @@ export async function render({ promoId, estadoId = 'resuelta' }) {
         quien: x.quien ? store.persona(null, x.quien) : null,
         titulo: x.tarea.texto || 'Sin descripción',
         villa: u?.nombre || 'Vivienda',
+        // Con tres chips el oficio va en corto («Puertas», no «Puertas
+        // de paso y entrada»): el nombre entero desborda la tarjeta.
+        chips: mezclada
+          ? [u?.nombre || 'Vivienda', o?.corto, estado(x.tarea.estado).nombre].filter(Boolean)
+          : null,
+        tono: !mezclada ? null
+          : x.tarea.estado === 'rechazada' ? 'rechazada'
+            : x.tarea.estado === 'resuelta' ? 'completada' : null,
         // Ninguna tarjeta sin foto: si la tarea es vieja y no llegó a
         // tener ninguna, la tarjeta enseña la cara del oficio. Es
         // genérica y se reconoce como tal, que es justo lo que debe
@@ -247,7 +285,7 @@ export async function render({ promoId, estadoId = 'resuelta' }) {
   const bajarPdf = () => {
     const items = visibles();
     if (!items.length) { toast('No hay nada que bajar'); return; }
-    const rotulo = estado(estadoId).plural;
+    const rotulo = vistaDe(estadoId).plural;
     const blob = hojaDePuerta({
       vivienda: `Repasos ${rotulo.toLowerCase()}`,
       promocion: p.nombre,

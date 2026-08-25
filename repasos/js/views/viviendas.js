@@ -73,7 +73,7 @@ export async function render({ promoId, desdeTab = false }) {
     const n = visibles.length;
     epigrafe.textContent = vista === 'finalizadas'
       ? `${n} ${n === 1 ? 'vivienda lista' : 'viviendas listas'} para entregar`
-      : `${n} ${n === 1 ? 'vivienda' : 'viviendas'} con repasos pendientes`;
+      : `${n} ${n === 1 ? 'vivienda' : 'viviendas'} con repasos por cerrar`;
 
     pintarFiltros();
     conmutador.querySelectorAll('button').forEach((b) =>

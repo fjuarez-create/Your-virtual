@@ -263,14 +263,21 @@ export async function render() {
       }),
 
       h('p.d-epigrafe', null, p.nombre),
+      // «Por cerrar» y no «pendientes»: la cifra suma TODO lo que aún
+      // no tiene el visto bueno de la DF (pendientes + completados +
+      // rechazados), que es lo mismo que cuentan el 1/3, el anillo y
+      // el color de la propia tarjeta. Llamarla «pendientes» chocaba
+      // con la lista estricta de Pendientes: prometía 2 y enseñaba 1
+      // (lo cazó Fran el primer día). La tarjeta aterriza en la
+      // vista-suma, que enseña exactamente lo que la cifra promete.
       tarjetaVilla({
-        titulo: `${d.sinVerificar} ${d.sinVerificar === 1 ? 'repaso pendiente' : 'repasos pendientes'}`,
+        titulo: `${d.sinVerificar} ${d.sinVerificar === 1 ? 'repaso por cerrar' : 'repasos por cerrar'}`,
         cuando: cuandoVilla(d.ultimaSinVerificar),
         caras: d.caras,
         hechas: c.hechas,
         total: c.total,
         pct,
-        alPinchar: () => ir('#/tareas/pendiente'),
+        alPinchar: () => ir('#/tareas/por-cerrar'),
       }),
 
       h('p.d-epigrafe', null, 'Actividad reciente'),

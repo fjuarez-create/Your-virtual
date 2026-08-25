@@ -90,7 +90,7 @@ export async function render({ promoId, unidadId }) {
       }, !total
         ? 'Sin repasos todavía. Abre una inspección y ve apuntando.'
         : hechas2.length
-          ? 'Nada pendiente con este filtro. Lo verificado está abajo.'
+          ? 'Nada por cerrar con este filtro. Lo verificado está abajo.'
           : 'Ningún repaso encaja con este filtro.'));
     }
 
@@ -239,12 +239,12 @@ export async function render({ promoId, unidadId }) {
     ].filter(Boolean).join(' · ');
 
     const elegido = await menuTarjeta(u.nombre, [
-      { id: 'pdf', icono: 'documento', rotulo: 'PDF de repasos pendientes',
-        sub: `${vivas.length} ${vivas.length === 1 ? 'repaso por hacer' : 'repasos por hacer'}, con sus fotos` },
+      { id: 'pdf', icono: 'documento', rotulo: 'PDF de repasos por cerrar',
+        sub: `${vivas.length} ${vivas.length === 1 ? 'repaso por cerrar' : 'repasos por cerrar'}, con sus fotos` },
       hayFiltros ? { id: 'pdf-filtrado', icono: 'cursores', rotulo: 'PDF con los filtros puestos',
         sub: `${fraseFiltros} · ${conFiltro.length} ${conFiltro.length === 1 ? 'repaso' : 'repasos'}` } : null,
       { id: 'pdf-historico', icono: 'listaChecks', rotulo: 'PDF con todo el histórico',
-        sub: `Pendientes primero y las ${hechas9.length} ejecutadas al final` },
+        sub: `Lo por cerrar primero y las ${hechas9.length} ejecutadas al final` },
     ].filter(Boolean), { extra });
 
     if (elegido === 'pdf') descargarVivienda(p, u, { tareas: vivas });

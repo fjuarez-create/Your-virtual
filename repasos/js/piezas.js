@@ -1323,7 +1323,7 @@ export function cuandoCorto(iso) {
  * sin entrar. Por eso ocupa el mismo sitio que el anillo de avance en
  * la otra tarjeta, que es donde el ojo ya sabe que hay algo.
  */
-export function tarjetaTarea({ cuando, quien, titulo, villa, oficioObj, foto, chips = null, alPinchar }) {
+export function tarjetaTarea({ cuando, quien, titulo, villa, oficioObj, foto, chips = null, tono = null, alPinchar }) {
   const bola = h('span.d-tarjeta-foto');
   if (foto) {
     bola.style.backgroundImage = `url("${foto}")`;
@@ -1333,7 +1333,9 @@ export function tarjetaTarea({ cuando, quien, titulo, villa, oficioObj, foto, ch
     // lee como que la app no ha cargado bien.
     bola.append(caraDeGremio(oficioObj, 55));
   }
-  return h('button.d-tarjeta.d-tarea-fila', { onclick: alPinchar },
+  // El tono solo lo usa la lista mezclada «Por cerrar»: ahí conviven
+  // estados distintos y el color es lo que los separa de un vistazo.
+  return h('button.d-tarjeta.d-tarea-fila', { class: tono || '', onclick: alPinchar },
     h('span.d-mordida'),
     h('span.d-mordida-esquina'),
     h('div.d-tarjeta-cab', null,

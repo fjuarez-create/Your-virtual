@@ -858,7 +858,9 @@ export function hojaDeReparto({
       pag.texto(A4.ancho - MARGEN - anchoTexto(promocion, 12.5, false, 'eiko'), y - 20, promocion,
         { tam: 12.5, fuente: 'eiko', color: COLOR.topo });
       y -= 42;
-      const resumen = `${tareas.length} ${tareas.length === 1 ? 'repaso pendiente' : 'repasos pendientes'}`
+      // «Por cerrar», como la portada: este papel lleva también las
+      // rechazadas y las completadas sin verificar, no solo pendientes.
+      const resumen = `${tareas.length} ${tareas.length === 1 ? 'repaso por cerrar' : 'repasos por cerrar'}`
         + (ejecutadas.length ? `  ·  ${ejecutadas.length} ${ejecutadas.length === 1 ? 'ejecutada' : 'ejecutadas'}` : '')
         + (filtros ? `  ·  Filtrado: ${filtros}` : '');
       pag.texto(MARGEN, y, resumen, { tam: 9.5, negrita: true, gris: 0.3, fuente: 'haas' });
