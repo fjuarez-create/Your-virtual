@@ -157,8 +157,11 @@ function tarjetaReunion(r) {
   ];
 
   const hechas = r.encargos - r.pendientes;
+  // Sin la clase 'hoy': al archivo solo llegan reuniones pasadas (la
+  // de hoy viste la tarjeta viva), y el esHoy que quedó aquí tras la
+  // mudanza era una variable muerta que habría reventado la pantalla
+  // con la primera reunión archivada.
   return h('button.d-acta-dia', {
-    class: esHoy ? 'hoy' : '',
     onclick: () => ir(`#/obra/r/${r.id}`),
   },
     h('div.d-acta-dia-cab', null,
