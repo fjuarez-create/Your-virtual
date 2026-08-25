@@ -249,6 +249,9 @@ function despachar(string $metodo, array $p): void
             }
         }
         if ($r1 === 'reuniones' && isset($p[2], $p[3])) {
+            if ($p[3] === 'mesa' && $metodo === 'POST') {
+                tocar_mesa($p[2]);
+            }
             if ($p[3] === 'grabaciones' && $metodo === 'POST') {
                 empezar_grabacion($p[2]);
             }
@@ -2461,11 +2464,85 @@ function guardar_partes(string $id, array $partes, array $ademas = []): void
     bd()->prepare("UPDATE grabaciones SET {$asig} WHERE id = ?")->execute($valores);
 }
 
+/**
+ * La mesa se toca POR DIFERENCIAS, no mandando la lista entera: así
+ * dos personas añadiendo asistentes a la vez no se pisan (decidido
+ * por Fran, agosto de 2026). `poner`/`quitar` llevan ids del equipo;
+ * `invitar`/`desinvitar`, nombres de fuera.
+ */
+function tocar_mesa(string $reunionId): void
+{
+    exigir_df();
+    $reunion = reunion_o_404($reunionId);
+    exigir_reunion_abierta($reunion);
+    $c = cuerpo();
+
+    $ids = static fn ($v) => lista_de_uuids(is_array($v) ? $v : []);
+    $nombres = static fn ($v) => array_values(array_filter(array_map(
+        static fn ($n) => mb_substr(trim((string) $n), 0, 80),
+        is_array($v) ? $v : []
+    ), static fn ($n) => $n !== ''));
+
+    $bd = bd();
+    $bd->beginTransaction();
+    try {
+        // Se relee DENTRO de la transacción: la lista sobre la que se
+        // aplican las diferencias es la última de verdad, no la que
+        // tuviera el móvil al abrir la hoja.
+        $sent = $bd->prepare('SELECT asistentes, invitados FROM reuniones WHERE id = ?');
+        $sent->execute([$reunion['id']]);
+        $fila = $sent->fetch();
+
+        $asistentes = json_decode((string) $fila['asistentes'], true) ?: [];
+        $invitados = json_decode((string) $fila['invitados'], true) ?: [];
+
+        $asistentes = array_values(array_unique(array_merge($asistentes, $ids($c['poner'] ?? []))));
+        $fuera = $ids($c['quitar'] ?? []);
+        $asistentes = array_values(array_filter($asistentes, static fn ($id) => !in_array($id, $fuera, true)));
+
+        $invitados = array_values(array_unique(array_merge($invitados, $nombres($c['invitar'] ?? []))));
+        $seVan = $nombres($c['desinvitar'] ?? []);
+        $invitados = array_values(array_filter($invitados, static fn ($n) => !in_array($n, $seVan, true)));
+
+        $bd->prepare('UPDATE reuniones SET asistentes = ?, invitados = ?, actualizado = ? WHERE id = ?')
+            ->execute([json_encode($asistentes), json_encode($invitados, JSON_UNESCAPED_UNICODE),
+                ahora_iso(), $reunion['id']]);
+        $bd->commit();
+    } catch (Throwable $e) {
+        $bd->rollBack();
+        throw $e;
+    }
+
+    $sent = bd()->prepare('SELECT * FROM reuniones WHERE id = ?');
+    $sent->execute([$reunion['id']]);
+    responder(['reunion' => reunion_salida($sent->fetch())]);
+}
+
 function empezar_grabacion(string $reunionId): void
 {
     $yo = exigir_df();
     $reunion = reunion_o_404($reunionId);
     exigir_reunion_abierta($reunion);
+
+    // Una sola grabación en marcha por reunión (decidido por Fran):
+    // dos micros a la vez meterían la misma conversación dos veces en
+    // el acta. Solo bloquea la de OTRA persona y con señales de vida
+    // recientes; un resto propio (la app se murió grabando) o una
+    // ajena muda media hora se recogen solos y dejan pasar.
+    $sent = bd()->prepare("SELECT * FROM grabaciones WHERE reunion_id = ? AND estado = 'grabando' AND borrada = 0");
+    $sent->execute([$reunionId]);
+    foreach ($sent->fetchAll() as $viva) {
+        $deOtro = (string) $viva['creado_por'] !== (string) $yo['id'];
+        $conSenales = (string) $viva['actualizado'] >= gmdate('Y-m-d\TH:i:s', time() - 1800);
+        if ($deOtro && $conSenales) {
+            responder_error(409,
+                (($viva['creado_por_nombre'] ?: 'Alguien') . ' ya está grabando esta reunión.'),
+                'grabando-otra');
+        }
+        $conBytes = array_filter(partes_de($viva), static fn ($p) => (int) ($p['tam'] ?? 0) > 0);
+        bd()->prepare('UPDATE grabaciones SET estado = ?, borrada = ?, actualizado = ? WHERE id = ?')
+            ->execute([$conBytes ? 'lista' : 'grabando', $conBytes ? 0 : 1, ahora_iso(), $viva['id']]);
+    }
 
     $mime = texto(cuerpo(), 'mime', 60, 'audio/webm');
     $registro = [

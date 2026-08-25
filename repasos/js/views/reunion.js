@@ -46,6 +46,13 @@ let CONDUCTO_VIVO = null;
 const VUELTAS = new Map();
 const TOPE_VUELTAS = 3;
 
+/* La sonda del directo: mientras se mira una reunión, cada pocos
+   segundos se pregunta al servidor si algo ha cambiado —un asistente
+   que entra, una tarea recién apuntada por otro— y se repinta solo si
+   cambió (pedido por Fran: «molaría que se actualizara sola»). */
+let SONDA = 0;
+let SONDA_FOTO = '';
+
 export async function render({ reunionId }) {
   let datos = null;
   let error = null;
@@ -68,6 +75,27 @@ export async function render({ reunionId }) {
   }
 
   const { reunion: r, encargos, arrastre, grabaciones, resumen, propuesta } = datos;
+
+  // La sonda calla con la pestaña oculta, con una hoja o un menú
+  // abiertos (repintar debajo de una hoja tira lo que estés tocando) y
+  // mientras el conducto trabaja (ese ya repinta lo suyo); y muere en
+  // cuanto se sale de la reunión. Un bache de red no la rompe: al
+  // siguiente tic vuelve a preguntar.
+  clearInterval(SONDA);
+  SONDA_FOTO = JSON.stringify(datos);
+  const rutaSonda = `#/obra/r/${r.id}`;
+  SONDA = setInterval(async () => {
+    if (location.hash !== rutaSonda) { clearInterval(SONDA); return; }
+    if (document.hidden || CONDUCTO_VIVO
+      || document.querySelector('.sheet, .d-hoja-acciones, [role="dialog"]')) return;
+    try {
+      const nuevos = await api.verReunion(r.id);
+      if (location.hash !== rutaSonda) { clearInterval(SONDA); return; }
+      if (JSON.stringify(nuevos) !== SONDA_FOTO
+        && !document.querySelector('.sheet, .d-hoja-acciones, [role="dialog"]')) refrescar();
+    } catch { /* sin cobertura un momento: se reintenta al siguiente tic */ }
+  }, 12000);
+
   const esHoy = r.fecha === datos.hoy;
   const abierta = !r.sellada;
   const df = puedeVerificar(store.sesion());
@@ -444,9 +472,11 @@ function tarjetaGrabacion(g, { edita, exprimible = true, promoId }) {
     }
   } else if (g.estado === 'grabando') {
     chip = h('span.d-chip.ambar', null, 'grabando');
-    if (edita && !hayGrabacionEnMarcha()) {
-      // Una grabación que quedó abierta de una sesión anterior: se
-      // cierra y el conducto la coge en el siguiente repintado.
+    // «Cerrar» solo para restos de una sesión rota (media hora sin dar
+    // señales): con una grabación VIVA de otra persona, ese botón le
+    // cortaría el micro a media reunión.
+    const rancia = Date.now() - new Date(g.actualizado).getTime() > 30 * 60 * 1000;
+    if (edita && rancia && !hayGrabacionEnMarcha()) {
       accion = h('button.d-chip', {
         onclick: async () => {
           try { await api.cerrarGrabacion(g.id, g.duracion); refrescar(); } catch (e) { avisarDeError(e); }
@@ -784,8 +814,21 @@ function hojaMesa(r) {
       onclick: async () => {
         meter();   // lo que quede escrito en la caja también cuenta
         guardar.disabled = true;
+        // Se mandan las DIFERENCIAS, no la lista entera: si otro ha
+        // añadido a alguien mientras esta hoja estaba abierta, su
+        // añadido no se pisa (decidido por Fran, agosto de 2026).
+        const antes = new Set(r.asistentes || []);
+        const antesInv = r.invitados || [];
+        const deltas = {
+          poner: [...dentro].filter((id) => !antes.has(id)),
+          quitar: [...antes].filter((id) => !dentro.has(id)),
+          invitar: invitados.filter((n) => !antesInv.includes(n)),
+          desinvitar: antesInv.filter((n) => !invitados.includes(n)),
+        };
+        if (!deltas.poner.length && !deltas.quitar.length
+          && !deltas.invitar.length && !deltas.desinvitar.length) { cerrar(false); return; }
         try {
-          await api.editarReunion(r.id, { asistentes: [...dentro], invitados });
+          await api.tocarMesa(r.id, deltas);
           cerrar(true);
         } catch (e) { guardar.disabled = false; avisarDeError(e); }
       },

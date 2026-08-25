@@ -173,6 +173,10 @@ export const verReunion = (id) =>
 /** Cambia asistentes, invitados o el terminada de la reunión. */
 export const editarReunion = (id, datos) =>
   pedir('obra/reuniones/' + encodeURIComponent(id), { metodo: 'PATCH', json: datos });
+/** Toca la mesa por diferencias: {poner, quitar, invitar, desinvitar}.
+    Así dos personas añadiendo a la vez no se pisan la lista. */
+export const tocarMesa = (id, deltas) =>
+  pedir('obra/reuniones/' + encodeURIComponent(id) + '/mesa', { metodo: 'POST', json: deltas });
 export const crearEncargo = (datos) =>
   pedir('obra/encargos', { metodo: 'POST', json: datos });
 export const editarEncargo = (id, datos) =>

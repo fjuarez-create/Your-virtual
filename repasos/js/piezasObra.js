@@ -221,6 +221,7 @@ export async function hojaEncargo({ reunionId, promoId, encargo = null }) {
 export function avisarDeError(err) {
   if (err?.codigo === 'red') toast('Sin conexión: la obra se lleva en directo', 'err');
   else if (err?.codigo === 'sellada') toast('El acta de ese día ya está sellada', 'err');
+  else if (err?.codigo === 'grabando-otra') toast(err?.message || 'Otra persona ya está grabando esta reunión', 'err');
   else toast(err?.message || 'No se pudo guardar', 'err');
 }
 
