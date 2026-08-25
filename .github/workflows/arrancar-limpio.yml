@@ -157,8 +157,11 @@ jobs:
           printf '%s\n' "$TOKEN" > "$RUNNER_TEMP/copia.clave"
           run_lftp "$OPTS" "cd \"$DIR\"; put \"$RUNNER_TEMP/copia.clave\" -o api/datos/copia.clave"
 
+          # Con cuerpo JSON y su Content-Type: el cortafuegos del hosting
+          # corta los POST desnudos con un 403 suyo (le pasó al estreno).
           CODIGO=$(curl -s -o respuesta.json -w '%{http_code}' --max-time 300 \
-            -X POST -H "X-Clave-Copia: $TOKEN" "$DOMINIO/api/arranque-limpio" || echo 000)
+            -X POST -H "X-Clave-Copia: $TOKEN" -H 'Content-Type: application/json' \
+            --data-binary '{}' "$DOMINIO/api/arranque-limpio" || echo 000)
           if [ "$CODIGO" != 200 ] || ! jq -e '.ok == true' respuesta.json > /dev/null 2>&1; then
             echo "::error::El arranque limpio ha contestado ${CODIGO}. NO se ha borrado nada sin su copia previa."
             cat respuesta.json 2>/dev/null || true
