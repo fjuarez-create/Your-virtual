@@ -2541,6 +2541,19 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 }
 /* El deshabilitado de crear es más suave que el de completar. */
 .d-pie-placa .d-boton-negro:disabled { background: var(--d-gris-suave); color: #d9d9d9; }
+/* El pie de la ficha de vivienda: «Nueva inspección» pegado abajo
+   mientras la lista está a la vista, y sentado en su sitio del flujo
+   después. Sobre el fondo gris la placa blanca parecería una tarjeta:
+   aquí, un fundido del propio fondo para que la lista no asome pura
+   por debajo del botón. El colchón de la barra de inicio del iPhone
+   va DENTRO: el sticky pega al borde del área desplazable y el
+   relleno de .screen ahí no cuenta. */
+.d-pie-vivienda {
+  margin: 8px calc(var(--pad) * -1) 0;
+  padding: 14px var(--pad) calc(env(safe-area-inset-bottom) + 12px);
+  background: linear-gradient(to top, var(--d-fondo) 72%, rgba(245, 245, 245, 0));
+  border-radius: 0;
+}
 
 /* ─── El visor del recorrido con IA ─────────────────────────────
    Calcado del Figma: la cámara a pantalla completa, la tira de

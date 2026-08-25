@@ -321,12 +321,18 @@ export async function render({ promoId, unidadId }) {
       filtros,
       listado,
 
-      // El botón va debajo de la lista: se entra en la casa a ver qué
-      // hay, y solo cuando ya lo has visto tiene sentido apuntar algo
-      // nuevo.
-      h('p.d-epigrafe', null, 'Inspecciones'),
+      // El botón iba al pie de la lista con la teoría de que primero
+      // se mira y luego se apunta; el primer día de repasos reales la
+      // desmintió: con la lista larga quedaba a un túnel de scroll (lo
+      // avisó la DF). Ahora va PEGADO abajo mientras la lista está a
+      // la vista —en la mano durante todo el paseo, en la zona del
+      // pulgar— y al pasar de la lista se sienta en su sitio del
+      // flujo, para no tapar los verificados ni el chat. Pegado
+      // (sticky) y no flotante fijo: el fijo dentro de una pantalla
+      // animada ya mordió dos veces en esta app.
       puedeCrearLista(store.sesion())
-        ? h('button.d-boton-negro', { onclick: nueva }, icon('plus'), 'Nueva inspección')
+        ? h('div.d-pie-placa.d-pie-vivienda', null,
+          h('button.d-boton-negro', { onclick: nueva }, icon('plus'), 'Nueva inspección'))
         : null,
 
       bloqueVerificados,
