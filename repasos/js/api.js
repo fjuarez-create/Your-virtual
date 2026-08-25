@@ -159,6 +159,8 @@ export const borrarMedioRemoto = (id) =>
 /** Cambios en el servidor desde una marca de tiempo. */
 export const cambios = (desde) =>
   pedir('cambios?desde=' + encodeURIComponent(desde || ''));
+/** El sello del último arranque limpio (vacío si nunca se hizo). */
+export const marcaDeArranque = () => pedir('arranque');
 
 /** URL pública de un medio ya subido. */
 export const urlMedio = (id) => API_BASE + 'medios/' + encodeURIComponent(id) + '/fichero';

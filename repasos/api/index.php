@@ -175,6 +175,14 @@ function despachar(string $metodo, array $p): void
         cambios();
     }
 
+    // El sello del último arranque limpio, a solas: el móvil lo mira
+    // ANTES de empujar su cola, porque una cola del mundo anterior
+    // repoblaría el servidor recién limpiado.
+    if ($r0 === 'arranque' && $metodo === 'GET') {
+        exigir_sesion();
+        responder(['arranque' => marca_de_arranque()]);
+    }
+
     if ($r0 === 'config' && ($p[1] ?? '') === 'zonas') {
         if ($metodo === 'GET') {
             leer_zonas();
@@ -1693,6 +1701,15 @@ function arranque_limpio(): void
         }
     }
 
+    // El sello del arranque: al verlo cambiar, cada móvil tira él solo
+    // su copia local entera —datos y cola de subida— y baja el mundo
+    // de cero. Sin esto, los teléfonos seguían enseñando su copia
+    // vieja y re-subían lo pendiente (pasó el día del estreno: tres
+    // móviles en la caseta, tres cuentas distintas).
+    $sello = ahora_iso();
+    $pdo->prepare("DELETE FROM meta WHERE clave = 'arranque'")->execute();
+    $pdo->prepare("INSERT INTO meta (clave, valor) VALUES ('arranque', ?)")->execute([$sello]);
+
     // El repaso del esquema, a la cara: se vuelve a aplicar entero
     // (los CREATE son IF NOT EXISTS: no toca un dato) y se cuenta qué
     // hizo o QUÉ ERROR dio. Existe porque en el estreno la tabla de
@@ -1708,7 +1725,7 @@ function arranque_limpio(): void
         $esquema['fallo'] = $e->getMessage();
     }
 
-    responder(['ok' => true, 'copia' => basename($ruta), 'borrado' => $borrado, 'esquema' => $esquema]);
+    responder(['ok' => true, 'copia' => basename($ruta), 'borrado' => $borrado, 'arranque' => $sello, 'esquema' => $esquema]);
 }
 
 function borrar_medio(string $id): void
@@ -1866,7 +1883,21 @@ function cambios(): void
         'lecturas'    => array_map('lectura_salida', $lecturas),
         'ahora'       => $marca,
         'mas'         => $hayMas,
+        // El sello del arranque viaja también en la tanda, de cinturón:
+        // si cambia con una bajada en marcha, el móvil se entera igual.
+        'arranque'    => marca_de_arranque(),
     ]);
+}
+
+/** El sello del último arranque limpio. Vacío si nunca se ha hecho. */
+function marca_de_arranque(): string
+{
+    try {
+        $v = bd()->query("SELECT valor FROM meta WHERE clave = 'arranque'")->fetchColumn();
+        return $v === false ? '' : (string) $v;
+    } catch (Throwable $e) {
+        return '';
+    }
 }
 
 function traer(string $tabla, string $desde): array

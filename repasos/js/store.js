@@ -1355,6 +1355,16 @@ export async function sincronizar({ forzar = false } = {}) {
     estadoSync.error = null;
     avisar();
     try {
+      // El sello del arranque, ANTES de empujar nada: si el mundo se
+      // reinició, la cola local es del mundo anterior y empujarla
+      // repoblaría el servidor recién limpiado (les pasó a tres
+      // móviles en la caseta el día del estreno).
+      try {
+        await acatarArranque((await api.marcaDeArranque())?.arranque || '');
+      } catch (e) {
+        if (e.status !== 404) throw e;
+        // Un servidor viejo no conoce la ruta: sin sello, nada que acatar.
+      }
       await empujar();
       await tirar();
       estadoSync.ultimo = ahora();
@@ -1529,9 +1539,38 @@ async function tirar() {
   }
 }
 
+/**
+ * El sello del arranque limpio. Si el servidor lleva uno que este
+ * dispositivo no conoce, el mundo se reinició: la copia local es del
+ * mundo anterior y se tira ENTERA —repasos, partes, comentarios,
+ * fotos y la cola de subida— para volver a bajar todo de cero. Los
+ * mensajes y el directorio se quedan: el arranque no los toca en el
+ * servidor. Devuelve si hubo reinicio.
+ */
+async function acatarArranque(sello) {
+  if (!sello) return false;
+  if ((await db.meta.get('arranque')) === sello) return false;
+  for (const almacen of ['tareas', 'listas', 'comentarios', 'medios', 'outbox']) {
+    await db.vaciar(almacen);
+  }
+  await db.meta.del('ultimoSync');
+  await db.meta.set('arranque', sello);
+  await refrescarPendientes();
+  estadoSync.revision++;
+  avisar();
+  return true;
+}
+
 async function fusionarTanda(desde) {
   const r = await api.cambios(desde);
   if (!r) return null;
+
+  // De cinturón, por si el arranque llega con una bajada en marcha:
+  // la tanda incremental ya no vale y se pide otra, ya de cero.
+  if (await acatarArranque(r.arranque || '')) {
+    if (desde !== '') return { mas: true, ahora: 'reinicio' };
+    // Si ya era una bajada completa, esta tanda vale: se fusiona.
+  }
 
   if (r.personas?.length) {
     // El directorio no se fusiona por marca de tiempo: lo que manda el
