@@ -207,7 +207,13 @@ export function barraSync() {
     } else if (e.error === 'sesion') {
       texto.textContent = 'Sesión caducada · vuelve a entrar';
     } else if (e.error) {
-      texto.textContent = `No se pudo sincronizar · ${e.pendientes} en espera`;
+      // Nada se pierde: la cola queda guardada en el móvil y el motor
+      // reintenta solo (cada minuto, al volver la cobertura y al
+      // volver a la app). El texto tiene que decirlo, porque «no se
+      // pudo sincronizar» a secas suena a pérdida y asusta de más.
+      texto.textContent = e.pendientes
+        ? `No se pudo subir · ${e.pendientes} en espera · se reintenta solo`
+        : 'No se pudo bajar lo nuevo · se reintenta solo';
     } else if (e.pendientes > 0) {
       texto.textContent = `Subiendo ${e.pendientes} ${e.pendientes === 1 ? 'cambio' : 'cambios'}…`;
     } else {

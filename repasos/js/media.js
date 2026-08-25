@@ -283,7 +283,7 @@ function metadatosMedia(file, tipo) {
 }
 
 /* ─── Grabadora de audio ──────────────────────────────────────── */
-function mimeSoportado() {
+export function mimeSoportado() {
   const candidatos = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'];
   return candidatos.find((m) => window.MediaRecorder?.isTypeSupported?.(m)) || '';
 }

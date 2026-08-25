@@ -9,6 +9,7 @@ import {
   ctaAccion, ctaCancelar, abrirPagina,
 } from '../piezas.js';
 import * as ejemplos from '../ejemplos.js';
+import { mimeSoportado } from '../media.js';
 import { PROMOCIONES } from '../catalog.js';
 import {
   usaIA, ponerUsaIA, juntaFotos, ponerJuntaFotos,
@@ -33,6 +34,17 @@ export async function render() {
     try { claude = await api.claudeEstado(); } catch { claude = { puesta: false, final: '' }; }
     try { oido = await api.oidoEstado(); } catch { oido = { puesta: false, final: '' }; }
     try { voces = await api.vocesEstado(); } catch { voces = { puesta: false, final: '' }; }
+  }
+
+  // La voz propia, para la fila del entrenador: si ya está aprendida,
+  // se dice ahí mismo sin tener que entrar a mirar.
+  const promoActiva = PROMOCIONES.find((x) => x.activa) || null;
+  let vozMia = null;
+  if (api.HAY_SERVIDOR && !u.local && promoActiva) {
+    try {
+      const rv = await api.listarVoces(promoActiva.id);
+      vozMia = rv.voces.find((v) => v.personaId === u.id) || null;
+    } catch { /* sin respuesta, la fila sale con su texto de estreno */ }
   }
 
   /** Una fila de tarjeta: icono, rótulo, detalle y lo que haya a la derecha. */
@@ -100,6 +112,8 @@ export async function render() {
             if (await hojaFoto(u)) { await store.refrescarSesion(); refrescar(); }
           }) : null,
         api.HAY_SERVIDOR && !u.local ? item('key', 'Cambiar mi contraseña', null, () => cambiarPassword()) : null,
+        api.HAY_SERVIDOR && !u.local && promoActiva ? item('mic', 'Entrenar mi voz',
+          subEntrenador(vozMia), () => hojaEntrenarVoz(u, promoActiva.id)) : null,
         admin && api.HAY_SERVIDOR && !u.local
           ? item('users', 'Usuarios', 'Alta y baja del equipo', () => ir('#/usuarios'))
           : null,
@@ -526,6 +540,159 @@ function cambiarPassword() {
       h('button.btn.ghost.full', { onclick: () => cerrar(false) }, 'Cancelar'),
     ];
   });
+}
+
+/* ─── El entrenador de voz ────────────────────────────────────────
+   Cada uno entrena la suya: lee en voz alta el texto de la pantalla
+   —cosas de obra, un minuto como tope— y ese clip queda como su
+   muestra. Con la clave de pyannote puesta, la huella se encarga en el
+   momento; sin ella, el clip espera y se enrola al activarlas. */
+
+const LECTURA_DE_OBRA = 'En la obra repasamos cada mañana la estructura: '
+  + 'pilares, forjados y vigas de hormigón. El aparejador revisa la cubierta '
+  + 'y la carpintería exterior mientras el arquitecto replantea la fachada. '
+  + 'Hoy llegan el vidrio del lucernario, la grúa pequeña y seis palés de '
+  + 'azulejo. Si la junta queda bien sellada, firmamos el acta y cerramos '
+  + 'la jornada sin repasos pendientes.';
+
+/** Lo que cuenta la fila del entrenador según cómo esté la voz. */
+function subEntrenador(voz) {
+  if (voz?.conHuella) return 'Aprendida · la app te pone el nombre sola';
+  if (voz?.enrolando) return 'Aprendiéndose · queda lista en unos minutos';
+  if (voz?.conClip) return 'Grabada · se aprenderá al activar las huellas';
+  return 'Lee un texto de un minuto y la app te reconocerá';
+}
+
+async function hojaEntrenarVoz(u, promoId) {
+  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+    return toast('Este navegador no graba audio: entra desde el móvil', 'err');
+  }
+  let stream = null;
+  let rec = null;
+  let trozos = [];
+  let t0 = 0;
+  let tick = null;
+  let resultado = null;
+
+  const salida = await sheet((cerrar) => {
+    const crono = h('div.display.mono-num', { style: { fontSize: '34px' } }, '0:00');
+    const pista = h('p.sub.center', null, 'Toca el micro y lee el texto en voz alta.');
+    const aviso = h('p.hint.err', { style: { display: 'none' } });
+    const hueco = h('div');   // aquí aparece la escucha al terminar
+    const bola = h('button.icon-btn.accent', {
+      style: { width: '72px', height: '72px', flex: '0 0 72px' },
+      'aria-label': 'Grabar',
+    }, icon('mic', 26));
+    const guardar = ctaAccion('GUARDAR MI VOZ', { icono: 'check' });
+    guardar.disabled = true;
+    let grabando = false;
+
+    const pintarCrono = () => {
+      const s = Math.floor((Date.now() - t0) / 1000);
+      crono.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    };
+
+    const parar = () => {
+      if (!grabando) return;
+      grabando = false;
+      clearInterval(tick);
+      try { rec.stop(); } catch { /* ya parado */ }
+      stream?.getTracks().forEach((t) => t.stop());
+      bola.style.display = 'none';
+    };
+
+    const empezar = async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch {
+        toast('No se pudo acceder al micrófono', 'err');
+        return;
+      }
+      const mime = mimeSoportado();
+      rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+      trozos = [];
+      rec.ondataavailable = (e) => { if (e.data.size) trozos.push(e.data); };
+      rec.onstop = () => {
+        const blob = new Blob(trozos, { type: rec.mimeType || mime || 'audio/webm' });
+        resultado = { blob, duracion: Math.round((Date.now() - t0) / 1000) };
+        guardar.disabled = false;
+        pista.textContent = 'Ya está. Escúchala si quieres, y guárdala.';
+        hueco.replaceChildren(h('audio', {
+          controls: true, src: URL.createObjectURL(blob), style: { width: '100%' },
+        }));
+      };
+      rec.start();
+      grabando = true;
+      t0 = Date.now();
+      tick = setInterval(() => {
+        pintarCrono();
+        // El tope que pidió Fran: un minuto como mucho. Con el texto
+        // de arriba sobra la mitad.
+        if (Date.now() - t0 > 60 * 1000) {
+          parar();
+          pista.textContent = 'Un minuto es el tope, y con eso llega de sobra.';
+        }
+      }, 200);
+      bola.replaceChildren(icon('stop', 24));
+      bola.className = 'icon-btn ink';
+      bola.style.width = bola.style.height = '72px';
+      pista.textContent = 'Grabando… lee con tu voz de siempre.';
+    };
+
+    bola.addEventListener('click', () => (grabando ? parar() : empezar()));
+
+    guardar.addEventListener('click', async () => {
+      if (!resultado) return;
+      // Menos de tres segundos no retratan una voz: casi seguro que
+      // fue un toque sin querer.
+      if (resultado.duracion < 3) {
+        aviso.textContent = 'Ha quedado demasiado corta: vuelve a abrir y lee el texto entero.';
+        aviso.style.display = 'block';
+        return;
+      }
+      guardar.disabled = true;
+      guardar.querySelector('.grow').textContent = 'GUARDANDO…';
+      try {
+        const rv = await api.crearVoz({ promoId, personaId: u.id, personaNombre: u.nombre });
+        const rs = await api.subirMuestraVoz(rv.voz.id, resultado.blob);
+        cerrar(true);
+        toast(rs.enrolando
+          ? 'Tu voz se está aprendiendo · queda lista en unos minutos'
+          : 'Tu voz queda grabada · se aprenderá al activar las huellas');
+        refrescar();
+      } catch (e) {
+        aviso.textContent = e?.message || 'No se ha podido guardar.';
+        aviso.style.display = 'block';
+        guardar.disabled = false;
+        guardar.querySelector('.grow').textContent = 'GUARDAR MI VOZ';
+      }
+    });
+
+    return [
+      h('h2.title', null, 'Entrenar mi voz'),
+      h('p.sub', { style: { marginTop: '6px' } },
+        'Lee el texto en voz alta, con el móvil cerca y sin ruido alrededor. '
+        + 'Con eso la app aprende tu voz y en las actas de reunión pone tu '
+        + 'nombre sola.'),
+      h('p.lectura-voz', null, LECTURA_DE_OBRA),
+      h('div.center', { style: { padding: '6px 0 0' } }, crono),
+      pista,
+      hueco,
+      h('div', { style: { display: 'flex', justifyContent: 'center', padding: '8px 0 2px' } }, bola),
+      aviso,
+      guardar,
+      h('p.hint', null,
+        'Tu voz es un dato personal: la huella se guarda en el servidor de '
+        + 'UNIK, no sale de ahí, y se borra si lo pides.'),
+      ctaCancelar(() => cerrar(false)),
+    ];
+  });
+
+  // Se cierre como se cierre la hoja —botón, velo o gesto—, ni el
+  // temporizador ni el micrófono pueden quedarse encendidos.
+  clearInterval(tick);
+  stream?.getTracks().forEach((t) => t.stop());
+  return salida;
 }
 
 async function vaciarCache() {

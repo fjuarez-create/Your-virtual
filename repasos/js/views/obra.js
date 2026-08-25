@@ -66,37 +66,26 @@ export async function render() {
   if (deHoy) {
     // Sin el «Hoy ·» delante: el epígrafe de arriba ya lo dice.
     contenido.push(tarjetaReunion(deHoy, { esHoy: true }));
+  } else if (df) {
+    // Sin tarjeta de «Sin empezar»: la quitó Fran en agosto de 2026
+    // porque no contaba nada que el epígrafe «Hoy» no dijera ya. Los
+    // días sin reunión, aquí solo vive el botón.
+    const empezar = h('button.d-boton-negro', {
+      onclick: async () => {
+        empezar.disabled = true;
+        try {
+          const r = await api.empezarReunion(p.id);
+          ir(`#/obra/r/${r.reunion.id}`);
+        } catch (e) {
+          empezar.disabled = false;
+          toast(e.codigo === 'red' ? 'Sin conexión: la obra se lleva en directo' : e.message, 'err');
+        }
+      },
+    }, 'Comenzar reunión');
+    contenido.push(empezar);
   } else {
-    contenido.push(
-      h('div.d-acta-dia.hoy', null,
-        h('div.d-acta-dia-cab', null,
-          h('div.grow', null,
-            h('p.d-acta-dia-cuando', null, 'Sin empezar'),
-            h('p.d-acta-dia-fecha', null, `${diaDeLaSemana(hoy, { mayuscula: true })}, ${fechaDeActa(hoy)}`),
-          ),
-        ),
-        h('p.d-acta-dia-villas', null, 'La reunión de cada mañana, con su acta'),
-      ),
-    );
-    if (df) {
-      const empezar = h('button.d-boton-negro', {
-        style: { marginTop: '12px' },
-        onclick: async () => {
-          empezar.disabled = true;
-          try {
-            const r = await api.empezarReunion(p.id);
-            ir(`#/obra/r/${r.reunion.id}`);
-          } catch (e) {
-            empezar.disabled = false;
-            toast(e.codigo === 'red' ? 'Sin conexión: la obra se lleva en directo' : e.message, 'err');
-          }
-        },
-      }, 'Empezar la reunión de hoy');
-      contenido.push(empezar);
-    } else {
-      contenido.push(h('p.d-nota-pie', null,
-        'La reunión la empieza la dirección facultativa o el administrador; en cuanto arranque, aparecerá aquí.'));
-    }
+    contenido.push(h('p.d-nota-pie', null,
+      'La reunión la empieza la dirección facultativa o el administrador; en cuanto arranque, aparecerá aquí.'));
   }
 
   /* ─── Lo pendiente de toda la obra ─── */

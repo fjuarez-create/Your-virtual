@@ -569,6 +569,14 @@ button.avatar:active { transform: scale(0.92); }
 .sheet .grab { width: 40px; height: 4px; border-radius: 2px; background: var(--line); margin: 0 auto 16px; }
 .sheet > * + * { margin-top: 12px; }
 
+/* El texto del entrenador de voz (Ajustes): se lee en voz alta con el
+   móvil a un palmo, así que va grande, aireado y en su propia píldora. */
+.lectura-voz {
+  background: var(--surface); border-radius: 16px;
+  padding: 15px 17px; margin: 4px 0 0;
+  font-size: 17px; line-height: 1.6;
+}
+
 /* ─── Visor a pantalla completa ────────────────────────────────── */
 .viewer {
   position: absolute; inset: 0; z-index: 80; background: #0b0b0c;

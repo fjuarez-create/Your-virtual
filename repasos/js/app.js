@@ -180,10 +180,14 @@ function pintar({ contenido, tab, fab, sinTabs, clase, alSalir = null }) {
   // Se conservan los nodos flotantes (aviso, hoja, visor) entre pantallas.
   // La cápsula también, si seguimos en una sección con botonera: así la
   // bolita se desliza hasta la nueva en vez de reaparecer de cero.
+  //
+  // OJO: el aviso se llama `.aviso` (con `.toast`, su nombre de antes
+  // del rediseño, aquí se barría recién nacido: todo aviso seguido de
+  // un repintado moría al primer cuadro).
   const barraViva = sinTabs ? null : app.querySelector('.tabbar');
   [...app.children].forEach((n) => {
     if (n === barraViva) return;
-    if (!n.matches('.toast, .veil, .sheet, .viewer')) n.remove();
+    if (!n.matches('.aviso, .veil, .sheet, .viewer')) n.remove();
   });
   app.prepend(screen);
   if (fab) screen.after(fab);

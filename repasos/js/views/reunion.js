@@ -217,9 +217,13 @@ export async function render({ reunionId }) {
     }
   }
 
-  /* ─── ¿Quién es quién? ─── */
+  /* ─── ¿Quién es quién? ───
+     Con df a secas, no con edita: corregir a quién se atribuye una voz
+     no cambia lo acordado, así que sobrevive al sello de las 23:59
+     —igual que tachar tareas— y el servidor lo permite también. Si al
+     leer un acta vieja se ve un nombre mal puesto, se arregla ahí. */
   const conVoces = grabaciones.filter((g) => g.estado === 'transcrita' && g.partes.some((p) => p.dicho.length));
-  if (edita && conVoces.length) {
+  if (df && conVoces.length) {
     for (const g of conVoces) {
       const bloque = bloqueQuienEsQuien(g, { reunion: r, voces, hayServicioVoces });
       if (bloque) {

@@ -1883,10 +1883,16 @@ function medio_salida(array $f): array
 */
 
 /** La reunión la llevan la DF y el administrador: los mismos que verifican. */
+/** ¿Lleva esta persona las reuniones de obra? (DF o administrador) */
+function es_df(array $yo): bool
+{
+    return $yo['rol'] === 'admin' || (bool) $yo['verifica'];
+}
+
 function exigir_df(): array
 {
     $yo = exigir_sesion();
-    if ($yo['rol'] !== 'admin' && !$yo['verifica']) {
+    if (!es_df($yo)) {
         responder_error(403, 'Las reuniones de obra las llevan la dirección facultativa y el administrador.', 'permiso');
     }
     return $yo;
@@ -2997,6 +3003,9 @@ function voz_salida(array $v): array
         // La huella JAMÁS sale del servidor: al móvil solo va si la hay.
         'conHuella' => trim((string) ($v['huella'] ?? '')) !== '',
         'enrolando' => trim((string) ($v['huella_trabajo'] ?? '')) !== '',
+        // Si hay clip guardado aunque no haya huella (sin clave de
+        // pyannote): el entrenador de Ajustes lo cuenta como «grabada».
+        'conClip' => is_file(carpeta_voces() . '/' . $v['id'] . '.wav'),
         'muestra' => [
             'grabacionId' => $v['muestra_grabacion_id'],
             'parte' => (int) $v['muestra_parte'],
@@ -3049,11 +3058,17 @@ function listar_voces(): void
  */
 function crear_voz(): void
 {
-    exigir_df();
+    // La DF y el administrador apuntan la voz de cualquiera; el resto
+    // del equipo solo la suya, que es lo que usa el entrenador de voz
+    // de Ajustes.
+    $yo = exigir_sesion();
     $c = cuerpo();
     $promo = texto($c, 'promoId', 60);
     $personaId = es_uuid($c['personaId'] ?? null) ? $c['personaId'] : null;
     $personaNombre = texto($c, 'personaNombre', 120);
+    if (!es_df($yo) && $personaId !== (string) $yo['id']) {
+        responder_error(403, 'Solo puedes entrenar tu propia voz.', 'permiso');
+    }
     if ($promo === '' || ($personaId === null && $personaNombre === '')) {
         responder_error(400, 'La voz necesita promoción y dueño.', 'formato');
     }
@@ -3128,7 +3143,7 @@ function carpeta_voces(): string
  */
 function subir_muestra_voz(string $id): void
 {
-    exigir_df();
+    $yo = exigir_sesion();
     if (!es_uuid($id)) {
         responder_error(404, 'Voz desconocida.');
     }
@@ -3137,6 +3152,11 @@ function subir_muestra_voz(string $id): void
     $voz = $sent->fetch();
     if (!$voz) {
         responder_error(404, 'Voz desconocida.');
+    }
+    // Mismo reparto que al crearla: cada uno puede poner clip a SU voz
+    // (el entrenador de Ajustes); a las demás, solo DF o administrador.
+    if (!es_df($yo) && (string) $voz['persona_id'] !== (string) $yo['id']) {
+        responder_error(403, 'Solo puedes entrenar tu propia voz.', 'permiso');
     }
 
     $clip = file_get_contents('php://input');
