@@ -17,8 +17,13 @@
  */
 declare(strict_types=1);
 
-/** Se sube al añadir campos o tablas. */
-const ESQUEMA_VERSION = 13;
+/** Se sube al añadir campos o tablas.
+    La 14 no añade nada sobre la 13: repite sus CREATE. En el estreno
+    de la 13, un móvil sincronizó en mitad del despliegue —esquema.php
+    ya nuevo, schema.sql todavía viejo— y la migración selló la 13 sin
+    la tabla de adjuntos. Los CREATE son IF NOT EXISTS: repasarlos no
+    toca un dato. */
+const ESQUEMA_VERSION = 14;
 
 /**
  * Campos que tienen que existir, por tabla, con el tipo que usa MySQL.
