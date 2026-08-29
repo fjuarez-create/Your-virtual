@@ -9,6 +9,11 @@ export const metadata: Metadata = {
   title: 'banango — tu buscador de compras con IA',
   description:
     'Busca en lenguaje natural en las 20 grandes tiendas online de España y compra en la tienda oficial.',
+  // La versión estática (unikdi.com/bng) no debe indexarse: lleva su propio
+  // noindex, independiente del robots.txt del sitio que la aloje.
+  ...(process.env.NEXT_PUBLIC_STATIC === '1'
+    ? { robots: { index: false, follow: false } }
+    : {}),
 };
 
 export const viewport: Viewport = {

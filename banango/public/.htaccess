@@ -1,0 +1,6 @@
+# Refuerzo del noindex para la versión estática (unikdi.com/bng):
+# aplica la cabecera a todos los ficheros de la carpeta, no solo al HTML.
+# Si el servidor no es Apache o no tiene mod_headers, se ignora sin romper nada.
+<IfModule mod_headers.c>
+  Header set X-Robots-Tag "noindex, nofollow"
+</IfModule>
