@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "ingest:awin": "node scripts/ingest-awin.mjs"
+    "ingest:awin": "node scripts/ingest-awin.mjs",
+    "build:static": "node scripts/build-static.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.122.0",

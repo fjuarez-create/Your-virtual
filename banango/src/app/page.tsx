@@ -16,6 +16,10 @@ const SUGGESTIONS = [
 
 type Sort = 'rel' | 'asc' | 'desc';
 
+// Fijados en build: la versión estática (unikdi.com/bng) busca en el navegador.
+const IS_STATIC = process.env.NEXT_PUBLIC_STATIC === '1';
+const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? '';
+
 export default function Home() {
   const [input, setInput] = useState('');
   const [data, setData] = useState<SearchResponse | null>(null);
@@ -43,11 +47,17 @@ export default function Home() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`, {
-        signal: controller.signal,
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const body = (await res.json()) as SearchResponse;
+      let body: SearchResponse;
+      if (IS_STATIC) {
+        const { searchClient } = await import('@/lib/client-search');
+        body = await searchClient(query);
+      } else {
+        const res = await fetch(`${BASE_PATH}/api/search?q=${encodeURIComponent(query)}`, {
+          signal: controller.signal,
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        body = (await res.json()) as SearchResponse;
+      }
       setData(body);
       setStoreFilter(new Set());
       setSort('rel');
