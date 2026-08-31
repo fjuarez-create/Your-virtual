@@ -1,0 +1,3419 @@
+/* ═══════════════════════════════════════════════════════════════
+   UNIK repasos — sistema visual
+   Blanco y grises con tinta negra; el acento #9b8f7f se reserva
+   para la acción principal de cada pantalla. Nunca dos acentos
+   compitiendo en la misma vista.
+   ═══════════════════════════════════════════════════════════════ */
+/* Los titulares de pantalla. Recortada a los caracteres que se usan:
+   de 165 KB a 18, que en obra con mala cobertura se nota. */
+@font-face {
+  font-family: 'PP Eiko';
+  src: url('../assets/fonts/eiko-thin.woff2') format('woff2');
+  font-weight: 200;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* La letra de la casa, ya con licencia: la Neue Haas Grotesk Display
+   Pro que Fran compró, corte 55 Roman, la que quiere en toda la app.
+
+   Se probó primero con la 45 Light y en el móvil se veía más fina que
+   su propio Figma —que está hecho con esta 55—, así que volvimos a la
+   que manda el diseño.
+
+   Se declara para TODOS los pesos —de 100 a 900— aunque el fichero sea
+   uno solo. Así, cuando el diseño pide un 500, el navegador usa esta y
+   no se inventa un engordado de la letra, que es lo que hace cuando no
+   encuentra el peso pedido y deja los textos sucios.
+
+   Al lado queda guardada la Light, por si alguna vez hiciera falta.
+   Inter Tight se queda detrás como red de seguridad. */
+@font-face {
+  font-family: 'Neue Haas Grotesk Display Pro';
+  src: url('../assets/fonts/neue-haas-display-roman.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Inter Tight';
+  src: url('../assets/fonts/inter-tight-latin-400-normal.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Inter Tight';
+  src: url('../assets/fonts/inter-tight-latin-500-normal.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Inter Tight';
+  src: url('../assets/fonts/inter-tight-latin-600-normal.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Open Sans';
+  src: url('../assets/fonts/opensans-var.woff2') format('woff2');
+  font-weight: 300 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --bg: #ffffff;
+  --page: #ebebe8;          /* fondo fuera del marco de la app (escritorio) */
+  --surface: #f2f2f0;       /* píldoras y tarjetas claras */
+  --surface-2: #e7e7e3;     /* estado pulsado / pistas */
+  --ink: #111112;           /* tarjetas negras y botones primarios */
+  --ink-2: #1d1d20;
+  --text: #161618;
+  --muted: #8a8a90;
+  --muted-2: #a8a8ae;
+  --muted-oscuro: #5e5e66;  /* gris de lectura, 6,4:1 sobre la tarjeta */
+  --line: rgba(17, 17, 18, 0.10);
+  --line-soft: rgba(17, 17, 18, 0.06);
+
+  --accent: #9b8f7f;        /* acento de marca */
+  --accent-deep: #6f6558;   /* mismo tono legible sobre blanco (5,6:1) */
+  --accent-soft: rgba(155, 143, 127, 0.16);
+  --on-accent: #111112;     /* tinta sobre acento (6,6:1) */
+
+  --ok: #3f7d5a;
+  --warn: #b0842a;
+  --danger: #b4453c;
+  /* El rojo es señal, no decoración: solo rechazos y la hoja de puerta. */
+  --rojo: #c63a30;
+  --rojo-soft: rgba(198, 58, 48, 0.10);
+  /* El azul es el de «esto es para ti»: la bolita de sin leer y los dos
+     tics. No lo usa nada más, para que verlo signifique siempre eso. */
+  --azul: #2f6fd0;
+
+  --r-xl: 30px;
+  --r-lg: 24px;
+  --r-md: 18px;
+  --r-sm: 13px;
+  --shadow: 0 14px 40px rgba(17, 17, 18, 0.10);
+  --shadow-sm: 0 4px 16px rgba(17, 17, 18, 0.07);
+  --font: 'Neue Haas Grotesk Display Pro', 'Inter Tight', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  /* ─── El rediseño 2026, con los valores exactos del Figma ───
+     La letra a peso 500 en casi todo, y estos colores medidos del
+     archivo: el fondo #f5f5f5, el verde botella de lo verificado, el
+     beige de lo completado y el rojo de lo rechazado, cada uno con su
+     versión suave para las tarjetas del muro. */
+  --d-font: 'Neue Haas Grotesk Display Pro', 'Inter Tight', 'Helvetica Neue', Arial, sans-serif;
+  --d-fondo: #f5f5f5;
+  --d-tinta: #000000;
+  --d-gris: #8c8c8c;
+  --d-verde: #064d2d;
+  --d-verde-suave: #e7f8f0;
+  --d-beige: #d6cabc;
+  --d-beige-suave: #deddd8;
+  --d-beige-tinta: #736b5c;
+  --d-rojo: #db3e32;
+  --d-rojo-suave: #feeceb;
+  --d-rojo-tinta: #683c03;
+  --d-gris-suave: #f0f0f0;
+  --d-anillo-fondo: #d9d9d9;
+  --d-radio: 16px;
+  --font-titulo: 'Neue Haas Grotesk Display Pro', 'Inter Tight', 'Helvetica Neue', Arial, sans-serif;
+
+  --tab-h: 104px;           /* alto que reserva la barra inferior */
+  --pad: 20px;
+
+  /* ─── Movimiento ───────────────────────────────────────────────
+     Un sistema, no números sueltos. La duración la marca el tamaño
+     del cambio; la curva, su naturaleza: lo que entra decelera, lo
+     que sale acelera, y lo que solo se transforma va estándar. */
+  --mov-corto: 140ms;       /* reacción a un toque */
+  --mov-medio: 260ms;       /* un elemento que cambia de sitio */
+  --mov-largo: 420ms;       /* una pantalla entera */
+  --sal-estandar: cubic-bezier(0.2, 0, 0, 1);
+  --sal-entrada: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --sal-salida: cubic-bezier(0.3, 0, 0.8, 0.15);
+  --sal-muelle: cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body { height: 100%; }
+body {
+  font-family: var(--font);
+  color: var(--text);
+  background: var(--page);
+  -webkit-font-smoothing: antialiased;
+  -webkit-user-select: none; user-select: none;
+  /* Ni rebote vertical ni un solo píxel de desplazamiento lateral. Lo
+     de arriba lo cierra el <meta> del viewport; esto es el cinturón
+     por si algún día un elemento se pasa de ancho: que se recorte, no
+     que convierta la pantalla en un mapa que se puede arrastrar. */
+  overscroll-behavior: none;
+  overflow-x: hidden;
+}
+input, textarea { -webkit-user-select: text; user-select: text; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+a { color: inherit; text-decoration: none; }
+img, video { max-width: 100%; display: block; }
+
+/* ─── Marco de la app ──────────────────────────────────────────
+   En móvil ocupa la pantalla. En escritorio se centra a 480 px
+   para que siga leyéndose como una app y no como una web ancha. */
+#app {
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  /* Altura exacta de la ventana, no mínima: el marco no crece con el
+     contenido. Quien se desplaza es .screen, y así la cápsula de abajo,
+     el botón flotante y los avisos —que se colocan respecto al marco—
+     siguen en su sitio aunque la lista tenga cincuenta viviendas. */
+  height: 100dvh;
+  background: var(--bg);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+@supports not (height: 100dvh) { #app { height: 100vh; } }
+@media (min-width: 520px) {
+  body { padding: 0; }
+  #app { box-shadow: 0 0 0 1px var(--line), 0 30px 80px rgba(17, 17, 18, 0.14); }
+}
+
+/* ─── Zona desplazable ─────────────────────────────────────────── */
+.screen {
+  flex: 1;
+  /* Sin este min-height un hijo de flex nunca encoge por debajo de su
+     contenido, y el desplazamiento se le escaparía a la ventana. */
+  min-height: 0;
+  overflow-y: auto;
+  /* Explícito: con overflow-y en auto y overflow-x sin declarar, el
+     lateral también se vuelve auto y basta con que algo sobresalga un
+     píxel para que la pantalla se pueda arrastrar de lado. */
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: calc(env(safe-area-inset-top) + 18px) var(--pad)
+           calc(env(safe-area-inset-bottom) + var(--tab-h) + 24px);
+}
+.screen.no-tabs { padding-bottom: calc(env(safe-area-inset-bottom) + 32px); }
+/* Con botón flotante, la lista respira por debajo lo que ocupa él: si
+   no, la última tarjeta queda medio tapada y no hay manera de tocarla. */
+#app.con-fab .screen { padding-bottom: calc(env(safe-area-inset-bottom) + var(--tab-h) + 96px); }
+#app.con-fab .screen.no-tabs { padding-bottom: calc(env(safe-area-inset-bottom) + 108px); }
+.screen > * + * { margin-top: 14px; }
+/* El titular ya trae su propio hueco inferior; el genérico lo
+   duplicaría. */
+.screen > .titulo-pantalla + * { margin-top: 0; }
+
+/* ─── Tipografía ───────────────────────────────────────────────── */
+.display {
+  font-size: clamp(34px, 10.5vw, 46px);
+  font-weight: 800;
+  letter-spacing: -0.038em;
+  line-height: 0.96;
+}
+.display .thin { font-weight: 300; letter-spacing: -0.03em; }
+h2.title { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
+.eyebrow {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--muted);
+}
+.sub { font-size: 13.5px; color: var(--muted); line-height: 1.45; }
+.strong { font-weight: 700; }
+.center { text-align: center; }
+.mono-num { font-variant-numeric: tabular-nums; }
+
+/* ─── Cabecera de pantalla ─────────────────────────────────────── */
+.topbar {
+  display: flex; align-items: center; gap: 12px;
+  min-height: 44px; margin-bottom: 4px;
+}
+.topbar .grow { flex: 1; min-width: 0; }
+.topbar h1 {
+  font-size: 17px; font-weight: 700; letter-spacing: -0.02em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.topbar .sub { font-size: 12px; }
+
+.icon-btn {
+  width: 44px; height: 44px; flex: 0 0 44px;
+  border-radius: 50%; background: var(--surface);
+  display: grid; place-items: center; color: var(--text);
+  transition: background 0.15s ease, transform 0.12s ease;
+}
+.icon-btn:active { background: var(--surface-2); transform: scale(0.94); }
+.icon-btn.ink { background: var(--ink); color: #fff; }
+.icon-btn.accent { background: var(--accent); color: var(--on-accent); }
+.icon-btn svg { width: 20px; height: 20px; }
+
+.avatar {
+  position: relative; overflow: hidden;
+  width: 44px; height: 44px; flex: 0 0 44px; border-radius: 50%;
+  background: var(--accent); color: var(--on-accent);
+  display: grid; place-items: center;
+  font-size: 15px; font-weight: 700; letter-spacing: -0.01em;
+  transition: transform var(--mov-corto) var(--sal-estandar);
+}
+button.avatar:active { transform: scale(0.92); }
+/* La foto tapa las iniciales, que se quedan debajo por si falla. */
+.avatar img { position: absolute; inset: 0; }
+
+/* ─── Píldoras de lista (patrón «Settings» de la referencia) ───── */
+.row {
+  display: flex; align-items: center; gap: 14px;
+  width: 100%; text-align: left;
+  padding: 16px 16px 16px 18px;
+  background: var(--surface); border-radius: var(--r-md);
+  transition: background 0.15s ease, transform 0.12s ease;
+}
+.row:active { background: var(--surface-2); transform: scale(0.985); }
+.row .grow { flex: 1; min-width: 0; }
+.row .row-title {
+  font-size: 15.5px; font-weight: 600; letter-spacing: -0.01em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.row .row-sub {
+  font-size: 12.5px; color: var(--muted); margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.row.danger .row-title { color: var(--danger); }
+.chev { width: 18px; height: 18px; flex: 0 0 18px; color: var(--muted); }
+.row-lead {
+  width: 40px; height: 40px; flex: 0 0 40px; border-radius: 12px;
+  background: var(--bg); display: grid; place-items: center;
+  font-size: 14px; font-weight: 700;
+}
+.stack { display: flex; flex-direction: column; gap: 9px; }
+
+/* ─── Tarjeta negra ────────────────────────────────────────────── */
+.card-ink {
+  background: var(--ink); color: #fff;
+  border-radius: var(--r-lg); padding: 20px;
+}
+.card-ink .eyebrow { color: rgba(255, 255, 255, 0.55); }
+.card-ink .sub { color: rgba(255, 255, 255, 0.62); }
+
+/* Fila de cifras separadas por línea vertical, como el panel de la referencia */
+.stats { display: flex; align-items: stretch; }
+.stats > div { flex: 1; padding: 0 14px; }
+.stats > div:first-child { padding-left: 0; }
+.stats > div:last-child { padding-right: 0; }
+.stats > div + div { border-left: 1px solid rgba(255, 255, 255, 0.14); }
+.stats .n { font-size: 26px; font-weight: 800; letter-spacing: -0.03em; line-height: 1; }
+.stats .n.accent { color: var(--accent); }
+.stats .l { font-size: 11px; color: rgba(255, 255, 255, 0.5); margin-top: 5px; }
+
+.bar { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.16); overflow: hidden; }
+.bar > i { display: block; height: 100%; border-radius: 3px; background: var(--accent); transition: width 0.4s ease; }
+.bar.on-light { background: var(--surface-2); }
+
+/* ─── Llamada a la acción en acento ────────────────────────────── */
+.cta {
+  display: flex; align-items: center; gap: 14px; width: 100%; text-align: left;
+  background: var(--accent); color: var(--on-accent);
+  border-radius: var(--r-lg); padding: 17px 17px 17px 22px;
+  transition: transform 0.12s ease, filter 0.15s ease;
+}
+.cta:active { transform: scale(0.985); filter: brightness(0.96); }
+.cta .grow { flex: 1; min-width: 0; }
+.cta .cta-title { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; }
+.cta .cta-sub { font-size: 12.5px; opacity: 0.72; margin-top: 2px; }
+.cta .knob {
+  width: 42px; height: 42px; flex: 0 0 42px; border-radius: 50%;
+  background: var(--ink); color: #fff; display: grid; place-items: center;
+}
+.cta .knob svg { width: 18px; height: 18px; }
+.cta.ink { background: var(--ink); color: #fff; }
+.cta.ink .knob { background: var(--accent); color: var(--on-accent); }
+
+/* ─── Botones ──────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+  padding: 15px 22px; border-radius: 999px;
+  font-size: 15px; font-weight: 700; letter-spacing: -0.01em;
+  background: var(--surface); color: var(--text);
+  transition: transform 0.12s ease, filter 0.15s ease, background 0.15s ease;
+}
+.btn:active { transform: scale(0.97); }
+.btn:disabled { opacity: 0.45; pointer-events: none; }
+.btn.full { display: flex; width: 100%; }
+.btn.ink { background: var(--ink); color: #fff; }
+.btn.accent { background: var(--accent); color: var(--on-accent); }
+.btn.ghost { background: transparent; box-shadow: inset 0 0 0 1.5px var(--line); }
+.btn.danger { background: transparent; color: var(--danger); box-shadow: inset 0 0 0 1.5px rgba(180, 69, 60, 0.3); }
+.btn svg { width: 18px; height: 18px; }
+.btn-row { display: flex; gap: 10px; }
+.btn-row > .btn { flex: 1; }
+
+/* ─── Chips y etiquetas ────────────────────────────────────────── */
+.chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip {
+  padding: 9px 15px; border-radius: 999px; background: var(--surface);
+  font-size: 13px; font-weight: 600; color: var(--text);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.chip[aria-pressed='true'] { background: var(--ink); color: #fff; }
+.chip.accent[aria-pressed='true'] { background: var(--accent); color: var(--on-accent); }
+
+.tag {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 10px; border-radius: 999px;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
+  background: var(--surface); color: var(--muted); white-space: nowrap;
+}
+.tag.accent { background: var(--accent-soft); color: var(--accent-deep); }
+.tag.ink { background: var(--ink); color: #fff; }
+.tag.ok { background: rgba(63, 125, 90, 0.13); color: var(--ok); }
+.tag.warn { background: rgba(176, 132, 42, 0.15); color: var(--warn); }
+.tag.dot::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+/* ─── Rejilla de viviendas ─────────────────────────────────────── */
+.grid-units { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; }
+.unit {
+  position: relative; aspect-ratio: 1; border-radius: var(--r-sm);
+  background: var(--surface); display: grid; place-items: center;
+  font-size: 17px; font-weight: 700; letter-spacing: -0.02em;
+  transition: background 0.15s ease, transform 0.12s ease;
+}
+.unit:active { transform: scale(0.94); }
+.unit.has-open { background: var(--accent); color: var(--on-accent); }
+.unit.has-done { background: var(--ink); color: #fff; }
+.unit .pip {
+  position: absolute; top: 7px; right: 7px;
+  min-width: 17px; height: 17px; padding: 0 5px; border-radius: 9px;
+  background: var(--ink); color: #fff;
+  font-size: 10px; font-weight: 700; display: grid; place-items: center;
+}
+.unit.has-open .pip { background: var(--ink); color: var(--accent); }
+.unit.has-done .pip { background: rgba(255, 255, 255, 0.2); }
+
+/* ─── Tarjeta de tarea: foto + texto, legible sin abrirla ──────── */
+.task {
+  display: flex; gap: 13px; width: 100%; text-align: left;
+  background: var(--surface); border-radius: var(--r-md); padding: 11px;
+  transition: background 0.15s ease, transform 0.12s ease;
+}
+.task:active { background: var(--surface-2); transform: scale(0.99); }
+.task .thumb {
+  width: 92px; height: 92px; flex: 0 0 92px; border-radius: 13px;
+  background: var(--surface-2) center / cover no-repeat;
+  position: relative; overflow: hidden;
+}
+.task .thumb.empty { display: grid; place-items: center; color: var(--muted-2); }
+.task .thumb.empty svg { width: 26px; height: 26px; }
+.task .body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.task .txt {
+  font-size: 14px; line-height: 1.38; letter-spacing: -0.005em;
+  display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.task .meta {
+  margin-top: auto; padding-top: 8px;
+  display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+}
+.task.done .txt { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--muted-2); }
+.task .n {
+  position: absolute; left: 6px; top: 6px;
+  min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px;
+  background: rgba(17, 17, 18, 0.72); color: #fff; backdrop-filter: blur(6px);
+  font-size: 11px; font-weight: 700; display: grid; place-items: center;
+}
+.task .kinds {
+  position: absolute; right: 5px; bottom: 5px; display: flex; gap: 3px;
+}
+.task .kinds span {
+  width: 19px; height: 19px; border-radius: 6px; display: grid; place-items: center;
+  background: rgba(17, 17, 18, 0.72); color: #fff; backdrop-filter: blur(6px);
+}
+.task .kinds svg { width: 11px; height: 11px; }
+
+/* ─── Detalle de tarea ─────────────────────────────────────────── */
+.hero-media {
+  border-radius: var(--r-lg); overflow: hidden; background: var(--ink);
+  aspect-ratio: 4 / 3; position: relative;
+}
+.hero-media img, .hero-media video { width: 100%; height: 100%; object-fit: contain; background: var(--ink); }
+.hero-media.empty { display: grid; place-items: center; aspect-ratio: 16 / 7; background: var(--surface); color: var(--muted); }
+.rail { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+.rail::-webkit-scrollbar { display: none; }
+.rail .m {
+  position: relative; width: 66px; height: 66px; flex: 0 0 66px;
+  border-radius: 13px; overflow: hidden; background: var(--surface-2) center / cover no-repeat;
+}
+.rail .m[aria-current='true'] { box-shadow: 0 0 0 2.5px var(--accent); }
+.rail .m .k {
+  position: absolute; inset: auto 4px 4px auto; width: 18px; height: 18px;
+  border-radius: 6px; background: rgba(17, 17, 18, 0.72); color: #fff;
+  display: grid; place-items: center; backdrop-filter: blur(6px);
+}
+.rail .m .k svg { width: 10px; height: 10px; }
+.rail .add {
+  width: 66px; height: 66px; flex: 0 0 66px; border-radius: 13px;
+  background: var(--surface); display: grid; place-items: center; color: var(--muted);
+}
+.rail .add svg { width: 20px; height: 20px; }
+/* La «x» de quitar una foto de un parte que todavía no se ha mandado.
+   Arriba a la derecha y no abajo, donde vive la marca del tipo de
+   medio: en una miniatura de 66 px, dos pastillas en la misma esquina
+   se tocan y se acierta a la que no era. */
+.rail-x {
+  position: absolute; inset: 4px 4px auto auto; width: 20px; height: 20px;
+  border-radius: 7px; background: rgba(17, 17, 18, 0.72); color: #fff;
+  display: grid; place-items: center; backdrop-filter: blur(6px);
+}
+
+.audio-row {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--surface); border-radius: var(--r-md); padding: 12px 14px;
+}
+.audio-row audio { width: 100%; height: 36px; }
+
+/* ─── Formularios ──────────────────────────────────────────────── */
+.field { display: block; }
+.field > .lbl { display: block; margin-bottom: 7px; }
+.input, .textarea {
+  width: 100%; font: inherit; font-size: 15.5px; color: var(--text);
+  background: var(--surface); border: 0; border-radius: var(--r-md);
+  padding: 15px 16px; outline: none;
+  transition: box-shadow 0.15s ease, background 0.15s ease;
+}
+.input::placeholder, .textarea::placeholder { color: var(--muted-2); }
+.input:focus, .textarea:focus { background: var(--bg); box-shadow: inset 0 0 0 2px var(--accent); }
+.textarea { resize: none; line-height: 1.45; min-height: 120px; }
+.hint { font-size: 12px; color: var(--muted); margin-top: 7px; }
+.hint.err { color: var(--danger); }
+
+/* ─── Barra inferior ───────────────────────────────────────────
+   Misma idea que el conmutador del showroom: una cápsula oscura que
+   contiene las bolitas, en vez de botones sueltos flotando. La
+   diferencia es que aquí el activo no cambia de color de golpe: hay
+   una bolita blanca que se desliza por detrás. */
+.tabbar {
+  position: absolute; left: 50%; z-index: 40;
+  bottom: calc(env(safe-area-inset-bottom) + 14px);
+  transform: translateX(-50%);
+  display: flex; gap: 8px; padding: 8px;
+  background: var(--ink); border-radius: 999px;
+  box-shadow: 0 10px 30px rgba(17, 17, 18, 0.28);
+}
+/* La bolita que viaja. Va por detrás de los botones, y su posición la
+   fija el JS con --x según cuál esté activo. --sx y --sy son el estirón
+   del viaje: el JS los sube al salir y los devuelve a uno al llegar, y
+   como el que se interpola es `transform` entero, el estirón y el
+   desplazamiento van en el mismo gesto. */
+.tabbar .marca {
+  position: absolute; top: 8px; left: 8px;
+  width: 72px; height: 72px; border-radius: 50%;
+  background: #fff;
+  transform: translateX(var(--x, 0)) scale(var(--sx, 1), var(--sy, 1));
+  transform-origin: center;
+  transition: transform var(--mov-largo) var(--sal-muelle);
+  pointer-events: none;
+}
+.tabbar.sin-animar .marca { transition: none; }
+.tabbar button {
+  position: relative; z-index: 1;
+  width: 72px; height: 72px; border-radius: 50%;
+  background: transparent; color: rgba(255, 255, 255, 0.55);
+  display: grid; place-items: center;
+  transition: color var(--mov-medio) var(--sal-estandar),
+              transform var(--mov-corto) var(--sal-estandar);
+}
+.tabbar button:active { transform: scale(0.9); }
+.tabbar button[aria-current='true'] { color: var(--ink); }
+.tabbar button svg {
+  width: 25px; height: 25px;
+  transition: transform var(--mov-largo) var(--sal-muelle);
+}
+/* Al activarse, el icono da un pellizco de escala: confirma el cambio
+   sin necesidad de más adorno. */
+.tabbar button[aria-current='true'] svg { transform: scale(1.14); }
+.tabbar button:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+
+/* Botón flotante de acción, por encima de la barra */
+.fab {
+  position: absolute; right: var(--pad); z-index: 45;
+  bottom: calc(env(safe-area-inset-bottom) + var(--tab-h) + 8px);
+  height: 54px; padding: 0 22px; border-radius: 27px;
+  background: var(--accent); color: var(--on-accent);
+  display: flex; align-items: center; gap: 9px;
+  font-size: 15px; font-weight: 700; letter-spacing: -0.01em;
+  box-shadow: var(--shadow);
+  transition: transform 0.12s ease, filter 0.15s ease;
+}
+.fab:active { transform: scale(0.95); filter: brightness(0.96); }
+.fab svg { width: 19px; height: 19px; }
+.screen.no-tabs ~ .fab { bottom: calc(env(safe-area-inset-bottom) + 18px); }
+
+/* ─── Hoja inferior (modal) ────────────────────────────────────── */
+.veil {
+  position: absolute; inset: 0; z-index: 60;
+  background: rgba(17, 17, 18, 0.42); backdrop-filter: blur(3px);
+  opacity: 0; transition: opacity 0.24s ease;
+}
+.veil.on { opacity: 1; }
+.sheet {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 61;
+  background: var(--bg); border-radius: var(--r-xl) var(--r-xl) 0 0;
+  padding: 12px var(--pad) calc(env(safe-area-inset-bottom) + 22px);
+  max-height: 88%; overflow-y: auto;
+  transform: translateY(101%); transition: transform 0.3s cubic-bezier(0.22, 0.8, 0.25, 1);
+}
+.sheet.on { transform: none; }
+.sheet .grab { width: 40px; height: 4px; border-radius: 2px; background: var(--line); margin: 0 auto 16px; }
+.sheet > * + * { margin-top: 12px; }
+
+/* El texto del entrenador de voz (Ajustes): se lee en voz alta con el
+   móvil a un palmo, así que va grande, aireado y en su propia píldora. */
+.lectura-voz {
+  background: var(--surface); border-radius: 16px;
+  padding: 15px 17px; margin: 4px 0 0;
+  font-size: 17px; line-height: 1.6;
+}
+
+/* ─── Visor a pantalla completa ────────────────────────────────── */
+.viewer {
+  position: absolute; inset: 0; z-index: 80; background: #0b0b0c;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none; transition: opacity 0.22s ease;
+}
+.viewer.on { opacity: 1; pointer-events: auto; }
+.viewer img, .viewer video { max-width: 100%; max-height: 100%; object-fit: contain; }
+.viewer .close {
+  position: absolute; top: calc(env(safe-area-inset-top) + 14px); right: 14px;
+  width: 42px; height: 42px; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14); color: #fff;
+  display: grid; place-items: center; backdrop-filter: blur(8px);
+}
+.viewer .close svg { width: 19px; height: 19px; }
+
+/* ─── Aviso flotante ──────────────────────────────────────────────
+   La banda de arriba: radio 12, cuerpo generoso, sombra corta sin
+   resplandor. Negro con una levísima transparencia; el error, igual
+   pero rojo. El desenfoque de detrás es lo que hace que la
+   transparencia se lea con cualquier cosa debajo. */
+.aviso {
+  position: fixed; z-index: 120;
+  top: calc(env(safe-area-inset-top) + 12px);
+  left: 12px; right: 12px;
+  display: flex; align-items: center; gap: 13px;
+  background: rgba(12, 11, 10, 0.84);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  backdrop-filter: blur(14px) saturate(1.4);
+  color: #fff; border-radius: 12px;
+  padding: 17px 18px;
+  font-size: 15.5px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.25;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.16);
+  animation: aviso-entra 0.42s cubic-bezier(0.34, 1.45, 0.5, 1) both;
+  cursor: pointer;
+}
+.aviso > svg { flex: 0 0 21px; }
+.aviso.err { background: rgba(219, 62, 50, 0.86); }
+.aviso-detalle {
+  display: block; margin-top: 2px;
+  font-size: 13px; font-weight: 500; color: rgba(255, 255, 255, 0.66);
+}
+.aviso.fuera { animation: aviso-sale 0.26s cubic-bezier(0.5, 0, 0.8, 0.4) both; }
+
+/* Entra cayendo con un muelle sutil; sale elevándose y fundiéndose. */
+@keyframes aviso-entra {
+  0% { transform: translateY(calc(-100% - 24px)) scale(0.97); opacity: 0; }
+  55% { opacity: 1; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+@keyframes aviso-sale {
+  0% { transform: translateY(0) scale(1); opacity: 1; }
+  100% { transform: translateY(calc(-100% - 24px)) scale(0.97); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .aviso { animation: aviso-funde 0.2s ease both; }
+  .aviso.fuera { animation: aviso-funde 0.2s ease reverse both; }
+  @keyframes aviso-funde { from { opacity: 0; } to { opacity: 1; } }
+}
+
+/* ─── Estado vacío ─────────────────────────────────────────────── */
+.empty-state { padding: 40px 12px; text-align: center; }
+.empty-state .ico {
+  width: 66px; height: 66px; border-radius: 50%; margin: 0 auto 16px;
+  background: var(--surface); display: grid; place-items: center; color: var(--muted-2);
+}
+.empty-state .ico svg { width: 27px; height: 27px; }
+.empty-state h3 { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 6px; }
+.empty-state .sub { max-width: 260px; margin: 0 auto; }
+
+/* ─── Cinta de estado de sincronización ────────────────────────── */
+.syncbar {
+  display: flex; align-items: center; gap: 9px;
+  padding: 10px 14px; border-radius: 999px;
+  background: var(--surface); font-size: 12.5px; font-weight: 600; color: var(--muted);
+}
+.syncbar .led { width: 8px; height: 8px; border-radius: 50%; background: var(--muted-2); flex: 0 0 8px; }
+.syncbar.online .led { background: var(--ok); }
+.syncbar.pending .led { background: var(--accent); }
+.syncbar.offline .led { background: var(--muted-2); }
+.syncbar .grow { flex: 1; }
+
+/* ─── Carga ────────────────────────────────────────────────────── */
+.spin {
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 2px solid var(--line); border-top-color: var(--ink);
+  animation: spin 0.85s linear infinite;
+}
+.spin.on-ink { border-color: rgba(255, 255, 255, 0.25); border-top-color: #fff; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.boot { min-height: 100dvh; display: grid; place-items: center; }
+
+/* ─── Entrada de pantalla ──────────────────────────────────────── */
+.screen > * { animation: rise 0.34s cubic-bezier(0.22, 0.8, 0.25, 1) both; }
+@keyframes rise { from { opacity: 0; transform: translateY(9px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+/* Barras de progreso de subida dentro de una fila */
+.uprow { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: var(--surface); border-radius: var(--r-md); }
+.uprow .grow { flex: 1; }
+
+/* ─── Rojo: rechazos y hoja de puerta ──────────────────────────
+   Es el único color que compite con el acento, y por eso solo
+   aparece donde hay que parar a mirar. */
+.btn.pdf { background: var(--rojo); color: #fff; }
+.btn.pdf:active { filter: brightness(0.94); }
+.tag.rojo { background: var(--rojo-soft); color: var(--rojo); }
+/* ─── Mensajes de una vivienda ─────────────────────────────────
+   El hilo de la casa, con acuse de lectura. Cada fila enseña dos
+   líneas y se abre para leer el resto: un mensaje largo dentro de la
+   lista empuja los demás fuera de la pantalla. */
+.mensaje {
+  display: flex; align-items: flex-start; gap: 11px;
+  width: 100%; padding: 11px; text-align: left;
+  background: var(--surface); border-radius: var(--r-md);
+  transition: transform var(--mov-corto) var(--sal-estandar);
+}
+.mensaje:active { transform: scale(0.985); }
+/* Sin leer: un filo azul a la izquierda además de la bolita. La bolita
+   sola es de 10 px y se pierde con el móvil al sol. */
+.mensaje.nuevo { box-shadow: inset 3px 0 0 var(--azul); }
+.mensaje-cab { display: flex; align-items: baseline; gap: 8px; }
+.mensaje-quien { font-size: 13px; font-weight: 800; letter-spacing: -0.01em; }
+.mensaje-cuando { font-size: 11.5px; color: var(--muted); }
+.mensaje-txt {
+  font-size: 14px; line-height: 1.35; margin-top: 3px; color: var(--muted-oscuro);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.mensaje-bolita {
+  width: 10px; height: 10px; border-radius: 50%; background: var(--azul);
+  flex: none; margin-top: 4px;
+}
+/* Los dos checks solapados, como en cualquier mensajería: la diferencia
+   entre uno y dos se lee por el número de marcas sin aprender nada. */
+.tics { display: inline-flex; flex: none; margin-top: 3px; color: var(--muted); }
+.tics svg { width: 13px; height: 13px; }
+.tics svg + svg { margin-left: -7px; }
+.tics.todos { color: var(--azul); }
+.tics.sin { opacity: .35; }
+
+/* ─── Gremios ──────────────────────────────────────────────────
+   Cada uno con su imagen y la empresa que lo lleva. Con quince
+   nombres seguidos y nada más, encontrar el tuyo era leerlos todos;
+   la foto y la empresa dan dos asideros más. */
+.stack.gremios { gap: 6px; max-height: 58vh; overflow-y: auto; }
+.row.gremio { padding: 8px 14px 8px 8px; }
+.row.gremio[aria-pressed='true'] { box-shadow: inset 0 0 0 1.5px var(--ink); }
+.gremio-cara {
+  border-radius: 12px; overflow: hidden;
+  background: var(--surface-2) center / cover no-repeat;
+  display: grid; place-items: center;
+  font-size: 15px; font-weight: 800; letter-spacing: -0.02em;
+}
+
+/* Chips con la cara de cada persona que tiene trabajo sin verificar en
+   una casa. Filtran por quién. La cara delante del nombre y no al revés
+   porque en obra se reconoce antes una cara que un nombre de pila, y
+   media plantilla se llama Fran. */
+.chips.caras { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 0; }
+.chips.caras .cara {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 4px 13px 4px 4px; border-radius: 999px;
+  background: var(--surface); font-size: 13px; font-weight: 700;
+  letter-spacing: -0.01em; color: var(--ink);
+  box-shadow: inset 0 0 0 1.5px transparent;
+  transition: box-shadow var(--mov-corto) var(--sal-estandar);
+}
+.chips.caras .cara[aria-pressed='true'] { box-shadow: inset 0 0 0 1.5px var(--ink); }
+
+/* La marca de lo verificado en los listados: el check pegado al texto. */
+.tag.hecha { background: rgba(63, 125, 90, 0.14); color: var(--ok); gap: 5px; }
+.tag.hecha svg { width: 12px; height: 12px; flex: none; }
+
+.alerta {
+  display: flex; gap: 13px; align-items: flex-start;
+  background: var(--rojo-soft); border-radius: var(--r-md);
+  padding: 14px 16px; box-shadow: inset 0 0 0 1px rgba(198, 58, 48, 0.22);
+}
+.alerta-ico { flex: 0 0 auto; color: var(--rojo); display: flex; padding-top: 1px; }
+.alerta-titulo {
+  font-size: 11px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--rojo); margin-bottom: 4px;
+}
+.alerta-texto { font-size: 13.5px; line-height: 1.45; color: var(--text); }
+
+/* ─── Hilo de la tarea ─────────────────────────────────────────
+   Rechazos y notas en orden, como una conversación corta. */
+.hilo { display: flex; flex-direction: column; gap: 9px; }
+.mensaje {
+  background: var(--surface); border-radius: var(--r-md); padding: 13px 15px;
+}
+.mensaje.rechazo {
+  background: var(--rojo-soft); box-shadow: inset 0 0 0 1px rgba(198, 58, 48, 0.18);
+}
+.mensaje-cab {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 7px;
+}
+.mensaje-autor { font-size: 13.5px; font-weight: 700; letter-spacing: -0.01em; }
+.mensaje-empresa { font-size: 11.5px; color: var(--muted); }
+.mensaje-fecha { font-size: 11.5px; color: var(--muted-2); margin-left: auto; white-space: nowrap; }
+.mensaje-texto { font-size: 14.5px; line-height: 1.45; white-space: pre-wrap; }
+
+/* ─── Contraseña generada ──────────────────────────────────────
+   Se enseña una sola vez, así que tiene que leerse sin esfuerzo
+   para poder dictarla por teléfono. */
+.clave-caja {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--surface); border-radius: var(--r-md); padding: 14px 16px;
+}
+.clave-caja .grow { flex: 1; min-width: 0; }
+.clave-vista {
+  display: block; margin-top: 5px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 17px; font-weight: 600; letter-spacing: 0.01em;
+  color: var(--accent-deep); overflow-wrap: anywhere;
+}
+
+/* ─── Informe imprimible ───────────────────────────────────────
+   Vive fuera de #app: al imprimir se esconde la app entera y la
+   hoja sale sola, en A4, sin barras ni botones. */
+.informe {
+  position: fixed; inset: 0; z-index: 200; overflow-y: auto;
+  background: var(--page); padding-bottom: 40px;
+}
+html.imprimiendo, html.imprimiendo body { overflow: hidden; }
+.inf-barra {
+  position: sticky; top: 0; z-index: 2;
+  display: flex; gap: 10px; justify-content: space-between;
+  padding: calc(env(safe-area-inset-top) + 12px) 16px 12px;
+  background: var(--page);
+}
+.inf-hoja {
+  max-width: 760px; margin: 0 auto; background: #fff; color: #161618;
+  padding: 34px 34px 44px; box-shadow: var(--shadow);
+}
+.inf-cab {
+  display: flex; gap: 24px; justify-content: space-between; flex-wrap: wrap;
+  padding-bottom: 20px; border-bottom: 2px solid var(--ink); margin-bottom: 22px;
+}
+.inf-marca { font-size: 11px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent-deep); }
+.inf-cab h1 { font-size: 30px; font-weight: 800; letter-spacing: -0.03em; margin-top: 6px; }
+.inf-sub { font-size: 14px; color: var(--muted); margin-top: 3px; }
+.inf-meta { font-size: 12.5px; line-height: 1.7; text-align: right; min-width: 210px; }
+.inf-meta b { font-weight: 700; }
+/* En pantalla estrecha la cabecera se apila: alineada a la derecha
+   quedaría descolgada del título. */
+@media (max-width: 640px) {
+  .inf-meta { text-align: left; }
+}
+
+.inf-item {
+  display: flex; gap: 18px; padding: 16px 0;
+  border-bottom: 1px solid var(--line-soft); break-inside: avoid; page-break-inside: avoid;
+}
+.inf-foto {
+  width: 190px; flex: 0 0 190px; aspect-ratio: 4 / 3; border-radius: 8px;
+  overflow: hidden; background: var(--surface);
+  display: grid; place-items: center; font-size: 12px; color: var(--muted);
+}
+.inf-foto img { width: 100%; height: 100%; object-fit: cover; }
+.inf-txt { flex: 1; min-width: 0; }
+.inf-num { font-size: 13px; font-weight: 800; letter-spacing: -0.01em; margin-bottom: 6px; }
+.inf-estado {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+  padding: 3px 8px; border-radius: 999px; background: var(--surface); color: var(--muted);
+}
+.inf-estado.pendiente { background: var(--accent-soft); color: var(--accent-deep); }
+.inf-estado.resuelta { background: rgba(63, 125, 90, 0.14); color: var(--ok); }
+.inf-estado.rechazada { background: var(--rojo-soft); color: var(--rojo); }
+.inf-estado.verificada { background: var(--ink); color: #fff; }
+.inf-txt p { font-size: 14px; line-height: 1.5; white-space: pre-wrap; }
+.inf-extras { font-size: 12px; color: var(--muted); margin-top: 6px; }
+.inf-pie { margin-top: 26px; font-size: 11px; color: var(--muted); line-height: 1.5; }
+
+@media print {
+  @page { size: A4; margin: 14mm; }
+  body { background: #fff; }
+  #app { display: none !important; }
+  .informe { position: static; background: #fff; padding: 0; overflow: visible; }
+  .inf-barra { display: none !important; }
+  .inf-hoja { max-width: none; box-shadow: none; padding: 0; }
+  .inf-item { padding: 12px 0; }
+  .inf-foto { width: 150px; flex-basis: 150px; }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Pantallas nuevas: entrada, portada con widgets, actas y viviendas.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ─── Logotipo ─────────────────────────────────────────────────
+   El fichero es blanco sobre transparente y aquí se usa de máscara:
+   el dibujo lo pone el canal alfa y el color lo pone el CSS. Así el
+   mismo PNG sale negro sobre el blanco de la entrada y blanco sobre
+   una superficie oscura, sin dos ficheros que se desincronicen. */
+.logo-unik {
+  display: block;
+  background: var(--text);
+  -webkit-mask: url('../assets/logo/unik.png') left center / contain no-repeat;
+          mask: url('../assets/logo/unik.png') left center / contain no-repeat;
+}
+
+/* ─── Entrada ──────────────────────────────────────────────────
+   El bloque no va centrado a media pantalla: se asienta más abajo,
+   para que los campos queden a la altura del pulgar. */
+.screen.entrada {
+  display: flex; flex-direction: column;
+  padding-top: calc(env(safe-area-inset-top) + 12vh);
+}
+.entrada-marca { display: flex; flex-direction: column; align-items: center; }
+.entrada-marca .logo-unik { margin: 0 auto; }
+.entrada-sub {
+  margin-top: 6px; font-size: 19px; font-weight: 300;
+  letter-spacing: 0.42em; text-indent: 0.42em;   /* compensa el espaciado del final */
+  color: var(--muted); text-transform: lowercase;
+}
+/* El reseteo va primero y los márgenes propios después, y todos con
+   la misma especificidad: si no, el reseteo ganaría por llevar dos
+   clases y se comería el hueco entre el logotipo y los campos. */
+.screen.entrada > * + * { margin-top: 0; }
+.screen.entrada .entrada-form { margin-top: 12vh; }
+.screen.entrada .legal {
+  margin-top: auto; padding-top: 32px;
+  text-align: center; font-size: 11.5px; color: var(--muted-2);
+}
+.spin.claro { border-color: rgba(255, 255, 255, 0.35); border-top-color: #fff; }
+.hint.center { text-align: center; }
+
+/* ─── Anillo de avance ─────────────────────────────────────────
+   El trazo se dibuja al entrar en pantalla: el recorrido es la
+   información. Ver crecer el arco dice si la villa va bien o va
+   justa antes de leer el número. */
+.anillo { position: relative; display: grid; place-items: center; flex: none; }
+.anillo svg { display: block; }
+.anillo-n {
+  position: absolute; font-weight: 700; letter-spacing: -0.03em;
+  font-size: 12.5px; font-variant-numeric: tabular-nums;
+}
+.widget-anillo .anillo-n { font-size: 25px; }
+
+/* ─── Bolitas apiladas ─────────────────────────────────────────
+   Un acta la tocan varias personas. Se solapan en vez de ponerse
+   en fila para que la tarjeta no cambie de ancho según cuántas
+   hayan pasado por ella. */
+/* El alto lo pone grupoAvatares según el tamaño de la bolita. */
+.avatares { position: relative; flex: none; }
+.avatar.apilado { position: absolute; top: 0; }
+.avatar.mas {
+  background: var(--surface-2); color: var(--muted);
+  display: grid; place-items: center; font-weight: 700;
+  border-radius: 50%;
+}
+
+/* ─── Widgets de la portada ────────────────────────────────────── */
+.widgets { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.widget {
+  background: var(--surface); border-radius: var(--r-lg);
+  padding: 15px 15px 13px; min-width: 0;
+  display: flex; flex-direction: column;
+}
+.widget-tit {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--muted);
+}
+.widget-centro { flex: 1; display: grid; place-items: center; padding: 12px 0 6px; }
+.widget-pie {
+  display: flex; gap: 16px; margin-top: auto; padding-top: 12px;
+}
+.widget-pie > div { display: flex; flex-direction: column; min-width: 0; }
+.widget-pie b {
+  font-size: 21px; font-weight: 800; letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums; line-height: 1.05;
+}
+.widget-pie span {
+  font-size: 10.5px; color: var(--muted); margin-top: 1px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.widget-cola {
+  margin-top: 8px; font-size: 11px; line-height: 1.35;
+  color: var(--accent-deep);
+}
+
+/* Barras diarias */
+.barras {
+  display: flex; align-items: flex-end; gap: 5px;
+  height: 92px; margin-top: 12px;
+}
+.barra { flex: 1; display: flex; flex-direction: column; align-items: center; min-width: 0; }
+.barra-caja {
+  width: 100%; height: 72px;
+  display: flex; align-items: flex-end;
+  background: rgba(17, 17, 18, 0.05); border-radius: 5px;
+  overflow: hidden;
+}
+.barra-caja i {
+  display: block; width: 100%; height: 3%;
+  background: var(--accent); border-radius: 5px;
+  transition: height var(--mov-largo) var(--sal-muelle);
+}
+.barra.hoy .barra-caja i { background: var(--ink); }
+.barra-dia {
+  margin-top: 6px; font-size: 10px; font-weight: 600; color: var(--muted-2);
+}
+.barra.hoy .barra-dia { color: var(--text); }
+
+/* ─── Botón negro ancho y su bolita ────────────────────────────
+   Son el mismo botón: cuando el ancho sale de pantalla al desplazar,
+   entra la bolita. Nunca están los dos a la vez. */
+/* La llamada a la acción de todo el proyecto: rótulo a la izquierda,
+   icono en una bolita a la derecha. La variante clara es la misma caja
+   —mismo alto, mismo ancho, mismo redondeo— para las salidas, que no
+   son la acción principal pero tampoco un enlace suelto. */
+.cta-accion {
+  display: flex; align-items: center; gap: 12px;
+  width: 100%; padding: 0 8px 0 22px; height: 62px;
+  background: var(--ink); color: #fff;
+  border-radius: var(--r-lg);
+  font-size: 13.5px; font-weight: 700; letter-spacing: 0.06em;
+  transition: transform var(--mov-corto) var(--sal-estandar),
+              background var(--mov-corto) var(--sal-estandar);
+}
+.cta-accion:active { transform: scale(0.985); }
+.cta-accion:disabled { opacity: 0.4; pointer-events: none; }
+/* Sin flex:1 el texto no empuja, y la bola del icono se queda a media
+   tarjeta en vez de pegada al borde derecho. */
+.cta-accion .grow { flex: 1; min-width: 0; text-align: left; }
+
+.cta-accion.claro { background: var(--surface); color: var(--text); }
+.cta-accion.claro:active { background: var(--surface-2); }
+.cta-accion.claro .cta-mas { background: var(--bg); color: var(--text); }
+.cta-mas {
+  width: 46px; height: 46px; flex: 0 0 46px; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+  display: grid; place-items: center;
+}
+/* Elegir de dónde sale la foto: dos tarjetas del mismo rango, una al
+   lado de la otra y más altas que anchas. Puestas en dos filas, la de
+   arriba se leía como la buena y la de abajo como el plan B, y no lo
+   son: en obra se tira de cámara, pero en el despacho se sube lo que ya
+   está hecho. */
+.opciones { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; }
+.opcion {
+  display: flex; flex-direction: column; align-items: flex-start;
+  aspect-ratio: 4 / 5;
+  padding: 18px 18px 20px;
+  background: var(--surface); color: var(--text);
+  border-radius: var(--r-lg);
+  text-align: left;
+  transition: transform var(--mov-corto) var(--sal-estandar),
+              background var(--mov-corto) var(--sal-estandar);
+}
+.opcion:active { transform: scale(0.97); background: var(--surface-2); }
+.opcion .grow { flex: 1; }
+.opcion .bola {
+  width: 50px; height: 50px; border-radius: 50%;
+  background: var(--bg); color: var(--text);
+  display: grid; place-items: center;
+}
+.opcion .rotulo {
+  font-size: 16.5px; font-weight: 700; letter-spacing: -0.025em;
+  line-height: 1.1;
+}
+.opcion .pie { font-size: 12.5px; color: var(--muted-oscuro); margin-top: 4px; }
+
+/* La de la cámara va en el color de marca: es la que se usa andando por
+   la vivienda, que es para lo que existe esta app. */
+.opcion.principal { background: var(--accent); color: var(--on-accent); }
+.opcion.principal:active { background: var(--accent-deep); color: #fff; }
+.opcion.principal .bola { background: var(--ink); color: #fff; }
+.opcion.principal .pie { color: rgba(17, 17, 18, 0.6); }
+
+/* El botón de añadir de las pantallas que son una lista y nada más: un
+   círculo gordo abajo a la derecha. Sin rótulo a propósito: en una
+   pantalla cuya única acción es añadir, el signo más ya lo dice, y una
+   llamada a la acción a todo lo ancho partía la lista en dos. */
+.fab-bola {
+  position: absolute; right: var(--pad); z-index: 45;
+  bottom: calc(env(safe-area-inset-bottom) + var(--tab-h) + 8px);
+  width: 68px; height: 68px; border-radius: 50%;
+  background: var(--ink); color: #fff;
+  display: grid; place-items: center;
+  box-shadow: 0 10px 26px rgba(17, 17, 18, 0.3);
+  transition: transform var(--mov-medio) var(--sal-muelle),
+              opacity var(--mov-corto) var(--sal-estandar);
+}
+.fab-bola svg { width: 26px; height: 26px; }
+.screen.no-tabs ~ .fab-bola { bottom: calc(env(safe-area-inset-bottom) + 18px); }
+
+/* Se hunde deprisa al apretar y vuelve con muelle al soltar: el rebote
+   de la vuelta es lo que da la sensación de botón físico. */
+.fab-bola:active { transform: scale(0.88); transition-duration: var(--mov-corto); }
+
+/* Y al soltar sale una onda. Va en la sombra y no en un elemento
+   encima, para no tapar el signo más ni un instante. */
+.fab-bola.pulsa { animation: onda 520ms var(--sal-salida); }
+@keyframes onda {
+  from { box-shadow: 0 10px 26px rgba(17, 17, 18, 0.3), 0 0 0 0 rgba(17, 17, 18, 0.38); }
+  to   { box-shadow: 0 10px 26px rgba(17, 17, 18, 0.3), 0 0 0 26px rgba(17, 17, 18, 0); }
+}
+
+.fab-bola.oculto {
+  opacity: 0; pointer-events: none;
+  transform: scale(0.4) translateY(10px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .fab-bola, .barra-caja i, .anillo circle { transition: none !important; }
+  .fab-bola.pulsa { animation: none; }
+}
+
+/* ─── Tarjeta de acta ──────────────────────────────────────────── */
+.actas { gap: 8px; }
+.acta {
+  display: flex; align-items: center; gap: 13px;
+  width: 100%; padding: 12px 14px;
+  background: var(--surface); border-radius: var(--r-md);
+  text-align: left;
+  transition: transform var(--mov-corto) var(--sal-estandar),
+              background var(--mov-corto) var(--sal-estandar);
+}
+.acta:active { transform: scale(0.985); background: var(--surface-2); }
+/* Sin min-width:0 el centro no puede encoger —el título va en una sola
+   línea— y un acta con nombre largo empuja el anillo fuera de la
+   tarjeta. Con esto, el que se recorta es el título. */
+.acta .grow { flex: 1; min-width: 0; }
+.acta-tit {
+  font-size: 15.5px; font-weight: 700; letter-spacing: -0.02em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.acta-pie {
+  display: flex; align-items: center; gap: 8px; margin-top: 4px;
+  font-size: 12.5px; color: var(--muted);
+  /* La fecha y la fase, en una línea: con la pila de bolitas ancha, el
+     hueco que queda es justo y partirlas en tres renglones desmonta la
+     tarjeta. */
+  white-space: nowrap;
+}
+.acta-tit { min-width: 0; }
+
+
+/* ─── Filtros ──────────────────────────────────────────────────── */
+.titulo-promo {
+  font-size: clamp(28px, 8vw, 34px); font-weight: 800;
+  letter-spacing: -0.02em; text-transform: uppercase;
+}
+/* Cada pastilla mide lo que mide su palabra más la misma sangría a los
+   lados; la fila NO se estira para llenar la pantalla. Antes crecían
+   hasta el borde y eso obligaba a repartir el sobrante, que es lo que
+   deformaba la sangría. Envuelven cuando no caben, así que da igual
+   cuántas haya y cómo de largas sean. */
+.chips.filtro { gap: 8px; flex-wrap: wrap; }
+.chips.filtro .chip {
+  flex: 0 0 auto;
+  /* El alto lo fija min-height y no el relleno: así es exacto y no
+     depende de las métricas de la tipografía. */
+  min-height: 54px; padding: 0 15px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 14px;
+  border-radius: 17px;
+  background: var(--bg);
+  box-shadow: inset 0 0 0 1.5px var(--line);
+  white-space: nowrap;
+}
+/* La salida del filtro de oficio, dentro de su hoja: se distingue de un
+   oficio porque no lo es. */
+.chips.filtro .chip.quitar { color: var(--muted-oscuro); font-weight: 600; }
+/* Al marcarlo se rellena y pierde el contorno. El color hay que
+   repetirlo aquí: el fondo de la regla de arriba empata en peso con el
+   de .chip y, por ir después, se lo comía. */
+.chips.filtro .chip[aria-pressed='true'] {
+  background: var(--ink); color: #fff; box-shadow: none;
+}
+.chips.filtro .chip.accent[aria-pressed='true'] {
+  background: var(--accent); color: var(--on-accent);
+}
+.contador { font-size: 12.5px; color: var(--muted); margin-top: 12px; }
+
+/* Mismo alto y mismo redondeo que los chips de filtro: en una pantalla
+   se ven uno encima del otro y tienen que parecer de la misma familia.
+   El texto a la izquierda y la flecha pegada al borde derecho. */
+.selector {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; min-height: 54px; padding: 0 18px;
+  background: var(--surface); border-radius: 17px;
+  font-size: 14px; color: var(--text); text-align: left;
+}
+.selector .grow { flex: 1; min-width: 0; }
+.selector svg { transform: rotate(90deg); color: var(--muted); flex: none; }
+.selector.puesto { background: var(--accent-soft); color: var(--accent-deep); font-weight: 600; }
+
+
+/* ─── Viviendas, en una columna ────────────────────────────────
+   El color dice el estado antes de leer nada: apagada sin tareas,
+   clara con trabajo abierto, verde cuando está todo verificado. */
+.villas { gap: 7px; }
+.villa {
+  position: relative;
+  display: block; width: 100%;
+  padding: 13px 15px 14px;
+  background: var(--surface); border-radius: var(--r-md);
+  text-align: left;
+  transition: transform var(--mov-corto) var(--sal-estandar);
+}
+.villa:active { transform: scale(0.985); }
+/* Mensajes sin leer en esa casa. En la esquina y no junto al nombre: la
+   fila va en columnas fijas para que el nombre y el porcentaje caigan en
+   la misma vertical en las cincuenta, y meter una bolita dentro de una
+   de esas columnas las descuadraría todas. */
+.villa-bolita {
+  position: absolute; top: 9px; right: 9px;
+  width: 9px; height: 9px; border-radius: 50%; background: var(--azul);
+}
+
+/* Todo en columnas fijas menos la barra, que se come lo que sobra. Así
+   el nombre y el porcentaje caen en la misma vertical en las cincuenta
+   filas y la lista se puede recorrer con la vista. */
+.villa-cab { display: flex; align-items: center; gap: 12px; }
+.villa-tit {
+  flex: none; width: 66px;
+  font-size: 15px; font-weight: 700; letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap; overflow: hidden;
+}
+.villa-pct {
+  flex: none; width: 40px; text-align: right;
+  font-size: 14px; font-weight: 700;
+  letter-spacing: -0.02em; font-variant-numeric: tabular-nums;
+}
+
+/* Tres tramos: el negro es lo verificado, el de marca lo que espera que
+   vayamos a verificar, y el rojo lo que rebotó. Los dos últimos son la
+   respuesta de un vistazo a «¿dónde tengo cosas que mirar?», sin leer
+   una palabra. */
+.villa-barra {
+  flex: 1; min-width: 0;
+  display: flex; height: 6px; border-radius: 999px;
+  background: var(--bg); overflow: hidden;
+}
+.villa-barra i {
+  display: block; height: 100%;
+  transition: width var(--mov-largo) var(--sal-estandar);
+}
+.villa-barra .t-validada { background: var(--ink); }
+.villa-barra .t-validar { background: var(--accent); }
+.villa-barra .t-rechazada { background: var(--rojo); }
+
+.villa-pie {
+  display: flex; align-items: baseline; gap: 10px; margin-top: 10px;
+  font-size: 12.5px; color: var(--muted-oscuro);
+}
+.villa-pie > :first-child {
+  flex: 1; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.villa-mov { flex: none; }
+/* Con trabajo abierto y dos semanas sin tocarse, la antigüedad deja de
+   ser un dato y pasa a ser un aviso. */
+.villa-mov.parada { color: var(--danger); font-weight: 700; }
+
+.villa.apagada { background: transparent; box-shadow: inset 0 0 0 1px var(--line-soft); }
+.villa.apagada .villa-tit { color: var(--muted); font-weight: 600; }
+.villa.apagada .villa-pct { color: var(--muted-2); }
+.villa.apagada .villa-barra { background: var(--surface); }
+
+.villa.hecha { background: rgba(63, 125, 90, 0.10); }
+.villa.hecha .villa-pct { color: var(--ok); }
+.villa.hecha .villa-barra { background: rgba(63, 125, 90, 0.16); }
+.villa.hecha .villa-barra .t-validada { background: var(--ok); }
+
+/* Bolita de relleno cuando en esa vivienda no ha trabajado nadie
+   todavía: un disco liso, sin cara. Sostiene la columna sin fingir que
+   hay alguien. */
+.avatar.vacia {
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1.5px var(--line-soft);
+}
+.villa.apagada .avatar.vacia { background: var(--surface); }
+
+.vacio-suave { padding: 34px 0; }
+
+/* ═══════════════════════════════════════════════════════════════
+   Cabecera de las pantallas con bolitas y titular de pantalla
+   ═══════════════════════════════════════════════════════════════ */
+/* El tamaño no va en el CSS: lo calcula ajustarTitulo() midiendo con
+   canvas. Dentro de una vivienda o de un acta el titular se estira
+   hasta llenar el ancho; en las tres pantallas raíz comparten cuerpo
+   —el que hace que quepa la más larga de las tres— y arrancan por la
+   izquierda, alineadas con el logotipo de la cabecera. */
+.titulo-raiz { text-align: left; }
+.titulo-pantalla {
+  font-family: var(--font-titulo);
+  font-weight: 200;
+  line-height: 0.88;
+  letter-spacing: 0;
+  white-space: nowrap;
+  display: block;
+  /* El titular respira por arriba y por abajo: pegado al logotipo se
+     leía como una sola marca de dos pisos, y pegado a lo de abajo, como
+     el rótulo de la primera sección en vez de como el de la pantalla. */
+  margin-top: 36px;
+  margin-bottom: 36px;   /* 28 + 30 % */
+  font-size: 56px;   /* de partida; el JS lo ajusta al ancho real */
+}
+
+/* Una fila con interruptor en vez de flecha. El nativo del sistema,
+   solo teñido: en un móvil de obra, el interruptor que uno reconoce se
+   toca sin pensar, y uno dibujado a mano nunca se parece del todo. */
+.row.conmutador { cursor: pointer; }
+.row.conmutador input[type='checkbox'] {
+  appearance: none; -webkit-appearance: none;
+  width: 46px; height: 28px; flex: none; border-radius: 999px;
+  background: var(--line); position: relative; cursor: pointer;
+  transition: background var(--mov-corto, .18s) ease;
+}
+.row.conmutador input[type='checkbox']::after {
+  content: ''; position: absolute; top: 3px; left: 3px;
+  width: 22px; height: 22px; border-radius: 50%; background: #fff;
+  box-shadow: 0 1px 3px rgba(17, 17, 18, .28);
+  transition: transform var(--mov-corto, .18s) ease;
+}
+.row.conmutador input[type='checkbox']:checked { background: var(--ink); }
+.row.conmutador input[type='checkbox']:checked::after { transform: translateX(18px); }
+
+/* La frase del día. Va pegada debajo del titular grande y en su mismo
+   sitio, así que se le come el aire que el titular deja por abajo: dos
+   márgenes de 36 px seguidos dejan la portada empezando a media
+   pantalla. */
+.titular {
+  font-size: 17px; font-weight: 700; letter-spacing: -0.02em;
+  margin-top: -22px; margin-bottom: 20px; color: var(--ink);
+}
+
+/* ─── Los banners de la portada ────────────────────────────────
+   Tres avisos que se leen sin entrar: cuánto espera nuestra revisión,
+   cuánto se ha verificado desde la última vez y cuánto ha rebotado.
+
+   Cada uno con su color y el mismo esqueleto —rótulo, cifra grande,
+   flecha— para que la diferencia sea el color y la cifra, no la forma:
+   así se distinguen de reojo, que es como se miran. */
+.banner {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 15px 16px; border-radius: var(--r-lg); text-align: left;
+}
+.banner-rotulo { font-size: 14.5px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.25; }
+.banner-sub { font-size: 12.5px; margin-top: 3px; opacity: .72; line-height: 1.35; }
+.banner-cifra { font-size: 27px; font-weight: 800; letter-spacing: -0.04em; flex: none; }
+.banner .chev { opacity: .5; flex: none; }
+
+/* El beige es el del diseño. Los otros dos salen de los colores que ya
+   usa la app para esos mismos estados —el verde de «va bien» y el rojo
+   de las rechazadas—, para que el color signifique lo mismo aquí que
+   en un chip o en la barra de avance. */
+.banner.beige { background: #DEDDD8; color: var(--ink); }
+.banner.verde { background: rgba(63, 125, 90, 0.14); color: var(--ok); }
+.banner.rojo { background: var(--rojo-soft); color: var(--rojo); }
+
+/* ─── Barra de avance de tres tramos ───────────────────────────
+   Sustituye al anillo en la portada: con tres estados, una barra
+   dice de un vistazo la proporción entre ellos, cosa que un anillo
+   de un solo color no puede. */
+/* La barra vive dentro de una tarjeta que respira: el dato importa lo
+   suficiente como para no ir suelto entre dos rótulos. */
+.widget-avance {
+  background: var(--surface);
+  border-radius: var(--r-xl);
+  padding: 28px 24px 26px;
+}
+.widget-avance .eyebrow { margin-bottom: 20px; }
+
+.avance-barra {
+  display: flex; width: 100%; height: 20px;
+  border-radius: 999px; overflow: hidden;
+  /* Blanco y no gris: sobre la tarjeta clara, el tramo pendiente tiene
+     que distinguirse del fondo o la barra parece más corta de lo que es. */
+  background: var(--bg);
+}
+.avance-barra i {
+  display: block; height: 100%;
+  transition: width var(--mov-largo) var(--sal-estandar);
+}
+.avance-barra .t-resuelta { background: var(--ink); }
+.avance-barra .t-revisar { background: var(--accent); }
+.avance-barra .t-rechazada { background: var(--rojo); }
+.avance-barra .t-pendiente { background: var(--bg); }
+
+/* Dos columnas y dos filas: los cuatro estados en una sola fila no
+   caben en un móvil estrecho —se parten en cuanto una cifra llega a
+   tres dígitos— y a dos por fila queda el número grande y legible. */
+.leyenda {
+  display: grid; grid-template-columns: repeat(2, 1fr);
+  gap: 16px 12px; margin-top: 24px;
+}
+.leyenda > div { min-width: 0; }
+.leyenda-cifra { display: flex; align-items: center; gap: 8px; }
+.leyenda .punto {
+  width: 11px; height: 11px; border-radius: 3px; flex: none;
+}
+.leyenda .punto.t-resuelta { background: var(--ink); }
+.leyenda .punto.t-revisar { background: var(--accent); }
+.leyenda .punto.t-rechazada { background: var(--rojo); }
+.leyenda .punto.t-pendiente { background: var(--bg); box-shadow: inset 0 0 0 1px var(--line); }
+.leyenda b { font-size: 19px; font-weight: 800; letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums; }
+.leyenda > div > span { font-size: 12.5px; color: var(--muted); display: block; margin-top: 2px; }
+
+/* ─── Tarea en un listado ──────────────────────────────────────
+   La foto y el texto se leen sin abrirla, que es como se repasa
+   una vivienda andando. El fondo dice el estado antes que la
+   etiqueta. */
+.tarea-fila {
+  display: flex; align-items: center; gap: 13px;
+  width: 100%; padding: 11px; text-align: left;
+  background: var(--surface); border-radius: var(--r-md);
+  transition: transform var(--mov-corto) var(--sal-estandar);
+}
+.tarea-fila:active { transform: scale(0.985); }
+/* Lo verificado se aparta, no se esconde: va al final de la lista, en
+   gris claro y tachado. Sigue estando —es la prueba de que se miró— y
+   se lee como lo que es, algo cerrado, sin competir por la atención con
+   lo que todavía hay que hacer. */
+.tarea-fila.resuelta { background: var(--surface); opacity: .62; }
+.tarea-fila.resuelta .tarea-txt { text-decoration: line-through; text-decoration-thickness: 1px; }
+.tarea-fila.resuelta .tarea-foto { filter: grayscale(1); }
+.tarea-fila.rechazada { background: var(--rojo-soft); }
+.tarea-foto {
+  width: 84px; height: 84px; flex: 0 0 84px; border-radius: 15px;
+  background: var(--surface-2) center / cover no-repeat;
+  display: grid; place-items: center; color: var(--muted-2);
+}
+.tarea-txt {
+  font-size: 14px; line-height: 1.3; font-weight: 600; letter-spacing: -0.01em;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.tarea-pie { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+
+.tarea-donde { font-size: 11.5px; color: var(--muted); }
+
+/* ═══════════════════════════════════════════════════════════════
+   Recorrido: grabar un paseo por una vivienda
+   ═══════════════════════════════════════════════════════════════ */
+.rec-intro { padding: 6px 0 2px; }
+.rec-ico {
+  width: 66px; height: 66px; border-radius: 50%; margin-bottom: 16px;
+  background: var(--surface); display: grid; place-items: center; color: var(--accent-deep);
+}
+.rec-intro .title { margin-bottom: 8px; }
+
+/* ─── Grabando ───────────────────────────────────────────────────
+   La imagen ocupa lo que puede y es toda ella el botón de marcar: en
+   obra, con guantes y andando, no se acierta a un botón pequeño. */
+.rec-visor {
+  position: relative;
+  border-radius: var(--r-lg); overflow: hidden;
+  background: var(--ink);
+  aspect-ratio: 3 / 4;
+  cursor: pointer;
+}
+.rec-video { width: 100%; height: 100%; object-fit: cover; }
+
+/* El fogonazo de la instantánea: sin él no se sabe si el toque ha
+   entrado, y andando se acaba tocando dos veces. */
+.rec-destello {
+  position: absolute; inset: 0; background: #fff;
+  opacity: 0; pointer-events: none;
+}
+.rec-destello.on { animation: fogonazo 260ms var(--sal-salida); }
+@keyframes fogonazo { from { opacity: 0.85; } to { opacity: 0; } }
+
+.rec-barra {
+  display: flex; align-items: center; gap: 12px;
+  margin-top: 12px; min-height: 46px;
+}
+.rec-estado { display: flex; align-items: center; gap: 8px; flex: none; }
+.rec-punto {
+  width: 10px; height: 10px; border-radius: 50%; background: var(--rojo);
+  animation: latido 1.4s ease-in-out infinite;
+}
+@keyframes latido { 50% { opacity: 0.25; } }
+.rec-crono { font-size: 16px; font-weight: 700; letter-spacing: -0.02em; }
+
+/* En pausa. El punto rojo deja de latir y se queda gris —lo que late es
+   «esto está grabando», y en pausa no lo está—, y la imagen se apaga a
+   medias para que se vea desde el otro lado de la habitación que ahí no
+   se está guardando nada. */
+.rec-barra.pausado .rec-punto { background: var(--muted); animation: none; }
+.rec-barra.pausado .rec-crono { color: var(--muted-oscuro); }
+.rec-visor.pausado .rec-video { filter: grayscale(1) brightness(.55); }
+.rec-visor.pausado::after {
+  content: 'EN PAUSA · toca para seguir';
+  position: absolute; inset: auto 0 0 0; padding: 12px;
+  text-align: center; color: #fff; font-size: 12.5px; font-weight: 800;
+  letter-spacing: 0.08em; background: linear-gradient(transparent, rgba(17, 17, 18, .72));
+}
+.rec-marcas {
+  display: flex; align-items: center; gap: 6px; flex: none;
+  font-size: 14px; font-weight: 700; color: var(--muted-oscuro);
+}
+.rec-marcas svg { color: var(--muted); }
+
+/* Las capturas van saliendo aquí, la última la primera. */
+.rec-tira {
+  display: flex; gap: 6px; overflow-x: auto;
+  scrollbar-width: none; padding: 2px 0;
+}
+.rec-tira::-webkit-scrollbar { display: none; }
+.rec-mini {
+  width: 46px; height: 46px; flex: 0 0 46px; border-radius: 11px;
+  background: var(--surface-2) center / cover no-repeat;
+  animation: entra-mini 300ms var(--sal-muelle) both;
+}
+@keyframes entra-mini { from { transform: scale(0.4); opacity: 0; } }
+
+.rec-botones { display: grid; place-items: center; margin-top: 14px; }
+.rec-parar {
+  width: 76px; height: 76px; border-radius: 50%;
+  background: var(--rojo); display: grid; place-items: center;
+  box-shadow: 0 10px 26px rgba(198, 58, 48, 0.32);
+  transition: transform var(--mov-corto) var(--sal-estandar);
+}
+.rec-parar:active { transform: scale(0.9); }
+.rec-cuadro { width: 26px; height: 26px; border-radius: 7px; background: #fff; }
+
+/* ─── Repasando lo capturado ─────────────────────────────────── */
+.rec-resumen {
+  background: var(--surface); border-radius: var(--r-lg);
+  padding: 18px 18px 16px;
+}
+.rec-ficha {
+  background: var(--surface); border-radius: var(--r-lg);
+  padding: 12px 12px 14px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.rec-ficha-cab { display: flex; align-items: center; gap: 12px; }
+.rec-foto {
+  width: 78px; height: 78px; flex: 0 0 78px; border-radius: 15px;
+  background: var(--surface-2) center / cover no-repeat;
+}
+/* Dos líneas bastan —«rozar y repasar la junta del alicatado»— y con
+   quince fichas seguidas, los 120px de siempre son cinco pantallas de
+   scroll de más. Crece sola si hace falta escribir más. */
+.rec-ficha .textarea {
+  background: var(--bg); min-height: 76px; padding: 12px 14px; overflow: hidden;
+}
+.rec-ficha .selector { background: var(--bg); }
+.rec-ficha .tag { display: inline-flex; align-items: center; gap: 6px; }
+
+/* ─── Un recorrido que se quedó a medias ─────────────────────────
+   Se grabó el paseo pero no se convirtió en tareas. Va en amarillo
+   porque no es un error, es trabajo esperando. */
+.rec-pendiente {
+  background: var(--surface); border-radius: var(--r-lg);
+  padding: 16px 18px 14px; margin-bottom: 18px;
+  border-left: 3px solid var(--accent-deep);
+}
+.rec-pendiente-pies { display: flex; gap: 8px; margin-top: 12px; }
+.rec-pendiente-pies .btn { flex: 1 1 auto; }
+
+/* ─── Con la cámara abierta, la pantalla es la cámara ────────────
+   El titular de la vivienda se sabe de sobra: lo acabas de tocar
+   para llegar aquí. Estorbando arriba le quita alto al visor, que
+   es lo único que se mira mientras se anda. */
+.screen.grabando .titulo-pantalla,
+.screen.grabando .topbar .eyebrow { display: none; }
+.screen.grabando .rec-visor { aspect-ratio: auto; height: min(62vh, 620px); }
+
+/* Un resultado de diagnóstico no se corta con puntos suspensivos: es
+   justo el texto que hay que leer entero y copiar al correo del
+   hosting cuando dice que no. */
+.row .row-sub.libre { white-space: normal; overflow: visible; text-overflow: clip; }
+
+/* Los gremios de la ficha: pastillas pequeñas, que aquí van quince
+   fichas seguidas y las del filtro de pantalla ocuparían media
+   pantalla cada una. */
+.chips.filtro.rec-gremios { margin-top: 2px; gap: 6px; }
+.chips.filtro.rec-gremios .chip {
+  flex: 0 0 auto; min-height: 34px; padding: 0 12px;
+  font-size: 12.5px; border-radius: 11px;
+}
+.chips.filtro.rec-gremios .chip.quitar { color: var(--muted-oscuro); font-weight: 500; }
+
+/* ─── Que las escriba solas ──────────────────────────────────────
+   La caja donde se dicta lo que se dijo en el recorrido. Va aparte
+   de las fichas, con su propio fondo, porque es un paso opcional:
+   quien prefiera escribir a mano la ignora y baja. */
+.rec-dictado {
+  background: var(--surface); border-radius: var(--r-lg);
+  padding: 18px 18px 16px; margin-top: 12px;
+  border-left: 3px solid var(--accent-deep);
+}
+.rec-dictado .textarea { background: var(--bg); min-height: 96px; }
+.rec-dictado .cta-accion { margin-top: 10px; }
+
+/* Una marca de la que no se dijo nada y ha salido a ojo: se marca
+   para que se mire, no para que se descarte. */
+.rec-ficha.dudosa { box-shadow: inset 0 0 0 2px var(--accent); }
+
+/* ═══════════════════════════════════════════════════════════════
+   EL REDISEÑO 2026 · la home
+
+   Reproduce la pantalla HOME del Figma de Fran con sus valores
+   exactos: letra a peso 500, fondo #f5f5f5, banners con el botón
+   recortado en el borde («el mordisco»), módulo de Brassie con su
+   anillo y el muro de comentarios coloreado por estado.
+
+   Todas las clases llevan el prefijo d- para convivir con las
+   pantallas que aún no se han rediseñado, sin pisarlas.
+   ═══════════════════════════════════════════════════════════════ */
+.pantalla-diseno {
+  --pad: 12px; /* el Figma respira 12 a los lados, no 16 */
+  font-family: var(--d-font);
+  background: var(--d-fondo);
+  color: var(--d-tinta);
+  font-weight: 500;
+}
+/* El fondo de la página entera, no solo del contenido. */
+.pantalla-diseno::before {
+  content: ''; position: fixed; inset: 0; z-index: -1; background: var(--d-fondo);
+}
+
+/* ═══ LA CABECERA ═══════════════════════════════════════════════
+
+   Una sola para las diez pantallas, en dos formas: la de fuera —la
+   cara y las tres bolas de navegación— y la de dentro —volver, título
+   y acción—. Las dos salen de estos tres números, así que miden
+   exactamente lo mismo y caen a la misma altura.
+
+   Antes cada pantalla escribía la suya y por eso la cara quedaba medio
+   píxel más baja que las bolas, y en Ajustes acababa un píxel antes
+   del borde derecho que en todas las demás. Lo montaba todo la vista,
+   y bastaba con que una pusiera 54 donde otra ponía 55.
+
+   Quien las dibuja ahora es cabecera(), en js/piezas.js.  ═══ */
+:root {
+  /* ── GEMELO de CAB_BOLA en js/piezas.js: la cara la dibuja avatar()
+     con las medidas puestas en el propio elemento, y ésas no leen
+     variables de CSS. Si cambia una, cambia la otra. ── */
+  --cab-bola: 55px;   /* el diámetro de todo lo redondo de la cabecera */
+  --cab-hueco: 4px;   /* el aire entre una bola y la siguiente */
+  --cab-aire: 8px;    /* el margen de arriba y el de abajo */
+}
+
+.d-cab {
+  display: flex; align-items: center; gap: var(--cab-hueco);
+  padding: var(--cab-aire) 0;
+  min-height: calc(var(--cab-bola) + var(--cab-aire) * 2);
+}
+
+/* Todo lo redondo de la cabecera mide igual, venga de donde venga: la
+   cara, las tres bolas, la flecha de volver y los tres puntos. */
+.d-cab .d-bola,
+.d-cab .avatar,
+.d-cab .d-cab-hueco {
+  width: var(--cab-bola); height: var(--cab-bola);
+  flex: 0 0 var(--cab-bola);
+}
+
+/* La de fuera: las tres bolas, pegadas al borde derecho. */
+.d-cab-menu { display: flex; gap: var(--cab-hueco); margin-left: auto; }
+
+/* La de dentro: el título se come el centro y los dos flancos miden lo
+   mismo, así que queda centrado de verdad y no «casi». */
+.d-cab.dentro .d-titulo {
+  flex: 1; min-width: 0; text-align: center;
+  font-size: 24px; line-height: 32px;
+  letter-spacing: -0.005em; font-weight: 500;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.d-bola {
+  border-radius: 999px; display: grid; place-items: center;
+  background: #fff; color: var(--d-tinta);
+}
+.d-bola.activa { background: var(--d-tinta); color: #fff; }
+.d-bola svg { width: 24px; height: 24px; }
+
+/* Al cambiar de sección, el negro de la bola nueva entra fundido en vez
+   de aparecer de golpe: medio parpadeo menos y el salto de pantalla se
+   lee como un movimiento.
+
+   Quien decide si toca fundir es cabecera(), en js/piezas.js, poniendo
+   la clase «entrando». No se pone en .activa a secas porque la pantalla
+   se repinta sola cada vez que la sincronización trae algo nuevo, y la
+   bola parpadearía sola mientras estás mirando la lista. */
+.d-bola.activa.entrando { animation: cab-entra-negro var(--mov-medio) var(--sal-estandar); }
+@keyframes cab-entra-negro {
+  from { background: #fff; color: var(--d-tinta); }
+  to   { background: var(--d-tinta); color: #fff; }
+}
+
+
+/* ═══ QUE SE NOTE QUE SE PULSA ═══════════════════════════════════
+
+   Lo importante no es el efecto: es el reloj. El tono entra de golpe al
+   apoyar el dedo y sale despacio al levantarlo. Con una transición
+   simétrica —o al revés— un toque rápido no llega a verse y la pantalla
+   parece muerta. Por eso el reposo dura --pulsa-sale y :active pone la
+   transición a cero.
+
+   Hasta ahora esto no existía: en todo el rediseño había dos reglas de
+   :active y ninguna cambiaba de color. Y arriba del fichero,
+   -webkit-tap-highlight-color: transparent apaga hasta el destello que
+   pondría iOS por su cuenta. Se tocaba y no pasaba nada.
+
+   Lo claro se apaga un punto con brightness, que vale igual para el
+   blanco de las tarjetas y para el beige del día de hoy sin escribir un
+   color por variante. Lo negro no puede oscurecer más, así que ésos
+   aclaran y llevan su color puesto a mano.   ═══ */
+:root { --pulsa-sale: 190ms; }
+
+.d-bola, .d-cab .avatar, .d-confirmar-x, .d-fila-elegir, .d-boton-negro, .d-selector-estado,
+.d-bola-embudo, .d-bola-filtros, .d-desplegable, .d-tarjeta, .d-acta-dia,
+.d-acta-linea, .d-repaso, .d-mensaje, .d-item {
+  transition: filter var(--pulsa-sale) var(--sal-estandar),
+              background-color var(--pulsa-sale) var(--sal-estandar),
+              transform var(--pulsa-sale) var(--sal-estandar);
+}
+
+/* Al apoyar el dedo, sin transición ninguna: instantáneo. */
+.d-bola:active, .d-cab .avatar:active, .d-confirmar-x:active, .d-fila-elegir:active,
+.d-boton-negro:active, .d-selector-estado:active, .d-bola-embudo:active,
+.d-bola-filtros:active, .d-desplegable:active, .d-tarjeta:active,
+.d-acta-dia:active, .d-acta-linea:active, .d-repaso:active,
+.d-mensaje:active, .d-item:active {
+  transition-duration: 0s;
+}
+
+/* Lo redondo y lo pequeño: un punto de sombra y un pellizco de tamaño.
+
+   La cara entra aquí con nombre y apellidos porque trae de serie su
+   propio :active del diseño de antes, que la encogía a 0,92 y no le
+   cambiaba el tono: al lado de las bolas se notaba que iban por libre. */
+.d-bola:active, .d-cab .avatar:active, .d-confirmar-x:active,
+.d-selector-estado:active, .d-bola-embudo:active, .d-bola-filtros:active,
+.d-desplegable:active {
+  filter: brightness(0.93); transform: scale(0.96);
+}
+
+/* Las tarjetas y las filas anchas se encogen mucho menos: a este tamaño
+   un 4 % ya no es un pellizco, es un salto. */
+.d-tarjeta:active, .d-acta-dia:active, .d-acta-linea:active,
+.d-repaso:active, .d-mensaje:active {
+  animation: none; filter: brightness(0.93); transform: scale(0.99);
+}
+
+/* Lo negro aclara, que oscurecer no puede.
+
+   Y el «animation: none» no es un capricho. Los hijos directos de
+   .screen llevan la animación de entrada con fill-mode «both», y una
+   animación terminada sigue mandando sobre el transform para siempre:
+   sin esta línea el botón cambiaba de tono pero no se encogía —medido
+   en el navegador, no supuesto— porque la animación lo tenía clavado en
+   «none». Donde el elemento no cuelga de .screen, no hace nada. */
+.d-bola.activa:active { filter: none; background: #262626; }
+.d-boton-negro:active { animation: none; background: #262626; transform: scale(0.985); }
+.d-boton-negro.rojo:active { background: #c23429; }
+.d-boton-negro.verde:active { background: #0a6b3e; }
+
+/* Las filas de Ajustes no tienen fondo propio —van sobre la tarjeta
+   blanca del grupo—, así que a éstas hay que ponérselo. La caja de la
+   fila se define arriba, con el resto de .d-item; aquí solo el tono. */
+.d-item:active { background: var(--d-gris-suave); }
+.d-fila-elegir:active { background: #e8e8e8; }
+
+/* Con el movimiento reducido se va el tamaño y se queda el tono, que es
+   lo que dice que la app te ha oído. La regla general del principio del
+   fichero deja todas las transiciones en 0,01 ms, y así un toque rápido
+   no se vería: aquí se les devuelve la salida. */
+@media (prefers-reduced-motion: reduce) {
+  .d-bola, .d-cab .avatar, .d-boton-negro, .d-selector-estado,
+  .d-bola-embudo, .d-bola-filtros, .d-desplegable, .d-tarjeta,
+  .d-acta-dia, .d-acta-linea, .d-repaso, .d-mensaje, .d-item {
+    transition-duration: var(--pulsa-sale) !important;
+  }
+  .d-bola:active, .d-cab .avatar:active, .d-boton-negro:active,
+  .d-selector-estado:active, .d-bola-embudo:active, .d-bola-filtros:active,
+  .d-desplegable:active, .d-tarjeta:active, .d-acta-dia:active,
+  .d-acta-linea:active, .d-repaso:active, .d-mensaje:active, .d-item:active {
+    transform: none; transition-duration: 0s !important;
+  }
+}
+
+/* ─── La onda del dedo ───
+   Solo en los botones de ancho completo. Quién la lleva, por qué, y por
+   qué NO la llevan las bolas está contado en arrancarOndas(), en
+   js/piezas.js. Aquí solo hace falta que la pastilla la recorte: sin
+   overflow, la ola asoma por las esquinas redondeadas. */
+.d-boton-negro { position: relative; overflow: hidden; }
+.d-onda {
+  position: absolute; border-radius: 50%; pointer-events: none;
+  background: rgba(255, 255, 255, 0.13);
+  transform: translate(-50%, -50%) scale(0);
+  animation: d-onda 300ms var(--sal-estandar) forwards;
+}
+@keyframes d-onda {
+  0%   { transform: translate(-50%, -50%) scale(0); opacity: 1; }
+  55%  { opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+}
+
+/* ─── El saludo del día ── */
+.d-saludo {
+  font-size: 42px; line-height: 1.14; letter-spacing: -0.03em;
+  font-weight: 500; margin: 26px 0 10px;
+}
+
+/* ─── Epígrafes de sección ── */
+.d-epigrafe { font-size: 18px; font-weight: 500; margin: 30px 0 12px; }
+
+/* ─── Banner con mordisco ──
+   La píldora lleva un bocado circular en el borde derecho y el botón
+   redondo vive dentro del hueco, del mismo color, con el fondo de la
+   página asomando en la junta. El bocado se recorta con una máscara
+   radial centrada donde el botón. */
+.d-banner {
+  position: relative; width: 100%; min-height: 95px;
+  text-align: left; display: block;
+}
+.d-banner + .d-banner { margin-top: 8px; }
+/* Cuando una banda viene justo detrás de una tarjeta —la última
+   reunión y su banda negra, en la portada— lleva el mismo aire que
+   entre dos tarjetas, 13px. En la portada solo afina el margen
+   genérico de .screen (14px); donde de verdad iban pegadas era en las
+   maquetas, que montan las piezas sin .screen y sin esta regla las
+   enseñaban como una sola pieza a dos colores. */
+.d-tarjeta + .d-banner { margin-top: 13px; }
+/* La forma mordida que comparten los banners de la home y las tarjetas
+   de vivienda: la pieza se estrecha abajo a la derecha y la bola de 55
+   vive fuera, en el hueco. Tres piezas ancladas abajo a la derecha,
+   para que valgan a cualquier altura y ancho:
+     · la franja de arriba, a todo lo ancho, hasta 61px del borde bajo;
+     · la columna de abajo, estrechada 61px;
+     · y el filete cóncavo que las une rodeando la bola, un cuadrado al
+       que un círculo de 35,5px (27,5 de bola + 8 de aire), centrado en
+       el centro de la bola, le come la esquina.
+   El fondo acaba 1px antes que la caja: ese píxel es lo que asoma la
+   bola por debajo. */
+.d-mordida { position: absolute; inset: 0 0 1px 0; }
+.d-mordida::before {
+  content: ''; position: absolute; inset: 0 0 61px 0;
+  background: var(--mordida, #fff);
+  border-radius: 20px 20px 16.5px 0;
+}
+.d-mordida::after {
+  content: ''; position: absolute; inset: 0 61px 0 0;
+  background: var(--mordida, #fff);
+  border-radius: 20px 0 20px 20px;
+}
+.d-mordida-esquina {
+  position: absolute; right: 26.5px; bottom: 26.5px; width: 35.5px; height: 35.5px;
+  background: var(--mordida, #fff);
+  -webkit-mask: radial-gradient(circle 35.5px at 100% 100%, transparent 99%, #000 101%);
+  mask: radial-gradient(circle 35.5px at 100% 100%, transparent 99%, #000 101%);
+}
+.d-banner { --mordida: var(--banner, var(--d-beige)); }
+/* En los banners, bajitos, la franja acaba en media pastilla. */
+.d-banner .d-mordida::before,
+.d-avance-banda .d-mordida::before { border-radius: 20px 16.5px 16.5px 0; }
+.d-banner-texto { position: relative; display: block; padding: 13px 76px 13px 16px; }
+.d-banner-rotulo { display: block; font-size: 16px; line-height: 24px; font-weight: 500; }
+.d-banner-cifra { display: block; font-size: 32px; font-weight: 500; line-height: 40px; margin-top: 4px; }
+
+/* ─── La banda de avance de una vivienda ───────────────────────
+   Beige siempre, la frase arriba y el porcentaje grande debajo, con
+   el anillo asomando por la esquina de abajo a la derecha.
+
+   El mordisco es el mismo que el del banner de la portada, pieza por
+   pieza. Antes se recortaba con una máscara circular y no quedaba
+   igual: una máscara agujerea, y donde el agujero se comía el borde
+   dejaba una punta en vez de rematar en curva. Como la banda mide lo
+   mismo que aquel banner —95 px— las medidas del mordisco valen tal
+   cual y no hay nada que recalcular. */
+.d-avance-banda { position: relative; --mordida: var(--d-beige); }
+.d-avance-texto { position: relative; display: block; padding: 13px 76px 13px 16px; }
+.d-avance-rotulo { display: block; font-size: 16px; line-height: 24px; font-weight: 500; color: var(--d-tinta); }
+.d-avance-cifra {
+  display: block; font-size: 32px; font-weight: 500; line-height: 40px;
+  margin-top: 4px; color: var(--d-tinta); letter-spacing: -0.01em;
+}
+.d-avance-anillo {
+  position: absolute; right: -1px; bottom: 0; width: 55px; height: 55px;
+  display: grid; place-items: center;
+  --anillo-color: var(--tramo, var(--d-verde)); --anillo-fondo: #d9d9d9;
+}
+.d-banner-boton {
+  position: absolute; right: -1px; bottom: 0;
+  width: 55px; height: 55px; border-radius: 999px;
+  background: var(--banner, var(--d-beige));
+  display: grid; place-items: center;
+}
+.d-banner-boton svg { width: 24px; height: 24px; }
+.d-banner.beige { --banner: var(--d-beige); color: var(--d-tinta); }
+.d-banner.beige .d-banner-boton { color: #262626; }
+.d-banner.verde { --banner: var(--d-verde); color: #f0f0fe; }
+.d-banner.verde .d-banner-boton { color: #fff; }
+.d-banner.rojo { --banner: var(--d-rojo); color: #f0f0fe; }
+.d-banner.rojo .d-banner-boton { color: #fff; }
+/* Negro: el color de lo que hace la IA en toda la app. Lo lleva el
+   aviso de recorrido a medias, que en verde se confundía con el banner
+   de tareas verificadas. */
+.d-banner.negro { --banner: var(--d-tinta); color: #f5f5f5; }
+.d-banner.negro .d-banner-boton { color: #fff; }
+
+/* ─── La tarjeta de vivienda (y el módulo de Brassie de la home):
+   blanca, con mordisco y el anillo de avance en la esquina ── */
+.d-tarjeta { position: relative; width: 100%; height: 177px; text-align: left; display: block; }
+.d-tarjeta + .d-tarjeta { margin-top: 13px; }
+.d-tarjeta-cab {
+  position: absolute; top: 16px; left: 16px; right: 16px;
+  display: flex; align-items: center; gap: 8px;
+  color: var(--d-gris); font-size: 16px; min-height: 36px;
+}
+.d-tarjeta-cab svg { width: 24px; height: 24px; flex: none; }
+.d-tarjeta-caras { margin-left: auto; }
+.d-tarjeta-titulo {
+  position: absolute; top: 60px; left: 16px; right: 70px;
+  font-size: 24px; line-height: 32px; letter-spacing: -0.005em;
+  color: var(--d-tinta);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* La señal de que la reunión de HOY sigue viva —abierta hasta las
+   23:59, terminada o no—: un punto verde luminoso delante del título,
+   con un aura que late. La eligió Fran entre seis propuestas y solo
+   la lleva la tarjeta del día. El verde es más vivo que el verde
+   bosque de la casa a propósito: esto es una luz, no una tinta. Con
+   «reducir movimiento» puesto en el móvil, el aura se queda quieta.
+
+   OJO: el punto NO puede vivir dentro de .d-tarjeta-titulo, que
+   recorta con overflow por los puntos suspensivos y le rebanaba el
+   aura por la izquierda. Va anclado a la tarjeta, que no recorta, y
+   el título se hace a un lado con la clase .viva. */
+.d-punto-vivo {
+  position: absolute; top: 71px; left: 16px;
+  width: 11px; height: 11px; border-radius: 999px;
+  background: #2ec96a;
+  box-shadow: 0 0 0 4px rgba(46, 201, 106, 0.22);
+  animation: d-latido 2s ease-out infinite;
+}
+.d-tarjeta.viva .d-tarjeta-titulo { left: 38px; }
+@keyframes d-latido {
+  0% { box-shadow: 0 0 0 1px rgba(46, 201, 106, 0.4); }
+  70% { box-shadow: 0 0 0 10px rgba(46, 201, 106, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(46, 201, 106, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .d-punto-vivo { animation: none; }
+}
+.d-tarjeta-pie { position: absolute; top: 116px; left: 16px; display: flex; gap: 8px; }
+.d-tarjeta-anillo {
+  position: absolute; right: -1px; bottom: 0; width: 55px; height: 55px;
+  --anillo-color: var(--tramo, var(--d-verde)); --anillo-fondo: #d9d9d9;
+}
+/* El color del avance, en los tres tramos de siempre: hasta el 30 rojo
+   oscuro, hasta el 70 naranja oscuro, y verde oscuro de ahí para
+   arriba. Son las mismas tintas que ya usaba la barra de avance, para
+   que una villa no se vea de un color en la lista y de otro dentro. */
+.tramo-rojo { --tramo: #651d17; }
+.tramo-ambar { --tramo: #683c03; }
+.tramo-verde { --tramo: var(--d-verde); }
+.d-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 9px 14px; border-radius: 999px;
+  font-size: 14px; font-weight: 500;
+  background: var(--d-gris-suave); color: var(--d-gris);
+}
+.d-chip svg { width: 17px; height: 17px; }
+/* Los tintes medidos del diseño: rojo vino sobre rosa, ámbar tostado
+   sobre crema, verde bosque sobre menta. El macizo es el 100%. */
+.d-chip.rojo { background: var(--d-rojo-suave); color: #651d17; }
+.d-chip.ambar { background: #fef4e6; color: #683c03; }
+.d-chip.verde { background: var(--d-verde-suave); color: var(--d-verde); }
+.d-chip.macizo { background: var(--d-verde); color: #fff; }
+/* El chip grande de la tarjeta de vivienda. */
+.d-chip.grande { height: 44px; padding: 10px 12px; gap: 7px; font-size: 16px; }
+.d-chip.grande svg { width: 24px; height: 24px; }
+/* ─── La lista de viviendas: el conmutador, la bola de filtros y las
+   píldoras de filtros aplicados ── */
+.d-fila-selector { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
+.d-selector {
+  display: flex; flex: 1; height: 56px;
+  background: #fff; border-radius: 999px; padding: 4px;
+}
+.d-selector button {
+  flex: 1; border-radius: 999px; font-size: 16px; font-weight: 500;
+  color: var(--d-gris); display: grid; place-items: center;
+}
+.d-selector button[aria-pressed='true'] { background: var(--d-beige); color: var(--d-tinta); }
+/* Lo mismo en la ficha de la vivienda: el desplegable de estancia mide
+   48 y esta bola tiene que medir 48. */
+.d-bola-filtros {
+  width: 48px; height: 48px; flex: none; border-radius: 999px;
+  background: #fff; color: var(--d-gris); display: grid; place-items: center;
+}
+.d-bola-filtros svg { width: 24px; height: 24px; }
+.d-filtros { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.d-filtro-pildora {
+  display: inline-flex; align-items: center; gap: 8px; height: 48px;
+  background: var(--d-beige); border-radius: 999px;
+  padding: 6px 14px; font-size: 16px; color: var(--d-tinta);
+}
+.d-filtro-pildora .cara { width: 36px; height: 36px; border-radius: 50%; margin-left: -8px; flex: none; object-fit: cover; }
+.d-filtro-quitar {
+  width: 48px; height: 48px; border-radius: 999px; flex: none;
+  background: var(--d-beige-tinta); color: #fff;
+  display: grid; place-items: center;
+}
+.d-filtro-quitar svg { width: 24px; height: 24px; }
+
+/* ─── La hoja de filtros «Oficios y subcontratas»: modal a pantalla
+   completa con buscador, la lista de gremios en píldora y el botón
+   de filtrar anclado abajo ── */
+.d-filtro-modal {
+  position: fixed; inset: 0; z-index: 60; background: var(--d-fondo);
+  display: flex; flex-direction: column;
+  font-family: var(--d-font); font-weight: 500; color: var(--d-tinta);
+  padding: calc(env(safe-area-inset-top) + 8px) var(--pad, 12px) 0;
+}
+.d-filtro-modal-cab { display: flex; align-items: center; min-height: 70px; }
+.d-filtro-modal-cab h2 { font-size: 24px; line-height: 32px; letter-spacing: -0.005em; font-weight: 500; }
+.d-filtro-modal-cab .d-bola { margin-left: auto; }
+.d-filtro-buscar { position: relative; margin: 8px 0; flex: none; }
+.d-filtro-buscar svg {
+  position: absolute; left: 16px; top: 12px; width: 24px; height: 24px;
+  color: var(--d-gris); pointer-events: none;
+}
+.d-filtro-buscar input {
+  width: 100%; height: 48px; border-radius: 999px; background: #fff;
+  border: none; padding: 12px 16px 12px 46px;
+  font: inherit; font-size: 16px; color: var(--d-tinta);
+}
+.d-filtro-buscar input::placeholder { color: var(--d-gris); }
+.d-filtro-buscar input:focus { outline: none; }
+/* Sin el aspa nativa del campo de búsqueda: el diseño no la lleva. */
+.d-filtro-buscar input::-webkit-search-cancel-button { display: none; }
+.d-filtro-lista { flex: 1; overflow-y: auto; padding: 12px 0 96px; }
+/* La ficha-píldora de un gremio (la misma pieza que la lista de chats). */
+.d-ficha-chat {
+  width: 100%; height: 60px; border-radius: 31px; background: #fff;
+  display: flex; align-items: center; gap: 8px; padding: 6px 13px 6px 7px;
+  text-align: left; font-size: 16px; color: var(--d-tinta);
+}
+.d-ficha-chat + .d-ficha-chat { margin-top: 6px; }
+.d-ficha-chat .cara { width: 48px; height: 48px; flex: none; }
+/* En el rediseño las caras de gremio son redondas, no cuadradas. */
+.d-ficha-chat .gremio-cara,
+.d-filtro-pildora .gremio-cara { border-radius: 50%; }
+.d-ficha-chat .grow { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.d-ficha-chat .etiqueta { flex: none; font-size: 14px; color: #bfbfbf; }
+.d-ficha-chat[aria-pressed='true'] { background: var(--d-beige); }
+.d-ficha-chat[aria-pressed='true'] .etiqueta { color: #fff; }
+.d-filtro-pie {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  padding: 12px 24px calc(env(safe-area-inset-bottom) + 16px);
+  background: linear-gradient(transparent, var(--d-fondo) 40%);
+}
+.d-filtro-pie button {
+  width: 100%; height: 48px; border-radius: 999px;
+  background: var(--d-gris-suave); color: #d9d9d9;
+  font-size: 16px; font-weight: 500;
+}
+.d-filtro-pie button.activo { background: var(--d-beige-tinta); color: #fff; }
+
+/* ─── El muro de comentarios y feedback ── */
+.d-muro { display: flex; flex-direction: column; gap: 10px; }
+.d-nota {
+  width: 100%; text-align: left;
+  border-radius: var(--d-radio); background: #fff; padding: 12px;
+}
+.d-nota-cab { display: flex; align-items: flex-start; gap: 10px; }
+.d-nota-cab .avatar { width: 36px; height: 36px; flex: none; margin-top: 3px; }
+.d-nota-quien { min-width: 0; }
+.d-nota-villa { font-size: 16px; font-weight: 500; }
+.d-nota-cuando { font-size: 14px; color: var(--d-gris); margin-top: 1px; }
+.d-nota-estado { margin-left: auto; font-size: 14px; font-weight: 500; flex: none; padding-top: 2px; }
+.d-nota-texto { font-size: 14px; line-height: 1.35; margin-top: 8px; }
+.d-nota.rechazada { background: var(--d-rojo-suave); }
+.d-nota.rechazada .d-nota-villa, .d-nota.rechazada .d-nota-estado,
+.d-nota.rechazada .d-nota-texto { color: var(--d-rojo-tinta); }
+.d-nota.verificada { background: var(--d-verde-suave); }
+.d-nota.verificada .d-nota-villa, .d-nota.verificada .d-nota-estado,
+.d-nota.verificada .d-nota-texto { color: var(--d-verde); }
+.d-nota.completada { background: var(--d-beige-suave); }
+.d-nota.completada .d-nota-estado, .d-nota.completada .d-nota-texto { color: var(--d-beige-tinta); }
+.d-nota.pendiente .d-nota-estado { color: #bebcb2; }
+
+/* ─── Escribir en el muro ── */
+.d-escribir {
+  display: flex; align-items: center; gap: 8px;
+  background: #fff; border-radius: 999px; padding: 6px 6px 6px 16px;
+  margin-top: 10px;
+}
+.d-escribir input {
+  flex: 1; min-width: 0; border: 0; outline: 0; background: none;
+  font: 500 14px var(--d-font); color: var(--d-tinta);
+}
+.d-escribir input::placeholder { color: var(--d-gris); }
+/* El avión de mandar: gris mientras no hay nada escrito y topo en
+   cuanto lo hay. Un botón encendido sobre una caja vacía promete algo
+   que al pulsarlo no pasa. */
+.d-escribir-mandar {
+  width: 36px; height: 36px; border-radius: 999px; flex: none;
+  background: var(--d-beige-tinta); color: #fff; display: grid; place-items: center;
+}
+.d-escribir-mandar svg { width: 18px; height: 18px; }
+
+/* ─── El rediseño · pantallas de dentro (Ajustes) ──────────────
+   La línea de la plantilla que pasó Fran: cabecera con la flecha en
+   bola blanca y el título centrado, y el contenido en tarjetas
+   blancas agrupadas —el epígrafe dentro de la tarjeta— con filas de
+   icono, rótulo y flechita. El rojo solo para salir. */
+.d-grupo {
+  /* El aire lateral de la tarjeta. Las filas de dentro se asoman
+     justo esto por cada lado para que la banda de pulsado llegue al
+     borde, así que el número tiene que ser uno solo. */
+  --grupo-aire: 16px;
+  background: #fff; border-radius: var(--d-radio);
+  padding: 14px var(--grupo-aire) 6px; margin-top: 14px;
+}
+.d-grupo-titulo { font-size: 15px; font-weight: 500; margin-bottom: 4px; }
+/* La fila sale a los bordes de la tarjeta con margen negativo y se
+   devuelve el mismo margen como relleno: el texto queda exactamente
+   donde estaba y, al pulsarla, la banda gris llega de lado a lado en
+   vez de quedarse en un recuadro flotando en medio. */
+.d-item {
+  display: flex; align-items: center; gap: 12px;
+  /* El ancho va escrito y no en «auto» porque casi todas estas filas
+     son <button>, y un botón en «auto» se encoge a su contenido: las
+     que llevaban texto corto se quedaban a media tarjeta. */
+  width: calc(100% + var(--grupo-aire) * 2);
+  margin: 0 calc(var(--grupo-aire) * -1); min-height: 52px;
+  padding: 6px var(--grupo-aire); border-radius: 14px;
+  text-align: left; font-family: var(--d-font);
+  font-size: 16px; font-weight: 500; color: var(--d-tinta);
+}
+.d-item svg:first-child { width: 22px; height: 22px; flex: none; }
+.d-item .grow { flex: 1; min-width: 0; }
+.d-item-sub { display: block; font-size: 13px; font-weight: 400; color: var(--d-gris); margin-top: 1px; }
+.d-item .chev { width: 18px; height: 18px; flex: none; color: var(--d-tinta); opacity: .8; }
+.d-item-valor { font-size: 15px; color: var(--d-gris); flex: none; }
+.d-item.rojo { color: var(--d-rojo); }
+.d-item.rojo svg { color: var(--d-rojo); }
+
+/* El interruptor, negro como la tinta del diseño. */
+.d-item input[type='checkbox'] {
+  appearance: none; -webkit-appearance: none;
+  width: 46px; height: 28px; flex: none; border-radius: 999px;
+  background: #e4e4e4; position: relative; cursor: pointer;
+  transition: background var(--mov-corto) ease;
+}
+.d-item input[type='checkbox']::after {
+  content: ''; position: absolute; top: 3px; left: 3px;
+  width: 22px; height: 22px; border-radius: 50%; background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .25);
+  transition: transform var(--mov-corto) ease;
+}
+.d-item input[type='checkbox']:checked { background: var(--d-tinta); }
+.d-item input[type='checkbox']:checked::after { transform: translateX(18px); }
+
+/* ─── El login del rediseño: UNIK CHECK ─────────────────────────────
+   Calcado del Figma (nodos 4106): la marca en dos imágenes a un
+   cuarto de pantalla, los campos en pastilla blanca de 48 con radio
+   infinito, el ojo de la contraseña, el error en rojo #f14437, el
+   botón negro y el pie abajo del todo. */
+.pantalla-entrar { display: flex; flex-direction: column; }
+.d-entrar {
+  flex: 1; display: flex; flex-direction: column;
+  min-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 96px);
+}
+.d-entrar-marca {
+  display: flex; justify-content: center; align-items: center; gap: 7px;
+  margin-top: min(146px, 18dvh);
+}
+.d-entrar-marca img { height: 21px; width: auto; display: block; }
+.d-entrar-form { margin-top: min(188px, 23dvh); }
+.d-entrar-rotulo {
+  display: block; font-size: 18px; font-weight: 500; line-height: 24px;
+  letter-spacing: -0.005em; color: #000; margin: 0 0 4px;
+}
+.d-entrar-campo { position: relative; }
+.d-entrar-campo + .d-entrar-rotulo { margin-top: 8px; }
+.d-entrar-campo input {
+  width: 100%; height: 48px; border-radius: 999px;
+  background: #fff; border: 1px solid transparent;
+  padding: 12px 16px; font: inherit; font-size: 16px; line-height: 24px;
+  color: #000;
+}
+.d-entrar-campo input::placeholder { color: var(--d-gris); }
+.d-entrar-campo input:focus { outline: none; border-color: var(--d-tinta); }
+.d-entrar-campo.con-ojo input { padding-right: 48px; }
+/* El navegador pinta de amarillo lo autorrellenado; la pastilla sigue blanca. */
+.d-entrar-campo input:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 48px #fff inset; -webkit-text-fill-color: #000;
+}
+.d-entrar-ojo {
+  position: absolute; right: 16px; top: 12px; width: 24px; height: 24px;
+  color: var(--d-gris); display: grid; place-items: center;
+}
+.d-entrar-ojo svg { width: 24px; height: 24px; }
+/* El estado de error, como la pantalla «Error State» del Figma. */
+.d-entrar-form.error .d-entrar-campo input { border-color: #f14437; color: #f14437; }
+.d-entrar-error {
+  display: block; font-size: 14px; line-height: 20px; color: #f14437;
+  text-align: center; margin: 21px 0 0;
+}
+.d-entrar-boton {
+  width: 100%; height: 48px; border-radius: 999px; margin-top: 26px;
+  background: #000; color: #fff; font-size: 16px; font-weight: 500;
+  display: grid; place-items: center;
+}
+.d-entrar-o {
+  display: flex; align-items: center; gap: 8px; margin-top: 18px;
+  font-size: 14px; line-height: 20px; color: #bfbfbf; text-align: center;
+}
+.d-entrar-o::before, .d-entrar-o::after {
+  content: ''; flex: 1; height: 1px; background: #f0f0f0;
+}
+.d-entrar-pie {
+  margin-top: auto; padding-top: 40px;
+  font-size: 14px; line-height: 20px; color: #595959; text-align: center;
+}
+
+/* ─── La ficha de la vivienda ───────────────────────────────────
+   La banda de avance está más arriba, con el anillo. Aquí quedan el
+   botón negro de nueva inspección, los repasos verificados en
+   pastilla con su redondel, y el chat de la villa con sus marcas de
+   leído.
+
+   La tarjeta de avance de tres pieles y la bola roja del PDF se
+   fueron: el color lo lleva ahora el anillo, y el PDF vive en el menú
+   de los tres puntos de arriba. */
+.d-boton-negro {
+  width: 100%; height: 48px; border-radius: 999px;
+  background: var(--d-tinta); color: #fff; font-size: 16px; font-weight: 500;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+}
+.d-boton-negro svg { width: 24px; height: 24px; }
+
+.d-desplegable {
+  flex: 1; min-width: 0; height: 48px; border-radius: 999px; background: #fff;
+  display: flex; align-items: center; gap: 8px; padding: 12px 16px;
+  font-size: 16px; color: var(--d-gris); text-align: left;
+}
+.d-desplegable.puesto { color: var(--d-tinta); }
+.d-desplegable svg { width: 24px; height: 24px; margin-left: auto; flex: none; color: var(--d-gris); }
+.d-desplegable span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.d-repaso {
+  width: 100%; min-height: 48px; border-radius: 999px; background: #fff;
+  display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 16px;
+  text-align: left; font-size: 16px; line-height: 24px; color: var(--d-tinta);
+}
+.d-repaso + .d-repaso { margin-top: 8px; }
+/* Una línea y ni una más. Estas pastillas son ya lo verificado: se
+   miran de refilón para comprobar que está, no se leen. Si una frase
+   larga las hiciera crecer a dos y tres líneas, lo cerrado ocuparía
+   más pantalla que lo que queda por hacer. */
+.d-repaso .grow {
+  flex: 1; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.d-repaso-bola {
+  width: 36px; height: 36px; flex: none; border-radius: 999px;
+  border: 3px solid #d9d9d9; display: grid; place-items: center; color: #fff;
+}
+.d-repaso-bola svg { width: 20px; height: 20px; }
+.d-repaso.hecho { color: #d9d9d9; text-decoration: line-through; }
+.d-repaso.hecho .d-repaso-bola { border: none; background: var(--d-beige-tinta); }
+
+.d-mensaje {
+  width: 100%; border-radius: var(--d-radio); background: #fff;
+  display: flex; align-items: center; gap: 12px; padding: 14px 12px;
+  text-align: left;
+}
+.d-mensaje + .d-mensaje { margin-top: 6px; }
+.d-mensaje .grow { flex: 1; min-width: 0; }
+.d-mensaje-cab { display: flex; align-items: baseline; gap: 8px; }
+.d-mensaje-quien { flex: 1; min-width: 0; font-size: 16px; line-height: 24px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.d-mensaje-cuando { flex: none; font-size: 14px; line-height: 20px; color: #bfbfbf; }
+.d-mensaje-pie { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+.d-mensaje-pie svg { width: 20px; height: 20px; flex: none; }
+.d-mensaje-pie .tic { color: #bfbfbf; }
+.d-mensaje-pie .tics { color: #6864f2; }
+.d-mensaje-txt { flex: 1; min-width: 0; font-size: 14px; line-height: 20px; color: var(--d-tinta); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.d-mensaje-bolita { width: 8px; height: 8px; flex: none; border-radius: 50%; background: #37c4f8; }
+
+/* ─── La ficha de la tarea ──────────────────────────────────────
+   Calcada del Figma: la foto grande, el chip del gremio con su cara,
+   la pastilla de estancia, el campo de fecha, la caja de descripción
+   y la sección de completar con sus miniaturas. */
+.d-foto {
+  position: relative; display: block; width: 100%; aspect-ratio: 1 / 1;
+  border-radius: 5px; overflow: hidden;
+  background: #e9e7e4 center / cover no-repeat;
+}
+.d-foto img, .d-foto video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.d-foto-papelera {
+  position: absolute; right: 0; bottom: 0; width: 55px; height: 55px;
+  display: grid; place-items: center; color: #fff;
+  filter: drop-shadow(0 1px 4px rgba(0, 0, 0, .55));
+  /* Al 50%, como en el Figma: está encima de la foto y no debe
+     comérsela. Vale para todas las papeleras sobre imágenes. */
+  opacity: .5;
+}
+.d-foto-papelera svg { width: 20px; height: 20px; }
+.d-minis { display: flex; gap: 11px; overflow-x: auto; scrollbar-width: none; }
+.d-minis::-webkit-scrollbar { display: none; }
+.d-mini {
+  position: relative; width: 99px; height: 99px; flex: none;
+  border-radius: 5px; overflow: hidden;
+  background: #e9e7e4 center / cover no-repeat;
+}
+.d-mini .d-foto-papelera { width: 25px; height: 25px; }
+.d-mini .k { position: absolute; inset: 0; display: grid; place-items: center; color: #fff; }
+.d-mini > svg { width: 24px; height: 24px; }
+.d-mini[aria-current='true'] { outline: 2px solid var(--d-tinta); outline-offset: -2px; }
+
+.d-chip-gremio {
+  display: inline-flex; align-items: center; gap: 8px; height: 48px;
+  border-radius: 999px; background: var(--d-beige);
+  padding: 6px 16px 6px 6px; font-size: 16px; color: var(--d-tinta);
+}
+.d-chip-gremio .gremio-cara { border-radius: 50%; }
+.d-pastilla {
+  display: inline-flex; align-items: center; gap: 8px; height: 48px;
+  border-radius: 999px; background: #fff; padding: 12px 16px;
+  font-size: 16px; color: var(--d-tinta); text-align: left;
+}
+.d-pastilla.ancha { display: flex; width: 100%; }
+.d-pastilla svg { width: 24px; height: 24px; flex: none; margin-left: auto; color: var(--d-gris); }
+.d-caja {
+  background: #fff; border-radius: var(--d-radio); padding: 12px 16px;
+  font-size: 16px; line-height: 24px; white-space: pre-wrap;
+  width: 100%; text-align: left; color: var(--d-tinta); display: block;
+}
+.d-fantasma {
+  width: 100%; height: 48px; border-radius: 999px; background: none;
+  border: 1px solid var(--d-gris); color: var(--d-gris);
+  font-size: 16px; font-weight: 500;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+}
+.d-fantasma svg { width: 24px; height: 24px; }
+/* El botón que cambia de rótulo —el de añadir foto— necesita fondo
+   propio.
+
+   Con `background: none` no hay nada que pintar dentro de su caja, y
+   el Safari del iPhone da por bueno lo que ya había: el rótulo viejo
+   se queda debajo del nuevo y se leen los dos encima. Con un fondo
+   —del mismo color que la pantalla, así que no se nota— y el pintado
+   contenido en su caja, la repinta entera y no queda rastro. */
+.d-fantasma.opaco { background: var(--d-fondo); contain: paint; }
+.d-boton-negro:disabled { background: #d9d9d9; color: #fff; }
+.d-escribir-mandar:disabled { background: #d9d9d9; }
+
+/* ─── El velo con desenfoque, el modal de enhorabuena y la hoja de
+   «Hacer foto / Seleccionar de la galería» ── */
+.d-velo {
+  position: fixed; inset: 0; z-index: 70; background: rgba(0, 0, 0, .32);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  display: grid; place-items: center; padding: 16px;
+}
+.d-modal {
+  width: min(344px, 100%); background: var(--d-fondo); border-radius: 12px;
+  position: relative; padding: 55px 12px 12px;
+  display: grid; justify-items: center;
+  font-family: var(--d-font); font-weight: 500; color: var(--d-tinta);
+}
+.d-modal-x { position: absolute; top: 15px; right: 12px; width: 24px; height: 24px; color: var(--d-gris); }
+.d-modal-x svg { width: 24px; height: 24px; }
+.d-modal-titulo { font-size: 24px; line-height: 32px; letter-spacing: -0.005em; font-weight: 500; margin-top: 24px; text-align: center; }
+.d-modal-sub { font-size: 14px; line-height: 20px; color: var(--d-gris); margin-top: 12px; text-align: center; }
+.d-modal-boton {
+  width: 100%; height: 48px; border-radius: 999px; margin-top: 24px;
+  background: var(--d-beige-tinta); color: #fff; font-size: 16px; font-weight: 500;
+}
+.d-hoja-acciones {
+  position: fixed; inset: 0; z-index: 70; background: rgba(0, 0, 0, .32);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  display: flex; flex-direction: column; justify-content: flex-end;
+  align-items: center; gap: 22px;
+  padding: 16px 16px calc(env(safe-area-inset-bottom) + 24px);
+}
+.d-hoja-acciones-menu { width: min(100%, 480px); background: #fcfcfc; border-radius: 12px; overflow: hidden; }
+/* El titular de una hoja de acciones (p. ej. «El PDF está listo»). */
+.d-hoja-titulo {
+  margin: 0; padding: 16px 18px 6px;
+  font-size: 15px; font-weight: 600; color: var(--d-tinta, #000);
+  text-align: center;
+}
+.d-hoja-fila {
+  width: 100%; height: 55px; background: none;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  font: 500 16px var(--d-font); color: var(--d-tinta); cursor: pointer;
+}
+.d-hoja-fila + .d-hoja-fila { border-top: 1px solid #ececec; }
+/* Sin icono, el rótulo manda y se alinea a la izquierda: en la lista de
+   viviendas todas llevarían la misma casita y no distingue nada. */
+.d-hoja-fila.suelta { justify-content: flex-start; padding: 0 16px; }
+.d-hoja-fila svg { width: 24px; height: 24px; color: var(--d-beige-tinta); }
+/* Rojo el rótulo y el icono: lo que se va a perder se ve antes de
+   leerlo. La fila sigue siendo blanca, que un bloque rojo entero
+   grita más de lo que hace falta. */
+.d-hoja-fila.roja, .d-hoja-fila.roja svg { color: var(--d-rojo); }
+.d-hoja-acciones-x {
+  width: 66px; height: 66px; border-radius: 999px; background: #fcfcfc;
+  box-shadow: 0 12px 34px rgba(0, 0, 0, .28);
+  display: grid; place-items: center;
+}
+.d-hoja-acciones-x svg { width: 20px; height: 20px; }
+
+/* ─── El menú de los tres puntos ────────────────────────────────
+   Mismo fondo borroso que el resto de menús de la aplicación, y
+   encima una tarjeta con el título, su X y las filas al estilo de
+   Ajustes: icono a la izquierda y el rótulo alineado con él. */
+.d-menu-velo {
+  position: fixed; inset: 0; z-index: 70; background: rgba(0, 0, 0, .32);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  display: flex; flex-direction: column; justify-content: flex-end; align-items: center;
+  padding: 16px 16px calc(env(safe-area-inset-bottom) + 24px);
+}
+.d-menu-tarjeta {
+  width: min(100%, 480px); max-height: 82vh; overflow-y: auto;
+  background: #fcfcfc; border-radius: 20px; padding: 14px 8px 10px;
+  animation: rise 0.28s cubic-bezier(0.22, 0.8, 0.25, 1) both;
+}
+.d-menu-cab { display: flex; align-items: center; gap: 12px; padding: 0 8px 4px; }
+.d-menu-titulo { flex: 1; font-size: 17px; font-weight: 500; color: var(--d-tinta); }
+.d-menu-x {
+  width: 34px; height: 34px; flex: none; border-radius: 999px;
+  display: grid; place-items: center; color: var(--d-gris);
+}
+.d-menu-x svg { width: 22px; height: 22px; }
+.d-menu-fila {
+  display: flex; align-items: center; gap: 14px; width: 100%;
+  min-height: 56px; padding: 8px; border-radius: 14px;
+  text-align: left; font: 500 17px var(--d-font); color: var(--d-tinta);
+}
+.d-menu-fila:active { background: var(--d-gris-suave); }
+.d-menu-fila svg { width: 24px; height: 24px; flex: none; color: var(--d-beige-tinta); }
+.d-menu-fila .grow { flex: 1; min-width: 0; }
+.d-menu-sub { display: block; font-size: 14px; font-weight: 400; color: var(--d-gris); margin-top: 1px; }
+.d-menu-fila.rojo { color: var(--d-rojo); }
+.d-menu-fila.rojo svg { color: var(--d-rojo); }
+
+/* ─── Elegir de una lista ───
+   Las filas van densas, como las de Ajustes: sin el texto pequeño de
+   debajo cada opción ocupa la mitad y caben el doble en la pantalla.
+   La flechita de la derecha marca el borde y da el ritmo de la
+   columna. */
+.d-menu-tarjeta.elegir { padding: 14px 8px 12px; }
+.d-bloque-elegir + .d-bloque-elegir {
+  /* El hueco es lo que separa las plantas. Sin rótulos: se ve solo. */
+  margin-top: 14px; padding-top: 14px;
+  border-top: 1px solid rgba(0, 0, 0, .07);
+}
+.d-fila-elegir {
+  display: flex; align-items: center; gap: 14px; width: 100%;
+  min-height: 48px; padding: 4px 8px; border-radius: 12px;
+  text-align: left; font: 400 17px/24px var(--d-font); color: var(--d-tinta);
+  background: transparent;
+}
+.d-fila-elegir .grow { flex: 1; min-width: 0; }
+.d-fila-elegir > svg:first-child { width: 24px; height: 24px; flex: none; color: var(--d-beige-tinta); }
+.d-fila-elegir .chev { width: 18px; height: 18px; flex: none; color: var(--d-gris); opacity: .7; }
+.d-fila-elegir > svg:last-child { width: 20px; height: 20px; flex: none; }
+/* La elegida. Fondo suave y no negro macizo: en una lista larga una
+   fila negra pesa más que el título, y a lo que se viene aquí es a
+   escoger otra. */
+.d-fila-elegir.puesta { background: var(--d-gris-suave); font-weight: 500; }
+.d-fila-elegir.puesta > svg:last-child { color: var(--d-tinta); }
+.d-bloque-elegir.rojo .d-fila-elegir,
+.d-bloque-elegir.rojo .d-fila-elegir > svg { color: var(--d-rojo); }
+/* ─── El «¿seguro?» ───
+   La tarjeta con las dos salidas —la que borra y la que conserva— y la
+   X redonda suelta debajo. La X va fuera de la tarjeta a propósito: es
+   irse sin hacer nada, y separarla deja claro que no es una tercera
+   opción. Éste es el modal de todas las confirmaciones de la app. */
+.d-menu-velo.confirmar { justify-content: flex-end; gap: 12px; }
+.d-confirmar-tarjeta {
+  width: min(100%, 480px); overflow: hidden;
+  background: #fcfcfc; border-radius: 22px;
+  animation: rise 0.28s cubic-bezier(0.22, 0.8, 0.25, 1) both;
+}
+.d-confirmar-mini {
+  width: 92px; height: 92px; margin: 18px auto 0;
+  border-radius: 14px; overflow: hidden; background: var(--d-gris-suave);
+}
+.d-confirmar-mini img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.d-confirmar-mini + .d-confirmar-titulo { padding-top: 12px; }
+.d-confirmar-mini + .d-confirmar-texto { padding-top: 12px; }
+.d-confirmar-titulo {
+  margin: 0; padding: 18px 20px 0;
+  text-align: center; font-size: 17px; font-weight: 500; color: var(--d-tinta);
+}
+.d-confirmar-texto {
+  margin: 0; padding: 6px 20px 14px;
+  text-align: center; font-size: 15px; line-height: 21px; color: var(--d-gris);
+}
+.d-confirmar-titulo + .d-confirmar-texto { padding-top: 4px; }
+.d-confirmar-fila {
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+  width: 100%; min-height: 64px; padding: 12px 18px;
+  font: 500 17px var(--d-font); color: var(--d-tinta);
+  background: transparent;
+}
+/* La raya entre las dos, y la de debajo del texto cuando lo hay: la
+   misma, para que la tarjeta se lea como una lista y no como un cajón
+   con cosas dentro. */
+.d-confirmar-fila + .d-confirmar-fila,
+.d-confirmar-texto + .d-confirmar-fila,
+.d-confirmar-titulo + .d-confirmar-fila { border-top: 1px solid rgba(0, 0, 0, .08); }
+.d-confirmar-fila svg { width: 24px; height: 24px; flex: none; color: var(--d-beige-tinta); }
+.d-confirmar-fila:active { background: var(--d-gris-suave); }
+/* La misma marca roja que en el menú de los tres puntos, para que la
+   pregunta se lea como continuación de la fila que se acaba de pulsar
+   y no como otra pantalla distinta. */
+.d-confirmar-fila.roja, .d-confirmar-fila.roja svg { color: var(--d-rojo); }
+.d-confirmar-x {
+  width: var(--cab-bola); height: var(--cab-bola); flex: none;
+  border-radius: 999px; display: grid; place-items: center;
+  background: #fff; color: var(--d-tinta);
+}
+.d-confirmar-x svg { width: 24px; height: 24px; }
+
+/* Lo que se cuelgue debajo de las filas —las actas de la vivienda—
+   respira lo mismo que ellas. */
+.d-menu-extra { padding: 6px 8px 0; }
+.d-menu-extra .d-epigrafe { margin: 10px 0 8px; }
+
+/* ─── El formulario de nueva tarea ──────────────────────────────
+   Calcado del Figma: campos de rótulo con asterisco y pastilla,
+   descripción en tarjeta, carrusel de multimedia y el pie con placa
+   blanca que arropa el botón de guardar. */
+.d-campo { margin-top: 8px; }
+.d-campo-rotulo {
+  display: block; font-size: 18px; line-height: 24px;
+  letter-spacing: -0.005em; color: var(--d-tinta); margin: 0 0 4px;
+}
+.d-campo-rotulo .req { color: #f14437; font-size: 16px; margin-left: 2px; }
+.d-area {
+  width: 100%; min-height: 185px; border: none; resize: vertical;
+  border-radius: var(--d-radio); background: #fff; padding: 12px 16px;
+  font: 500 16px/24px var(--d-font); color: var(--d-tinta);
+}
+.d-area::placeholder { color: #d9d9d9; }
+.d-area:focus { outline: none; }
+.d-carrusel { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; margin-top: 12px; }
+.d-carrusel::-webkit-scrollbar { display: none; }
+.d-carrusel .celda {
+  position: relative; flex: 0 0 92%; height: 246px;
+  border-radius: 8px; overflow: hidden;
+  background: #e9e7e4 center / cover no-repeat;
+}
+/* Una sola foto ocupa el ancho entero, con el mismo margen a un lado
+   que al otro. El 92 % está para cuando hay más de una: ese trocito
+   que asoma es lo que dice que a la derecha viene otra. Con una sola
+   no dice nada, solo parece mal alineada. */
+.d-carrusel.una .celda { flex: 0 0 100%; }
+.d-pie-placa {
+  position: sticky; bottom: 0; z-index: 5;
+  margin: 20px -10px 0; padding: 12px;
+  background: #fff; border-radius: 16px 16px 0 0;
+}
+/* El deshabilitado de crear es más suave que el de completar. */
+.d-pie-placa .d-boton-negro:disabled { background: var(--d-gris-suave); color: #d9d9d9; }
+/* «Nueva inspección» flotando en la zona del pulgar: la mecánica del
+   .fab (absoluto, hermano de la pantalla) con la ropa del botón negro
+   del rediseño, a todo lo ancho. Primero fue un pie pegado (sticky)
+   dentro del scroll, y el iPhone, con la inercia, lo dejaba flotando
+   a media pantalla partiendo tarjetas. Los 12px son el respiro del
+   rediseño: el fab vive FUERA de .pantalla-diseno y su --pad de 12
+   no le llega. La sombra es obligada: flota sobre tarjetas blancas. */
+.fab.d-fab-negro {
+  left: 12px; right: 12px;
+  justify-content: center;
+  background: var(--d-tinta); color: #fff;
+  font: 500 16px/24px var(--d-font); letter-spacing: 0;
+  box-shadow: 0 10px 28px rgba(17, 17, 18, 0.28);
+}
+.fab.d-fab-negro:active { transform: scale(0.985); filter: none; background: #262626; }
+
+/* ─── El visor del recorrido con IA ─────────────────────────────
+   Calcado del Figma: la cámara a pantalla completa, la tira de
+   fotogramas arriba, el botón del cerebro con su halo abajo, y una
+   píldora discreta con el crono para saber que se graba. */
+.d-visor { position: fixed; inset: 0; z-index: 55; background: #000; overflow: hidden; }
+.d-visor-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.d-visor-tira {
+  position: absolute; top: calc(env(safe-area-inset-top) + 14px);
+  left: 0; right: 0; display: flex; gap: 11px; padding: 0 12px;
+  overflow-x: auto; scrollbar-width: none;
+}
+.d-visor-tira::-webkit-scrollbar { display: none; }
+.d-visor-tira .d-mini { box-shadow: 0 2px 10px rgba(0, 0, 0, .35); }
+.d-visor-cerebro {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  bottom: calc(env(safe-area-inset-bottom) + 62px);
+  width: 66px; height: 66px; border-radius: 999px; background: #fff;
+  color: #000; display: grid; place-items: center;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, .31), 0 12px 34px rgba(0, 0, 0, .35);
+}
+.d-visor-cerebro svg { width: 24px; height: 24px; }
+.d-visor-crono {
+  position: absolute; left: 16px;
+  bottom: calc(env(safe-area-inset-bottom) + 82px);
+  display: inline-flex; align-items: center; gap: 6px;
+  background: rgba(0, 0, 0, .45); color: #fff;
+  border-radius: 999px; padding: 6px 12px; font-size: 13px;
+}
+.d-visor-crono .punto { width: 8px; height: 8px; border-radius: 50%; background: #ff453a; animation: d-latido 1.2s infinite; }
+.d-visor.pausado .d-visor-crono .punto { animation: none; background: #ffd60a; }
+@keyframes d-latido { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+.d-visor-pista {
+  position: absolute; left: 16px; right: 16px;
+  bottom: calc(env(safe-area-inset-bottom) + 148px);
+  text-align: center; color: rgba(255, 255, 255, .88); font-size: 13px;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, .6);
+}
+.d-visor-destello { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+.d-visor-destello.on { animation: d-destello .28s ease; }
+@keyframes d-destello { 0% { opacity: .85; } 100% { opacity: 0; } }
+
+/* ─── Validar las tareas del recorrido ── */
+.d-propuestas .d-propuesta + .d-propuesta { margin-top: 37px; }
+.d-propuesta-botones { display: flex; gap: 14px; margin-top: 16px; }
+.d-propuesta-botones > * { flex: 1; }
+.d-propuesta .d-foto .tag { display: inline-flex; align-items: center; gap: 4px; border: none; }
+/* ═══ EL REPASO DEL RECORRIDO, FICHA A FICHA ═══════════════════
+
+   Una ficha por pantalla. Antes eran las siete seguidas en una
+   columna de dos metros, y no había forma de saber dónde acababa una
+   y empezaba la siguiente.  ═══ */
+
+/* Por dónde vas: un guión por ficha, el de ahora en negro y los ya
+   cerrados en topo. Con siete cabe de sobra, y de un vistazo sabes
+   cuánto queda sin leer ningún número. */
+.d-rec-avance { display: flex; gap: 5px; margin: 2px 0 14px; }
+.d-rec-avance span {
+  flex: 1; height: 4px; border-radius: 999px; background: #e4e2df;
+  transition: background var(--mov-medio) var(--sal-estandar);
+}
+.d-rec-avance span.hecha { background: var(--d-beige-tinta); }
+.d-rec-avance span.aqui { background: var(--d-tinta); }
+
+/* La foto del repaso: alta, pero no un cuadrado a todo lo ancho que se
+   coma la pantalla entera. Lo que importa de la foto se reconoce igual,
+   y así los campos entran sin desplazarse. */
+.d-foto.repaso { aspect-ratio: 4 / 3; border-radius: var(--d-radio); }
+
+/* ─── La ficha de una tarea del recorrido, a pantalla completa ───
+   El lienzo se vuelve una columna que mide justo lo que se ve: barra
+   de avance, la villa de señalización, los dos desplegables, la
+   descripción con su alto justo, la FOTO estirando con todo lo que
+   sobre, y los botones abajo, siempre a la vista sin desplazarse.
+
+   La foto no se deforma nunca: con `cover` recorta un poco de los
+   lados en pantallas altas y un poco de arriba y abajo en las bajas.
+   Y nada de `position: fixed` para el pie: dentro de una pantalla
+   animada el fijo se queda atrapado y aterriza donde no es (ya nos
+   pasó con las pantallas vacías de Tareas). El alto de la columna hace
+   el mismo trabajo sin trucos.
+
+   El 135 es lo que ocupan la cabecera y los aires de la pantalla; los
+   safe-area son el notch y la barra de abajo del iPhone. */
+.recorrido.ficha {
+  display: flex; flex-direction: column; gap: 12px;
+  min-height: calc(100vh - 135px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  min-height: calc(100dvh - 135px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+}
+/* Solo la foto crece. Los desplegables traen un flex de las filas
+   horizontales donde viven normalmente, y aquí, en columna, ese flex
+   los hincharía a lo alto. */
+.recorrido.ficha > * { flex: 0 0 auto; }
+/* La villa, en su pastilla blanca como los desplegables pero quieta:
+   ni flecha ni nada que tocar. Solo dice desde dónde se hizo. */
+.d-rec-villa {
+  height: 48px; padding: 12px 16px; border-radius: 999px; background: #fff;
+  display: flex; align-items: center;
+  font-size: 16px; font-weight: 500; color: var(--d-tinta);
+}
+.recorrido.ficha .d-foto.repaso {
+  aspect-ratio: auto; height: auto; flex: 1 1 auto; min-height: 132px;
+}
+/* A relleno absoluto: el alto en porcentaje dentro de una caja cuya
+   altura la decide el flex se queda corto en algunos navegadores, y la
+   foto dejaba una franja de fondo sin cubrir. */
+.recorrido.ficha .d-foto.repaso img {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+}
+.recorrido.ficha .d-area { resize: none; }
+.recorrido.ficha .d-rec-pie { margin-top: 0; }
+/* El pie del Figma: los dos botones a todo lo ancho, apilados. El
+   flex:1 de la versión en fila, fuera: en columna aplastaba el botón
+   (y con nombre y apellidos, que la regla vieja va después en el
+   fichero y a igual peso ganaría ella). */
+.d-rec-pie.apilado { flex-direction: column; gap: 10px; }
+.d-rec-pie.apilado .d-boton-negro,
+.d-rec-pie.apilado .d-boton-hueco {
+  width: 100%; flex: 0 0 auto; height: 48px;
+}
+/* «Descartar tarea»: blanco hueco, con la voz baja. */
+.d-boton-hueco {
+  height: 48px; border-radius: 999px; background: #fff;
+  border: 1px solid #e4e0db; color: var(--d-gris);
+  font-size: 16px; font-weight: 500;
+  display: flex; align-items: center; justify-content: center;
+}
+/* Lo que la IA no pilló se pide con la voz baja: el texto de espera de
+   los desplegables y de la descripción, en un gris más claro. */
+.recorrido.ficha .d-desplegable:not(.puesto) span { color: #b7b3ae; }
+.recorrido.ficha .d-area::placeholder { color: #b7b3ae; }
+
+/* El pie: guardar manda y eliminar se aparta.
+   Antes ocupaban la mitad justa cada uno, del mismo tamaño y pegados.
+   Uno no tiene vuelta atrás; el otro es lo que se hace nueve de cada
+   diez veces. */
+.d-rec-pie { display: flex; align-items: center; gap: 10px; margin-top: 18px; }
+.d-rec-pie .d-boton-negro { flex: 1; }
+.d-fantasma.estrecho {
+  width: 48px; height: 48px; flex: none; border-radius: 999px;
+  display: grid; place-items: center;
+  background: transparent; border: 1px solid #ddd9d4; color: var(--d-gris);
+}
+.d-fantasma.estrecho svg { width: 22px; height: 22px; }
+
+/* El botón secundario del rediseño: la misma pastilla, en claro. */
+.d-boton-negro.claro {
+  background: #fff; color: var(--d-tinta);
+}
+.d-boton-negro.claro:active { background: var(--d-gris-suave); }
+
+/* El reproductor del paseo, con la ropa de la app en vez del gris de
+   iOS. No se puede repintar por dentro —lo dibuja el sistema—, pero sí
+   sentarlo en su pastilla para que no cante tanto. */
+.d-audio {
+  width: 100%; height: 42px; display: block;
+  border-radius: 999px; background: var(--d-gris-suave);
+}
+
+/* El repaso del recorrido, con la ropa del rediseño. */
+.pantalla-diseno .rec-resumen,
+.pantalla-diseno .rec-dictado {
+  background: #fff; border-radius: var(--d-radio);
+  border: none; box-shadow: none; padding: 14px 16px;
+}
+.pantalla-diseno .rec-dictado .grow { flex: none; }
+
+/* ─── La hoja «Filtrar por oficio» y el calendario del diseño:
+   tarjeta clara sobre velo, filas con círculo de marcar y el botón
+   «Seleccionar» que pasa de gris a topo ── */
+.d-velo.abajo { place-items: end center; padding-bottom: calc(env(safe-area-inset-bottom) + 20px); }
+.d-carta {
+  /* Dieciséis de cada lado, sea cual sea el móvil: los pone el velo con
+     su relleno, así que aquí basta con ocuparlo entero. Estaba clavado
+     a 344 —el ancho del Figma, que dibuja sobre una pantalla de 375— y
+     en un iPhone grande eso dejaba más de cuarenta de aire por lado. */
+  width: min(100%, 480px); max-height: calc(100dvh - 110px);
+  background: var(--d-fondo); border-radius: 12px;
+  display: flex; flex-direction: column; overflow: hidden;
+  font-family: var(--d-font); font-weight: 500; color: var(--d-tinta);
+}
+.d-carta-cab {
+  flex: none; display: flex; align-items: center; gap: 8px;
+  min-height: 55px; padding: 0 12px;
+  font-size: 16px; color: #595959;
+}
+.d-carta-cab span { flex: 1; min-width: 0; }
+.d-carta-cab .x { flex: none; width: 24px; height: 24px; color: var(--d-tinta); }
+.d-carta-cab .x svg { width: 24px; height: 24px; }
+.d-carta-cab.calendario { color: var(--d-tinta); }
+.d-carta-cab .paso { flex: none; width: 24px; height: 24px; color: var(--d-tinta); }
+.d-carta-cab .paso svg { width: 20px; height: 20px; }
+.d-carta-lista { flex: 1; overflow-y: auto; }
+.d-marcable {
+  width: 100%; height: 56px; display: flex; align-items: center; gap: 6px;
+  padding: 10px 12px; font-size: 16px; color: var(--d-tinta); text-align: left;
+}
+.d-marcable .grow { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.d-marcable .gremio-cara { border-radius: 50%; }
+.d-marcable-circulo {
+  flex: none; width: 32px; height: 32px; border-radius: 999px;
+  border: 2px solid #d9d9d9; display: grid; place-items: center; color: #fff;
+}
+.d-marcable-circulo.marcado { border: none; background: var(--d-beige-tinta); }
+.d-marcable-circulo svg { width: 18px; height: 18px; }
+.d-carta-pie { flex: none; padding: 12px; }
+.d-carta-pie button {
+  width: 100%; height: 48px; border-radius: 999px;
+  background: var(--d-beige-tinta); color: #fff;
+  font-size: 16px; font-weight: 500;
+}
+.d-carta-pie button:disabled { background: var(--d-gris-suave); color: #d9d9d9; }
+.d-calendario {
+  flex: 1; overflow-y: auto;
+  display: grid; grid-template-columns: repeat(7, 1fr);
+  padding: 0 12px; align-content: start;
+}
+.d-calendario .dia {
+  aspect-ratio: 1 / 1; border-radius: 999px;
+  display: grid; place-items: center;
+  font-size: 14px; color: #454545; background: none;
+}
+.d-calendario .dia.cabecera { aspect-ratio: auto; height: 46px; }
+.d-calendario .dia.fuera { color: #d9d9d9; }
+.d-calendario .dia.hoy { color: var(--d-beige-tinta); }
+.d-calendario .dia.elegido { background: var(--d-beige-tinta); color: #fff; }
+
+/* ═══ La lista de tareas de la obra ═══════════════════════════════
+   Las cuatro pastillas de la portada llegan aqui: la misma pantalla
+   con un estado u otro. La tarjeta es la de vivienda —mismo mordisco,
+   misma altura— cambiando el anillo de avance por la foto del remate.
+   ═══════════════════════════════════════════════════════════════ */
+.d-fila-filtro { display: flex; align-items: center; gap: 8px; margin: 12px 0; }
+.d-selector-estado {
+  flex: 1; height: 48px; padding: 0 16px; border-radius: 9999px;
+  background: #fff; border: 0; cursor: pointer;
+  display: flex; align-items: center; justify-content: space-between;
+  font: 500 16px/24px var(--d-font); color: var(--d-tinta); text-align: left;
+}
+.d-selector-estado svg { width: 24px; height: 24px; color: var(--d-gris); flex: none; }
+/* La bola de al lado del selector mide lo que el selector, no más:
+   antes eran 56 contra 48 y el círculo sobresalía por arriba y por
+   abajo de la pastilla, que es de lo que menos se perdona en una fila
+   de dos piezas. */
+.d-bola-embudo {
+  width: 48px; height: 48px; flex: none; border-radius: 999px;
+  background: #fff; border: 0; cursor: pointer; display: grid; place-items: center;
+  color: var(--d-gris);
+}
+.d-bola-embudo svg { width: 24px; height: 24px; }
+
+/* La foto del remate, en la esquina que muerde la tarjeta. */
+.d-tarjeta-foto {
+  position: absolute; right: -1px; bottom: 0; width: 55px; height: 55px;
+  border-radius: 999px; overflow: hidden;
+  background: #e9e9e9 center/cover no-repeat;
+}
+.d-tarjeta-foto .gremio-cara { border-radius: 999px; width: 55px; height: 55px; font-size: 20px; }
+.d-tarea-fila .d-tarjeta-cab { color: var(--d-gris); }
+.d-chip.tarea {
+  padding: 10px 12px; font-size: 16px; line-height: 24px;
+  background: #f0f0f0; color: var(--d-tinta); gap: 0;
+}
+/* En la lista mezclada «Por cerrar» cada tarjeta lleva el color de su
+   estado —rechazada en rojo, completada-sin-verificar en beige, los
+   mismos tonos que sus notas del muro—; la pendiente se queda blanca.
+   El cuerpo de la tarjeta lo pintan las mordidas, así que el tono
+   entra por la variable --mordida, igual que en los banners. */
+.d-tarea-fila.rechazada { --mordida: var(--d-rojo-suave); }
+.d-tarea-fila.rechazada .d-tarjeta-titulo { color: var(--d-rojo-tinta); }
+.d-tarea-fila.rechazada .d-chip.tarea { background: #fff; }
+.d-tarea-fila.completada { --mordida: var(--d-beige-suave); }
+.d-tarea-fila.completada .d-tarjeta-titulo { color: var(--d-beige-tinta); }
+.d-tarea-fila.completada .d-chip.tarea { background: #fff; }
+
+/* Los filtros aplicados: pastillas beige y la X en topo. */
+.d-filtros-tareas { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.d-filtros-tareas .pastilla {
+  height: 48px; padding: 0 15px; border-radius: 999px;
+  background: var(--d-beige); color: var(--d-tinta);
+  display: inline-flex; align-items: center;
+  font: 500 16px/19.2px var(--d-font); letter-spacing: -0.01em;
+}
+.d-filtros-tareas .quitar {
+  width: 48px; height: 48px; border: 0; border-radius: 999px; cursor: pointer;
+  background: var(--d-beige-tinta); color: #fff; display: grid; place-items: center;
+}
+.d-filtros-tareas .quitar svg { width: 24px; height: 24px; }
+.d-cuantos-filtros {
+  font: 500 18px/24px var(--d-font); letter-spacing: -0.005em;
+  color: var(--d-tinta); margin-bottom: 11px;
+}
+
+/* La hoja de filtrar tareas: la carta de siempre con el selector de
+   vivienda arriba y el circulo en topo, como pide el diseno. */
+.d-carta-selector-caja { padding: 8px 12px; }
+.d-carta-selector {
+  width: 100%; height: 48px; padding: 0 16px; border-radius: 9999px;
+  background: #fff; border: 0; cursor: pointer;
+  display: flex; align-items: center; justify-content: space-between;
+  font: 500 16px/24px var(--d-font); color: var(--d-tinta); text-align: left;
+}
+.d-carta-selector svg { width: 24px; height: 24px; color: var(--d-gris); flex: none; }
+.d-carta.tareas .d-marcable-circulo { border-color: var(--d-beige-tinta); }
+.d-marcable.cabecera { height: 52px; cursor: default; }
+.d-marcable-rotulo { flex: 1; text-align: left; }
+
+/* La lista vacia: la ilustracion del diseno, en gris como en el Figma
+   (saturacion -1), el porque en dos lineas y la salida al pie. */
+/* La pantalla vacía: título, subtítulo y el botón al final.
+
+   Todo en el flujo, NADA con `position: fixed`: los hijos de la
+   pantalla llevan la animación de entrada, y un ancestro animado
+   atrapa a sus descendientes fijos —el botón acababa clavado en mitad
+   de la página, encima del propio título—. La caja estira hasta media
+   pantalla larga y el botón baja solo con su margin-top automático. */
+.d-vacio {
+  display: flex; flex-direction: column; align-items: center;
+  text-align: center; padding: 48px 12px 0;
+  min-height: 58vh;
+}
+.d-vacio h2 {
+  margin: 0 0 12px; font: 500 24px/32px var(--d-font);
+  letter-spacing: -0.005em; color: var(--d-tinta);
+}
+.d-vacio p {
+  margin: 0 auto; max-width: 262px;
+  font: 500 14px/20px var(--d-font); color: var(--d-gris);
+}
+.d-vacio .d-boton-topo { margin-top: auto; }
+.d-boton-topo {
+  width: 100%; height: 48px; border: 0; border-radius: 999px; cursor: pointer;
+  background: var(--d-beige-tinta); color: #fff;
+  font: 500 16px/24px var(--d-font);
+}
+
+/* ═══ La ficha de una tarea ═══════════════════════════════════════
+   Una foto sola manda a lo ancho; dos, una debajo de otra. Nada de
+   repetir la misma imagen en una tira de miniaturas debajo de sí
+   misma, que era lo que hacía antes.
+   ═══════════════════════════════════════════════════════════════ */
+.d-creada { font-size: 16px; color: var(--d-gris); margin: 4px 0 12px; }
+.d-fotos-tarea { display: flex; flex-direction: column; gap: 12px; }
+.d-foto-tarea {
+  position: relative; width: 100%; border-radius: 5px; overflow: hidden;
+  background: #e9e9e9; aspect-ratio: 351 / 352; cursor: pointer;
+}
+/* Con dos, cada una ocupa menos alto: las dos tienen que caber de un
+   vistazo, que es de lo que va enseñar el antes y el después.
+
+   Se mira si hay otra foto detrás, no si hay otro hermano cualquiera:
+   la foto de relleno lleva debajo su letrero, y con «no eres hijo
+   único» esa se quedaba también a media altura estando sola. Si algún
+   navegador viejo no entiende el `:has`, lo que sale es la foto entera,
+   que es justo lo que toca cuando hay una. */
+.d-fotos-tarea .d-foto-tarea:has(~ .d-foto-tarea),
+.d-fotos-tarea .d-foto-tarea:nth-child(2) { aspect-ratio: 351 / 246; }
+.d-foto-tarea img, .d-foto-tarea video { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* La de relleno: la del oficio, apagada y con su letrero, para que no
+   se lea como si fuera el remate. */
+.d-foto-tarea.generica {
+  background: #e9e9e9 center/cover no-repeat; cursor: default;
+  display: grid; place-items: center; color: var(--d-gris); filter: grayscale(.35);
+}
+.d-foto-aviso { font-size: 13px; color: var(--d-gris); margin: -4px 2px 0; }
+/* La descripción, con el alto que le da el diseño: la caja no encoge
+   hasta el texto, para que la pantalla no baile según lo larga que sea
+   la frase de cada tarea. */
+.pantalla-diseno .d-caja { min-height: 112px; border-radius: 16px; }
+.d-foto-tarea .d-foto-papelera { position: absolute; right: 12px; bottom: 12px; }
+
+.d-chips-tarea { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 4px; }
+/* La fecha límite, en oscuro y solo para mirarla. */
+.d-chip.tarea.fecha { background: #454545; color: #fff; gap: 8px; }
+.d-chip.tarea.fecha svg { width: 20px; height: 20px; }
+
+/* Los dos botones de la dirección facultativa: verde da por bueno,
+   rojo devuelve a la obra. */
+.d-boton-negro.verde { background: var(--d-verde); }
+.d-boton-negro.verde:disabled { background: #d9d9d9; }
+.d-boton-negro.rojo { background: var(--d-rojo); margin-top: 10px; }
+
+/* ═══════════════════════════════════════════════════════════════
+   ACTAS POR DÍA
+
+   El archivo de la obra: una tarjeta por jornada, con la fecha en
+   grande, quién estuvo y lo que se hizo en chips del mismo idioma de
+   color que el resto de la aplicación. Y dentro, el acta del día leída
+   como un parte de visita, casa por casa y hora a hora.
+   ═══════════════════════════════════════════════════════════════ */
+.d-actas-dias { display: flex; flex-direction: column; gap: 12px; }
+.d-actas-mes {
+  margin: 18px 2px 2px; font-size: 13px; font-weight: 500;
+  letter-spacing: .1em; color: var(--d-gris);
+}
+.d-actas-dias > .d-actas-mes:first-child { margin-top: 4px; }
+
+.d-acta-dia {
+  display: block; width: 100%; text-align: left;
+  background: #fff; border-radius: var(--d-radio); padding: 16px;
+}
+/* El día de hoy sigue vivo: lo que se apunte dentro de un rato cae
+   aquí, así que se marca en beige como todo lo que está en curso. */
+.d-acta-dia.hoy { background: var(--d-beige); }
+.d-acta-dia-cab { display: flex; align-items: flex-start; gap: 12px; }
+/* Sin esto, la pila de caras flotaba a media tarjeta en vez de
+   quedarse pegada al borde derecho, donde la espera el ojo. */
+.d-acta-dia-cab .grow { flex: 1; min-width: 0; }
+.d-acta-dia-cuando { margin: 0; font-size: 14px; color: var(--d-gris); }
+.d-acta-dia.hoy .d-acta-dia-cuando { color: var(--d-beige-tinta); font-weight: 500; }
+.d-acta-dia-fecha {
+  margin: 2px 0 0; font-size: 26px; line-height: 32px; font-weight: 500;
+  letter-spacing: -.015em; color: var(--d-tinta);
+}
+.d-acta-dia-villas {
+  margin: 10px 0 0; font-size: 15px; color: var(--d-gris);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.d-acta-dia.hoy .d-acta-dia-villas { color: var(--d-beige-tinta); }
+.d-acta-dia-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.d-acta-dia-chips .d-chip { font-size: 13px; padding: 7px 11px; }
+.d-acta-dia.hoy .d-acta-dia-chips .d-chip { background: rgba(255, 255, 255, .55); }
+.d-acta-dia.hoy .d-acta-dia-chips .d-chip.verde,
+.d-acta-dia.hoy .d-acta-dia-chips .d-chip.ambar,
+.d-acta-dia.hoy .d-acta-dia-chips .d-chip.rojo { background: #fff; }
+
+/* ─── La obra: reuniones y encargos ──────────────────────────── */
+/* La fila de los presentes: las caras, los invitados sin cuenta en
+   pastilla y el botón de añadir en punteado. Las pastillas miden lo
+   mismo que las caras: una fila con tres alturas se ve descuidada. */
+.d-mesa { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.d-mesa .avatar { border: 2.5px solid var(--d-fondo); }
+.d-invitado {
+  display: inline-flex; align-items: center; height: 48px;
+  font-size: 13px; font-weight: 600; color: var(--d-gris);
+  background: #e9e7e2; padding: 0 14px; border-radius: 999px;
+}
+/* Añadir asistentes: una bola con el más, del mismo gris que las
+   pastillas de invitado y del mismo tamaño que las caras. El borde
+   discontinuo de antes no era del sistema y Fran lo retiró. */
+.d-mesa-mas {
+  width: 48px; height: 48px; flex: none; border-radius: 999px;
+  background: #e9e7e2; color: var(--d-gris);
+  display: grid; place-items: center; padding: 0;
+}
+.d-mesa-mas svg { width: 20px; height: 20px; }
+
+/* La tarea de una reunión: pastilla blanca con su redondel para
+   tachar. El redondel es un botón propio, porque tachar puede hacerlo
+   cualquiera y en cualquier momento; abrir la fila para editar, solo
+   la DF y solo mientras el acta está abierta. */
+.d-encargo {
+  width: 100%; border-radius: var(--d-radio); background: #fff;
+  display: flex; align-items: center; gap: 12px; padding: 12px 14px;
+}
+.d-encargo + .d-encargo { margin-top: 8px; }
+.d-encargo-bola {
+  width: 36px; height: 36px; flex: none; border-radius: 999px;
+  border: 3px solid #d9d9d9; display: grid; place-items: center;
+  color: #fff; background: transparent; padding: 0;
+}
+.d-encargo-bola svg { width: 20px; height: 20px; }
+.d-encargo.hecho .d-encargo-bola { border: none; background: var(--d-beige-tinta); }
+.d-encargo .grow { flex: 1; min-width: 0; text-align: left; }
+.d-encargo-texto { font-size: 15.5px; line-height: 1.35; font-weight: 500; color: var(--d-tinta); }
+.d-encargo.hecho .d-encargo-texto { color: #b5b1aa; text-decoration: line-through; }
+.d-encargo-sub { margin-top: 3px; font-size: 12.5px; line-height: 1.4; color: var(--d-gris); }
+
+/* La nota pequeña al pie de un bloque: el recordatorio del sello. */
+.d-nota-pie { margin: 10px 6px 0; font-size: 12.5px; line-height: 1.5; color: var(--d-gris); }
+
+/* ─── La grabadora de reuniones ──────────────────────────────────
+   Calcada del grabador de notas de voz de iOS: panel oscuro desde
+   abajo, título, cronómetro con centésimas, la onda roja avanzando y
+   el cuadrado de parar dentro de su aro. Vive colgada del body: se
+   pliega a una barrita y se sigue usando la app sin dejar de grabar. */
+.d-grabadora {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 85;
+  background: #131211; color: #fff;
+  border-radius: 24px 24px 0 0;
+  height: min(74vh, 620px);
+  display: flex; flex-direction: column; align-items: center;
+  padding: 8px 20px calc(env(safe-area-inset-bottom) + 26px);
+  box-shadow: 0 -18px 50px rgba(0, 0, 0, 0.35);
+}
+.d-grab-asa { padding: 8px 34px; background: none; }
+.d-grab-asa span { display: block; width: 44px; height: 5px; border-radius: 999px; background: #4a4846; }
+.d-grab-titulo {
+  margin: 16px 0 0; font-size: 24px; font-weight: 600;
+  letter-spacing: -0.01em; text-align: center;
+  max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.d-grab-crono { margin-top: 8px; font-size: 15px; color: #9d9a96; font-variant-numeric: tabular-nums; }
+.d-grab-lienzo { flex: 1; width: 100%; display: flex; align-items: center; min-height: 0; }
+.d-grab-onda { width: 100%; height: 160px; display: block; }
+.d-grab-estado { margin: 0 0 18px; font-size: 12.5px; color: #8c8984; text-align: center; }
+.d-grab-parar {
+  width: 84px; height: 84px; border-radius: 999px; background: none;
+  border: 3px solid #3a3835; display: grid; place-items: center; flex: none;
+}
+.d-grab-cuadrado { width: 30px; height: 30px; border-radius: 8px; background: var(--d-rojo); display: block; }
+.d-grab-cuadrado.chico { width: 15px; height: 15px; border-radius: 4px; }
+.d-grab-parar:active .d-grab-cuadrado { transform: scale(0.88); }
+
+.d-grab-mini {
+  position: fixed; left: 12px; right: 12px;
+  bottom: calc(env(safe-area-inset-bottom) + 12px);
+  z-index: 85; height: 54px; border-radius: 999px;
+  background: #131211; color: #fff;
+  display: flex; align-items: center; gap: 10px; padding: 0 8px 0 18px;
+  font-size: 15px; font-weight: 500;
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.35);
+}
+.d-grab-punto {
+  width: 10px; height: 10px; border-radius: 999px; background: var(--d-rojo);
+  animation: d-grab-late 1.2s ease-in-out infinite;
+}
+@keyframes d-grab-late { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+.d-grab-mini-crono { margin-left: auto; color: #9d9a96; font-variant-numeric: tabular-nums; }
+.d-grab-mini-parar {
+  width: 40px; height: 40px; border-radius: 999px; background: #2a2825;
+  display: grid; place-items: center; flex: none;
+}
+
+/* La tarjeta de «sin grabar todavía», con su botón negro. */
+.d-grab-quieta {
+  background: #fff; border-radius: var(--d-radio);
+  padding: 14px 16px; display: flex; align-items: center; gap: 12px;
+}
+.d-grab-quieta > svg { width: 24px; height: 24px; flex: none; color: var(--d-beige-tinta); }
+.d-grab-quieta .grow { flex: 1; min-width: 0; }
+.d-grab-quieta-titulo { font-size: 16px; font-weight: 500; color: var(--d-tinta); }
+.d-grab-quieta-sub { margin-top: 3px; font-size: 12.5px; line-height: 1.4; color: var(--d-gris); }
+/* Grabar es una bola negra con el micro dentro, como las bolas de
+   acción de toda la app: la palabra sobraba teniendo el dibujo. */
+.d-grab-quieta-boton {
+  flex: none; width: 48px; height: 48px; border-radius: 999px;
+  background: var(--d-tinta); color: #fff;
+  display: grid; place-items: center; padding: 0;
+}
+.d-grab-quieta-boton svg { width: 22px; height: 22px; }
+
+/* El girito de «esto está trabajando» y la barra de lo que lleva.
+   Van juntos en la fila de la grabación mientras se exprime el audio:
+   sin ellos, quien mira no sabe si la app hace algo o se ha quedado
+   pensando, que era justo la queja. */
+.d-giro {
+  width: 18px; height: 18px; flex: none; border-radius: 999px;
+  border: 2.5px solid #e4d9c6; border-top-color: var(--d-beige-tinta);
+  animation: d-gira 0.9s linear infinite;
+}
+@keyframes d-gira { to { transform: rotate(360deg); } }
+
+.d-barra-fina {
+  height: 5px; border-radius: 999px; background: #eceae6;
+  margin-top: 10px; overflow: hidden;
+}
+.d-barra-fina i {
+  display: block; height: 100%; border-radius: 999px;
+  background: var(--d-beige-tinta);
+  transition: width 0.45s var(--sal-estandar);
+}
+
+/* Quien no quiera animaciones tampoco las tiene aquí: el girito se
+   queda quieto y la barra salta a su sitio sin deslizarse. */
+@media (prefers-reduced-motion: reduce) {
+  .d-giro { animation: none; }
+  .d-barra-fina i { transition: none; }
+}
+
+/* El icono redondo de la fila de una grabación ya hecha. */
+.d-grab-fila-icono {
+  width: 36px; height: 36px; flex: none; border-radius: 999px;
+  background: var(--d-gris-suave); color: var(--d-beige-tinta);
+  display: grid; place-items: center;
+}
+
+/* El estado de una grabación, en su bola a la derecha (elegido por
+   Fran sobre tres propuestas): check en beige cuando está transcrita,
+   girito mientras espera su turno, y rojo con aviso si se quedó a
+   medias. El micro de la izquierda se queda quieto en su sitio. */
+.d-grab-estado {
+  width: 36px; height: 36px; flex: none; border-radius: 999px;
+  display: grid; place-items: center;
+}
+.d-grab-estado.hecha { background: var(--d-beige-tinta); color: #fff; }
+.d-grab-estado.hecha svg { width: 20px; height: 20px; }
+.d-grab-estado.cola { background: var(--d-gris-suave); }
+/* Quieta: en cola de una reunión ya sellada, donde el turno no va a
+   llegar. Pausa en vez de girito: aquí no hay nada trabajando. */
+.d-grab-estado.quieta { background: var(--d-gris-suave); color: var(--d-gris); }
+.d-grab-estado.quieta svg { width: 18px; height: 18px; }
+
+/* «Alguien está grabando» (G1, elegida por Fran): la fila en rojo con
+   la onda latiendo a la derecha. No hay nada que pulsar: la onda es
+   señal, no botón. Con «reducir movimiento», quieta. */
+.d-grab-viva-bola {
+  width: 36px; height: 36px; flex: none; border-radius: 999px;
+  background: #fdeceb; color: #db3e32; display: grid; place-items: center;
+}
+.d-onda-viva { display: inline-flex; align-items: center; gap: 3px; height: 26px; flex: none; }
+.d-onda-viva i {
+  width: 3px; border-radius: 2px; background: #db3e32;
+  animation: d-onda-late 1.1s ease-in-out infinite;
+}
+@keyframes d-onda-late {
+  0%, 100% { transform: scaleY(0.45); }
+  50% { transform: scaleY(1); }
+}
+@media (prefers-reduced-motion: reduce) { .d-onda-viva i { animation: none; } }
+
+/* «¿Quién dice esto?» (V2, elegida por Fran): la hoja con la frase en
+   grande y las caras de la mesa en cuadrícula para tocar una. */
+.d-cita-voz { margin: 4px 4px 14px; font: 500 20px/1.4 var(--d-font); color: var(--d-tinta); }
+.d-caras-voz { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.d-cara-voz {
+  display: flex; align-items: center; gap: 10px; min-width: 0;
+  background: #fff; border-radius: 14px; padding: 10px 12px; text-align: left;
+}
+.d-cara-voz-nombre {
+  font-size: 14.5px; font-weight: 500; color: var(--d-tinta);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.d-grab-estado.mal {
+  background: var(--d-rojo-suave); color: #651d17;
+  font: 700 18px/1 var(--d-font);
+}
+
+/* Los datos de la reunión bajo la cabecera: el calendario y el reloj
+   en gris pequeñito, pedidos así por Fran sobre tres propuestas que
+   no le convencieron (agosto de 2026). */
+.d-reunion-datos {
+  display: flex; flex-wrap: wrap; gap: 6px 18px;
+  margin: 0 6px; color: var(--d-gris); font-size: 13px;
+}
+.d-reunion-datos > span { display: inline-flex; align-items: center; gap: 7px; }
+.d-reunion-datos svg { width: 15px; height: 15px; flex: none; }
+
+/* El acta en prosa, ya firmada. */
+.d-acta-prosa {
+  background: #fff; border-radius: var(--d-radio);
+  padding: 16px; font-size: 14.5px; line-height: 1.55; color: #33312e;
+  white-space: pre-wrap;
+}
+
+/* ─── El acta de un día ─────────────────────────────────────── */
+.d-acta-portada {
+  background: #fff; border-radius: var(--d-radio);
+  padding: 22px 20px 24px; margin-top: 8px;
+}
+.d-acta-portada.hoy { background: var(--d-beige); }
+.d-acta-eyebrow {
+  margin: 0; font-size: 13px; font-weight: 500; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--d-gris);
+}
+.d-acta-portada.hoy .d-acta-eyebrow { color: var(--d-beige-tinta); }
+.d-acta-fecha {
+  margin: 8px 0 0; font-size: 34px; line-height: 38px; font-weight: 500;
+  letter-spacing: -.025em; color: var(--d-tinta);
+}
+.d-acta-sub { margin: 8px 0 0; font-size: 15px; color: var(--d-gris); }
+.d-acta-portada.hoy .d-acta-sub { color: var(--d-beige-tinta); }
+
+.d-acta-gente { display: flex; align-items: center; gap: 12px; }
+.d-acta-nombres { margin: 0; font-size: 15px; color: var(--d-tinta); min-width: 0; }
+
+/* Las cifras del día. Grandes porque son el resumen: lo primero que
+   se mira al abrir un acta es cuánto se movió ese día. */
+.d-acta-cifras { display: flex; flex-wrap: wrap; gap: 8px; }
+.d-acta-cifra {
+  flex: 1 1 128px; background: #fff; border-radius: 16px; padding: 14px 16px;
+}
+.d-acta-cifra .n {
+  display: block; font-size: 28px; line-height: 32px; font-weight: 500;
+  letter-spacing: -.02em; color: var(--d-tinta);
+}
+.d-acta-cifra .r { display: block; font-size: 13px; color: var(--d-gris); margin-top: 2px; }
+.d-acta-cifra.verde .n { color: var(--d-verde); }
+.d-acta-cifra.ambar .n { color: #683c03; }
+.d-acta-cifra.rojo .n { color: #651d17; }
+
+/* Cada vivienda del día, con su rótulo a la izquierda y cuántos
+   apuntes lleva a la derecha. */
+.d-acta-villa {
+  display: flex; align-items: baseline; gap: 10px; margin: 26px 2px 10px;
+}
+.d-acta-villa-nombre {
+  font-size: 20px; font-weight: 500; letter-spacing: -.01em; color: var(--d-tinta);
+}
+.d-acta-villa-cuantos { margin-left: auto; font-size: 14px; color: var(--d-gris); }
+
+.d-acta-lineas { display: flex; flex-direction: column; gap: 8px; }
+/* Una línea del acta: la hora a la izquierda, en su columna, y el
+   hecho a la derecha. La barra de color dice de un vistazo qué pasó
+   sin tener que leer. */
+.d-acta-linea {
+  display: flex; gap: 12px; width: 100%; text-align: left;
+  background: #fff; border-radius: 16px; padding: 13px 14px;
+  border-left: 4px solid var(--d-gris-suave);
+}
+.d-acta-linea.completada { border-left-color: #e2b35f; }
+.d-acta-linea.verificada { border-left-color: var(--d-verde); }
+.d-acta-linea.rechazada { border-left-color: var(--d-rojo); }
+.d-acta-linea.nota { border-left-color: var(--d-beige); }
+.d-acta-hora {
+  flex: none; width: 44px; font-size: 14px; font-weight: 500;
+  color: var(--d-gris); padding-top: 1px;
+}
+.d-acta-cuerpo { min-width: 0; display: block; }
+.d-acta-hecho {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 13px; font-weight: 500; color: var(--d-gris);
+}
+.d-acta-hecho svg { width: 14px; height: 14px; flex: none; }
+.d-acta-linea.completada .d-acta-hecho { color: #683c03; }
+.d-acta-linea.verificada .d-acta-hecho { color: var(--d-verde); }
+.d-acta-linea.rechazada .d-acta-hecho { color: var(--d-rojo); }
+.d-acta-quien { font-weight: 400; color: var(--d-gris); }
+.d-acta-texto {
+  display: block; margin-top: 3px; font-size: 16px; line-height: 21px;
+  color: var(--d-tinta);
+}
+.d-acta-nota {
+  display: block; margin-top: 4px; font-size: 14px; line-height: 19px;
+  color: var(--d-beige-tinta); font-style: italic;
+}
+.d-acta-pie { display: block; margin-top: 5px; font-size: 13px; color: var(--d-gris); }
+
+
+/* ═══ LA PANTALLA DE «ESTOY TRABAJANDO» ═════════════════════════
+
+   Para las esperas de treinta o sesenta segundos: la IA escuchando y
+   redactando. Ocupa la pantalla entera a propósito —lo pidió Fran— y
+   por eso tiene que ganárselo: se ven los tres pasos, cuál va, la
+   cuenta de fotos y una barra que avanza. Un aro girando y nada más
+   haría que un minuto se sintiera como tres.  ═══ */
+
+/* El cerebro dentro de un aro que da vueltas: el mismo icono que el
+   botón que se acaba de pulsar, para que se vea que es lo suyo lo que
+   está pasando. */
+@keyframes gira { to { transform: rotate(360deg); } }
+
+
+
+/* La salida, que aparece a los 75 segundos. Tarda a propósito: si
+   saliera enseguida, media obra la pulsaría por impaciencia y se
+   quedaría sin lo que ya está pagado. */
+
+/* Las otras fotos del mismo remate, cuando la IA ha agrupado varias.
+   Van pequeñas y debajo de la principal: son «esto también es esto»,
+   no siete fotos que repasar. Cada una se puede sacar a su propio
+   repaso si la IA se pasó de lista juntando. */
+.d-rec-extras { display: flex; gap: 8px; margin-top: 8px; overflow-x: auto; scrollbar-width: none; }
+.d-rec-extras::-webkit-scrollbar { display: none; }
+.d-rec-extra {
+  position: relative; width: 76px; height: 76px; flex: none;
+  border-radius: 12px; overflow: hidden; background: var(--d-gris-suave);
+}
+.d-rec-extra img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.d-rec-extra .quitar {
+  position: absolute; right: 3px; top: 3px;
+  width: 22px; height: 22px; border-radius: 999px;
+  display: grid; place-items: center;
+  background: rgba(0, 0, 0, .55); color: #fff;
+}
+
+
+/* ═══ LA PANTALLA DE LA MAGIA ════════════════════════════════════
+
+   Mientras la IA escucha y redacta. Es la única pantalla negra de toda
+   la app, y es a propósito: con lo demás apagado, el minuto se lee como
+   «está pasando algo» y no como «se ha colgado».
+
+   La nebulosa es un WebP animado de 887 KB —el GIF original pesaba 5,1
+   MB, y para blanco sobre negro el GIF además hace bandas—. Va a tamaño
+   fijo y centrada; el pie se queda abajo, donde el pulgar no lo tapa. */
+.d-magia {
+  position: fixed; inset: 0; z-index: 90;
+  background: #000; color: #fff;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: space-between;
+  padding: 12vh 24px calc(env(safe-area-inset-bottom) + 42px);
+  animation: magia-entra 320ms var(--sal-estandar) both;
+}
+@keyframes magia-entra { from { opacity: 0; } }
+
+.d-magia-nebulosa {
+  flex: 1; display: grid; place-items: center; width: 100%; min-height: 0;
+}
+.d-magia-nebulosa img {
+  width: min(78vw, 320px); height: auto; display: block;
+  /* El WebP viene con el negro dentro, así que se funde con el fondo en
+     lugar de recortarse en un cuadrado que se vería en los bordes. */
+  mix-blend-mode: screen;
+}
+
+.d-magia-pie { width: 100%; max-width: 420px; text-align: center; }
+.d-magia-titulo {
+  font-size: 26px; line-height: 34px; font-weight: 500;
+  letter-spacing: -0.02em; margin: 0;
+}
+.d-magia-sub {
+  margin: 8px 0 0; font-size: 15px; line-height: 22px;
+  color: rgba(255, 255, 255, .45);
+  /* Alto reservado: el subtítulo cambia en cada paso y sin esto el
+     título daría un salto cada vez que pasa de una línea a ninguna. */
+  min-height: 22px;
+}
+.d-magia-barra {
+  margin-top: 26px; height: 4px; border-radius: 999px;
+  background: rgba(255, 255, 255, .16); overflow: hidden;
+}
+.d-magia-barra .tira {
+  display: block; height: 100%; width: 0; border-radius: 999px;
+  background: #fff;
+  transition: width var(--mov-largo) var(--sal-estandar);
+}
+.d-magia-salida {
+  margin-top: 22px; min-height: 44px; padding: 0 18px;
+  font-size: 15px; color: rgba(255, 255, 255, .5);
+  background: none; border-radius: 999px;
+}
+.d-magia-salida:active { color: #fff; }
+
+/* Con el movimiento reducido, la nebulosa se queda quieta en su primer
+   fotograma: la pantalla sigue contando lo mismo con el título, el
+   subtítulo y la barra. */
+@media (prefers-reduced-motion: reduce) {
+  .d-magia-nebulosa img { animation-play-state: paused; }
+}
+
+/* ═══ EN VERTICAL SE TRABAJA ═══════════════════════════════════════
+   La app de iPhone no rota (lo prohíbe el envoltorio) y el manifest
+   pide vertical; esto cubre el hueco que quedaba: el navegador del
+   móvil. Un teléfono tumbado tapa la app con un telón y pide volver.
+   Los límites dejan fuera tabletas y ordenadores: pantalla táctil
+   (pointer: coarse) y bajita, que es la firma de un móvil tumbado. */
+@media (orientation: landscape) and (pointer: coarse) and (max-height: 520px) {
+  body::after {
+    content: 'Gira el teléfono \2014 UNIK Works se usa en vertical';
+    position: fixed; inset: 0; z-index: 9990;
+    display: grid; place-items: center;
+    padding: 32px; text-align: center; box-sizing: border-box;
+    background: var(--d-fondo, #f5f5f5); color: var(--d-tinta, #000);
+    font: 500 17px/1.5 var(--d-font, -apple-system, sans-serif);
+  }
+}
+
+/* El sello del taller: solo existe cuando la app corre en /taller (lo
+   decide app.js por la ruta). En la app real no aparece jamás. */
+body.es-taller::before {
+  content: 'TALLER \00b7 datos de prueba';
+  position: fixed; left: 12px;
+  bottom: calc(env(safe-area-inset-bottom) + 12px);
+  z-index: 900; pointer-events: none;
+  background: rgba(12, 11, 10, 0.84); color: #fff;
+  font: 600 11px/1 var(--d-font, sans-serif);
+  letter-spacing: 0.06em;
+  padding: 7px 12px; border-radius: 999px;
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+}

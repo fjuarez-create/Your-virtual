@@ -1,0 +1,54 @@
+name: Buscar fotos de muestra
+
+# Baja de Wikimedia Commons una foto para cada repaso de muestra y las
+# deja en una RAMA APARTE, nunca en la de la aplicación.
+#
+# Ese detalle es el importante: así se pueden mirar una a una antes de
+# que lleguen a la app, y las que no valgan se quedan por el camino.
+# Desde este ordenador no se puede: su salida a internet está limitada
+# a unos pocos dominios y Commons no es uno.
+
+# Se dispara empujando su fichero-señal, como los demás robots: el
+# botón de «ejecutar a mano» de GitHub solo aparece para los flujos que
+# están en la rama principal, y esta aplicación vive en la suya.
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/uniq-repasos-app-2ja8y2]
+    paths: ['.github/LANZAR-FOTOS.txt']
+
+permissions:
+  contents: write
+
+jobs:
+  buscar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/uniq-repasos-app-2ja8y2
+
+      - name: Preparar Python
+        run: python3 -m pip install --quiet pillow
+
+      - name: Buscar y recortar las fotos
+        run: python3 .github/scripts/fotos-ejemplo.py
+
+      - name: Dejarlas en una rama aparte
+        run: |
+          set -eu
+          git config user.name  'Claude'
+          git config user.email 'noreply@anthropic.com'
+          git checkout -B claude/fotos-ejemplo
+          git add repasos/assets/ejemplos
+          if git diff --cached --quiet; then
+            echo "No se ha bajado ninguna foto nueva."
+            exit 0
+          fi
+          git commit -m "Fotos de muestra bajadas de Wikimedia Commons
+
+          Sin revisar todavía: esta rama existe para poder mirarlas antes
+          de que entren en la aplicación."
+          git push -f origin claude/fotos-ejemplo
+          echo "Listas en la rama claude/fotos-ejemplo."

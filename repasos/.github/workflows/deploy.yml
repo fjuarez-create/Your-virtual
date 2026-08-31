@@ -1,0 +1,111 @@
+name: Publicar en el hosting (FTP)
+
+# Publica UNIK repasos en su subdominio (p. ej. repasos.unikdi.com) en
+# cada push a main.
+#
+# Secretos necesarios (GitHub → Settings → Secrets and variables →
+# Actions → New repository secret):
+#   FTP_SERVER      host FTP del panel, p. ej. lin127.loading.es
+#   FTP_USERNAME    usuario FTP del subdominio
+#   FTP_PASSWORD    contraseña
+#   FTP_SERVER_DIR  (opcional) carpeta destino; vacío = se detecta httpdocs
+#
+# config.php y las carpetas api/uploads y api/datos viven solo en el
+# servidor: el despliegue ni los sube ni los borra.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: hosting
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      # El SHA del commit sella la versión en index.html y en sw.js. Al
+      # cambiar, el service worker tira su caché entera y no quedan
+      # mezclas de una versión con otra en el móvil de nadie.
+      - name: Sellar la versión
+        run: |
+          set -eu
+          BUILD="${GITHUB_SHA::8}"
+          sed -i "s/__BUILD__/${BUILD}/g" index.html sw.js
+          echo "Versión: ${BUILD}"
+
+      - name: Preparar carpeta de publicación
+        run: |
+          set -eu
+          rm -rf publish && mkdir publish
+          cp index.html sw.js manifest.webmanifest .htaccess publish/
+          cp -r css js assets publish/
+
+          # El backend, sin el ejemplo de configuración ni los datos.
+          mkdir -p publish/api
+          cp -r api/. publish/api/
+
+          # Las carpetas de fotos y de base de datos viajan VACÍAS pero
+          # CON su .htaccess: es el que impide que se pueda pedir una foto
+          # por su URL sin haber entrado en la app. Si se borraran enteras,
+          # PHP recrearía la carpeta al vuelo y quedaría abierta.
+          for carpeta in uploads datos; do
+            find "publish/api/$carpeta" -mindepth 1 \
+              ! -name '.htaccess' ! -name '.gitkeep' -delete 2>/dev/null || true
+          done
+          test -f publish/api/uploads/.htaccess || { echo "Falta el .htaccess de uploads." >&2; exit 1; }
+          test -f publish/api/datos/.htaccess   || { echo "Falta el .htaccess de datos." >&2; exit 1; }
+
+          rm -f publish/api/config.php publish/api/config.example.php
+
+          # tools/ y docs/ no se publican: son para trabajar en local.
+          du -sh publish
+          find publish -type f | wc -l
+
+      - name: Comprobar que no viaja ningún secreto
+        run: |
+          set -eu
+          if [ -f publish/api/config.php ]; then
+            echo "config.php no debe subirse nunca." >&2
+            exit 1
+          fi
+          if grep -rIl --exclude-dir=assets -E "password'\s*=>\s*'[^']+'" publish/api 2>/dev/null | grep -q .; then
+            echo "Hay credenciales en los ficheros a publicar." >&2
+            exit 1
+          fi
+          echo "Sin credenciales en la carpeta de publicación."
+
+      - name: Instalar lftp
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq lftp
+
+      - name: Subir código y backend
+        timeout-minutes: 12
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_SERVER_DIR: ${{ secrets.FTP_SERVER_DIR }}
+        run: bash .github/scripts/ftp-deploy.sh subir
+
+      - name: Subir index.html y sw.js
+        timeout-minutes: 5
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_SERVER_DIR: ${{ secrets.FTP_SERVER_DIR }}
+        run: bash .github/scripts/ftp-deploy.sh arranque
+
+      - name: Comprobar la subida
+        timeout-minutes: 6
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_SERVER_DIR: ${{ secrets.FTP_SERVER_DIR }}
+        run: bash .github/scripts/ftp-deploy.sh comprobar
