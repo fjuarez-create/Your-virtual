@@ -299,6 +299,18 @@ export async function render({ promoId, unidadId }) {
   return {
     sinTabs: true,
     clase: 'pantalla-diseno',
+    // «Nueva inspección» FLOTA sobre la lista con la mecánica del .fab
+    // (absoluto, hermano de la pantalla), en la zona del pulgar: se ve
+    // nada más entrar y acompaña todo el paseo, tenga la lista dos
+    // repasos o cuarenta (lo pidió la DF el primer día). Primero se
+    // probó pegado (sticky) dentro del scroll y el iPhone, con el
+    // desplazamiento con inercia, lo dejaba flotando a media pantalla
+    // partiendo tarjetas (foto de Fran): absoluto y fuera del scroll
+    // no puede pasarle. El colchón con-fab de app.css deja libre la
+    // caja de escribir del chat al llegar al fondo.
+    fab: puedeCrearLista(store.sesion())
+      ? h('button.fab.d-fab-negro', { onclick: nueva }, icon('plus'), 'Nueva inspección')
+      : null,
     contenido: [
       cabecera({
         volver: () => ir(conFiltros('#/viviendas', filtrosDeRuta())),
@@ -320,20 +332,6 @@ export async function render({ promoId, unidadId }) {
       h('div.d-fila-selector', null, desplegable, bolaFiltros),
       filtros,
       listado,
-
-      // El botón iba al pie de la lista con la teoría de que primero
-      // se mira y luego se apunta; el primer día de repasos reales la
-      // desmintió: con la lista larga quedaba a un túnel de scroll (lo
-      // avisó la DF). Ahora va PEGADO abajo mientras la lista está a
-      // la vista —en la mano durante todo el paseo, en la zona del
-      // pulgar— y al pasar de la lista se sienta en su sitio del
-      // flujo, para no tapar los verificados ni el chat. Pegado
-      // (sticky) y no flotante fijo: el fijo dentro de una pantalla
-      // animada ya mordió dos veces en esta app.
-      puedeCrearLista(store.sesion())
-        ? h('div.d-pie-placa.d-pie-vivienda', null,
-          h('button.d-boton-negro', { onclick: nueva }, icon('plus'), 'Nueva inspección'))
-        : null,
 
       bloqueVerificados,
 

@@ -2541,19 +2541,21 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 }
 /* El deshabilitado de crear es más suave que el de completar. */
 .d-pie-placa .d-boton-negro:disabled { background: var(--d-gris-suave); color: #d9d9d9; }
-/* El pie de la ficha de vivienda: «Nueva inspección» pegado abajo
-   mientras la lista está a la vista, y sentado en su sitio del flujo
-   después. Sobre el fondo gris la placa blanca parecería una tarjeta:
-   aquí, un fundido del propio fondo para que la lista no asome pura
-   por debajo del botón. El colchón de la barra de inicio del iPhone
-   va DENTRO: el sticky pega al borde del área desplazable y el
-   relleno de .screen ahí no cuenta. */
-.d-pie-vivienda {
-  margin: 8px calc(var(--pad) * -1) 0;
-  padding: 14px var(--pad) calc(env(safe-area-inset-bottom) + 12px);
-  background: linear-gradient(to top, var(--d-fondo) 72%, rgba(245, 245, 245, 0));
-  border-radius: 0;
+/* «Nueva inspección» flotando en la zona del pulgar: la mecánica del
+   .fab (absoluto, hermano de la pantalla) con la ropa del botón negro
+   del rediseño, a todo lo ancho. Primero fue un pie pegado (sticky)
+   dentro del scroll, y el iPhone, con la inercia, lo dejaba flotando
+   a media pantalla partiendo tarjetas. Los 12px son el respiro del
+   rediseño: el fab vive FUERA de .pantalla-diseno y su --pad de 12
+   no le llega. La sombra es obligada: flota sobre tarjetas blancas. */
+.fab.d-fab-negro {
+  left: 12px; right: 12px;
+  justify-content: center;
+  background: var(--d-tinta); color: #fff;
+  font: 500 16px/24px var(--d-font); letter-spacing: 0;
+  box-shadow: 0 10px 28px rgba(17, 17, 18, 0.28);
 }
+.fab.d-fab-negro:active { transform: scale(0.985); filter: none; background: #262626; }
 
 /* ─── El visor del recorrido con IA ─────────────────────────────
    Calcado del Figma: la cámara a pantalla completa, la tira de
