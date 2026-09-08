@@ -1,0 +1,18 @@
+# Las fotos y los vídeos solo se sirven a través de la API, que comprueba
+# la sesión. El acceso directo a esta carpeta queda cerrado.
+<IfModule mod_authz_core.c>
+  Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+  Order allow,deny
+  Deny from all
+</IfModule>
+
+# Aunque nunca debería llegar aquí un .php, si llegara no se ejecutaría.
+<IfModule mod_php.c>
+  php_flag engine off
+</IfModule>
+php_flag engine off
+
+Options -Indexes -ExecCGI
+AddType text/plain .php .phtml .php3 .php4 .php5 .php7 .php8 .phar

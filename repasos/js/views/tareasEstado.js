@@ -1,0 +1,321 @@
+/* El listado de tareas de la obra, calcado del Figma.
+
+   Aquí llegan las cuatro pastillas de la portada. Antes llevaban a una
+   lista de viviendas, y eso obligaba a entrar casa por casa a buscar lo
+   que ya te habían contado en la portada: si te dice que hay 16
+   completadas esperando visto, lo que quieres ver son esas 16, no las
+   nueve casas donde están repartidas.
+
+   Es una sola pantalla para los cuatro estados: el selector de arriba
+   cambia de uno a otro sin salir. Y los filtros solo ofrecen lo que
+   existe —si no queda nada de pladur, pladur no sale—, así que no se
+   puede llegar por descarte a una lista vacía.
+
+   El orden de serie es lo último arriba, como pidió el diseño; en el
+   menú están los otros dos: lo que más lleva esperando, para lo que se
+   pudre, y por vivienda, que convierte la lista en una ruta de obra. */
+import { h, icon, toast } from '../ui.js';
+import {
+  PROMOCIONES, promocion, unidad, unidades, oficio, estado, ESTADOS, OFICIOS, hecha,
+} from '../catalog.js';
+import * as store from '../store.js';
+import {
+  cabecera, tarjetaTarea, cuandoTarea, hojaFiltroTareas, menuFlotante, menuTarjeta, filaMenu,
+  avisoLocal, barraSync, entregarFichero,
+} from '../piezas.js';
+import { ir } from '../app.js';
+import { hojaDePuerta, nombreDeFichero } from '../pdf.js';
+
+/* La vista-suma «Por cerrar»: todo lo que aún no tiene el visto bueno
+   de la DF —pendientes, completados y rechazados juntos—. Es la cifra
+   de la tarjeta de portada, y aterrizar aquí es lo que hace honesto su
+   número: promete 2 y enseña 2. NO es un estado (los estados viven en
+   datos de producción y no se tocan): es una vista solo de esta
+   pantalla, con su fila primera en el selector. */
+const VISTA_SUMA = { id: 'por-cerrar', nombre: 'Por cerrar', plural: 'Por cerrar' };
+const vistaDe = (id) => (id === VISTA_SUMA.id ? VISTA_SUMA : estado(id));
+
+/** Lo que dice la pantalla cuando no hay ninguna, por estado. */
+const VACIO = {
+  resuelta: {
+    titulo: 'Ningún repaso completado',
+    frase: 'Cuando la obra dé un repaso por arreglado, aparecerá aquí para que le des el visto bueno.',
+    salida: { rotulo: 'Revisar repasos pendientes', estado: 'pendiente' },
+  },
+  verificada: {
+    titulo: 'Ningún repaso verificado',
+    frase: 'Aquí se irán guardando todas las que deis por buenas, de la primera a la última.',
+    salida: { rotulo: 'Ver lo que falta por verificar', estado: 'resuelta' },
+  },
+  rechazada: {
+    titulo: 'Ningún repaso rechazado',
+    frase: 'Nada devuelto a la obra ahora mismo. Cuando rechacéis una, aparece aquí hasta que la rehagan.',
+    salida: { rotulo: 'Revisar repasos completados', estado: 'resuelta' },
+  },
+  pendiente: {
+    // Ojo con prometer de más: «no queda trabajo» sería mentira si hay
+    // rechazados vivos, que también son trabajo de la obra.
+    titulo: 'Ningún repaso pendiente',
+    frase: 'Ningún repaso nuevo esperando a la obra. Los rechazados y los completados van en sus propias listas.',
+    salida: { rotulo: 'Ver todo lo por cerrar', estado: 'por-cerrar' },
+  },
+  'por-cerrar': {
+    // Sin presumir: puede que todo esté verificado o que todavía no
+    // haya ningún repaso apuntado. La frase vale para las dos cosas.
+    titulo: 'Nada por cerrar',
+    frase: 'Ningún repaso abierto ahora mismo. Lo que se apunte aparecerá aquí hasta quedar verificado.',
+    salida: { rotulo: 'Ver los verificados', estado: 'verificada' },
+  },
+};
+
+const ORDENES = [
+  { id: 'reciente', rotulo: 'Lo último arriba' },
+  { id: 'espera', rotulo: 'Lo que más lleva esperando' },
+  { id: 'vivienda', rotulo: 'Por vivienda' },
+];
+
+export async function render({ promoId, estadoId = 'resuelta' }) {
+  if (!promoId) {
+    const activas = PROMOCIONES.filter((x) => x.activa);
+    if (activas.length === 1) promoId = activas[0].id;
+    else { ir('#/promociones', { reemplazar: true }); return { contenido: [] }; }
+  }
+  const p = promocion(promoId);
+  if (!p) { toast('Promoción desconocida', 'err'); ir('#/', { reemplazar: true }); return { contenido: [] }; }
+  if (estadoId !== VISTA_SUMA.id && !ESTADOS.some((e) => e.id === estadoId)) estadoId = 'resuelta';
+
+  const todas = await store.tareasDeLaObra(promoId);
+
+  let filtroVivienda = '';
+  let filtroOficios = [];
+  let orden = 'reciente';
+
+  /* ─── Qué se ve con lo que hay puesto ─── */
+  // La vista-suma usa el MISMO listón que la tarjeta de portada
+  // (hecha, en catalog.js): si algún día cambia qué cuenta como hecho,
+  // las dos cifras se mueven juntas y no pueden volver a descuadrarse.
+  const enLaVista = (t, vistaId = estadoId) =>
+    (vistaId === VISTA_SUMA.id ? !hecha(t) : t.estado === vistaId);
+  const deEsteEstado = () => todas.filter((x) => enLaVista(x.tarea));
+  const visibles = () => {
+    let lista = deEsteEstado();
+    if (filtroVivienda) lista = lista.filter((x) => x.unidadId === filtroVivienda);
+    if (filtroOficios.length) lista = lista.filter((x) => filtroOficios.includes(x.tarea.oficio));
+    return ordenar(lista);
+  };
+  const ordenar = (lista) => {
+    const copia = [...lista];
+    if (orden === 'espera') return copia.sort((a, b) => String(a.cuando).localeCompare(String(b.cuando)));
+    if (orden === 'vivienda') {
+      return copia.sort((a, b) =>
+        String(a.unidadId).localeCompare(String(b.unidadId), 'es', { numeric: true })
+        || String(b.cuando).localeCompare(String(a.cuando)));
+    }
+    return copia.sort((a, b) => String(b.cuando).localeCompare(String(a.cuando)));
+  };
+
+  /* ─── Lo que se puede filtrar: solo lo que existe ───
+     Y se recalcula con lo ya elegido, para que ninguna combinación
+     lleve a una lista vacía. */
+  const viviendasLibres = () => {
+    const conTareas = new Set(deEsteEstado()
+      .filter((x) => !filtroOficios.length || filtroOficios.includes(x.tarea.oficio))
+      .map((x) => x.unidadId));
+    return unidades(promoId).filter((u) => conTareas.has(u.id)).map((u) => ({ id: u.id, nombre: u.nombre }));
+  };
+  const oficiosLibres = () => {
+    const conTareas = new Set(deEsteEstado()
+      .filter((x) => !filtroVivienda || x.unidadId === filtroVivienda)
+      .map((x) => x.tarea.oficio));
+    return OFICIOS.filter((o) => conTareas.has(o.id));
+  };
+
+  /* ─── La pantalla ─── */
+  // La suma va primera y con las mismas cuentas filtradas que las
+  // demás filas: así el propio menú enseña que Por cerrar = Pendientes
+  // + Completados + Rechazados, y ninguna cifra contradice a otra.
+  const selector = h('button.d-selector-estado', {
+    onclick: () => menuFlotante((cerrar) => [VISTA_SUMA, ...ESTADOS].map((e) => {
+      const n = todas.filter((x) => enLaVista(x.tarea, e.id)
+        && (!filtroVivienda || x.unidadId === filtroVivienda)
+        && (!filtroOficios.length || filtroOficios.includes(x.tarea.oficio))).length;
+      return filaMenu('listaChecks', `${e.plural} (${n})`, () => { cerrar(); cambiarEstado(e.id); });
+    }), { conX: true }),
+  }, h('span'), icon('caretAbajo'));
+
+  const bolaFiltros = h('button.d-bola-embudo', {
+    'aria-label': 'Filtrar repasos',
+    onclick: async () => {
+      const r = await hojaFiltroTareas({
+        vivienda: filtroVivienda,
+        oficios: filtroOficios,
+        viviendas: viviendasLibres(),
+        oficiosLibres: oficiosLibres(),
+      });
+      if (!r) return;
+      filtroVivienda = r.vivienda;
+      filtroOficios = r.oficios;
+      pintar();
+    },
+  }, icon('cursores'));
+
+  const filtros = h('div.d-filtros-tareas');
+  const cuantos = h('p.d-cuantos-filtros');
+  const lista = h('div.d-lista-tareas');
+
+  /**
+   * Al cambiar de estado se conservan los filtros que sigan teniendo
+   * sentido. Si la Villa 33 no tiene ninguna rechazada, ese filtro se
+   * cae solo: mantenerlo dejaría la pantalla en blanco sin explicar por
+   * qué, y quitarlos todos obligaría a ponerlos otra vez cada vez.
+   */
+  const cambiarEstado = (nuevo) => {
+    estadoId = nuevo;
+    const hayVivienda = viviendasLibres().some((v) => v.id === filtroVivienda);
+    if (filtroVivienda && !hayVivienda) filtroVivienda = '';
+    const libres = new Set(oficiosLibres().map((o) => o.id));
+    filtroOficios = filtroOficios.filter((id) => libres.has(id));
+    ir(`#/tareas/${estadoId}`, { reemplazar: true });
+    pintar();
+  };
+
+  const pintar = () => {
+    const items = visibles();
+    selector.querySelector('span').textContent = `${vistaDe(estadoId).plural} (${items.length})`;
+
+    // Las pastillas de lo aplicado, con su única X.
+    const piezas = [];
+    if (filtroVivienda) piezas.push(h('span.pastilla', null, unidad(filtroVivienda)?.nombre || 'Vivienda'));
+    for (const id of filtroOficios) piezas.push(h('span.pastilla', null, oficio(id).nombre));
+    if (piezas.length) {
+      piezas.push(h('button.quitar', {
+        'aria-label': 'Quitar los filtros',
+        onclick: () => { filtroVivienda = ''; filtroOficios = []; pintar(); },
+      }, icon('x')));
+    }
+    filtros.replaceChildren(...piezas);
+    filtros.style.display = piezas.length ? '' : 'none';
+    const n = piezas.length - 1;
+    cuantos.textContent = piezas.length ? `Has aplicado ${n} ${n === 1 ? 'filtro' : 'filtros'}` : '';
+    cuantos.style.display = piezas.length ? '' : 'none';
+
+    if (!items.length) { lista.replaceChildren(...pantallaVacia()); return; }
+    // En la vista mezclada cada tarjeta dice y COLOREA su estado
+    // (rechazada en rojo, completada en beige, lo pidió Fran): sin
+    // eso, una rechazada y una pendiente serían gemelas en la lista.
+    const mezclada = estadoId === VISTA_SUMA.id;
+    lista.replaceChildren(...items.map((x) => {
+      const u = unidad(x.unidadId);
+      const o = oficio(x.tarea.oficio);
+      return tarjetaTarea({
+        cuando: cuandoTarea(x.cuando),
+        quien: x.quien ? store.persona(null, x.quien) : null,
+        titulo: x.tarea.texto || 'Sin descripción',
+        villa: u?.nombre || 'Vivienda',
+        // Con tres chips el oficio va en corto («Puertas», no «Puertas
+        // de paso y entrada»): el nombre entero desborda la tarjeta.
+        chips: mezclada
+          ? [u?.nombre || 'Vivienda', o?.corto, estado(x.tarea.estado).nombre].filter(Boolean)
+          : null,
+        tono: !mezclada ? null
+          : x.tarea.estado === 'rechazada' ? 'rechazada'
+            : x.tarea.estado === 'resuelta' ? 'completada' : null,
+        // Ninguna tarjeta sin foto: si la tarea es vieja y no llegó a
+        // tener ninguna, la tarjeta enseña la cara del oficio. Es
+        // genérica y se reconoce como tal, que es justo lo que debe
+        // pasar: rellena el hueco sin hacerse pasar por el remate.
+        oficioObj: o,
+        foto: x.foto,
+        alPinchar: () => {
+          // De dónde venía, para volver aquí al verificar y seguir
+          // bajando por la lista sin dar atrás cada vez. Se apunta con
+          // la tarea a la que pertenece: si no, el rastro se queda
+          // pegado y la siguiente tarea que se abra desde la ficha de
+          // una vivienda acabaría soltando a quien la verifica en esta
+          // lista, que no es de donde venía.
+          try {
+            sessionStorage.setItem('lista-tareas-desde',
+              JSON.stringify({ tareaId: x.tarea.id, ruta: `#/tareas/${estadoId}` }));
+          } catch { /* modo privado */ }
+          ir(`#/l/${x.tarea.listaId}/t/${x.tarea.id}`);
+        },
+      });
+    }));
+  };
+
+  /** Sin ninguna: el porqué y, al final de la página, una salida útil.
+
+      Sin ilustración y sin trucos de posicionamiento: el botón iba
+      antes clavado con `position: fixed`, y dentro de una pantalla
+      animada el «fixed» se queda atrapado por el ancestro y aterriza
+      en mitad de la página, pisando el texto —así se vio en el móvil—.
+      Ahora todo va en el flujo: título, subtítulo y el botón abajo,
+      empujado por el propio alto de la caja. */
+  const pantallaVacia = () => {
+    const hayFiltros = !!filtroVivienda || filtroOficios.length > 0;
+    const v = VACIO[estadoId];
+    const [titulo, frase, rotulo, accion] = hayFiltros
+      ? ['Ningún repaso con estos filtros', 'Prueba a quitar alguno para ver el resto.',
+        'Quitar los filtros', () => { filtroVivienda = ''; filtroOficios = []; pintar(); }]
+      : [v.titulo, v.frase, v.salida.rotulo, () => cambiarEstado(v.salida.estado)];
+    return [
+      h('div.d-vacio', null,
+        h('h2', null, titulo),
+        h('p', null, frase),
+        h('button.d-boton-topo', { onclick: accion }, rotulo)),
+    ];
+  };
+
+  /* ─── El menú de los tres puntos ─── */
+  const menu = async () => {
+    const elegido = await menuTarjeta('Repasos', [
+      ...ORDENES.map((o) => ({
+        id: `orden:${o.id}`,
+        icono: orden === o.id ? 'check' : 'listaChecks',
+        rotulo: o.rotulo,
+      })),
+      { id: 'pdf', icono: 'download', rotulo: 'Bajar la lista en PDF' },
+    ]);
+    if (!elegido) return;
+    if (elegido === 'pdf') { bajarPdf(); return; }
+    orden = elegido.replace('orden:', '');
+    pintar();
+  };
+
+  const bajarPdf = () => {
+    const items = visibles();
+    if (!items.length) { toast('No hay nada que bajar'); return; }
+    const rotulo = vistaDe(estadoId).plural;
+    const blob = hojaDePuerta({
+      vivienda: `Repasos ${rotulo.toLowerCase()}`,
+      promocion: p.nombre,
+      fecha: new Date().toLocaleDateString('es-ES'),
+      autor: store.sesion()?.nombre || '',
+      // Cada línea lleva su casa delante: la lista mezcla las cincuenta
+      // y en papel no hay chip que lo diga.
+      tareas: items.map((x) => ({
+        texto: `${unidad(x.unidadId)?.nombre || ''} · ${x.tarea.texto || 'Sin descripción'}`,
+        estado: x.tarea.estado,
+      })),
+    });
+    // La hoja de la casa y no un enlace de descarga: en el iPhone
+    // instalado como app el enlace no enseña nada por ningún lado.
+    const nombre = nombreDeFichero(`tareas-${rotulo}`, new Date().toLocaleDateString('es-ES'));
+    entregarFichero(new File([blob], nombre, { type: 'application/pdf' }), nombre);
+  };
+
+  pintar();
+
+  return {
+    sinTabs: true,
+    clase: 'pantalla-diseno',
+    contenido: [
+      cabecera({ volver: '#/', titulo: 'Repasos', menu }),
+      avisoLocal() || barraSync(),
+      h('div.d-fila-filtro', null, selector, bolaFiltros),
+      filtros,
+      cuantos,
+      lista,
+    ],
+  };
+}

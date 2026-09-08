@@ -1,0 +1,171 @@
+name: Fotografiar el diseño de Figma
+
+# Abre el visor público del archivo de Figma —Fran compartió el enlace
+# de incrustación, así que el archivo se puede ver sin cuenta— y saca
+# una foto de cada pantalla con un navegador de verdad.
+#
+# Existe porque la máquina donde se desarrolla tiene Figma cerrado por
+# red, y las de GitHub no. No necesita ningún token: usa el mismo visor
+# público que vería cualquiera con el enlace.
+#
+# Deja las capturas en diseno-figma/capturas/ y las empuja a la rama;
+# esa carpeta está fuera de repasos/, así que no dispara publicación.
+#
+# Si además está el secreto FIGMA_TOKEN, el flujo hermano
+# (figma-bajar.yml) baja el JSON exacto y las imágenes sueltas; este da
+# la capa visual y aquel, los números finos.
+
+# Los flujos que solo viven en esta rama no se pueden lanzar a mano por
+# la API —GitHub solo registra los de la rama principal—, así que este
+# se dispara al empujar su fichero-señal, que sí funciona en cualquier
+# rama.
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/uniq-repasos-app-2ja8y2]
+    paths: ['diseno-figma/LANZAR-CAPTURAS.txt']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: figma-capturar-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fotografiar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Traer el repositorio
+        uses: actions/checkout@v4
+
+      - name: Preparar el navegador
+        run: |
+          npm init -y >/dev/null
+          npm i playwright@1 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+
+      - name: Fotografiar cada pantalla
+        run: |
+          mkdir -p diseno-figma/capturas
+          cat > fotografiar.mjs <<'GUION'
+          import { chromium } from 'playwright';
+          import fs from 'fs';
+
+          const ARCHIVO = 'VlGqIJA4ZR7e8vmvELKPsB';
+          // Las pantallas del archivo, con su identificador y su nombre.
+          const PANTALLAS = [
+            ['5:12139', 'splash'],
+            ['2070:15536', 'home-tecnicos'],
+            ['2070:15747', 'home-constructora'],
+            ['2075:10806', 'viviendas-inacabadas'],
+            ['2079:13819', 'viviendas-terminadas'],
+            ['2093:17219', 'filtros-finalizadas'],
+            ['2093:25173', 'filtros-inacabadas'],
+            ['2103:27795', 'filtro-abierto'],
+            ['2105:19080', 'filtro-buscando-pladur'],
+            ['2071:8662', 'detalle-vivienda'],
+            ['2093:25786', 'detalle-vivienda-medio'],
+            ['2093:26070', 'detalle-vivienda-avanzada'],
+            ['2114:31310', 'nueva-inspeccion'],
+            ['2114:31918', 'nueva-foto'],
+            ['2129:33627', 'nueva-galeria'],
+            ['2129:34289', 'recorrido-ia'],
+            ['2129:34579', 'recorrido-popup'],
+            ['2129:34359', 'recorrido-fotogramas'],
+            ['2129:34399', 'recorrido-fotogramas-mas'],
+            ['2129:34627', 'recorrido-finalizar'],
+            ['2129:34669', 'recorrido-validar'],
+            ['2129:35828', 'recorrido-validar-eliminada'],
+            ['2129:36376', 'recorrido-validar-nueva-foto'],
+            ['2129:36158', 'recorrido-validar-2'],
+            ['2129:35588', 'recorrido-validar-ultima'],
+            ['2045:10272', 'tarea-creando-1'],
+            ['2129:33734', 'tarea-creando-2'],
+            ['2114:32994', 'tarea-a-mano'],
+            ['2129:33957', 'tarea-a-mano-2'],
+            ['2114:33358', 'tarea-anadiendo-multimedia'],
+            ['2129:34061', 'tarea-anadiendo-multimedia-2'],
+            ['2114:33501', 'tarea-multimedia'],
+            ['2129:34179', 'tarea-multimedia-2'],
+            ['2125:11553', 'tarea-confirmar-eliminar-foto'],
+            ['2129:33838', 'tarea-confirmar-eliminar-foto-2'],
+            ['2129:36657', 'tarea-viendo'],
+            ['2129:37393', 'tarea-viendo-2'],
+            ['2129:37602', 'tarea-mensaje'],
+            ['2129:37810', 'tarea-completar'],
+            ['2129:36942', 'tarea-editando'],
+            ['2129:38279', 'tarea-editando-fotos'],
+            ['2129:38466', 'tarea-finalizada'],
+          ];
+
+          const nav = await chromium.launch({ args: [
+            '--no-sandbox', '--enable-unsafe-swiftshader',
+            '--use-gl=angle', '--use-angle=swiftshader',
+          ] });
+          const ctx = await nav.newContext({
+            viewport: { width: 760, height: 1700 },
+            deviceScaleFactor: 2,
+          });
+
+          let bien = 0;
+          const fallos = [];
+
+          /** Una pantalla, con un solo reintento si el visor no pinta. */
+          async function fotografiar([id, nombre], intento = 1) {
+            const p = await ctx.newPage();
+            try {
+              const url = `https://embed.figma.com/design/${ARCHIVO}/UNIK-repasos`
+                + `?node-id=${id.replace(':', '-')}&embed-host=share&hide-ui=1`;
+              await p.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+              await p.waitForSelector('canvas', { timeout: 25000 });
+              await p.waitForTimeout(6000);
+              await p.screenshot({ path: `diseno-figma/capturas/${nombre}--${id.replace(':', '-')}.png` });
+              bien++;
+              console.log(`✓ ${bien} · ${nombre}`);
+            } catch (e) {
+              if (intento === 1) {
+                console.log(`↻ reintento · ${nombre}`);
+                await p.close();
+                return fotografiar([id, nombre], 2);
+              }
+              fallos.push(nombre);
+              console.log(`✗ ${nombre}: ${String(e).slice(0, 100)}`);
+            } finally {
+              try { await p.close(); } catch { /* ya cerrada */ }
+            }
+          }
+
+          // Tres a la vez: el visor tarda unos segundos por pantalla y en
+          // fila india no se llega dentro del tiempo del trabajo.
+          const cola = [...PANTALLAS];
+          await Promise.all(Array.from({ length: 3 }, async () => {
+            while (cola.length) await fotografiar(cola.shift());
+          }));
+          await nav.close();
+          console.log(`\n${bien} capturas de ${PANTALLAS.length}` + (fallos.length ? ` · fallaron: ${fallos.join(', ')}` : ''));
+          fs.writeFileSync('diseno-figma/capturas/RESUMEN.txt',
+            `${bien} de ${PANTALLAS.length}\n` + (fallos.length ? `fallaron: ${fallos.join(', ')}\n` : ''));
+          // Si no salió ninguna, que el flujo falle a la vista.
+          if (!bien) process.exit(1);
+          GUION
+          node fotografiar.mjs
+
+      - name: Guardar las capturas en la rama
+        # Pase lo que pase con el carrete: veinte fotos de cuarenta y dos
+        # valen veinte fotos, no cero.
+        if: always()
+        run: |
+          git config user.name "Robot de Figma"
+          git config user.email "noreply@unikdi.com"
+          git add diseno-figma/
+          if git diff --cached --quiet; then
+            echo "Nada nuevo que guardar."
+            exit 0
+          fi
+          git commit -m "Fotografiar el diseño de Figma desde el visor público"
+          # La rama puede haberse movido mientras se fotografiaba; el
+          # robot se incorpora encima de lo nuevo en vez de chocar.
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push

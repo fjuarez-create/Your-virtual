@@ -1,0 +1,6 @@
+# Fastlane es lo que sabe hablar con Apple: crear el certificado y el
+# perfil, firmar y subir a TestFlight. Se fija la versión mayor para que
+# una actualización suya no rompa un despliegue un martes por la tarde.
+source "https://rubygems.org"
+
+gem "fastlane", "~> 2.220"

@@ -1,0 +1,414 @@
+#!/usr/bin/env bash
+#
+# Sube UNIK repasos al subdominio por FTP.
+#
+#   ftp-deploy.sh destino    comprueba que la carpeta es la de repasos
+#   ftp-deploy.sh subir      todo menos index.html y sw.js
+#   ftp-deploy.sh arranque   index.html y sw.js, al final del todo
+#   ftp-deploy.sh comprobar  verifica que lo esencial está arriba
+#
+# El orden importa: index.html y sw.js son los que declaran la versión
+# nueva. Si subieran primero, un móvil podría pedir un módulo que aún no
+# está en el servidor.
+#
+# Lo que NUNCA se toca en el servidor:
+#   api/config.php     credenciales de la base de datos
+#   api/uploads/       fotos, vídeos y audios de los repasos
+#   api/datos/         base de datos SQLite, si se usa ese motor
+# Por eso el espejo va carpeta por carpeta y api/ se sube sin --delete.
+#
+# Variables (secretos del repositorio):
+#   FTP_SERVER, FTP_USERNAME, FTP_PASSWORD
+#   FTP_SERVER_DIR (opcional)
+
+set -eu
+
+QUE="${1:?uso: ftp-deploy.sh subir|arranque|comprobar}"
+
+for nombre in FTP_SERVER FTP_USERNAME FTP_PASSWORD; do
+  eval "valor=\${$nombre:-}"
+  if [ -z "$valor" ]; then
+    echo "Falta el secreto $nombre en el repositorio." >&2
+    exit 1
+  fi
+done
+
+AJUSTES='
+  set ftp:passive-mode true;
+  set net:timeout 20;
+  set net:max-retries 3;
+  set net:reconnect-interval-base 4;
+  set mirror:parallel-transfer-count 6;
+  set xfer:clobber on;
+  set cmd:fail-exit true;
+'
+# El canal de CONTROL, por donde viaja la contraseña, va cifrado siempre.
+# El de DATOS va en claro porque Plesk cortaba la conexión al renegociar
+# TLS en cada fichero, y por ahí solo pasan los ficheros públicos de la
+# app. Esa distinción es deliberada; lo que no se admite es mandar las
+# credenciales en claro.
+CIFRADO="set ftp:ssl-allow true; set ftp:ssl-force true;"
+# Con el canal de datos cifrado se renegocia TLS en cada fichero, y eso es
+# lo que en su día hacía que Plesk cortara la conexión; por eso van menos
+# ficheros a la vez en este modo. Más lento, pero entero.
+DATOS_CIFRADOS="set ftp:ssl-protect-data true; set mirror:parallel-transfer-count 2;"
+DATOS_EN_CLARO="set ftp:ssl-protect-data false;"
+
+TLS_VERIFICADO="$AJUSTES set ssl:verify-certificate yes; $CIFRADO $DATOS_CIFRADOS"
+TLS_VERIFICADO_CLARO="$AJUSTES set ssl:verify-certificate yes; $CIFRADO $DATOS_EN_CLARO"
+TLS_SIN_VERIFICAR="$AJUSTES set ssl:verify-certificate no; $CIFRADO $DATOS_CIFRADOS"
+TLS_SIN_VERIFICAR_CLARO="$AJUSTES set ssl:verify-certificate no; $CIFRADO $DATOS_EN_CLARO"
+PLANO="$AJUSTES set ssl:verify-certificate no; set ftp:ssl-allow false;"
+
+lanzar() {
+  lftp <<FIN
+$1
+open -u "$FTP_USERNAME","$FTP_PASSWORD" "$FTP_SERVER"
+$2
+bye
+FIN
+}
+
+# ¿Sirve este modo de conexión de verdad?
+#
+# La sonda LISTA una carpeta, y no es un capricho: entrar solo usa el
+# canal de control, pero listar y subir ficheros van por el canal de
+# DATOS, que es otro y puede estar cortado estando el primero perfecto.
+# Antes se sondeaba con «pwd», que solo toca el control, y por eso el
+# despliegue elegía un modo con el que se podía entrar pero no mover ni
+# un byte: el hosting apretó las tuercas de la cuenta, el canal de datos
+# dejó de pasar, y en el log salía «la carpeta está vacía» —que es lo que
+# parece una carpeta que no se deja listar—.
+#
+# Se sonda con poca paciencia (un intento, diez segundos) para que
+# descartar cuatro modos cueste segundos y no cinco minutos.
+sirve() {
+  salida=$(lanzar "$1 set net:max-retries 1; set net:timeout 10;" "cls -1" 2>&1) || return 1
+  case "$salida" in *"Fatal error"* | *"Login failed"* | *"not allowed"*) return 1 ;; esac
+  return 0
+}
+
+# Nunca se baja a FTP en claro por su cuenta: una sonda fallida por un
+# corte de red bastaría para mandar la contraseña del hosting por
+# Internet en texto plano, y con ella se lee api/config.php, que trae las
+# credenciales de la base de datos.
+#
+# El orden va de más protegido a menos, y el canal de datos cifrado se
+# prueba PRIMERO: si el hosting endurece la cuenta —lo típico después de
+# un aviso de seguridad—, lo que empieza a exigir es justo eso.
+if sirve "$TLS_VERIFICADO"; then
+  OPC="$TLS_VERIFICADO"
+  echo "Conexión cifrada de punta a punta, con el certificado verificado."
+elif sirve "$TLS_VERIFICADO_CLARO"; then
+  OPC="$TLS_VERIFICADO_CLARO"
+  echo "Conexión cifrada con el certificado verificado; los ficheros viajan en claro."
+elif sirve "$TLS_SIN_VERIFICAR"; then
+  OPC="$TLS_SIN_VERIFICAR"
+  echo "AVISO: no se ha podido verificar el certificado del servidor FTP."
+  echo "       La contraseña y los ficheros siguen cifrados."
+elif sirve "$TLS_SIN_VERIFICAR_CLARO"; then
+  OPC="$TLS_SIN_VERIFICAR_CLARO"
+  echo "AVISO: no se ha podido verificar el certificado del servidor FTP."
+  echo "       La contraseña sigue cifrada; los ficheros viajan en claro."
+elif [ "${FTP_PERMITIR_PLANO:-}" = "1" ] && sirve "$PLANO"; then
+  OPC="$PLANO"
+  echo "AVISO: FTP SIN CIFRAR. Permitido a propósito con FTP_PERMITIR_PLANO=1."
+else
+  echo "Ningún modo de conexión sirve para listar el servidor." >&2
+  echo "" >&2
+  echo "Se puede entrar o no —eso lo dice el detalle de abajo—, pero por el" >&2
+  echo "canal de datos no pasa nada, que es por donde van los ficheros." >&2
+  echo "Suele ser el cortafuegos del hosting: puertos de modo pasivo" >&2
+  echo "cerrados, o la IP del robot bloqueada tras un aviso de seguridad." >&2
+  echo "" >&2
+  echo "Esto es lo que contesta el servidor en cada modo:" >&2
+  for modo in "TLS_VERIFICADO" "TLS_VERIFICADO_CLARO" "TLS_SIN_VERIFICAR" "TLS_SIN_VERIFICAR_CLARO"; do
+    eval "ajustes=\$$modo"
+    echo "  ── $modo" >&2
+    lanzar "$ajustes set net:max-retries 1; set net:timeout 10;" "cls -1" 2>&1 \
+      | head -6 | sed 's/^/       /' >&2 || true
+  done
+  exit 1
+fi
+
+# ¿Hay una instalación de UNIK repasos en esta carpeta? api/config.php lo
+# escribe el instalador y no viaja nunca en el despliegue, así que su
+# presencia es la huella de que esto es la casa y no la del vecino.
+hay_instalacion() {
+  [ "$(lanzar "$OPC" "cd \"$1\"; cls -1 \"api/config.php\"" 2>/dev/null | grep -c . || true)" -ge 1 ]
+}
+
+# Lista una carpeta remota, sin ruido.
+listar() {
+  lanzar "$OPC" "cd \"$1\"; cls -1" 2>/dev/null | tr -d '\r' | sed 's#/$##' | grep . || true
+}
+
+DIR="${FTP_SERVER_DIR:-}"
+case "$DIR" in "" | "." | "./") DIR="" ;; esac
+
+# Sin carpeta escrita a mano, se busca.
+#
+# Antes esto solo miraba si existía «httpdocs» y, si no, se plantaba en la
+# raíz de la sesión. Con eso bastaba mientras la cuenta FTP entrara siempre
+# por el mismo sitio; el día que el hosting la recreó apuntando a otro
+# lado, el despliegue se paró en seco sin más pista que «la carpeta está
+# vacía» —y arreglarlo pedía entrar al panel a mirar rutas—.
+#
+# Ahora se recorren los sitios donde suele estar una web —la propia raíz,
+# los nombres habituales, y un nivel de subcarpetas— hasta dar con la que
+# tiene la huella. Buscar es de solo lectura: no escribe nada, así que no
+# puede romper nada. Y como la condición para aceptar una carpeta es la
+# misma que exige el guardián de más abajo, esto no relaja la seguridad:
+# solo le ahorra a alguien tener que averiguar la ruta a mano.
+if [ -z "$DIR" ] && [ "${PRIMERA_INSTALACION:-}" != "true" ]; then
+  RAIZ=$(listar ".")
+  CANDIDATAS=". httpdocs public_html www web htdocs"
+  for sub in $RAIZ; do
+    case "$sub" in logs | tmp | anon_ftp | error_docs | .well-known | cgi-bin) continue ;; esac
+    CANDIDATAS="$CANDIDATAS $sub $sub/httpdocs $sub/public_html"
+  done
+  for c in $CANDIDATAS; do
+    if hay_instalacion "$c"; then
+      DIR="$c"
+      echo "Instalación de UNIK repasos encontrada en «$c»."
+      break
+    fi
+  done
+fi
+
+# Ni escrita ni encontrada: se vuelve a lo de siempre y que decida el
+# guardián. En una primera instalación de verdad es lo correcto.
+if [ -z "$DIR" ]; then
+  if printf '%s\n' "$(listar '.')" | grep -qx httpdocs; then
+    DIR=httpdocs
+  else
+    DIR=.
+  fi
+fi
+echo "Carpeta destino: $DIR"
+
+contar_remoto() {
+  lanzar "$OPC" "cd \"$DIR\"; cls -1 \"$1\"" 2>/dev/null | grep -c . || true
+}
+
+case "$QUE" in
+  destino)
+    # El mismo hosting alberga otros sitios, y el peor accidente posible
+    # es publicar aquí encima de otro. Así que antes de escribir nada hay
+    # que saber dónde se escribe. «Primera instalación» NO exime de esta
+    # comprobación: cambia lo que hay que demostrar, y a algo más
+    # estricto —que la carpeta esté vacía de verdad—, no a nada.
+    LISTADO=$(lanzar "$OPC" "cd \"$DIR\"; cls -1" 2>/dev/null | tr -d '\r' | sed 's#/$##' | grep . || true)
+
+    if [ "${PRIMERA_INSTALACION:-}" = "true" ]; then
+      # Plesk deja sus propias carpetas de servicio en un subdominio recién
+      # creado; esas no cuentan como «ocupado».
+      AJENOS=$(printf '%s\n' "$LISTADO" | grep -vx -e 'logs' -e 'tmp' -e 'anon_ftp' -e 'error_docs' -e '.well-known' || true)
+      if [ -z "$AJENOS" ]; then
+        echo "Destino vacío: «$DIR» está listo para la primera instalación."
+      else
+        echo "" >&2
+        echo "PARO ANTES DE TOCAR NADA." >&2
+        echo "Has marcado «primera instalación», pero «$DIR» NO está vacía:" >&2
+        printf '%s\n' "$AJENOS" | sed 's/^/    /' >&2
+        echo "" >&2
+        echo "Si UNIK repasos ya está instalado ahí, lanza el despliegue normal," >&2
+        echo "SIN marcar la casilla." >&2
+        echo "Si eso de arriba es OTRO sitio web, los secretos REPASOS_FTP_*" >&2
+        echo "apuntan donde no deben y publicar aquí lo habría borrado." >&2
+        exit 1
+      fi
+    elif [ "$(contar_remoto "api/config.php")" -ge 1 ]; then
+      # api/config.php lo crea el instalador y no viaja nunca en el
+      # despliegue: es una señal que solo existe en esta instalación.
+      echo "Destino correcto: «$DIR» es una instalación de UNIK repasos."
+    else
+      echo "" >&2
+      echo "PARO ANTES DE TOCAR NADA." >&2
+      echo "En «$DIR» no hay api/config.php, así que no parece la carpeta de" >&2
+      echo "UNIK repasos. Casi siempre esto es un problema de credenciales:" >&2
+      echo "comprueba que REPASOS_FTP_USERNAME sea el usuario FTP DEL SUBDOMINIO" >&2
+      echo "de repasos y no el de otro sitio del mismo hosting, y revisa" >&2
+      echo "REPASOS_FTP_SERVER_DIR." >&2
+      echo "" >&2
+      echo "Esto es lo que hay ahora mismo en «$DIR»:" >&2
+      if [ -n "$LISTADO" ]; then
+        printf '%s\n' "$LISTADO" | sed 's/^/    /' >&2
+      else
+        echo "    (vacía)" >&2
+        echo "" >&2
+        echo "Al estar vacía, si de verdad es la primera instalación puedes lanzar" >&2
+        echo "el workflow a mano marcando «primera_instalacion»." >&2
+      fi
+
+      # El plano de lo que se ve desde esta cuenta.
+      #
+      # Ya se ha buscado la instalación por las carpetas habituales y no
+      # estaba, así que lo que queda es enseñar el terreno: dónde entra la
+      # sesión y qué cuelga de ahí, dos niveles. Con eso se sabe si la
+      # cuenta apunta a otro sitio o si de verdad no ve la web, que son dos
+      # problemas distintos y se arreglan de manera distinta.
+      #
+      # Va con los errores a la vista —sin 2>/dev/null— porque una carpeta
+      # que no se deja listar y una carpeta vacía se cuentan igual y no son
+      # lo mismo: si el servidor está diciendo «permiso denegado», eso es
+      # justo lo que hay que leer.
+      echo "" >&2
+      echo "─── Lo que ve esta cuenta FTP ───" >&2
+      echo "Por dónde entra la sesión:" >&2
+      lanzar "$OPC" "pwd" 2>&1 | sed 's/^/    /' >&2
+      echo "Raíz de la sesión:" >&2
+      RAIZ_VISTA=$(lanzar "$OPC" "cls -1" 2>&1 | tr -d '\r' | sed 's#/$##' | grep . || true)
+      if [ -z "$RAIZ_VISTA" ]; then
+        echo "    (no se ve nada, ni siquiera un error)" >&2
+      elif printf '%s' "$RAIZ_VISTA" | grep -q "Fatal error\|Access failed\|not allowed"; then
+        # Lo que ha vuelto no es una lista de carpetas, es una queja del
+        # servidor. Se enseña tal cual y no se entra en nada: recorrerla
+        # como si fueran nombres llevaba a pedir «cd Fatal», «cd error:»…
+        # y cada uno de esos intentos se comía su minuto de reintentos
+        # hasta agotar el tiempo del paso. Cinco minutos para no decir
+        # nada.
+        echo "    El servidor no deja listar. Contesta esto:" >&2
+        printf '%s\n' "$RAIZ_VISTA" | head -6 | sed 's/^/      /' >&2
+      else
+        printf '%s\n' "$RAIZ_VISTA" | sed 's/^/    /' >&2
+        for sub in $RAIZ_VISTA; do
+          case "$sub" in logs | tmp | anon_ftp | error_docs | cgi-bin) continue ;; esac
+          echo "    $sub/" >&2
+          lanzar "$OPC" "cd \"$sub\"; cls -1" 2>&1 | tr -d '\r' | sed 's#/$##' \
+            | grep . | head -25 | sed 's/^/        /' >&2 || true
+        done
+      fi
+      exit 1
+    fi
+    ;;
+
+  subir)
+    # Las páginas sueltas de la raíz —la de privacidad hoy, las que
+    # vengan mañana— se suben todas, sin lista escrita a mano. La de
+    # privacidad se quedó en tierra el día que se escribió porque aquí
+    # solo estaban nombrados el manifiesto y el .htaccess, y una página
+    # que Apple exige leer no puede depender de que alguien se acuerde.
+    #
+    # index.html no va aquí: sube el último, en «arranque», junto al
+    # service worker, para que ningún navegador se encuentre el índice
+    # nuevo antes que el código nuevo.
+    PAGINAS=""
+    for f in publish/*.html; do
+      [ -e "$f" ] || continue
+      n=$(basename "$f")
+      [ "$n" = index.html ] && continue
+      PAGINAS="$PAGINAS
+      put \"publish/$n\" -o \"$n\";"
+      echo "página suelta: $n"
+    done
+
+    lanzar "$OPC" "cd \"$DIR\";
+      mirror -R --transfer-all --delete --no-perms -v publish/css css;
+      mirror -R --transfer-all --delete --no-perms -v publish/js js;
+      mirror -R --transfer-all --delete --no-perms -v publish/assets assets;
+      mirror -R --transfer-all --no-perms -v publish/api api;
+      put publish/manifest.webmanifest -o manifest.webmanifest;
+      put publish/.htaccess -o .htaccess;$PAGINAS"
+    ;;
+
+  limpiar)
+    # api/ se sube sin --delete para no rozar las fotos ni config.php, así
+    # que lo que se retira del repositorio hay que retirarlo a mano.
+    #
+    # Estas dos páginas crean usuarios y tocan la base de datos SIN pedir
+    # contraseña, así que aquí no vale con intentarlo: hay que comprobar
+    # que ya no están. Y «no las veo» solo cuenta si de verdad se ha
+    # podido preguntar: un corte de FTP no puede pasar por «no estaban».
+    listar_api() {
+      lanzar "$OPC" "cd \"$DIR\"; cls -1 api/" 2>/dev/null | tr -d '\r' | sed 's#/$##; s#.*/##' | grep . || true
+    }
+
+    EN_API=$(listar_api)
+    if [ -z "$EN_API" ]; then
+      echo "No he podido listar api/ en el servidor, así que no puedo asegurar" >&2
+      echo "que las páginas de instalación no estén publicadas. Paro." >&2
+      exit 1
+    fi
+
+    # revision-cuenta.php entra en la lista solo cuando el despliegue NO
+    # lo ha generado, o sea cuando se han quitado los secretos. Eso es lo
+    # que cierra la cuenta de la revisión de Apple: se borra el fichero
+    # del servidor y, al siguiente arranque, la cuenta se desactiva sola.
+    A_RETIRAR="actualizar.php install.php"
+    if [ -f publish/api/revision-cuenta.php ]; then
+      echo "la cuenta de revisión sigue publicada (hay secretos)"
+    else
+      A_RETIRAR="$A_RETIRAR revision-cuenta.php"
+    fi
+
+    for f in $A_RETIRAR; do
+      if ! printf '%s\n' "$EN_API" | grep -qx "$f"; then
+        echo "no estaba  api/$f"
+        continue
+      fi
+      lanzar "$OPC" "cd \"$DIR\"; rm -f \"api/$f\";" >/dev/null 2>&1 || true
+
+      QUEDA=$(listar_api)
+      if [ -z "$QUEDA" ] || printf '%s\n' "$QUEDA" | grep -qx "$f"; then
+        echo "" >&2
+        echo "NO he podido quitar api/$f del servidor." >&2
+        if [ "$f" = revision-cuenta.php ]; then
+          echo "Ese fichero lleva la contraseña de la cuenta de revisión de Apple," >&2
+          echo "y mientras siga ahí la cuenta se queda abierta." >&2
+        else
+          echo "Esa página crea usuarios y enseña sus contraseñas sin pedir nada," >&2
+          echo "y está publicada." >&2
+        fi
+        echo "Bórralo a mano por FTP antes de seguir." >&2
+        exit 1
+      fi
+      echo "retirado   api/$f"
+    done
+    ;;
+
+  arranque)
+    # Los dos ficheros que hacen que el navegador descubra la versión nueva.
+    lanzar "$OPC" "cd \"$DIR\";
+      put publish/sw.js -o sw.js;
+      put publish/index.html -o index.html;"
+    ;;
+
+  comprobar)
+    echo "Contenido de $DIR:"
+    lanzar "$OPC" "cd \"$DIR\"; cls -1" 2>/dev/null | sed 's/^/  /'
+
+    fallos=0
+    # Las tres páginas sueltas entran en la lista a propósito: son las
+    # que Apple tiene que poder leer para dejar la app en la tienda, y
+    # sus direcciones están escritas en la ficha. Si un día dejan de
+    # subir, que se entere el despliegue y no el revisor.
+    for f in index.html sw.js manifest.webmanifest \
+             privacidad.html soporte.html marketing.html \
+             assets/marketing/inicio.jpg \
+             css/app.css js/app.js js/store.js \
+             api/index.php api/lib/nucleo.php assets/fonts/opensans-var.woff2; do
+      if [ "$(contar_remoto "$f")" -ge 1 ]; then
+        echo "ok     $f"
+      else
+        echo "FALTA  $f"
+        fallos=$((fallos + 1))
+      fi
+    done
+
+    locales=$(find publish/js -type f | wc -l)
+    remotos=$(contar_remoto "js/views")
+    echo "js/views: $remotos ficheros en el servidor (local total js: $locales)"
+
+    if [ "$fallos" -gt 0 ]; then
+      echo "La subida está incompleta: faltan $fallos ficheros." >&2
+      exit 1
+    fi
+    echo "Todo subido."
+    ;;
+
+  *)
+    echo "Parte desconocida: $QUE" >&2
+    exit 1
+    ;;
+esac

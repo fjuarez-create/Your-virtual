@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>UNIK Works</title>
+<!-- minimum-scale=1 es lo que impide que el pellizco encoja la página.
+     Sin él el mínimo por defecto es 0,25: maximum-scale solo cerraba la
+     puerta de agrandar y la de empequeñecer se quedaba abierta. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="description" content="UNIK Works: los repasos de obra de las viviendas de UNIK, con su foto y su responsable.">
+<meta name="robots" content="noindex, nofollow">
+
+<!-- Aspecto de app instalada -->
+<meta name="theme-color" content="#ffffff">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="UNIK Works">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/icons/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+<link rel="preload" href="assets/fonts/neue-haas-display-roman.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="css/app.css?v=__BUILD__">
+
+<!-- Dirección del backend. Vacía = modo local: la app funciona igual pero los
+     datos se quedan en este dispositivo. Al publicar en el hosting con la API
+     PHP en la misma carpeta, 'api/' es el valor correcto. -->
+<script>
+  window.REPASOS_CONFIG = {
+    apiBase: 'api/',
+    build: '__BUILD__',
+  };
+
+  /* El seguro de la pantalla de arranque de la app de iPhone.
+
+     Dentro del envoltorio, iOS enseña el logotipo sobre el fondo topo y
+     lo deja puesto hasta que alguien le dice que ya está. Si nadie se
+     lo dice, la aplicación se queda con el logo quieto y parece
+     colgada.
+
+     Esto vive aquí, en el propio index, y no dentro del código de la
+     app, porque el index se pide siempre a la red: aunque el resto del
+     código se quedara viejo en la caché del móvil, este seguro llega
+     igual. La app lo llama antes, en cuanto pinta la primera pantalla;
+     esto es solo la red por si acaso. */
+  window.retirarArranqueNativo = function () {
+    try {
+      var s = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.SplashScreen;
+      if (s && s.hide) s.hide({ fadeOutDuration: 200 });
+    } catch (e) { /* fuera de la app de iPhone no hay nada que quitar */ }
+  };
+  setTimeout(window.retirarArranqueNativo, 6000);
+</script>
+</head>
+<body>
+  <div id="app">
+    <div class="boot" id="boot"><div class="spin"></div></div>
+  </div>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

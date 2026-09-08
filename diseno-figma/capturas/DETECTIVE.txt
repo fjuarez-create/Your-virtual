@@ -1,0 +1,58 @@
+═══ proto-embed
+URL: https://embed.figma.com/proto/VlGqIJA4ZR7e8vmvELKPsB/UNIK-repasos?node-id=5-12139&viewport=5787%2C1030%2C0.66&scaling=min-zoom&content-scaling=fixed&page-id=2%3A1207&embed-host=share
+TÍTULO: Figma
+LIENZOS: 0
+TEXTO:
+Want to check out this file? Sign up or Log in
+Continue with Google
+
+or
+
+EMAIL
+Continue with email
+This website uses cookies, pixel tags, and local storage for performance, personalization, and marketing purposes. Our use of some cookies may be considered a sale, sharing for behavioral advertising, or targeted advertising. For more, see our privacy policy. California Residents can learn how personal information is collected, including how it is used, whether it is “sold” or “shared”, and how long it is retained.
+Opt out
+CONSOLA:
+log: Running frontend commit 4ec8c34c54794493471bfac8ea5422a051470a89
+error: Failed to load resource: the server responded with a status of 403 ()
+log: Running frontend commit 4ec8c34c54794493471bfac8ea5422a051470a89
+debug: [Livegraph] Connected 2026-08-17T21:28:15.157Z.
+
+═══ design-embed
+URL: https://embed.figma.com/design/VlGqIJA4ZR7e8vmvELKPsB/UNIK-repasos?node-id=5-12139&embed-host=share&hide-ui=1
+TÍTULO: Figma
+LIENZOS: 0
+TEXTO:
+Want to check out this file? Sign up or Log in
+Continue with Google
+
+or
+
+EMAIL
+Continue with email
+This website uses cookies, pixel tags, and local storage for performance, personalization, and marketing purposes. Our use of some cookies may be considered a sale, sharing for behavioral advertising, or targeted advertising. For more, see our privacy policy. California Residents can learn how personal information is collected, including how it is used, whether it is “sold” or “shared”, and how long it is retained.
+Opt out
+CONSOLA:
+log: Running frontend commit 4ec8c34c54794493471bfac8ea5422a051470a89
+error: Failed to load resource: the server responded with a status of 403 ()
+log: Running frontend commit 4ec8c34c54794493471bfac8ea5422a051470a89
+debug: [Livegraph] Connected 2026-08-17T21:28:39.020Z.
+
+═══ proto-normal
+URL: https://www.figma.com/proto/VlGqIJA4ZR7e8vmvELKPsB/UNIK-repasos?node-id=5-12139&page-id=2%3A1207&scaling=min-zoom
+TÍTULO: Figma
+LIENZOS: 0
+TEXTO:
+Want to check out this file? Sign up or Log in
+Continue with Google
+
+or
+
+EMAIL
+Continue with email
+This website uses cookies, pixel tags, and local storage for performance, personalization, and marketing purposes. Our use of some cookies may be considered a sale, sharing for behavioral advertising, or targeted advertising. For more, see our privacy policy. California Residents can learn how personal information is collected, including how it is used, whether it is “sold” or “shared”, and how long it is retained.
+Opt out
+CONSOLA:
+error: Failed to load resource: the server responded with a status of 403 ()
+log: Running frontend commit 4ec8c34c54794493471bfac8ea5422a051470a89
+debug: [Livegraph] Connected 2026-08-17T21:29:01.183Z.

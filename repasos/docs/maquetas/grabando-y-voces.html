@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maqueta · «Alguien está grabando» y la asignación de voces</title>
+<link rel="stylesheet" href="../../css/app.css">
+<style>
+  body { background: #d9d6d0; margin: 0; padding: 24px; display: grid; gap: 40px; justify-content: center; }
+  .telefono {
+    width: 430px; box-sizing: border-box;
+    padding: 12px 12px 24px; background: var(--d-fondo);
+    border-radius: 24px; overflow: hidden; position: relative;
+  }
+  .telefono > * + * { margin-top: 14px; }
+  .m-rotulo { font: 600 13px/1 var(--d-font); color: #6d6a64; margin: 0 0 8px 6px; letter-spacing: 0.04em; text-transform: uppercase; }
+
+  /* ── Piezas SOLO de maqueta ── */
+  /* La onda quieta (en el móvil latiría): barras rojas como la grabadora. */
+  .m-onda { display: inline-flex; align-items: center; gap: 3px; height: 26px; }
+  .m-onda i { width: 3px; border-radius: 2px; background: #db3e32; }
+  .m-punto-rojo {
+    width: 10px; height: 10px; border-radius: 999px; background: #db3e32;
+    display: inline-block; flex: none;
+    box-shadow: 0 0 0 4px rgba(219, 62, 50, 0.18);
+  }
+  .m-bola-roja {
+    width: 36px; height: 36px; flex: none; border-radius: 999px;
+    background: #fdeceb; color: #db3e32; display: grid; place-items: center;
+  }
+  .m-bola-roja svg { width: 20px; height: 20px; }
+  .m-mic-apagado {
+    width: 48px; height: 48px; flex: none; border-radius: 999px;
+    background: #e9e7e2; color: #b5b1aa; display: grid; place-items: center;
+  }
+  .m-mic-apagado svg { width: 22px; height: 22px; }
+  .m-banda-roja {
+    display: flex; align-items: center; gap: 9px;
+    background: #fdeceb; color: #a03028;
+    border-radius: 14px; padding: 11px 14px;
+    font-size: 14px; font-weight: 500;
+  }
+  /* V2: la hoja simulada. */
+  .m-velo { position: absolute; inset: 0; background: rgba(20, 18, 16, 0.45); border-radius: 24px; }
+  .m-hoja {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    background: var(--d-fondo); border-radius: 24px 24px 24px 24px;
+    padding: 20px 16px 24px;
+  }
+  .m-cita { font: 500 20px/1.4 var(--d-font); color: var(--d-tinta); margin: 10px 4px 16px; }
+  .m-caras-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .m-cara-boton {
+    display: flex; align-items: center; gap: 10px;
+    background: #fff; border-radius: 14px; padding: 10px 12px;
+    font-size: 14.5px; font-weight: 500; color: var(--d-tinta); text-align: left;
+  }
+  /* V3: el paso a paso. */
+  .m-pasos { display: inline-flex; gap: 5px; margin-left: 8px; vertical-align: 2px; }
+  .m-pasos i { width: 7px; height: 7px; border-radius: 999px; background: #d9d5cd; }
+  .m-pasos i.aqui { background: var(--d-tinta); }
+  /* V4: la transcripción pintada. */
+  .m-charla { background: #fff; border-radius: var(--d-radio); padding: 6px 14px; }
+  .m-frase { display: flex; gap: 10px; padding: 9px 0; align-items: baseline; }
+  .m-frase + .m-frase { border-top: 1px solid #f0eeea; }
+  .m-voz-chip {
+    flex: none; font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px;
+  }
+  .m-voz-a { background: #fef4e6; color: #683c03; }
+  .m-voz-b { background: #e8ecf4; color: #37507c; }
+  .m-frase p { margin: 0; font-size: 14.5px; line-height: 1.45; color: var(--d-tinta); }
+</style>
+</head>
+<body>
+  <div><p class="m-rotulo">G1 · La fila en rojo, con su onda</p><div class="telefono pantalla-diseno" id="g1"></div></div>
+  <div><p class="m-rotulo">G2 · La tarjeta de grabar, apagada y con nombre</p><div class="telefono pantalla-diseno" id="g2"></div></div>
+  <div><p class="m-rotulo">G3 · La banda roja bajo la cabecera</p><div class="telefono pantalla-diseno" id="g3"></div></div>
+  <div><p class="m-rotulo">G4 · La onda entera, de solo mirar</p><div class="telefono pantalla-diseno" id="g4"></div></div>
+  <div><p class="m-rotulo">V1 · Las caras en la propia fila: un toque y listo</p><div class="telefono pantalla-diseno" id="v1"></div></div>
+  <div><p class="m-rotulo">V2 · La hoja con la frase grande</p><div class="telefono pantalla-diseno" id="v2" style="min-height: 620px"></div></div>
+  <div><p class="m-rotulo">V3 · Una voz cada vez, paso a paso</p><div class="telefono pantalla-diseno" id="v3"></div></div>
+  <div><p class="m-rotulo">V4 · La conversación pintada por voces</p><div class="telefono pantalla-diseno" id="v4"></div></div>
+
+<script type="module">
+import { h, icon, avatar } from '../../js/ui.js';
+
+const F = { nombre: 'Francisco Juárez del Dago' };
+const A = { nombre: 'Alba García' };
+const FE = { nombre: 'Félix J. Bordes' };
+
+const onda = (alturas) => h('span.m-onda', null,
+  ...alturas.map((a) => h('i', { style: { height: `${a}px` } })));
+const ALTURAS = [8, 14, 22, 12, 18, 26, 10, 16, 22, 8, 12, 20, 14];
+
+const epigrafe = (t) => h('p.d-epigrafe', null, t);
+
+/* ─── G · Lo que ven los DEMÁS mientras Andrea graba ─── */
+
+document.getElementById('g1').append(
+  epigrafe('La grabación'),
+  h('div.d-encargo', null,
+    h('span.m-bola-roja', null, icon('mic')),
+    h('div.grow', null,
+      h('div.d-encargo-texto', null, 'Andrea está grabando…'),
+      h('div.d-encargo-sub', null, 'Podrás grabar cuando pare.'),
+    ),
+    onda(ALTURAS.slice(0, 9)),
+  ),
+);
+
+document.getElementById('g2').append(
+  epigrafe('La grabación'),
+  h('div.d-grab-quieta', null,
+    h('div.grow', null,
+      h('div.d-grab-quieta-titulo', null, 'Andrea está grabando'),
+      h('div.d-grab-quieta-sub', null, 'La reunión queda grabada. Podrás grabar cuando pare.'),
+    ),
+    h('span.m-mic-apagado', null, icon('mic')),
+  ),
+);
+
+document.getElementById('g3').append(
+  h('div.m-banda-roja', null,
+    h('span.m-punto-rojo'),
+    h('span', null, 'Andrea está grabando esta reunión'),
+  ),
+  epigrafe('Asistentes'),
+  h('div.d-mesa', null, avatar(F, { tam: 48 }), avatar(A, { tam: 48 }),
+    h('button.d-mesa-mas', null, icon('plus'))),
+);
+
+document.getElementById('g4').append(
+  epigrafe('La grabación'),
+  h('div.d-grab-quieta', null,
+    h('div.grow', null,
+      h('div.d-grab-quieta-titulo', { style: { display: 'flex', alignItems: 'center', gap: '9px' } },
+        h('span.m-punto-rojo'), 'Andrea está grabando · 12:41'),
+      h('div', { style: { marginTop: '8px' } }, onda([...ALTURAS, ...ALTURAS, ...ALTURAS.slice(0, 8)])),
+      h('div.d-grab-quieta-sub', { style: { marginTop: '8px' } }, 'Solo Andrea puede pararla.'),
+    ),
+  ),
+);
+
+/* ─── V · Ponerle nombre a una voz que la app no reconoce ─── */
+
+const bolaEscuchar = () => h('button.d-grab-fila-icono', { 'aria-label': 'Escuchar' }, icon('play', 18));
+
+document.getElementById('v1').append(
+  epigrafe('¿Quién es quién?'),
+  h('div.d-encargo', { style: { flexWrap: 'wrap' } },
+    bolaEscuchar(),
+    h('div.grow', null,
+      h('div.d-encargo-texto', null, 'Voz A · 1 min hablando'),
+      h('div.d-encargo-sub', null, '«Hay que limpiar la obra entera antes del viernes.»'),
+    ),
+    h('div', { style: { flexBasis: '100%', display: 'flex', gap: '10px', alignItems: 'center', marginTop: '10px', paddingLeft: '46px' } },
+      avatar(F, { tam: 38 }), avatar(A, { tam: 38 }), avatar(FE, { tam: 38 }),
+      h('span', { style: { font: '500 13px var(--d-font)', color: 'var(--d-gris)' } }, 'u otra persona…'),
+    ),
+  ),
+  h('p.d-nota-pie', null, 'Tocas la cara de quien habla, y listo: la app se queda con su voz.'),
+);
+
+const v2 = document.getElementById('v2');
+v2.append(
+  epigrafe('¿Quién es quién?'),
+  h('div.d-encargo', null, bolaEscuchar(), h('div.grow', null,
+    h('div.d-encargo-texto', null, 'Voz A · 1 min hablando'))),
+  h('div.m-velo'),
+  h('div.m-hoja', null,
+    h('h2', { style: { font: '500 22px var(--d-font)', margin: '0 4px' } }, '¿Quién dice esto?'),
+    h('p.m-cita', null, '«Hay que limpiar la obra entera antes del viernes.»'),
+    h('button.d-fantasma', { style: { marginBottom: '14px' } }, icon('play'), 'Volver a escuchar'),
+    h('div.m-caras-grid', null,
+      h('button.m-cara-boton', null, avatar(F, { tam: 38 }), 'Francisco'),
+      h('button.m-cara-boton', null, avatar(A, { tam: 38 }), 'Alba'),
+      h('button.m-cara-boton', null, avatar(FE, { tam: 38 }), 'Félix'),
+      h('button.m-cara-boton', null,
+        h('span.d-mesa-mas', { style: { width: '38px', height: '38px' } }, icon('plus')), 'Otra persona…'),
+    ),
+  ),
+);
+
+document.getElementById('v3').append(
+  epigrafe('¿Quién es quién?'),
+  h('div.d-encargo', { style: { flexWrap: 'wrap' } },
+    h('div.grow', null,
+      h('div.d-encargo-texto', null, 'Voz 1 de 2',
+        h('span.m-pasos', null, h('i.aqui'), h('i'))),
+      h('div.d-encargo-sub', { style: { marginTop: '6px' } }, '«Hay que limpiar la obra entera antes del viernes.»'),
+    ),
+    bolaEscuchar(),
+    h('div', { style: { flexBasis: '100%', display: 'flex', gap: '10px', alignItems: 'center', marginTop: '10px' } },
+      avatar(F, { tam: 38 }), avatar(A, { tam: 38 }), avatar(FE, { tam: 38 }),
+      h('span.grow'),
+      h('button.d-chip', null, 'Más tarde'),
+    ),
+  ),
+  h('p.d-nota-pie', null, 'Se escucha sola al abrirse; al tocar una cara pasa a la voz siguiente.'),
+);
+
+document.getElementById('v4').append(
+  epigrafe('¿Quién es quién?'),
+  h('div.m-charla', null,
+    h('div.m-frase', null, h('button.m-voz-chip.m-voz-a', null, 'Voz A'),
+      h('p', null, 'Hay que limpiar la obra entera antes del viernes.')),
+    h('div.m-frase', null, h('button.m-voz-chip.m-voz-b', null, 'Voz B'),
+      h('p', null, 'Vale, me encargo yo de avisar a Sinergia.')),
+    h('div.m-frase', null, h('button.m-voz-chip.m-voz-a', null, 'Voz A'),
+      h('p', null, 'Y que Felipe pida el vidrio del lucernario.')),
+  ),
+  h('p.d-nota-pie', null, 'Se lee la conversación entera; tocas la etiqueta de una voz y le pones cara.'),
+);
+</script>
+</body>
+</html>

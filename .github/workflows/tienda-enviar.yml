@@ -1,0 +1,176 @@
+name: Enviar la app a revisión
+
+# Envía a Apple la versión en curso. Es la única cosa de todo el
+# proyecto que no se puede deshacer con otro empujón: una vez enviada,
+# entra en la cola de revisión y lo que salga queda en el expediente de
+# la app. Por eso este robot:
+#
+#   - No tiene fichero-señal ni se dispara al empujar nada. Solo a mano.
+#   - Pide escribir ENVIAR en una casilla para arrancar.
+#   - Antes de enviar, comprueba de verdad que el revisor de Apple PUEDE
+#     ENTRAR en la app. Si no entra, no envía. Ese es el motivo número
+#     uno de rechazo y el más tonto: la ficha dice una contraseña y el
+#     servidor no la conoce.
+#
+# Secretos: los tres APPSTORE_* de siempre, y REVISION_EMAIL y
+# REVISION_PASSWORD, que son los que hacen que esa cuenta exista en el
+# servidor.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmar:
+        description: 'Escribe ENVIAR para mandarla a la cola de revisión de Apple, o RETIRAR para recoger un envío vacío'
+        required: true
+        default: ''
+      retirar_envio_id:
+        description: 'Solo para RETIRAR: el identificador del envío vacío que hay que recoger'
+        required: false
+        default: ''
+  # El empujón del fichero-señal NO envía nada: el trabajo de abajo solo
+  # se ejecuta cuando el disparo es a mano. Está aquí porque GitHub no
+  # da de alta un robot hasta que lo ve arrancar una vez, y uno que solo
+  # se dispara a mano no arranca nunca: no se puede pedir a mano lo que
+  # todavía no existe. Así se da de alta sin poder hacer daño.
+  push:
+    branches: [claude/uniq-repasos-app-2ja8y2]
+    paths: ['.github/LANZAR-TIENDA-ENVIAR.txt']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tienda-enviar
+  cancel-in-progress: false
+
+jobs:
+  enviar:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Confirmar qué se quiere hacer
+        env:
+          CONFIRMAR: ${{ inputs.confirmar }}
+          ENVIO_ID: ${{ inputs.retirar_envio_id }}
+        run: |
+          set -eu
+          case "$CONFIRMAR" in
+            ENVIAR)
+              echo "Confirmado: enviar a revisión."
+              ;;
+            RETIRAR)
+              if [ -z "${ENVIO_ID:-}" ]; then
+                echo "::error::Para RETIRAR hay que decir qué envío. No se ha tocado nada."
+                exit 1
+              fi
+              echo "Confirmado: retirar el envío vacío ${ENVIO_ID}."
+              ;;
+            *)
+              echo "::error::Hay que escribir ENVIAR o RETIRAR en la casilla. No se ha tocado nada."
+              exit 1
+              ;;
+          esac
+
+      - name: Comprobar que están los secretos
+        env:
+          CLAVE_ID: ${{ secrets.APPSTORE_CLAVE_ID }}
+          EMISOR: ${{ secrets.APPSTORE_EMISOR_ID }}
+          CLAVE_P8: ${{ secrets.APPSTORE_CLAVE_P8 }}
+          REVISION_EMAIL: ${{ secrets.REVISION_EMAIL }}
+          REVISION_PASSWORD: ${{ secrets.REVISION_PASSWORD }}
+        run: |
+          set -eu
+          falta=""
+          [ -n "$CLAVE_ID" ]          || falta="$falta APPSTORE_CLAVE_ID"
+          [ -n "$EMISOR" ]            || falta="$falta APPSTORE_EMISOR_ID"
+          [ -n "$CLAVE_P8" ]          || falta="$falta APPSTORE_CLAVE_P8"
+          [ -n "$REVISION_EMAIL" ]    || falta="$falta REVISION_EMAIL"
+          [ -n "$REVISION_PASSWORD" ] || falta="$falta REVISION_PASSWORD"
+          if [ -n "$falta" ]; then
+            {
+              echo "## No se ha enviado nada"
+              echo ""
+              echo "Faltan estos secretos:"
+              echo ""
+              for s in $falta; do echo "- \`$s\`"; done
+              echo ""
+              echo "\`REVISION_EMAIL\` y \`REVISION_PASSWORD\` son los que hacen que la cuenta"
+              echo "del revisor exista en el servidor. Sin ellos, Apple no puede entrar."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::Faltan secretos:$falta"
+            exit 1
+          fi
+
+      # El cerrojo de verdad. Aquí no vale un aviso: si el revisor no
+      # entra, no se envía y punto.
+      - name: Comprobar que el revisor de Apple puede entrar
+        timeout-minutes: 3
+        env:
+          REVISION_EMAIL: ${{ secrets.REVISION_EMAIL }}
+          REVISION_PASSWORD: ${{ secrets.REVISION_PASSWORD }}
+        run: |
+          set -eu
+          CUERPO="$(python3 -c 'import json,os; print(json.dumps({"email": os.environ["REVISION_EMAIL"], "password": os.environ["REVISION_PASSWORD"]}))')"
+          CODIGO=000
+          for intento in 1 2 3; do
+            CODIGO=$(printf '%s' "$CUERPO" | curl -s -o respuesta.json -w '%{http_code}' \
+              --max-time 25 -X POST -H 'Content-Type: application/json' \
+              --data-binary @- "https://repasos.unikdi.com/api/auth/login" || echo 000)
+            [ "$CODIGO" = 200 ] && break
+            echo "Intento ${intento}: el servidor ha contestado ${CODIGO}."
+            sleep $((intento * 5))
+          done
+          if [ "$CODIGO" != 200 ]; then
+            echo "::error::El revisor de Apple NO puede entrar (el servidor contesta ${CODIGO}). No se envía nada."
+            exit 1
+          fi
+          python3 - <<'PY'
+          import json, os, sys
+
+          d = (json.load(open("respuesta.json")) or {}).get("usuario") or {}
+          esperado = os.environ["REVISION_EMAIL"].strip().lower()
+          if (d.get("email") or "").strip().lower() != esperado:
+              sys.exit("::error::Ha entrado alguien, pero no es la cuenta de revisión. No se envía nada.")
+          if int(d.get("verifica") or 0) != 1:
+              sys.exit("::error::El revisor entra pero sin permiso de verificación: no vería media aplicación. No se envía nada.")
+          print("El revisor de Apple entra y ve la aplicación entera.")
+          PY
+          rm -f respuesta.json
+
+      - name: Traer el repositorio
+        uses: actions/checkout@v4
+
+      - name: Preparar Ruby y fastlane
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+          working-directory: movil
+
+      - name: Enviar a revisión
+        if: inputs.confirmar == 'ENVIAR'
+        working-directory: movil
+        env:
+          APPSTORE_CLAVE_ID: ${{ secrets.APPSTORE_CLAVE_ID }}
+          APPSTORE_EMISOR_ID: ${{ secrets.APPSTORE_EMISOR_ID }}
+          APPSTORE_CLAVE_P8: ${{ secrets.APPSTORE_CLAVE_P8 }}
+          TZ: Europe/Madrid
+          FASTLANE_SKIP_UPDATE_CHECK: '1'
+          FASTLANE_HIDE_CHANGELOG: '1'
+          FASTLANE_DISABLE_COLORS: '1'
+        run: bundle exec fastlane ios enviar
+
+      - name: Retirar el envío vacío
+        if: inputs.confirmar == 'RETIRAR'
+        working-directory: movil
+        env:
+          APPSTORE_CLAVE_ID: ${{ secrets.APPSTORE_CLAVE_ID }}
+          APPSTORE_EMISOR_ID: ${{ secrets.APPSTORE_EMISOR_ID }}
+          APPSTORE_CLAVE_P8: ${{ secrets.APPSTORE_CLAVE_P8 }}
+          ENVIO_ID: ${{ inputs.retirar_envio_id }}
+          TZ: Europe/Madrid
+          FASTLANE_SKIP_UPDATE_CHECK: '1'
+          FASTLANE_HIDE_CHANGELOG: '1'
+          FASTLANE_DISABLE_COLORS: '1'
+        run: bundle exec fastlane ios retirar_envio

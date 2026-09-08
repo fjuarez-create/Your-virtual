@@ -1,0 +1,58 @@
+# ═══════════════════════════════════════════════════════════════
+# UNIK repasos — configuración del subdominio.
+#
+# El armazón (JS, CSS, iconos) lo cachea el service worker con el SHA
+# del despliegue, así que aquí solo hay que asegurarse de dos cosas:
+# que index.html y sw.js NUNCA se sirvan de caché (o el navegador se
+# quedaría clavado en una versión vieja para siempre) y que las fuentes
+# e imágenes sí se guarden mucho tiempo.
+# ═══════════════════════════════════════════════════════════════
+
+Options -Indexes
+DirectoryIndex index.html
+
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "same-origin"
+  Header always set X-Frame-Options "SAMEORIGIN"
+  # La cámara y el micrófono los usa la propia app; nadie incrustado.
+  Header always set Permissions-Policy "camera=(self), microphone=(self), geolocation=(), interest-cohort=()"
+
+  <FilesMatch "^(index\.html|sw\.js|manifest\.webmanifest)$">
+    Header set Cache-Control "no-cache, must-revalidate"
+  </FilesMatch>
+
+  <FilesMatch "\.(woff2|png|svg|jpg|jpeg|webp)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+
+  # El código va sin guardar en el navegador, a propósito. Quien lo
+  # guarda es el service worker, versión a versión; si además el
+  # navegador se quedara con su copia por su cuenta, al instalarse una
+  # versión nueva podría meter dentro un fichero de la anterior y
+  # tendríamos media aplicación de cada. Revalidar cuesta nada: lo que
+  # se sirve rápido sale de la caché del service worker.
+  <FilesMatch "\.(js|css)$">
+    Header set Cache-Control "no-cache, must-revalidate"
+  </FilesMatch>
+</IfModule>
+
+<IfModule mod_mime.c>
+  AddType application/manifest+json .webmanifest
+  AddType font/woff2 .woff2
+  AddType text/javascript .js
+</IfModule>
+
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css text/javascript application/javascript application/json application/manifest+json image/svg+xml
+</IfModule>
+
+# El enrutado es por hash (#/...), así que no hace falta reescribir nada:
+# cualquier ruta profunda la resuelve el propio index.html. Solo se
+# fuerza HTTPS, que es requisito para cámara, micrófono y service worker.
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{HTTPS} !=on
+  RewriteCond %{HTTP:X-Forwarded-Proto} !https
+  RewriteRule ^(.*)$ https://%{HTTP_HOST}/$1 [R=301,L]
+</IfModule>
