@@ -15,7 +15,9 @@ name: Deploy al hosting (FTP)
 
 on:
   push:
-    branches: [claude/virtual-real-estate-showroom-cnb7kx]
+    branches:
+      - claude/virtual-real-estate-showroom-cnb7kx
+      - claude/hopeful-faraday-7y80bt
   workflow_dispatch:
 
 # Un push nuevo sustituye al anterior: cada deploy sube el estado completo del
