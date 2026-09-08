@@ -4,6 +4,7 @@
 # el log del workflow diga en cuál se atasca si algo va mal:
 #
 #   ftp-deploy.sh assets   planos, fichas, HDRI y modelo (lo pesado)
+#   ftp-deploy.sh new      la versión nueva del visor, en /new
 #   ftp-deploy.sh code     css, js, data y vendor
 #   ftp-deploy.sh index    index.html, siempre el último
 #   ftp-deploy.sh check    cuenta lo que hay arriba y falla si no cuadra
@@ -17,7 +18,7 @@
 
 set -eu
 
-WHAT="${1:?uso: ftp-deploy.sh assets|code|index|check}"
+WHAT="${1:?uso: ftp-deploy.sh assets|code|new|index|check}"
 
 for name in FTP_SERVER FTP_USERNAME FTP_PASSWORD; do
   eval "value=\${$name:-}"
@@ -95,7 +96,7 @@ if [ "$WHAT" = check ]; then
     printf 'assets/%-12s local %3s   servidor %3s\n' "$d" "$local_n" "$remote_n"
     [ "$remote_n" -ge "$local_n" ] || fallos=$((fallos + 1))
   done
-  for f in index.html js/main.js css/style.css assets/apolo_levels.glb assets/entorno_topo.glb; do
+  for f in index.html js/main.js css/style.css assets/apolo_levels.glb assets/entorno_topo.glb new/index.html new/js/main.js; do
     if [ "$(remote_count "$f")" -ge 1 ]; then
       echo "ok  $f"
     else
@@ -130,6 +131,12 @@ case "$WHAT" in
     ;;
   index)
     CMDS="cd \"$DIR\"; put publish/index.html -o index.html;"
+    ;;
+  # La versión nueva vive en /new y comparte assets, data y vendor con la
+  # raíz: no se duplican los 73 MB de planos, fichas y modelos.
+  new)
+    CMDS="cd \"$DIR\";
+      mirror -R --transfer-all --delete --no-perms -v publish/new new;"
     ;;
   *)
     echo "Parte desconocida: $WHAT" >&2

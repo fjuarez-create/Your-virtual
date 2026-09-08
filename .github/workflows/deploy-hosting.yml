@@ -34,7 +34,7 @@ jobs:
       # El importmap referencia los módulos con ?v=__BUILD__; al fijarlo al SHA
       # el HTML y el JS se cachean siempre como conjunto consistente.
       - name: Versionar módulos
-        run: sed -i "s/__BUILD__/${GITHUB_SHA::8}/g" index.html
+        run: sed -i "s/__BUILD__/${GITHUB_SHA::8}/g" index.html new/index.html
 
       # La clave de Maps es pública por naturaleza (viaja al navegador), pero no
       # entra en el repositorio, que sí lo es. Se sella aquí desde el secreto.
@@ -45,7 +45,7 @@ jobs:
         run: |
           set -eu
           if [ -n "${MAPS_API_KEY:-}" ]; then
-            MAPS_API_KEY="$MAPS_API_KEY" perl -pi -e 's/__MAPS_KEY__/$ENV{MAPS_API_KEY}/g' index.html
+            MAPS_API_KEY="$MAPS_API_KEY" perl -pi -e 's/__MAPS_KEY__/$ENV{MAPS_API_KEY}/g' index.html new/index.html
             echo "Clave sellada; el entorno real queda disponible."
           else
             echo "Sin secreto MAPS_API_KEY: el entorno real queda desactivado."
@@ -56,7 +56,7 @@ jobs:
           set -eu
           rm -rf publish && mkdir publish
           cp index.html publish/
-          cp -r assets css data js vendor publish/
+          cp -r assets css data js vendor new publish/
           du -sh publish
 
       - name: Instalar lftp
@@ -71,6 +71,15 @@ jobs:
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
           FTP_SERVER_DIR: ${{ secrets.FTP_SERVER_DIR }}
         run: bash .github/scripts/ftp-deploy.sh assets
+
+      - name: Subir la versión nueva (/new)
+        timeout-minutes: 10
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_SERVER_DIR: ${{ secrets.FTP_SERVER_DIR }}
+        run: bash .github/scripts/ftp-deploy.sh new
 
       - name: Subir código
         timeout-minutes: 10

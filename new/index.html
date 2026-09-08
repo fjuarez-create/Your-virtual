@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no">
+<meta name="robots" content="noindex, nofollow">
+<title>UNIK · SERENEA — Edificio Apolo</title>
+<!-- Las rutas de assets y datos son relativas y con esta base apuntan a la
+     raíz del sitio: /new comparte los 73 MB de planos, fichas y modelos con
+     la versión publicada en vez de duplicarlos. -->
+<base href="/">
+<link rel="stylesheet" href="/new/css/shell.css?v=__BUILD__">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#127963;&#65039;</text></svg>">
+<script type="importmap">
+{
+  "imports": {
+    "three": "/vendor/three.module.min.js",
+    "three/addons/controls/OrbitControls.js": "/vendor/OrbitControls.js",
+    "three/addons/loaders/GLTFLoader.js": "/vendor/GLTFLoader.js",
+    "three/addons/loaders/RGBELoader.js": "/vendor/RGBELoader.js",
+    "three/addons/utils/BufferGeometryUtils.js": "/vendor/BufferGeometryUtils.js",
+    "three/addons/objects/Sky.js": "/vendor/Sky.js",
+    "three/addons/postprocessing/EffectComposer.js": "/vendor/EffectComposer.js",
+    "three/addons/postprocessing/RenderPass.js": "/vendor/RenderPass.js",
+    "three/addons/postprocessing/UnrealBloomPass.js": "/vendor/UnrealBloomPass.js",
+    "three/addons/postprocessing/OutputPass.js": "/vendor/OutputPass.js",
+    "three/addons/postprocessing/Pass.js": "/vendor/Pass.js",
+    "three/addons/postprocessing/GTAOPass.js": "/vendor/GTAOPass.js",
+    "3d-tiles-renderer": "/vendor/3d-tiles-renderer.js",
+
+    "app/main.js": "/new/js/main.js?v=__BUILD__",
+    "app/shell.js": "/new/js/shell.js?v=__BUILD__",
+    "app/environment.js": "/new/js/environment.js?v=__BUILD__",
+    "app/topo.js": "/new/js/topo.js?v=__BUILD__",
+    "app/ui.js": "/new/js/ui.js?v=__BUILD__",
+    "app/building.js": "/new/js/building.js?v=__BUILD__",
+    "app/context.js": "/new/js/context.js?v=__BUILD__",
+    "app/layout.js": "/new/js/layout.js?v=__BUILD__",
+    "app/api.js": "/new/js/api.js?v=__BUILD__",
+    "app/promotions.js": "/new/js/promotions.js?v=__BUILD__"
+  }
+}
+</script>
+</head>
+<body>
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Iconografía Phosphor (peso regular), vendorizada en vendor/icons/.
+       Se dibujan con relleno, no con trazo: el color lo toma de currentColor
+       y el tamaño lo fija el CSS de cada botón. -->
+  <symbol id="i-cube" viewBox="0 0 256 256"><path d="M223.68,66.15,135.68,18h0a15.88,15.88,0,0,0-15.36,0l-88,48.17a16,16,0,0,0-8.32,14v95.64a16,16,0,0,0,8.32,14l88,48.17a15.88,15.88,0,0,0,15.36,0l88-48.17a16,16,0,0,0,8.32-14V80.18A16,16,0,0,0,223.68,66.15ZM128,32h0l80.34,44L128,120,47.66,76ZM40,90l80,43.78v85.79L40,175.82Zm96,129.57V133.82L216,90v85.78Z"/></symbol>
+  <symbol id="i-plan" viewBox="0 0 256 256"><path d="M232,56H72V40a8,8,0,0,0-8-8H48A32,32,0,0,0,16,64V176a32,32,0,0,0,32,32H232a8,8,0,0,0,8-8V64A8,8,0,0,0,232,56ZM32,64A16,16,0,0,1,48,48h8v96H48a31.82,31.82,0,0,0-16,4.29ZM224,192H48a16,16,0,0,1,0-32H64a8,8,0,0,0,8-8V72H224ZM104,136a8,8,0,0,0,0,16h16v8a8,8,0,0,0,16,0v-8h24v8a8,8,0,0,0,16,0v-8h16a8,8,0,0,0,0-16H176V120h16a8,8,0,0,0,0-16H176V96a8,8,0,0,0-16,0v8H136V96a8,8,0,0,0-16,0v8H104a8,8,0,0,0,0,16h16v16Zm32-16h24v16H136Z"/></symbol>
+  <symbol id="i-list" viewBox="0 0 256 256"><path d="M80,64a8,8,0,0,1,8-8H216a8,8,0,0,1,0,16H88A8,8,0,0,1,80,64Zm136,56H88a8,8,0,0,0,0,16H216a8,8,0,0,0,0-16Zm0,64H88a8,8,0,0,0,0,16H216a8,8,0,0,0,0-16ZM44,52A12,12,0,1,0,56,64,12,12,0,0,0,44,52Zm0,64a12,12,0,1,0,12,12A12,12,0,0,0,44,116Zm0,64a12,12,0,1,0,12,12A12,12,0,0,0,44,180Z"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 256 256"><path d="M120,40V16a8,8,0,0,1,16,0V40a8,8,0,0,1-16,0Zm72,88a64,64,0,1,1-64-64A64.07,64.07,0,0,1,192,128Zm-16,0a48,48,0,1,0-48,48A48.05,48.05,0,0,0,176,128ZM58.34,69.66A8,8,0,0,0,69.66,58.34l-16-16A8,8,0,0,0,42.34,53.66Zm0,116.68-16,16a8,8,0,0,0,11.32,11.32l16-16a8,8,0,0,0-11.32-11.32ZM192,72a8,8,0,0,0,5.66-2.34l16-16a8,8,0,0,0-11.32-11.32l-16,16A8,8,0,0,0,192,72Zm5.66,114.34a8,8,0,0,0-11.32,11.32l16,16a8,8,0,0,0,11.32-11.32ZM48,128a8,8,0,0,0-8-8H16a8,8,0,0,0,0,16H40A8,8,0,0,0,48,128Zm80,80a8,8,0,0,0-8,8v24a8,8,0,0,0,16,0V216A8,8,0,0,0,128,208Zm112-88H216a8,8,0,0,0,0,16h24a8,8,0,0,0,0-16Z"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 256 256"><path d="M233.54,142.23a8,8,0,0,0-8-2,88.08,88.08,0,0,1-109.8-109.8,8,8,0,0,0-10-10,104.84,104.84,0,0,0-52.91,37A104,104,0,0,0,136,224a103.09,103.09,0,0,0,62.52-20.88,104.84,104.84,0,0,0,37-52.91A8,8,0,0,0,233.54,142.23ZM188.9,190.34A88,88,0,0,1,65.66,67.11a89,89,0,0,1,31.4-26A106,106,0,0,0,96,56,104.11,104.11,0,0,0,200,160a106,106,0,0,0,14.92-1.06A89,89,0,0,1,188.9,190.34Z"/></symbol>
+  <symbol id="i-filter" viewBox="0 0 256 256"><path d="M230.6,49.53A15.81,15.81,0,0,0,216,40H40A16,16,0,0,0,28.19,66.76l.08.09L96,139.17V216a16,16,0,0,0,24.87,13.32l32-21.34A16,16,0,0,0,160,194.66V139.17l67.74-72.32.08-.09A15.8,15.8,0,0,0,230.6,49.53ZM40,56h0Zm106.18,74.58A8,8,0,0,0,144,136v58.66L112,216V136a8,8,0,0,0-2.16-5.47L40,56H216Z"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 256 256"><path d="M128,24h0A104,104,0,1,0,232,128,104.12,104.12,0,0,0,128,24Zm87.62,96H175.79C174,83.49,159.94,57.67,148.41,42.4A88.19,88.19,0,0,1,215.63,120ZM96.23,136h63.54c-2.31,41.61-22.23,67.11-31.77,77C118.45,203.1,98.54,177.6,96.23,136Zm0-16C98.54,78.39,118.46,52.89,128,43c9.55,9.93,29.46,35.43,31.77,77Zm11.36-77.6C96.06,57.67,82,83.49,80.21,120H40.37A88.19,88.19,0,0,1,107.59,42.4ZM40.37,136H80.21c1.82,36.51,15.85,62.33,27.38,77.6A88.19,88.19,0,0,1,40.37,136Zm108,77.6c11.53-15.27,25.56-41.09,27.38-77.6h39.84A88.19,88.19,0,0,1,148.41,213.6Z"/></symbol>
+  <symbol id="i-back" viewBox="0 0 256 256"><path d="M224,128a8,8,0,0,1-8,8H59.31l58.35,58.34a8,8,0,0,1-11.32,11.32l-72-72a8,8,0,0,1,0-11.32l72-72a8,8,0,0,1,11.32,11.32L59.31,120H216A8,8,0,0,1,224,128Z"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 256 256"><path d="M213.66,101.66l-80,80a8,8,0,0,1-11.32,0l-80-80A8,8,0,0,1,53.66,90.34L128,164.69l74.34-74.35a8,8,0,0,1,11.32,11.32Z"/></symbol>
+  <symbol id="i-car" viewBox="0 0 256 256"><path d="M240,104H229.2L201.42,41.5A16,16,0,0,0,186.8,32H69.2a16,16,0,0,0-14.62,9.5L26.8,104H16a8,8,0,0,0,0,16h8v80a16,16,0,0,0,16,16H64a16,16,0,0,0,16-16V184h96v16a16,16,0,0,0,16,16h24a16,16,0,0,0,16-16V120h8a8,8,0,0,0,0-16ZM69.2,48H186.8l24.89,56H44.31ZM216,200H192V176a8,8,0,0,0-8-8H72a8,8,0,0,0-8,8v24H40V120H216Z"/></symbol>
+  <symbol id="i-store" viewBox="0 0 256 256"><path d="M223.68,66.15,135.68,18a15.88,15.88,0,0,0-15.36,0l-88,48.17a16,16,0,0,0-8.32,14v95.64a16,16,0,0,0,8.32,14l88,48.17a15.88,15.88,0,0,0,15.36,0l88-48.17a16,16,0,0,0,8.32-14V80.18A16,16,0,0,0,223.68,66.15ZM128,32l80.34,44-29.77,16.3-80.35-44ZM128,120,47.66,76l33.9-18.56,80.34,44ZM40,90l80,43.78v85.79L40,175.82Zm176,85.78h0l-80,43.79V133.82l32-17.51V152a8,8,0,0,0,16,0V107.55L216,90v85.77Z"/></symbol>
+  <symbol id="i-gym" viewBox="0 0 256 256"><path d="M248,120h-8V88a16,16,0,0,0-16-16H208V64a16,16,0,0,0-16-16H168a16,16,0,0,0-16,16v56H104V64A16,16,0,0,0,88,48H64A16,16,0,0,0,48,64v8H32A16,16,0,0,0,16,88v32H8a8,8,0,0,0,0,16h8v32a16,16,0,0,0,16,16H48v8a16,16,0,0,0,16,16H88a16,16,0,0,0,16-16V136h48v56a16,16,0,0,0,16,16h24a16,16,0,0,0,16-16v-8h16a16,16,0,0,0,16-16V136h8a8,8,0,0,0,0-16ZM32,168V88H48v80Zm56,24H64V64H88V192Zm104,0H168V64h24V175.82c0,.06,0,.12,0,.18s0,.12,0,.18V192Zm32-24H208V88h16Z"/></symbol>
+  <symbol id="i-terr" viewBox="0 0 256 256"><path d="M240,126.63A112.44,112.44,0,0,0,51.75,53.75a111.56,111.56,0,0,0-35.7,72.88A16,16,0,0,0,32,144h88v56a32,32,0,0,0,64,0,8,8,0,0,0-16,0,16,16,0,0,1-32,0V144h88a16,16,0,0,0,16-17.37ZM32,128l0,0A96.43,96.43,0,0,1,193.4,65.52,95.32,95.32,0,0,1,224,128Z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 256 256"><path d="M229.66,77.66l-128,128a8,8,0,0,1-11.32,0l-56-56a8,8,0,0,1,11.32-11.32L96,188.69,218.34,66.34a8,8,0,0,1,11.32,11.32Z"/></symbol>
+  <symbol id="i-map-trifold" viewBox="0 0 256 256"><path d="M228.92,49.69a8,8,0,0,0-6.86-1.45L160.93,63.52,99.58,32.84a8,8,0,0,0-5.52-.6l-64,16A8,8,0,0,0,24,56V200a8,8,0,0,0,9.94,7.76l61.13-15.28,61.35,30.68A8.15,8.15,0,0,0,160,224a8,8,0,0,0,1.94-.24l64-16A8,8,0,0,0,232,200V56A8,8,0,0,0,228.92,49.69ZM104,52.94l48,24V203.06l-48-24ZM40,62.25l48-12v127.5l-48,12Zm176,131.5-48,12V78.25l48-12Z"/></symbol>
+  <symbol id="i-diamond" viewBox="0 0 256 256"><path d="M235.33,116.72,139.28,20.66a16,16,0,0,0-22.56,0l-96,96.06a16,16,0,0,0,0,22.56l96.05,96.06h0a16,16,0,0,0,22.56,0l96.05-96.06a16,16,0,0,0,0-22.56ZM128,224h0L32,128,128,32,224,128Z"/></symbol>
+  <symbol id="i-stack-simple" viewBox="0 0 256 256"><path d="M12,111l112,64a8,8,0,0,0,7.94,0l112-64a8,8,0,0,0,0-13.9l-112-64a8,8,0,0,0-7.94,0l-112,64A8,8,0,0,0,12,111ZM128,49.21,223.87,104,128,158.79,32.13,104ZM246.94,140A8,8,0,0,1,244,151L132,215a8,8,0,0,1-7.94,0L12,151A8,8,0,0,1,20,137.05l108,61.74,108-61.74A8,8,0,0,1,246.94,140Z"/></symbol>
+  <symbol id="i-image-square" viewBox="0 0 256 256"><path d="M208,32H48A16,16,0,0,0,32,48V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V48A16,16,0,0,0,208,32ZM48,48H208v77.38l-24.69-24.7a16,16,0,0,0-22.62,0L53.37,208H48ZM208,208H76l96-96,36,36v60ZM96,120A24,24,0,1,0,72,96,24,24,0,0,0,96,120Zm0-32a8,8,0,1,1-8,8A8,8,0,0,1,96,88Z"/></symbol>
+  <symbol id="i-play-circle" viewBox="0 0 256 256"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm48.24-94.78-64-40A8,8,0,0,0,100,88v80a8,8,0,0,0,12.24,6.78l64-40a8,8,0,0,0,0-13.56ZM116,153.57V102.43L156.91,128Z"/></symbol>
+  <symbol id="i-crosshair-simple" viewBox="0 0 256 256"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm8,191.63V184a8,8,0,0,0-16,0v31.63A88.13,88.13,0,0,1,40.37,136H72a8,8,0,0,0,0-16H40.37A88.13,88.13,0,0,1,120,40.37V72a8,8,0,0,0,16,0V40.37A88.13,88.13,0,0,1,215.63,120H184a8,8,0,0,0,0,16h31.63A88.13,88.13,0,0,1,136,215.63Z"/></symbol>
+  <symbol id="i-house-simple" viewBox="0 0 256 256"><path d="M219.31,108.68l-80-80a16,16,0,0,0-22.62,0l-80,80A15.87,15.87,0,0,0,32,120v96a8,8,0,0,0,8,8H216a8,8,0,0,0,8-8V120A15.87,15.87,0,0,0,219.31,108.68ZM208,208H48V120l80-80,80,80Z"/></symbol>
+  <symbol id="i-sun-horizon" viewBox="0 0 256 256"><path d="M240,152H199.55a73.54,73.54,0,0,0,.45-8,72,72,0,0,0-144,0,73.54,73.54,0,0,0,.45,8H16a8,8,0,0,0,0,16H240a8,8,0,0,0,0-16ZM72,144a56,56,0,1,1,111.41,8H72.59A56.13,56.13,0,0,1,72,144Zm144,56a8,8,0,0,1-8,8H48a8,8,0,0,1,0-16H208A8,8,0,0,1,216,200ZM72.84,43.58a8,8,0,0,1,14.32-7.16l8,16a8,8,0,0,1-14.32,7.16Zm-56,48.84a8,8,0,0,1,10.74-3.57l16,8a8,8,0,0,1-7.16,14.31l-16-8A8,8,0,0,1,16.84,92.42Zm192,15.16a8,8,0,0,1,3.58-10.73l16-8a8,8,0,1,1,7.16,14.31l-16,8a8,8,0,0,1-10.74-3.58Zm-48-55.16,8-16a8,8,0,0,1,14.32,7.16l-8,16a8,8,0,1,1-14.32-7.16Z"/></symbol>
+  <symbol id="i-cloud-sun" viewBox="0 0 256 256"><path d="M164,72a76.2,76.2,0,0,0-20.26,2.73,55.63,55.63,0,0,0-9.41-11.54l9.51-13.57a8,8,0,1,0-13.11-9.18L121.22,54A55.9,55.9,0,0,0,96,48c-.58,0-1.16,0-1.74,0L91.37,31.71a8,8,0,1,0-15.75,2.77L78.5,50.82A56.1,56.1,0,0,0,55.23,65.67L41.61,56.14a8,8,0,1,0-9.17,13.11L46,78.77A55.55,55.55,0,0,0,40,104c0,.57,0,1.15,0,1.72L23.71,108.6a8,8,0,0,0,1.38,15.88,8.24,8.24,0,0,0,1.39-.12l16.32-2.88a55.74,55.74,0,0,0,5.86,12.42A52,52,0,0,0,84,224h80a76,76,0,0,0,0-152ZM56,104a40,40,0,0,1,72.54-23.24,76.26,76.26,0,0,0-35.62,40,52.14,52.14,0,0,0-31,4.17A40,40,0,0,1,56,104ZM164,208H84a36,36,0,1,1,4.78-71.69c-.37,2.37-.63,4.79-.77,7.23a8,8,0,0,0,16,.92,58.91,58.91,0,0,1,1.88-11.81c0-.16.09-.32.12-.48A60.06,60.06,0,1,1,164,208Z"/></symbol>
+  <symbol id="i-x" viewBox="0 0 256 256"><path d="M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 256 256"><path d="M120,40V16a8,8,0,0,1,16,0V40a8,8,0,0,1-16,0Zm72,88a64,64,0,1,1-64-64A64.07,64.07,0,0,1,192,128Zm-16,0a48,48,0,1,0-48,48A48.05,48.05,0,0,0,176,128ZM58.34,69.66A8,8,0,0,0,69.66,58.34l-16-16A8,8,0,0,0,42.34,53.66Zm0,116.68-16,16a8,8,0,0,0,11.32,11.32l16-16a8,8,0,0,0-11.32-11.32ZM192,72a8,8,0,0,0,5.66-2.34l16-16a8,8,0,0,0-11.32-11.32l-16,16A8,8,0,0,0,192,72Zm5.66,114.34a8,8,0,0,0-11.32,11.32l16,16a8,8,0,0,0,11.32-11.32ZM48,128a8,8,0,0,0-8-8H16a8,8,0,0,0,0,16H40A8,8,0,0,0,48,128Zm80,80a8,8,0,0,0-8,8v24a8,8,0,0,0,16,0V216A8,8,0,0,0,128,208Zm112-88H216a8,8,0,0,0,0,16h24a8,8,0,0,0,0-16Z"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 256 256"><path d="M233.54,142.23a8,8,0,0,0-8-2,88.08,88.08,0,0,1-109.8-109.8,8,8,0,0,0-10-10,104.84,104.84,0,0,0-52.91,37A104,104,0,0,0,136,224a103.09,103.09,0,0,0,62.52-20.88,104.84,104.84,0,0,0,37-52.91A8,8,0,0,0,233.54,142.23ZM188.9,190.34A88,88,0,0,1,65.66,67.11a89,89,0,0,1,31.4-26A106,106,0,0,0,96,56,104.11,104.11,0,0,0,200,160a106,106,0,0,0,14.92-1.06A89,89,0,0,1,188.9,190.34Z"/></symbol>
+</svg>
+
+<div id="app"><canvas id="scene"></canvas></div>
+
+<!-- ═══════════════════ Carcasa nueva ═══════════════════ -->
+<nav id="rail" aria-label="Herramientas">
+  <div id="brand"><img src="assets/logo_unik.png" alt="UNIK"></div>
+
+  <div class="grupo">
+    <button class="rail-btn" id="bConjunto" data-nombre="Conjunto" aria-label="Conjunto">
+      <svg><use href="#i-map-trifold"></use></svg>
+    </button>
+    <button class="rail-btn" id="bEdificio" data-nombre="Edificio" aria-label="Edificio">
+      <svg><use href="#i-diamond"></use></svg>
+    </button>
+    <button class="rail-btn" id="bPlantas" data-nombre="Plantas" aria-label="Plantas">
+      <svg><use href="#i-stack-simple"></use></svg>
+    </button>
+    <button class="rail-btn" id="bRenders" data-nombre="Renders" aria-label="Renders">
+      <svg><use href="#i-image-square"></use></svg>
+    </button>
+    <button class="rail-btn" id="bVideo" data-nombre="Vídeo" aria-label="Vídeo">
+      <svg><use href="#i-play-circle"></use></svg>
+    </button>
+  </div>
+
+  <div class="grupo">
+    <button class="rail-btn" id="bCentrar" data-nombre="Recentrar" aria-label="Recentrar">
+      <svg><use href="#i-crosshair-simple"></use></svg>
+    </button>
+  </div>
+</nav>
+
+<aside id="plantas" aria-label="Selector de planta">
+  <h2>Planta</h2>
+  <div class="rejilla" id="plantasRejilla"></div>
+</aside>
+
+<div id="horas">
+  <button class="hora-btn" id="horaPrincipal" aria-label="Momento del día">
+    <svg><use href="#i-sun"></use></svg>
+  </button>
+  <button class="hora-btn opcion" data-momento="amanecer" data-nombre="Amanecer">
+    <svg><use href="#i-cloud-sun"></use></svg>
+  </button>
+  <button class="hora-btn opcion" data-momento="dia" data-nombre="Mediodía">
+    <svg><use href="#i-sun"></use></svg>
+  </button>
+  <button class="hora-btn opcion" data-momento="atardecer" data-nombre="Atardecer">
+    <svg><use href="#i-sun-horizon"></use></svg>
+  </button>
+  <button class="hora-btn opcion" data-momento="noche" data-nombre="Noche">
+    <svg><use href="#i-moon"></use></svg>
+  </button>
+</div>
+
+<section class="capa" id="capaRenders" aria-label="Renders">
+  <button class="capa-cerrar" data-cierra="capaRenders" aria-label="Cerrar"><svg><use href="#i-x"></use></svg></button>
+  <div class="marco">
+    <img id="renderGrande" alt="">
+    <div class="tiras" id="renderTiras"></div>
+    <p class="pie" id="renderPie"></p>
+  </div>
+</section>
+
+<section class="capa" id="capaVideo" aria-label="Vídeo">
+  <button class="capa-cerrar" data-cierra="capaVideo" aria-label="Cerrar"><svg><use href="#i-x"></use></svg></button>
+  <div class="marco">
+    <video id="videoProm" controls playsinline preload="none"></video>
+    <p class="pie" id="videoPie"></p>
+  </div>
+</section>
+
+<!-- La interfaz anterior sigue en el documento porque main.js y ui.js todavía
+     se apoyan en sus elementos. No se ve: se irá retirando pieza a pieza a
+     medida que la carcasa nueva asuma cada función. -->
+<div id="legado" hidden>
+<div id="app">
+  
+
+  <!-- ══════════ HERO / LANDING (UNIK → promociones) ══════════ -->
+  <div id="hero">
+    <div class="hero-inner">
+      <img class="unik-logo" src="assets/logo_unik.png" alt="UNIK">
+      <div class="hero-bottom">
+        <h1>Desarrollos inmobiliarios<br>que redefinen el lujo</h1>
+        <p class="hero-sub">Selecciona una de nuestras promociones.</p>
+        <div id="promoCards"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════ TOP BAR (2 filas planas + switch día/noche colgante) ══════════ -->
+  <header id="topbar" class="ui hidden-ui">
+    <div class="tb-row tb-row1">
+      <button id="backHome" title="Volver a las promociones"><svg><use href="#i-back"/></svg></button>
+      <strong id="brandName">SERENEA</strong>
+      <div class="tb-spacer"></div>
+      <div class="bld-sel" id="bldSel" title="Elegir edificio">
+        <button id="bldBtn" aria-haspopup="listbox" aria-expanded="false">
+          <span id="bldLabel"></span><svg><use href="#i-chev"/></svg>
+        </button>
+        <div id="bldMenu" role="listbox"></div>
+      </div>
+    </div>
+    <div class="tb-row tb-row2">
+      <nav id="floorNav" aria-label="Plantas">
+        <div id="floorBtns"></div>
+        <button class="floor-btn floor-all active" data-floor="all">
+          <span class="fb-short">Todo</span>
+        </button>
+      </nav>
+      <div class="tb-spacer"></div>
+      <button id="envToggle" class="hidden" title="Entorno real" aria-pressed="false">
+        <svg><use href="#i-globe"/></svg>
+      </button>
+      <button id="filtersToggle" title="Filtrar viviendas">
+        <svg><use href="#i-filter"/></svg><span class="ft-label">Filtrar</span>
+        <span class="ft-count" id="filterCount"></span>
+      </button>
+    </div>
+    <button id="dnToggle" class="dn-switch" role="switch" aria-checked="false" aria-label="Modo día / noche">
+      <span class="dn-ico dn-sun"><svg><use href="#i-sun"/></svg></span>
+      <span class="dn-ico dn-moon"><svg><use href="#i-moon"/></svg></span>
+    </button>
+  </header>
+
+  <!-- ══════════ MODOS (píldora inferior) ══════════ -->
+  <nav id="modeBar" class="ui hidden-ui" aria-label="Modo de vista">
+    <button id="modo3d" class="mode-btn active" title="Vista 3D orbital">
+      <svg><use href="#i-cube"/></svg>
+    </button>
+    <button id="modoPlano" class="mode-btn" title="Vista cenital de la planta">
+      <svg><use href="#i-plan"/></svg>
+    </button>
+    <button id="modoLista" class="mode-btn" title="Listado de viviendas">
+      <svg><use href="#i-list"/></svg>
+    </button>
+  </nav>
+
+  <!-- ══════════ FILTERS ══════════ -->
+  <aside id="filters" class="ui">
+    <div id="filtersBody">
+      <div class="f-scroll">
+      <div class="f-group">
+        <p>Dormitorios</p>
+        <div class="chips" id="chipsDorm">
+          <button class="chip" data-dorm="1">1D</button>
+          <button class="chip" data-dorm="2">2D</button>
+          <button class="chip" data-dorm="3">3D</button>
+        </div>
+      </div>
+      <div class="f-group">
+        <p>Estado</p>
+        <div class="chips" id="chipsEstado">
+          <button class="chip" data-estado="disponible"><i class="dot d-disp"></i>Disponible</button>
+          <button class="chip" data-estado="reservada"><i class="dot d-res"></i>Reservada</button>
+          <button class="chip" data-estado="vendida"><i class="dot d-ven"></i>Vendida</button>
+        </div>
+      </div>
+      <div class="f-group">
+        <p>Orientación</p>
+        <div class="chips" id="chipsOrient">
+          <button class="chip" data-orient="Suroeste">Suroeste</button>
+          <button class="chip" data-orient="Noreste">Noreste</button>
+          <button class="chip" data-orient="Jardín interior">Jardín int.</button>
+        </div>
+      </div>
+      <div class="f-group">
+        <p>Precio máximo</p>
+        <input type="range" id="priceMax" min="121000" max="481000" step="5000" value="481000">
+        <div class="price-pill" id="priceMaxLabel"></div>
+      </div>
+      <div class="f-group">
+        <p>Con terraza</p>
+        <div class="chips"><button class="chip" id="chipTerraza">Sólo con terraza</button></div>
+      </div>
+      <button id="filtersReset">Limpiar filtros</button>
+      </div>
+      <button id="filtersApply">Aplicar filtros</button>
+    </div>
+  </aside>
+
+  <!-- ══════════ COMPASS (oculta en el rediseño flat; la aguja sigue viva en JS) ══════════ -->
+  <div id="compass" class="ui hidden-ui" title="Norte"><div id="needle">N</div></div>
+  <div id="attrib" class="ui hidden-ui">Imagen aérea © Esri, Maxar, Earthstar Geographics</div>
+
+  <!-- ══════════ ÚLTIMAS VISTAS (solo pantallas grandes; en memoria) ══════════ -->
+  <nav id="recentDock" class="ui hidden-ui" aria-label="Últimas viviendas vistas"></nav>
+
+  <!-- ══════════ TOOLTIP ══════════ -->
+  <div id="tooltip"></div>
+
+  <!-- ══════════ DETAIL PANEL ══════════ -->
+  <aside id="panel" class="ui">
+    <button id="panelClose" title="Cerrar">✕</button>
+    <div id="panelBody"></div>
+  </aside>
+
+  <!-- ══════════ LISTADO (tarjetas con plano) ══════════ -->
+  <section id="listado">
+    <div id="unitsList"></div>
+  </section>
+
+  <!-- ══════════ LIGHTBOX (planos) ══════════ -->
+  <div id="lightbox">
+    <button id="lbClose">✕</button>
+    <figure><img id="lbImg" alt="Plano de planta"><figcaption id="lbCap"></figcaption></figure>
+  </div>
+
+  <button id="skipIntro">Saltar intro ›</button>
+
+  <div id="loader"><div class="spin"></div><p>Preparando el showroom…</p></div>
+</div>
+
+<!-- Atribución de Google, obligatoria mientras se muestren sus teselas. -->
+<div id="envAttr" class="ui hidden" aria-live="polite"></div>
+</div>
+
+<script>window.MAPS_API_KEY = '__MAPS_KEY__';</script>
+<script type="module">import 'app/main.js'; import 'app/shell.js';</script>
+</body>
+</html>

@@ -1,0 +1,338 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   shell.css — La carcasa del visor.
+
+   Todo el peso visual lo lleva el 3D: la interfaz es una lámina de cristal
+   sobre él. La barra lateral no tiene fondo propio, sino que desenfoca y
+   satura lo que hay detrás, de modo que cambia de color según a dónde mire
+   la cámara. Ese es el efecto de la referencia.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --rail: 76px;
+  --glass: rgba(16, 20, 24, 0.28);
+  --glass-alta: rgba(16, 20, 24, 0.42);
+  --linea: rgba(255, 255, 255, 0.16);
+  --tinta: rgba(255, 255, 255, 0.92);
+  --tinta-baja: rgba(255, 255, 255, 0.62);
+  --radio: 12px;
+  --sombra: 0 8px 32px rgba(0, 0, 0, 0.28);
+  --tipo: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  width: 100%;
+  max-width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #0b0f13;
+  font-family: var(--tipo);
+  -webkit-font-smoothing: antialiased;
+}
+
+#app { position: fixed; inset: 0; }
+
+#scene { display: block; width: 100%; height: 100%; }
+
+/* ─────────────────────────── Barra lateral ─────────────────────────── */
+
+/* El degradado de la máscara es lo que evita el corte duro contra la escena:
+   la banda se desvanece por el borde izquierdo en vez de terminar en una
+   línea recta. Sin esto parece una barra pegada encima; con esto parece
+   cristal apoyado sobre la imagen. */
+#rail {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--rail);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 18px 0 20px;
+  z-index: 20;
+  background: linear-gradient(100deg, var(--glass-alta) 0%, var(--glass) 55%, rgba(16, 20, 24, 0.18) 100%);
+  backdrop-filter: blur(20px) saturate(1.45);
+  -webkit-backdrop-filter: blur(20px) saturate(1.45);
+  border-right: 1px solid var(--linea);
+}
+
+#brand {
+  width: 44px;
+  height: 44px;
+  margin-bottom: 46px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+}
+#brand img { width: 100%; height: 100%; object-fit: contain; }
+/* Hasta que llegue el logotipo definitivo, las siglas con el mismo peso
+   óptico que tendrá la marca. */
+#brand .siglas {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  color: var(--tinta);
+  text-indent: 0.18em;
+}
+
+.grupo { display: flex; flex-direction: column; gap: 12px; }
+.grupo + .grupo { margin-top: auto; }
+
+.rail-btn {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--linea);
+  border-radius: var(--radio);
+  background: transparent;
+  color: var(--tinta);
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+.rail-btn svg { width: 21px; height: 21px; fill: currentColor; }
+.rail-btn:hover { background: rgba(255, 255, 255, 0.12); border-color: rgba(255, 255, 255, 0.3); }
+/* El estado activo invierte, como en la referencia: es lo que hace que la
+   botonera se lea de un vistazo sin necesidad de etiquetas. */
+.rail-btn.on {
+  background: #fff;
+  color: #12171c;
+  border-color: #fff;
+}
+
+/* Etiqueta al pasar el ratón: aparece a la derecha del botón, no encima. */
+.rail-btn::after {
+  content: attr(data-nombre);
+  position: absolute;
+  left: calc(100% + 12px);
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(10, 13, 16, 0.82);
+  backdrop-filter: blur(10px);
+  color: var(--tinta);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.16s ease;
+}
+.rail-btn:hover::after { opacity: 1; }
+
+/* ─────────────────────────── Selector de planta ─────────────────────────── */
+
+#plantas {
+  position: absolute;
+  left: calc(var(--rail) + 14px);
+  top: 50%;
+  transform: translateY(-50%) translateX(-8px);
+  z-index: 19;
+  padding: 16px 18px 18px;
+  border-radius: 16px;
+  border: 1px solid var(--linea);
+  background: var(--glass-alta);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  box-shadow: var(--sombra);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+#plantas.abierto { opacity: 1; pointer-events: auto; transform: translateY(-50%) translateX(0); }
+
+#plantas h2 {
+  margin: 0 0 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--linea);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--tinta-baja);
+}
+
+.rejilla { display: grid; grid-template-columns: repeat(3, 34px); gap: 8px; }
+
+.planta-btn {
+  height: 34px;
+  border: 1px solid var(--linea);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--tinta);
+  font-family: var(--tipo);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease;
+}
+.planta-btn:hover { background: rgba(255, 255, 255, 0.12); border-color: rgba(255, 255, 255, 0.3); }
+.planta-btn.on { background: #fff; color: #12171c; border-color: #fff; }
+.planta-btn.ancho { grid-column: 1 / -1; font-size: 11px; letter-spacing: 0.08em; }
+
+/* ─────────────────────────── Momento del día ─────────────────────────── */
+
+#horas {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.hora-btn {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--linea);
+  border-radius: var(--radio);
+  background: var(--glass-alta);
+  backdrop-filter: blur(16px) saturate(1.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  color: var(--tinta);
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.18s ease, color 0.18s ease, opacity 0.2s ease, transform 0.2s ease;
+}
+.hora-btn svg { width: 19px; height: 19px; fill: currentColor; }
+.hora-btn:hover { background: rgba(255, 255, 255, 0.16); }
+.hora-btn.on { background: #fff; color: #12171c; border-color: #fff; }
+
+/* Las opciones nacen plegadas detrás del botón principal. */
+#horas .opcion { opacity: 0; transform: translateY(-8px); pointer-events: none; }
+#horas.abierto .opcion { opacity: 1; transform: translateY(0); pointer-events: auto; }
+
+.hora-btn::after {
+  content: attr(data-nombre);
+  position: absolute;
+  right: calc(100% + 12px);
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(10, 13, 16, 0.82);
+  backdrop-filter: blur(10px);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--tinta);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.16s ease;
+}
+.hora-btn:hover::after { opacity: 1; }
+
+/* ─────────────────────────── Capas a pantalla completa ─────────────────── */
+
+.capa {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 40px 40px 40px calc(var(--rail) + 40px);
+  background: rgba(8, 11, 14, 0.82);
+  backdrop-filter: blur(24px) saturate(1.2);
+  -webkit-backdrop-filter: blur(24px) saturate(1.2);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.28s ease;
+}
+.capa.abierta { opacity: 1; pointer-events: auto; }
+
+.capa-cerrar {
+  position: absolute;
+  top: 22px;
+  right: 22px;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--linea);
+  border-radius: var(--radio);
+  background: transparent;
+  color: var(--tinta);
+  cursor: pointer;
+}
+.capa-cerrar svg { width: 19px; height: 19px; fill: currentColor; }
+.capa-cerrar:hover { background: rgba(255, 255, 255, 0.12); }
+
+#renders .marco, #video .marco {
+  width: min(100%, 1400px);
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+#renders img, #video video {
+  width: 100%;
+  max-height: calc(100vh - 190px);
+  object-fit: contain;
+  border-radius: 14px;
+  background: #0d1114;
+}
+
+.tiras { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.tiras button {
+  width: 96px;
+  height: 58px;
+  padding: 0;
+  border: 1px solid var(--linea);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #0d1114;
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 0.16s ease, border-color 0.16s ease;
+}
+.tiras button.on, .tiras button:hover { opacity: 1; border-color: rgba(255, 255, 255, 0.55); }
+.tiras img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.capa .pie {
+  text-align: center;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--tinta-baja);
+}
+
+/* ─────────────────────────── Móvil ─────────────────────────── */
+/* La herramienta vive en pantallas de la comercializadora, pero que un
+   teléfono no la rompa: el raíl pasa abajo y los paneles se centran. */
+@media (max-width: 760px) {
+  :root { --rail: 100%; }
+  #rail {
+    top: auto;
+    bottom: 0;
+    height: 68px;
+    width: 100%;
+    flex-direction: row;
+    justify-content: center;
+    gap: 10px;
+    padding: 0 14px;
+    border-right: none;
+    border-top: 1px solid var(--linea);
+    background: linear-gradient(0deg, var(--glass-alta) 0%, var(--glass) 100%);
+  }
+  #brand { display: none; }
+  .grupo { flex-direction: row; gap: 10px; }
+  .grupo + .grupo { margin-top: 0; }
+  .rail-btn::after { display: none; }
+  #plantas { left: 50%; top: auto; bottom: 84px; transform: translateX(-50%); }
+  #plantas.abierto { transform: translateX(-50%); }
+  .capa { padding: 24px 20px 90px; }
+}
