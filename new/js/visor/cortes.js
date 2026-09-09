@@ -104,6 +104,30 @@
      assets/serenea/apolo_envolvente.glb). Para esos modelos,
      `opciones.tapasCSG = false` y `opciones.tapasStencil = false` cortan sin
      tapas; el corte en sí (qué queda y qué se va) es correcto igualmente.
+   · Integración del modelo de SketchUp (9-sep), añadidos:
+     - `opciones.csg = false`: nunca se calcula CSG. Si al terminar la
+       transición la variante precortada de esa planta aún no ha llegado
+       (se descargan en segundo plano), el recorte por planos se queda en
+       su cota final (`cortes.provisional = true`) y en cuanto main llama a
+       `registrarVariante(clave, objeto)` se cambia al fichero. El trazador
+       no entiende de planos de recorte, así que main no lo arranca mientras
+       `provisional` sea true.
+     - `registrarMobiliario(objeto)`: el mobiliario llega después de la
+       primera imagen; se registra tarde y se le aplica la visibilidad de la
+       planta actual. Si `preparar()` aún no ha corrido, espera en cola.
+     - `opciones.atenuacionPorCota`: la atenuación de las plantas inferiores
+       ya no va por niveles (el SketchUp es un solo nivel) sino en el shader:
+       un uniforme con la cota de corte de cada cajón (rejilla de hasta 4
+       columnas × 2 filas derivada de las huellas) y un `uAtenuacion` que
+       sube a 1 al elegir planta; los fragmentos con worldY < cota − 3,2
+       (la planta activa es la franja de 3 m bajo el corte) pierden un 40 %
+       de color y un 75 % de entorno. Los uniformes son objetos compartidos
+       entre todos los materiales y sus clones: se actualizan una vez.
+     - Las caras traseras oscuras van además sin especular (rugosidad 1,
+       metalicidad 0 y reflejos a cero) y se saltan los materiales con
+       `userData.sinTraseras` (el vidrio: por dentro se vería negro).
+     - `preparar()` es público para que main registre los materiales antes
+       del primer fotograma con edificio (los hooks recompilan el shader).
    ═══════════════════════════════════════════════════════════════════════════ */
 import * as THREE from 'three';
 import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg';
@@ -273,25 +297,89 @@ function yminMobiliario(mesh, caja) {
    ya tenga el material (grano, CSM) y se distingue en la clave del programa. */
 const COLOR_TRASERA = 'vec3(0.05, 0.055, 0.06)';
 function oscurecerTraseras(material) {
-  if (!material || material.userData.carasOscuras) return;
+  if (!material || material.userData.carasOscuras || material.userData.sinTraseras) return;
   material.userData.carasOscuras = true;
   material.side = THREE.DoubleSide;
   const previo = material.onBeforeCompile;
   const clavePrevia = material.customProgramCacheKey?.bind(material);
+  const textoPrevio = previo ? previo.toString() : '';
   material.onBeforeCompile = function (shader, r) {
     if (previo) previo.call(this, shader, r);
-    shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>',
-      `#include <color_fragment>\n  if (!gl_FrontFacing) diffuseColor.rgb = ${COLOR_TRASERA};`);
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <color_fragment>',
+        `#include <color_fragment>\n  if (!gl_FrontFacing) diffuseColor.rgb = ${COLOR_TRASERA};`)
+      .replace('#include <roughnessmap_fragment>',
+        '#include <roughnessmap_fragment>\n  if (!gl_FrontFacing) roughnessFactor = 1.0;')
+      .replace('#include <metalnessmap_fragment>',
+        '#include <metalnessmap_fragment>\n  if (!gl_FrontFacing) metalnessFactor = 0.0;')
+      .replace('#include <lights_fragment_end>',
+        '#include <lights_fragment_end>\n  if (!gl_FrontFacing) { reflectedLight.directSpecular = vec3(0.0); reflectedLight.indirectSpecular = vec3(0.0); }');
   };
-  material.customProgramCacheKey = () => `${clavePrevia ? clavePrevia() : ''}|traseras`;
+  /* three usa el texto de onBeforeCompile como clave del programa; con el
+     envoltorio todas serían iguales, así que se añade el texto del hook
+     interior (grano, CSM…) para no compartir shader entre materiales
+     distintos. */
+  material.customProgramCacheKey = () => `${clavePrevia ? clavePrevia() : ''}|${textoPrevio}|traseras`;
+  material.needsUpdate = true;
+}
+
+/* Atenuación de las plantas inferiores en el shader (ver cabecera). Los
+   uniformes se crean por instancia de cortes y se comparten entre todos los
+   materiales que pasan por aquí. */
+const GLSL_ATENUACION = /* glsl */`
+  varying vec3 vPosMundoCorte;
+  uniform float uCortes[8];
+  uniform vec3 uBordesX;
+  uniform float uBordeZ;
+  uniform float uFilasZ;
+  uniform float uAtenuacion;
+  float atenuacionCorte(vec3 p) {
+    float col = step(uBordesX.x, p.x) + step(uBordesX.y, p.x) + step(uBordesX.z, p.x);
+    float fila = uFilasZ > 1.5 ? step(uBordeZ, p.z) : 0.0;
+    float cota = uCortes[int(col * uFilasZ + fila)];
+    return uAtenuacion * (1.0 - smoothstep(cota - 3.4, cota - 3.0, p.y));
+  }`;
+function crearUniformesAtenuacion() {
+  return {
+    uCortes: { value: new Float32Array(8).fill(1e6) },
+    uBordesX: { value: new THREE.Vector3(1e9, 1e9, 1e9) },
+    uBordeZ: { value: 1e9 },
+    uFilasZ: { value: 1 },
+    uAtenuacion: { value: 0 },
+  };
+}
+function atenuarPorCota(material, uniformes) {
+  if (!material || material.userData.atenuacionCorte || !material.isMeshStandardMaterial) return;
+  material.userData.atenuacionCorte = true;
+  const previo = material.onBeforeCompile;
+  const clavePrevia = material.customProgramCacheKey?.bind(material);
+  const textoPrevio = previo ? previo.toString() : '';
+  material.onBeforeCompile = function (shader, r) {
+    if (previo) previo.call(this, shader, r);
+    Object.assign(shader.uniforms, uniformes); // los mismos objetos: un cambio llega a todos los programas
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\n  varying vec3 vPosMundoCorte;')
+      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\n  vPosMundoCorte = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>\n${GLSL_ATENUACION}`)
+      .replace('#include <color_fragment>',
+        '#include <color_fragment>\n  float atCorte = atenuacionCorte(vPosMundoCorte);\n  diffuseColor.rgb *= 1.0 - 0.4 * atCorte;')
+      .replace('#include <lights_fragment_end>',
+        '#include <lights_fragment_end>\n  reflectedLight.indirectSpecular *= 1.0 - 0.75 * atCorte;\n  reflectedLight.indirectDiffuse *= 1.0 - 0.25 * atCorte;');
+  };
+  material.customProgramCacheKey = () => `${clavePrevia ? clavePrevia() : ''}|${textoPrevio}|atenuacion`;
   material.needsUpdate = true;
 }
 
 const aMapa = (v) => (v instanceof Map ? new Map(v) : new Map(Object.entries(v || {})));
 
 export function crearCortes(ctx, edificio, opciones = {}) {
-  const { url = 'data/cortes.json', luz = null, tapasCSG = true, tapasStencil = true, carasOscuras = false } = opciones;
+  const { url = 'data/cortes.json', luz = null, tapasCSG = true, tapasStencil = true, carasOscuras = false,
+    csg = true, atenuacionPorCota = false } = opciones;
   const { scene } = ctx;
+  const uniformesAtenuacion = crearUniformesAtenuacion();
+  const atenCota = { valor: 0, objetivo: 0 };
+  let celdas = [];                 // [{ indice de uniforme, tramo }] de la rejilla de atenuación
 
   const grupo = new THREE.Group();
   grupo.name = 'cortes';
@@ -306,6 +394,7 @@ export function crearCortes(ctx, edificio, opciones = {}) {
     definicion: opciones.definicion || null,
     planta: 'all',
     enTransicion: false,
+    provisional: false,  // recorte por planos a la espera de la variante precortada (ver cabecera)
     listo: null,
     tiempos: {},
     grupo,
@@ -315,6 +404,7 @@ export function crearCortes(ctx, edificio, opciones = {}) {
     variantes: aMapa(opciones.variantes || edificio.variantes), // clave → Object3D precortado (puede rellenarse después)
   };
   let aplicada = null;             // última planta aplicada de verdad (aplicarFinal)
+  const mobiliarioPendiente = [];  // registrado antes de preparar()
 
   let piezas = [];                 // una por malla del edificio
   const nivelDeClave = new Map();  // clave → { clave, nivel, mats, minY }
@@ -375,6 +465,32 @@ export function crearCortes(ctx, edificio, opciones = {}) {
       tapas[i] = tapa;
       grupo.add(tapa);
     }
+    /* Rejilla de la atenuación por cota: columnas por los x0 distintos y
+       filas por los z0 distintos de las huellas (hasta 4 × 2; si hay más,
+       todas las celdas llevan la media). */
+    const bordes = (clave) => [...new Set(cortes.tramos.map((t) => t[clave]))].sort((a, b) => a - b);
+    const xs = bordes('x0'), zs = bordes('z0');
+    const cabe = xs.length <= 4 && zs.length <= 2;
+    const u = uniformesAtenuacion;
+    u.uBordesX.value.set(cabe && xs[1] != null ? xs[1] : 1e9, cabe && xs[2] != null ? xs[2] : 1e9, cabe && xs[3] != null ? xs[3] : 1e9);
+    u.uBordeZ.value = cabe && zs[1] != null ? zs[1] : 1e9;
+    u.uFilasZ.value = cabe ? zs.length : 1;
+    celdas = [];
+    if (cabe) {
+      for (const [c, x0] of xs.entries()) for (const [f, z0] of zs.entries()) {
+        const tramo = cortes.tramos.findIndex((t) => t.x0 === x0 && t.z0 === z0);
+        if (tramo >= 0) celdas.push({ indice: c * zs.length + f, tramo });
+      }
+    } else celdas = cortes.tramos.map((_, i) => ({ indice: 0, tramo: i, media: true }));
+    actualizarUniformesCorte();
+  }
+  function actualizarUniformesCorte() {
+    const v = uniformesAtenuacion.uCortes.value;
+    if (celdas.length && celdas[0].media) {
+      v.fill(cortes.alturas.reduce((s, h) => s + h, 0) / Math.max(1, cortes.alturas.length));
+      return;
+    }
+    for (const c of celdas) v[c.indice] = cortes.alturas[c.tramo] ?? cortes.techo;
   }
   if (cortes.definicion) {
     fijarDefinicion(cortes.definicion);
@@ -419,11 +535,7 @@ export function crearCortes(ctx, edificio, opciones = {}) {
         if (luz) luz.aplicarMaterial(byCat.cap);
       }
       const mats = (nivel.mats?.length ? nivel.mats : Object.values(byCat).filter((m) => m && m !== byCat.cap));
-      for (const m of mats) {
-        if (!m.userData.baseColor) m.userData.baseColor = m.color.clone();
-        if (m.userData.baseEnv == null) m.userData.baseEnv = m.envMapIntensity ?? 1;
-        if (carasOscuras) oscurecerTraseras(m);
-      }
+      for (const m of mats) prepararMaterial(m);
       const info = { clave, nivel, mats, minY: Infinity };
       nivelDeClave.set(clave, info);
       atenuacion.set(clave, { valor: 0, objetivo: 0 });
@@ -448,23 +560,49 @@ export function crearCortes(ctx, edificio, opciones = {}) {
         if (!esTapa && !esMob) { techo = Math.max(techo, caja.max.y); info.minY = Math.min(info.minY, caja.min.y); }
       }
     }
-    // mobiliario aparte (opciones.mobiliario): nunca se corta, solo se oculta por cota
-    const mob = opciones.mobiliario;
-    const listaMob = Array.isArray(mob) ? mob : [];
-    if (mob && !Array.isArray(mob) && mob.traverse) mob.traverse((o) => { if (o.isMesh) listaMob.push(o); });
-    for (const mesh of listaMob) {
-      if (piezas.some((p) => p.mesh === mesh)) continue;
-      const caja = new THREE.Box3().setFromObject(mesh);
-      const centro = caja.getCenter(new THREE.Vector3());
-      const porNombre = /__T(\d+)__/.exec(mesh.name);
-      const principal = (porNombre && cortes.tramos[+porNombre[1]] ? +porNombre[1] : null) ?? tramoEn(centro.x, centro.z);
-      piezas.push({ mesh, clave: null, nivel: null, caja, tramos: [principal], principal, esTapa: false, esMob: true, esLosa: false,
-        ymin: yminMobiliario(mesh, caja), visibleBase: mesh.visible, clones: new Map(), estencil: new Map(), brush: null });
-    }
     nivelesOrdenados = [...nivelDeClave.values()].sort((a, b) => a.minY - b.minY).map((n) => n.clave);
     if (techo > -Infinity) cortes.techo = techo + 1;
     cortes.alturas = cortes.tramos.map(() => cortes.techo);
     for (const [i, t] of cortes.tramos.entries()) { planos[i][HORIZONTAL].constant = cortes.techo; tapas[i].position.y = cortes.techo; }
+    actualizarUniformesCorte();
+    // mobiliario aparte (opciones.mobiliario y registrarMobiliario): nunca se corta, solo se oculta por cota
+    for (const mob of [opciones.mobiliario, ...mobiliarioPendiente]) if (mob) registrarPiezasMobiliario(mob);
+    mobiliarioPendiente.length = 0;
+  }
+
+  /* Color y entorno de referencia (atenuación por niveles), caras traseras
+     oscuras y atenuación por cota, según las opciones. Idempotente. */
+  function prepararMaterial(m) {
+    if (!m || !m.color) return;
+    if (!m.userData.baseColor) m.userData.baseColor = m.color.clone();
+    if (m.userData.baseEnv == null) m.userData.baseEnv = m.envMapIntensity ?? 1;
+    if (carasOscuras) oscurecerTraseras(m);
+    if (atenuacionPorCota) atenuarPorCota(m, uniformesAtenuacion);
+  }
+  function materialesDe(objeto) {
+    const mats = new Set();
+    objeto.traverse((o) => { if (o.isMesh) for (const m of Array.isArray(o.material) ? o.material : [o.material]) mats.add(m); });
+    return mats;
+  }
+
+  function registrarPiezasMobiliario(mob) {
+    const listaMob = Array.isArray(mob) ? mob : [];
+    if (mob && !Array.isArray(mob) && mob.traverse) mob.traverse((o) => { if (o.isMesh) listaMob.push(o); });
+    const nuevas = [];
+    for (const mesh of listaMob) {
+      if (piezas.some((p) => p.mesh === mesh)) continue;
+      mesh.updateMatrixWorld(true);
+      const caja = new THREE.Box3().setFromObject(mesh);
+      const centro = caja.getCenter(new THREE.Vector3());
+      const porNombre = /__T(\d+)__/.exec(mesh.name);
+      const principal = (porNombre && cortes.tramos[+porNombre[1]] ? +porNombre[1] : null) ?? tramoEn(centro.x, centro.z);
+      const p = { mesh, clave: null, nivel: null, caja, tramos: [principal], principal, esTapa: false, esMob: true, esLosa: false,
+        ymin: yminMobiliario(mesh, caja), visibleBase: mesh.visible, clones: new Map(), estencil: new Map(), brush: null };
+      piezas.push(p);
+      nuevas.push(p);
+      for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) prepararMaterial(m);
+    }
+    return nuevas;
   }
 
   /* ── Transición: clones recortados y stencil ── */
@@ -662,13 +800,26 @@ export function crearCortes(ctx, edificio, opciones = {}) {
 
   function aplicarFinal(clave) {
     preparar();
-    ocultarTransitorios();
     for (const m of cortadasActivas) m.visible = false;
     cortadasActivas = [];
     const cotas = cotasDe(clave);
     // vía principal del contrato: fichero precortado si lo hay; si no, CSG
     const variante = cotas ? cortes.variantes.get(clave) : null;
     for (const [k, v] of cortes.variantes) if (v) v.visible = v === variante;
+    cortes.alturas = cotas ? cotas.slice() : cortes.tramos.map(() => cortes.techo);
+    actualizarUniformesCorte();
+    /* Sin CSG y sin variante todavía: el recorte por planos se queda en su
+       cota final hasta que registrarVariante traiga el fichero. */
+    cortes.provisional = !!(cotas && !variante && !csg);
+    if (cortes.provisional) {
+      for (const p of piezas) if (!p.esTapa && !p.esMob) p.mesh.visible = p.visibleBase;
+      aplicarRecorte();
+      fantasmasPara(clave);
+      aplicada = clave;
+      ctx.emit('geometria', { planta: clave });
+      return;
+    }
+    ocultarTransitorios();
     const mapa = cotas && !variante ? calcular(clave) : null;
     for (const p of piezas) {
       if (p.esTapa) { p.mesh.visible = false; continue; }
@@ -685,17 +836,17 @@ export function crearCortes(ctx, edificio, opciones = {}) {
       const hs = p.tramos.map((i) => cotas[i]);
       p.mesh.visible = p.caja.max.y <= Math.min(...hs) + EPS; // si no, entera por encima
     }
-    cortes.alturas = cotas ? cotas.slice() : cortes.tramos.map(() => cortes.techo);
     fantasmasPara(clave);
     aplicada = clave;
     ctx.emit('geometria', { planta: clave });
   }
 
   function fijarObjetivosAtenuacion(clave) {
+    atenCota.objetivo = clave !== 'all' ? 1 : 0;
     const k = nivelesOrdenados.indexOf(clave);
     for (const [nivel, a] of atenuacion) {
       const j = nivelesOrdenados.indexOf(nivel);
-      a.objetivo = clave !== 'all' && k >= 0 && j < k ? 1 : 0;
+      a.objetivo = !atenuacionPorCota && clave !== 'all' && k >= 0 && j < k ? 1 : 0;
     }
   }
 
@@ -736,6 +887,7 @@ export function crearCortes(ctx, edificio, opciones = {}) {
         trans.hasta = hasta;
         trans.resolver = resolver;
         cortes.enTransicion = true;
+        cortes.provisional = false;
         // durante la transición manda el recorte: fuera la geometría CSG
         for (const m of cortadasActivas) m.visible = false;
         cortadasActivas = [];
@@ -773,16 +925,45 @@ export function crearCortes(ctx, edificio, opciones = {}) {
         a.valor = a.objetivo = 0;
       }
       for (const v of cortes.variantes.values()) if (v) v.visible = false;
+      uniformesAtenuacion.uAtenuacion.value = 0;
+      atenCota.valor = atenCota.objetivo = 0;
       grupo.clear();
       scene.remove(grupo);
       cache.clear(); parciales.clear(); cortadores.clear(); piezas = []; fantasmas.length = 0;
-      preparado = false; aplicada = null; cortes.planta = 'all';
+      preparado = false; aplicada = null; cortes.planta = 'all'; cortes.provisional = false;
     },
+
+    /* Variante precortada que llega tarde (segundo plano): si es la planta
+       que se está viendo de forma provisional, se cambia al fichero ya. */
+    registrarVariante(clave, objeto) {
+      if (!objeto) return;
+      for (const m of materialesDe(objeto)) prepararMaterial(m);
+      objeto.visible = false;
+      cortes.variantes.set(clave, objeto);
+      if (aplicada === clave && !trans.activa) aplicarFinal(clave);
+    },
+
+    registrarMobiliario(objeto) {
+      if (!objeto) return;
+      if (!preparado) { mobiliarioPendiente.push(objeto); return; }
+      const nuevas = registrarPiezasMobiliario(objeto);
+      const h = cortes.alturas;
+      for (const p of nuevas) p.mesh.visible = p.visibleBase && p.ymin < h[p.principal] - EPS;
+    },
+
+    preparar,
 
     update(dt) {
       if (!preparado) return;
       // atenuación de las plantas inferiores, con la misma rampa que animateFloors
       const k = Math.min(1, dt * 4.5);
+      if (atenuacionPorCota) {
+        if (atenCota.valor !== atenCota.objetivo) {
+          atenCota.valor = Math.abs(atenCota.objetivo - atenCota.valor) < 0.002 ? atenCota.objetivo : atenCota.valor + (atenCota.objetivo - atenCota.valor) * k;
+          uniformesAtenuacion.uAtenuacion.value = atenCota.valor;
+        }
+        if (trans.activa) actualizarUniformesCorte();
+      }
       for (const [clave, a] of atenuacion) {
         if (a.valor === a.objetivo) continue;
         a.valor = Math.abs(a.objetivo - a.valor) < 0.002 ? a.objetivo : a.valor + (a.objetivo - a.valor) * k;
