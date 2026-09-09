@@ -65,21 +65,37 @@ const top = escena.listChildren()[0].listChildren();
 const nodoApolo = top.find((n) => /APOLO_Central/i.test(n.getName()));
 const nodoEntorno = top.find((n) => /Terreno, costa/i.test(n.getName()));
 const nodoCortes = top.find((n) => /^APOLO CORTES$/i.test(n.getName()));
-if (!nodoApolo || !nodoEntorno || !nodoCortes) throw new Error('No encuentro Apolo, el entorno o los cortes en el GLB');
+if (!nodoApolo || !nodoEntorno) throw new Error('No encuentro Apolo o el entorno en el GLB');
 log('leído', ENTRADA, `nodos ${root.listNodes().length}, mallas ${root.listMeshes().length}`);
 
 /* ─────────────────────────── 1. Cortes ─────────────────────────── */
 const f2 = (v) => Math.round(v * 100) / 100;
-const cortes = { edificio: 'apolo', origen: path.basename(ENTRADA), plantas: {} };
-for (const P of PLANTAS) {
-  const n = nodoCortes.listChildren().find((c) => c.getName().toUpperCase() === P.corte);
-  if (!n) throw new Error(`Falta el componente ${P.corte}`);
-  cortes.plantas[P.key] = n.listChildren().map((h) => {
-    const b = getBounds(h);
-    return { x0: f2(b.min[0]), x1: f2(b.max[0]), z0: f2(b.min[2]), z1: f2(b.max[2]), y: f2(b.min[1]) };
-  }).sort((a, b) => a.x0 - b.x0 || a.z0 - b.z0);
+const RUTA_CORTES = path.join(RAIZ, 'data', 'cortes.json');
+let cortes;
+if (nodoCortes) {
+  cortes = { edificio: 'apolo', origen: path.basename(ENTRADA), plantas: {} };
+  for (const P of PLANTAS) {
+    const n = nodoCortes.listChildren().find((c) => c.getName().toUpperCase() === P.corte);
+    if (!n) throw new Error(`Falta el componente ${P.corte}`);
+    cortes.plantas[P.key] = n.listChildren().map((h) => {
+      const b = getBounds(h);
+      return { x0: f2(b.min[0]), x1: f2(b.max[0]), z0: f2(b.min[2]), z1: f2(b.max[2]), y: f2(b.min[1]) };
+    }).sort((a, b) => a.x0 - b.x0 || a.z0 - b.z0);
+  }
+  fs.writeFileSync(RUTA_CORTES, JSON.stringify(cortes, null, 1));
+} else {
+  /* Sin componentes de corte en el modelo: valen los guardados de la última
+     vez, siempre que Apolo no se haya movido. Se comprueba que su caja
+     sigue dentro de la huella de los cajones y se avisa si no. */
+  cortes = JSON.parse(fs.readFileSync(RUTA_CORTES, 'utf8'));
+  const b = getBounds(nodoApolo);
+  const huella = cortes.plantas.baja;
+  const hx0 = Math.min(...huella.map((c) => c.x0)), hx1 = Math.max(...huella.map((c) => c.x1));
+  const hz0 = Math.min(...huella.map((c) => c.z0)), hz1 = Math.max(...huella.map((c) => c.z1));
+  const fuera = b.min[0] < hx0 - 1 || b.max[0] > hx1 + 1 || b.min[2] < hz0 - 1 || b.max[2] > hz1 + 1;
+  log(`el modelo no trae CORTE P1..P4: se usan los cortes guardados (${cortes.origen})`);
+  if (fuera) log(`AVISO: Apolo (${b.min.map(f2)} … ${b.max.map(f2)}) se sale de la huella de los cortes guardados (${hx0}…${hx1} × ${hz0}…${hz1}). Incluye los componentes de corte en la exportación.`);
 }
-fs.writeFileSync(path.join(RAIZ, 'data', 'cortes.json'), JSON.stringify(cortes, null, 1));
 log('cortes:', PLANTAS.map((P) => `${P.key}: ${cortes.plantas[P.key].map((c) => c.y).join('/')}`).join(' · '));
 
 /* ─────────────────────────── 2. Clasificar Apolo ─────────────────────────── */
