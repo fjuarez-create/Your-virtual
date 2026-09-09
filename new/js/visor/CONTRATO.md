@@ -375,3 +375,27 @@ Consecuencias para los módulos:
 - Peso: envolvente 12 MB, mobiliario 30 MB, cortes 6–12 MB cada uno, entorno
   14 MB. Cargar en este orden: entorno + envolvente (primera imagen), luego
   mobiliario y cortes en segundo plano con `apolo.on('carga')`.
+
+## Contornos reales de vivienda (v6, 9-sep-2026, prevalece sobre lo anterior)
+
+`data/viviendas_serenea.json` trae el contorno exacto de las 166 viviendas
+(`viviendas.<id>: { planta, plataforma, poligono: [[x, z], …], y0, y1, area,
+supViv, supUtil, entrada, vidrios }`, metros del SketchUp), deducido de
+tabiques y puertas del v6 y numerado con los planos comerciales. Cambios:
+
+- **edificio.js**: los prismas de vivienda salen de ese polígono
+  (`THREE.Shape` + `ExtrudeGeometry` entre `y0` e `y1`), sin cajas ni
+  `layout.js`; la cartela va en el centroide a `y1 + 1,2`; los vidrios se
+  asignan por distancia a la huella (≤ 0,45 m) y por cota
+  (`y ∈ [y0 − 0,5, y0 + 3,2]`). `edificio.suelos` da el suelo mínimo por
+  planta y cajón y `edificio.comprobarPrismas()` contrasta caja y polígono.
+- **La planta activa NO es la franja de 3 m bajo el corte**: los planos de
+  corte del cliente están a altura de sección (1,3-1,4 m sobre el suelo en
+  p1/p2/ático, 1,9-2,0 en baja). cortes.js atenúa por debajo del suelo real
+  (`opciones.suelos` / `setSuelos`) y recorta con su plano el mobiliario que
+  cruza el corte.
+- **luz.js**: `setRealcePlanta(activo)` pone la planta seccionada a plena
+  luz (sol ≥ 62°, hemisférica ×1,6, IBL ×1,4; de noche hemisférica ×1,5).
+- **main.js**: encuadre de planta con la caja limitada a [suelo mínimo,
+  corte máximo], azimut 8°, elevación 50°, margen 1,02; trazador solo en
+  'all' y ya convergido (`minSamples` 48, fundido 1,2 s); SSR apagado.

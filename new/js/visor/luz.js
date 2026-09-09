@@ -41,6 +41,17 @@
    · Sin sol en la escena hasta que el cielo está listo: el fundido arranca
      cuando las texturas del destino existen, para que el cambio a mitad sea
      instantáneo y quede tapado por el bajón de exposición.
+   · Realce de planta seccionada (`luz.setRealcePlanta(activo, { duracion })`,
+     integración del v6): el cliente quiere la planta seccionada A PLENA LUZ,
+     como un gemelo digital comercial, no con la luz rasante del momento.
+     Con el realce activo (main lo enciende al elegir planta y lo apaga en
+     'all') el sol sube a ≥ 62° de elevación conservando el acimut del
+     momento, la hemisférica se multiplica ×1,6 y el IBL ×1,4 en amanecer,
+     día y atardecer; de noche la luna se queda donde está, el IBL no cambia
+     y la hemisférica sube ×1,5 para que la planta se lea. Todo con un
+     fundido de 1 s (REALCE.duracion) sobre `luz.realce`, aplicado encima de
+     los valores interpolados del momento: cambiar de momento con el realce
+     activo lo conserva, y volver a 'all' lo restaura.
    ═══════════════════════════════════════════════════════════════════════════ */
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
@@ -104,6 +115,8 @@ export const MOMENTOS = {
 };
 
 const ANCHO = 1024, ALTO = 512;
+/* Realce de la planta seccionada (ver cabecera). */
+export const REALCE = { elevacion: 62, hemi: 1.6, ibl: 1.4, hemiNoche: 1.5, duracion: 1.0 };
 const CLAVES_NUM = ['solInt', 'hemiInt', 'rellenoInt', 'exposicion', 'bloom', 'umbral', 'ibl', 'fondo', 'noche'];
 const CLAVES_COLOR = ['sol', 'cielo', 'suelo', 'relleno', 'niebla'];
 
@@ -574,6 +587,9 @@ export function crearLuz(ctx) {
   };
   let factorActual = 1;
   for (const k of CLAVES_COLOR) { trans.origenColores[k] = new THREE.Color(); trans.destinoColores[k] = new THREE.Color(); }
+  const realce = { valor: 0, objetivo: 0, duracion: REALCE.duracion };
+  const dirRealce = new THREE.Vector3();
+  const dirEfectiva = new THREE.Vector3();
 
   const luz = {
     momento: 'dia',
@@ -589,6 +605,8 @@ export function crearLuz(ctx) {
     relleno,
     cieloNoche,
     direccionSol: dirSol,
+    direccionEfectiva: dirEfectiva, // la del sol en escena (con el realce de planta aplicado)
+    realce: 0,                      // 0…1, peso del realce de planta
     enTransicion: false,
     listo: null,
     materiales: new Set(),
@@ -671,7 +689,20 @@ export function crearLuz(ctx) {
       });
     },
 
+    /* Realce de la planta seccionada (ver cabecera): sol alto, más
+       hemisférica y más IBL, con fundido. */
+    setRealcePlanta(activo, { duracion = REALCE.duracion } = {}) {
+      realce.objetivo = activo ? 1 : 0;
+      realce.duracion = Math.max(0, duracion);
+      if (realce.duracion === 0) { realce.valor = realce.objetivo; aplicarEstado(factorActual); }
+    },
+
     update(dt) {
+      if (realce.valor !== realce.objetivo) {
+        const paso = realce.duracion > 0 ? dt / realce.duracion : 1;
+        realce.valor = realce.objetivo > realce.valor ? Math.min(realce.objetivo, realce.valor + paso) : Math.max(realce.objetivo, realce.valor - paso);
+        if (!trans.activa) aplicarEstado(factorActual);
+      }
       if (trans.activa) {
         trans.t = trans.duracion > 0 ? Math.min(1, trans.t + dt / trans.duracion) : 1;
         const s = THREE.MathUtils.smoothstep(trans.t, 0, 1);
@@ -793,18 +824,34 @@ export function crearLuz(ctx) {
 
   function aplicarEstado(factorExposicion) {
     factorActual = factorExposicion;
+    /* Realce de planta encima del estado interpolado del momento: de noche
+       (actual.noche → 1) la luna no se mueve y solo sube la hemisférica. */
+    const r = THREE.MathUtils.smoothstep(realce.valor, 0, 1);
+    luz.realce = realce.valor;
+    const noche = THREE.MathUtils.clamp(actual.noche ?? 0, 0, 1);
+    const fHemi = THREE.MathUtils.lerp(1, THREE.MathUtils.lerp(REALCE.hemi, REALCE.hemiNoche, noche), r);
+    const fIbl = THREE.MathUtils.lerp(1, THREE.MathUtils.lerp(REALCE.ibl, 1, noche), r);
+    dirEfectiva.copy(dirSol);
+    const pesoDir = r * (1 - noche);
+    if (pesoDir > 0) {
+      const M = luz.parametros;
+      dirRealce.copy(direccionDe(Math.max(M.elev, REALCE.elevacion), M.azim));
+      dirEfectiva.lerp(dirRealce, pesoDir);
+      if (dirEfectiva.lengthSq() < 1e-6) dirEfectiva.set(0, 1, 0);
+      dirEfectiva.normalize();
+    }
     for (const l of csm.lights) {
       l.color.copy(colores.sol);
       l.intensity = actual.solInt;
     }
-    csm.lightDirection.copy(dirSol).negate();
+    csm.lightDirection.copy(dirEfectiva).negate();
     hemi.color.copy(colores.cielo);
     hemi.groundColor.copy(colores.suelo);
-    hemi.intensity = actual.hemiInt;
+    hemi.intensity = actual.hemiInt * fHemi;
     relleno.color.copy(colores.relleno);
     relleno.intensity = actual.rellenoInt;
     scene.fog.color.copy(colores.niebla);
-    scene.environmentIntensity = actual.ibl;
+    scene.environmentIntensity = actual.ibl * fIbl;
     scene.backgroundIntensity = actual.fondo * factorExposicion;
     renderer.toneMappingExposure = actual.exposicion * factorExposicion;
     cieloNoche.setOpacidad(actual.noche * factorExposicion);

@@ -128,6 +128,27 @@
        `userData.sinTraseras` (el vidrio: por dentro se vería negro).
      - `preparar()` es público para que main registre los materiales antes
        del primer fotograma con edificio (los hooks recompilan el shader).
+   · Integración del v6 (contornos reales de vivienda), cambios:
+     - La planta activa NO es "la franja de 3 m bajo el corte": los planos de
+       corte del cliente van a altura de sección arquitectónica, 1,3-1,4 m
+       sobre el suelo real en p1/p2/ático y 1,9-2,0 m en baja. La atenuación
+       por cota usa ahora la COTA DEL SUELO de la planta activa por cajón
+       (`uSuelos`): main la pasa en `opciones.suelos` ({ clave: [cota por
+       tramo] }, el y0 mínimo de las viviendas de data/viviendas_serenea.json)
+       o con `cortes.setSuelos(mapa)`; sin dato, corte − 1,5 (corte − 2,2 en
+       la planta más baja). Se atenúa lo que queda por debajo de suelo − 0,15
+       con una rampa de 0,45 m (el canto del forjado), así la planta activa
+       entera, tabiques y mobiliario incluidos, queda sin atenuar. Los
+       suelos se fijan al pedir la planta y no cambian durante la transición
+       (`uAtenuacion` ya hace la rampa temporal).
+     - Mobiliario que cruza el plano de corte: con el corte a 1,3 m del
+       suelo, armarios y puertas (2,1-2,4 m) asomarían por encima de la
+       planta seccionada. Las piezas de mobiliario cuyo ymin queda bajo la
+       cota pero cuya caja la supera se dibujan con el clon recortado por el
+       plano horizontal de su cajón (`clonDe`, el mismo mecanismo de la
+       transición, también en el estado final); las que quedan enteras por
+       debajo siguen intactas. El trazador solo corre en 'all', donde no hay
+       planos, así que no ve nunca un clon recortado.
    ═══════════════════════════════════════════════════════════════════════════ */
 import * as THREE from 'three';
 import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg';
@@ -332,7 +353,7 @@ function oscurecerTraseras(material) {
    muros quedan abiertos y lo que se ve por la boca es su cara interior. */
 const GLSL_ATENUACION = /* glsl */`
   varying vec3 vPosMundoCorte;
-  uniform float uCortes[8];
+  uniform float uSuelos[8];
   uniform vec3 uBordesX;
   uniform float uBordeZ;
   uniform float uFilasZ;
@@ -340,12 +361,14 @@ const GLSL_ATENUACION = /* glsl */`
   float atenuacionCorte(vec3 p) {
     float col = step(uBordesX.x, p.x) + step(uBordesX.y, p.x) + step(uBordesX.z, p.x);
     float fila = uFilasZ > 1.5 ? step(uBordeZ, p.z) : 0.0;
-    float cota = uCortes[int(col * uFilasZ + fila)];
-    return uAtenuacion * (1.0 - smoothstep(cota - 3.4, cota - 3.0, p.y));
+    float suelo = uSuelos[int(col * uFilasZ + fila)];
+    return uAtenuacion * (1.0 - smoothstep(suelo - 0.6, suelo - 0.15, p.y));
   }`;
+const SUELO_BAJO_CORTE = 1.5;        // m; respaldo sin datos de vivienda (p1/p2/ático)
+const SUELO_BAJO_CORTE_BAJA = 2.2;   // m; respaldo en la planta más baja
 function crearUniformesAtenuacion() {
   return {
-    uCortes: { value: new Float32Array(8).fill(1e6) },
+    uSuelos: { value: new Float32Array(8).fill(-1e6) },
     uBordesX: { value: new THREE.Vector3(1e9, 1e9, 1e9) },
     uBordeZ: { value: 1e9 },
     uFilasZ: { value: 1 },
@@ -380,6 +403,7 @@ const aMapa = (v) => (v instanceof Map ? new Map(v) : new Map(Object.entries(v |
 export function crearCortes(ctx, edificio, opciones = {}) {
   const { url = 'data/cortes.json', luz = null, tapasCSG = true, tapasStencil = true, carasOscuras = false,
     csg = true, atenuacionPorCota = false, sombraFantasma = false } = opciones;
+  let suelos = aMapa(opciones.suelos); // clave de planta → [cota del suelo por tramo]
   const { scene } = ctx;
   const uniformesAtenuacion = crearUniformesAtenuacion();
   const atenCota = { valor: 0, objetivo: 0 };
@@ -489,13 +513,27 @@ export function crearCortes(ctx, edificio, opciones = {}) {
     } else celdas = cortes.tramos.map((_, i) => ({ indice: 0, tramo: i, media: true }));
     actualizarUniformesCorte();
   }
-  function actualizarUniformesCorte() {
-    const v = uniformesAtenuacion.uCortes.value;
+  /* Cota del suelo de una planta por tramo (ver cabecera): dato de main o
+     respaldo a partir de la cota de corte. */
+  function suelosDe(clave) {
+    const cotas = cotasDe(clave);
+    if (!cotas) return null;
+    const dato = suelos.get(clave);
+    const claves = Object.keys(cortes.definicion.plantas);
+    const bajo = claves.indexOf(clave) === 0 ? SUELO_BAJO_CORTE_BAJA : SUELO_BAJO_CORTE;
+    return cotas.map((y, i) => (Number.isFinite(dato?.[i]) ? dato[i] : y - bajo));
+  }
+  /* Los uniformes de suelo solo cambian al pedir una planta; en 'all' se
+     conservan los últimos para que la atenuación se desvanezca en su sitio. */
+  function actualizarUniformesCorte(clave = cortes.planta) {
+    const S = suelosDe(clave);
+    if (!S) return;
+    const v = uniformesAtenuacion.uSuelos.value;
     if (celdas.length && celdas[0].media) {
-      v.fill(cortes.alturas.reduce((s, h) => s + h, 0) / Math.max(1, cortes.alturas.length));
+      v.fill(S.reduce((s, h) => s + h, 0) / Math.max(1, S.length));
       return;
     }
-    for (const c of celdas) v[c.indice] = cortes.alturas[c.tramo] ?? cortes.techo;
+    for (const c of celdas) v[c.indice] = S[c.tramo] ?? -1e6;
   }
   if (cortes.definicion) {
     fijarDefinicion(cortes.definicion);
@@ -657,6 +695,18 @@ export function crearCortes(ctx, edificio, opciones = {}) {
     if (o.emissiveIntensity != null && m.emissiveIntensity != null) m.emissiveIntensity = o.emissiveIntensity;
   }
 
+  /* Mobiliario frente a la cota de su cajón: oculto si nace por encima,
+     intacto si queda entero por debajo y, si cruza el plano, el clon
+     recortado en su lugar (ver cabecera). */
+  function mostrarMobiliario(p, h) {
+    const cota = h[p.principal];
+    const debajo = p.ymin < cota - EPS;
+    const cruza = debajo && p.caja.max.y > cota + EPS && cota < cortes.techo - EPS;
+    p.mesh.visible = p.visibleBase && debajo && !cruza;
+    const clon = cruza ? clonDe(p, p.principal) : p.clones.get(p.principal);
+    if (clon) { clon.visible = p.visibleBase && cruza; if (clon.visible) sincronizarClon(clon, p); }
+  }
+
   function aplicarRecorte() {
     const h = cortes.alturas;
     for (const [i, t] of cortes.tramos.entries()) {
@@ -666,7 +716,7 @@ export function crearCortes(ctx, edificio, opciones = {}) {
     const cruzan = cortes.tramos.map(() => false);
     for (const p of piezas) {
       if (p.esTapa || !p.visibleBase) continue;
-      if (p.esMob) { p.mesh.visible = p.ymin < h[p.principal] - EPS; continue; }
+      if (p.esMob) { mostrarMobiliario(p, h); continue; }
       const hs = p.tramos.map((i) => h[i]);
       const min = Math.min(...hs), max = Math.max(...hs);
       let modo;
@@ -814,7 +864,8 @@ export function crearCortes(ctx, edificio, opciones = {}) {
     const variante = cotas ? cortes.variantes.get(clave) : null;
     for (const [k, v] of cortes.variantes) if (v) v.visible = v === variante;
     cortes.alturas = cotas ? cotas.slice() : cortes.tramos.map(() => cortes.techo);
-    actualizarUniformesCorte();
+    for (const [i] of cortes.tramos.entries()) planos[i][HORIZONTAL].constant = cortes.alturas[i]; // los clones del mobiliario los usan
+    actualizarUniformesCorte(clave);
     /* Sin CSG y sin variante todavía: el recorte por planos se queda en su
        cota final hasta que registrarVariante traiga el fichero. */
     cortes.provisional = !!(cotas && !variante && !csg);
@@ -831,7 +882,7 @@ export function crearCortes(ctx, edificio, opciones = {}) {
     for (const p of piezas) {
       if (p.esTapa) { p.mesh.visible = false; continue; }
       if (!p.visibleBase) continue;
-      if (p.esMob) { p.mesh.visible = !cotas || p.ymin < cotas[p.principal] - EPS; continue; }
+      if (p.esMob) { mostrarMobiliario(p, cortes.alturas); continue; }
       if (!cotas) { p.mesh.visible = true; continue; }
       if (variante) { p.mesh.visible = false; continue; }
       if (mapa.has(p.mesh)) {
@@ -878,6 +929,7 @@ export function crearCortes(ctx, edificio, opciones = {}) {
       const anterior = cortes.planta;
       cortes.planta = clave;
       fijarObjetivosAtenuacion(clave);
+      actualizarUniformesCorte(clave);
       // una transición nueva interrumpe la anterior: se parte de lo que se ve ahora
       if (trans.activa && trans.resolver) { const r = trans.resolver; trans.resolver = null; r(anterior); }
       const hasta = cotasDe(clave) || cortes.tramos.map(() => cortes.techo);
@@ -954,9 +1006,15 @@ export function crearCortes(ctx, edificio, opciones = {}) {
       if (!objeto) return;
       if (!preparado) { mobiliarioPendiente.push(objeto); return; }
       const nuevas = registrarPiezasMobiliario(objeto);
-      const h = cortes.alturas;
-      for (const p of nuevas) p.mesh.visible = p.visibleBase && p.ymin < h[p.principal] - EPS;
+      for (const p of nuevas) mostrarMobiliario(p, cortes.alturas);
     },
+
+    /* Cotas del suelo por planta y tramo (ver cabecera). */
+    setSuelos(mapa) {
+      suelos = aMapa(mapa);
+      actualizarUniformesCorte();
+    },
+    suelosDe,
 
     preparar,
 
@@ -969,7 +1027,6 @@ export function crearCortes(ctx, edificio, opciones = {}) {
           atenCota.valor = Math.abs(atenCota.objetivo - atenCota.valor) < 0.002 ? atenCota.objetivo : atenCota.valor + (atenCota.objetivo - atenCota.valor) * k;
           uniformesAtenuacion.uAtenuacion.value = atenCota.valor;
         }
-        if (trans.activa) actualizarUniformesCorte();
       }
       for (const [clave, a] of atenuacion) {
         if (a.valor === a.objetivo) continue;

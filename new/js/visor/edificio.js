@@ -1,13 +1,14 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   edificio.js — Carga y estado de un edificio (modelo de SketchUp).
+   edificio.js — Carga y estado de un edificio (modelo v6 de SketchUp).
 
    Un edificio son cuatro cosas en el mismo grupo: la envolvente completa
    (assets/serenea/apolo_envolvente.glb: muros, forjados, carpinterías,
    escaleras, pilares y un vidrio por hueco), el mobiliario y las cuatro
    variantes ya cortadas por planta (que llegan en segundo plano con
-   `cargarSecundarios`), las envolventes translúcidas de vivienda que salen
-   de app/layout.js (invisibles en reposo; solo realce de hover y selección,
-   y lo único que ve el raycaster) y las cartelas de cada vivienda (capa 1).
+   `cargarSecundarios`), los PRISMAS translúcidos de vivienda que salen del
+   contorno exacto de data/viviendas_serenea.json (invisibles en reposo; solo
+   realce de hover y selección, y lo único que ve el raycaster) y las
+   cartelas de cada vivienda (capa 1).
 
    Decisiones donde el contrato deja hueco (documentadas aquí):
 
@@ -16,62 +17,68 @@
      de opciones `{ luz, unitsById, estados, rutas, onProgreso }`. Con `luz`,
      todos los materiales se registran en `luz.aplicarMaterial`.
    · Materiales por NOMBRE, compartidos entre ficheros: cada GLB trae sus
-     propias instancias de material y sus propias texturas (18 en cada uno).
-     El primer fichero que trae un nombre fija el material del visor; los
-     siguientes (variantes cortadas, mobiliario) adoptan ese mismo material y
-     liberan sus texturas. Así hay un solo programa por material, el emisivo
-     de las ventanas y la atenuación de cortes.js llegan a las variantes sin
-     hacer nada, y la GPU no guarda cinco copias de la ortofoto del monocapa.
-     El monocapa y el travertino conservan las texturas del SketchUp;
-     'APOLO | Vidrio claro' se sustituye por el vidrio físico del visor
-     (el de app/building.js: Fresnel, clearcoat, tinte de flotado). El
-     alphaTest que GLTFLoader pone a los materiales MASK se quita: las
-     texturas son opacas y el `discard` mata el early-z.
-   · Vidrio por vivienda: el pipeline ya trae un vidrio por hueco con el
-     centro en el nombre (`vidrio__T<plataforma>__<n>__<xcm>_<ycm>_<zcm>`).
-     Cada uno va a la vivienda cuya caja ampliada 0,6 m contiene su centro
-     (si varias, la más cercana sin ampliar) y recibe el clon de vidrio de
+     propias instancias de material y sus propias texturas. El primer fichero
+     que trae un nombre fija el material del visor; los siguientes (variantes
+     cortadas, mobiliario) adoptan ese mismo material y liberan sus texturas.
+     Así hay un solo programa por material, el emisivo de las ventanas y la
+     atenuación de cortes.js llegan a las variantes sin hacer nada, y la GPU
+     no guarda cinco copias de la ortofoto del monocapa. El monocapa y el
+     travertino conservan las texturas del SketchUp; 'APOLO | Vidrio claro'
+     se sustituye por el vidrio físico del visor (Fresnel, clearcoat, tinte
+     de flotado). El alphaTest que GLTFLoader pone a los materiales MASK se
+     quita: las texturas son opacas y el `discard` mata el early-z.
+   · Prismas de vivienda (data/viviendas_serenea.json, RUTAS.viviendas): por
+     vivienda, `poligono` es el contorno exacto en planta [[x, z], …] en
+     metros del SketchUp, deducido de tabiques y puertas del v6 y numerado
+     con los planos comerciales; `y0` es la cota real del suelo e `y1` =
+     min(y0 + 2,7, corte − 0,15). El prisma es una THREE.Shape con el
+     polígono (en (x, −z), para que al girar −90° en X la extrusión vaya en
+     +Y y z conserve el signo) extruida y1 − y0 sin bisel, y la geometría se
+     hornea en coordenadas de mundo (rotateX + translate): el mesh queda con
+     matriz identidad y su caja se puede contrastar con el polígono
+     (`edificio.comprobarPrismas()`, usado en las pruebas). Bien encajados:
+     el contorno ya está en la cara del tabique, sin holgura ni caja. Nota:
+     en p1/p2/ático el corte del cliente está solo 1,3-1,4 m sobre el suelo
+     (altura de sección arquitectónica), así que los prismas miden ≈ 1,2 m;
+     en baja, 1,8-2,5 m. La caja del registro (`caja`) es la huella del
+     polígono × [y0, y0 + 2,7], para encuadrar la cámara.
+   · Cartela en el centroide del polígono (área con signo; si cae fuera, el
+     punto interior más cercano al centro de la caja) a y1 + 1,2 m.
+   · Vidrio por vivienda: el pipeline trae un vidrio por hueco con el centro
+     en el nombre (`vidrio__T<plataforma>__<n>__<xcm>_<ycm>_<zcm>`). Se asigna
+     POR POLÍGONO, no por caja: cada vidrio va a la vivienda cuya huella
+     queda a ≤ 0,45 m de su centro (dentro, o cerca del borde: los vidrios
+     están en el plano de fachada) y cuyo suelo cumple y ∈ [y0 − 0,5,
+     y0 + 3,2]; si hay varias, la más cercana. Recibe el clon de vidrio de
      esa vivienda (emisivo cálido que `setVentanas` enciende o apaga). Las
      variantes cortadas traen las mismas mallas con el mismo nombre, así que
      el mismo registro por nombre les asigna el mismo material. Lo que no
-     cae en ninguna caja (portales, testeros) queda con el vidrio común, que
-     no se enciende nunca.
-   · Marco antiguo → nuevo (provisional hasta que el SketchUp traiga grupos
-     VIV_): las cajas de layout.js van centradas en (0,0); aquí
-     x' = x + 66,72 · z' = z − 23,94 (sin espejo: comprobado con dos datos
-     medibles, ver MARCO) e y' = cota de corte de la plataforma que contiene
-     (x', z') en la planta de la vivienda (data/cortes.json) − 1,25 como
-     suelo, con 3,0 m de alto. Medido: 153 de los 175 vidrios caen en una
-     caja (87 %); los 22 restantes están en el testero este entre las dos
-     filas. El espejo en x daría 159 pero invierte la pendiente del terreno
-     (SECTIONS.street de layout.js cae hacia +x, igual que las plataformas
-     de cortes.json) y desplaza los patios: los vidrios interiores caen en
-     x = 29,8/42,3 · 60,6/73,1 · 91,4/103,9, que son los bordes de los
-     patios de layout.js trasladados sin espejo. La fila 'sw' queda en la
-     banda de z alta (−18,8…−6,8), que es el sur del SketchUp (fachada
-     principal); la 'ne' en la banda baja.
+     cae en ninguna huella (portales, zonas comunes) queda con el vidrio
+     común, que no se enciende nunca. `edificio.vidrio` guarda el recuento
+     (total, asignados, comunes, viviendasConVidrio, sinVidrio).
    · `Material.clone()` copia `userData` pasándolo por JSON; los clones de
      vidrio reciben un userData nuevo con `baseOpacity`, `baseEnv`,
      `baseColor` y `unitId` correctos.
-   · `pintar` sigue paintUnits (envolvente invisible en reposo, realce al
-     pasar el ratón o seleccionar; vendidas inertes) SIN prueba de
-     profundidad: la envolvente está dentro de los muros. En reposo es
-     `visible = false`, no solo opacidad 0: las pasadas de post.js con
-     `scene.overrideMaterial` (G-buffer de GTAO, profundidad de SSR y Bokeh)
-     ignoran la opacidad y verían 166 cajas sólidas. El Raycaster de three no
-     filtra por `visible`, así que `pickables` sigue funcionando.
+   · `pintar` sigue paintUnits (prisma invisible en reposo, realce al pasar
+     el ratón o seleccionar; vendidas inertes) SIN prueba de profundidad: el
+     prisma está dentro de los tabiques. En reposo es `visible = false`, no
+     solo opacidad 0: las pasadas de post.js con `scene.overrideMaterial`
+     (G-buffer de GTAO, profundidad de SSR y Bokeh) ignoran la opacidad y
+     verían 166 prismas sólidos. El Raycaster de three no filtra por
+     `visible`, así que `pickables` sigue funcionando.
      Las cartelas se muestran por planta con `setCartelas(clave | null)`.
    · `niveles` tiene un único nivel ('apolo') con todas las mallas de la
      envolvente completa: cortes.js lo consume para la transición por planos
      y para registrar los materiales; las plantas ya no son mallas aparte.
    · `cargarSecundarios({ onProgreso, alMobiliario, alVariante })` descarga en
-     serie el mobiliario y las cuatro variantes (peso: 33 + 4×(5-12) MB),
-     adopta los materiales, cuelga cada objeto del grupo (variantes ocultas)
-     y avisa por callback para que main las registre en cortes.js.
-   · Extras: `edificio.vidrio` (recuento de la asignación), `edificio.units`
-     / `unitsById`, `estadoDe(id)`, `edificio.caja` (Box3 de la envolvente),
-     `edificio.ventanas`, `edificio.definicionCortes` (data/cortes.json ya
-     cargado, para pasárselo a cortes.js sin pedirlo dos veces),
+     serie el mobiliario y las cuatro variantes, adopta los materiales,
+     cuelga cada objeto del grupo (variantes ocultas) y avisa por callback
+     para que main las registre en cortes.js.
+   · Extras: `edificio.suelos` (cota mínima de suelo por planta y
+     plataforma, para que cortes.js atenúe solo lo que queda bajo el suelo
+     de la planta activa), `edificio.units` / `unitsById`, `estadoDe(id)`,
+     `edificio.caja` (Box3 de la envolvente), `edificio.ventanas`,
+     `edificio.definicionCortes` (data/cortes.json ya cargado),
      `edificio.materiales` (Map nombre → material), `edificio.variantes`
      (Map clave → Object3D), `edificio.mobiliario` y `edificio.destruir()`.
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -79,19 +86,19 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { ESTADO_COLORS } from 'app/building.js';
-import { FLOOR_DEFS, computeLayout } from 'app/layout.js';
 
-export const AMPLIACION_CAJA = 0.6;      // margen de la caja al asignar vidrio (contrato)
+export const DISTANCIA_VIDRIO = 0.45;    // m del centro del vidrio a la huella de la vivienda (ver cabecera)
+export const RANGO_Y_VIDRIO = [-0.5, 3.2]; // y del vidrio respecto al suelo de la vivienda
+export const ALTURA_VIVIENDA = 2.7;      // m; alto de la caja de encuadre
+export const ALTURA_CARTELA = 1.2;       // m sobre y1
 export const EMISIVO_VENTANA = 0xffd9a0; // luz cálida de interior
 export const INTENSIDAD_VENTANA = 1.4;   // por encima de 1 para que el bloom lo recoja
-
-/* Transformación del marco de layout.js al del SketchUp (ver cabecera). */
-export const MARCO = { dx: 66.72, dz: -23.94, sx: 1, sz: 1, bajoCorte: 1.25, alto: 3.0 };
 
 export const RUTAS = {
   envolvente: 'assets/serenea/apolo_envolvente.glb',
   mobiliario: 'assets/serenea/apolo_mobiliario.glb',
   cortes: 'data/cortes.json',
+  viviendas: 'data/viviendas_serenea.json',
   variantes: {
     baja: 'assets/serenea/apolo_corte_baja.glb',
     p1: 'assets/serenea/apolo_corte_p1.glb',
@@ -101,7 +108,7 @@ export const RUTAS = {
 };
 
 const COLOR_BASE_VIVIENDA = new THREE.Color(0xe9e7e1);
-const HUECO_ENVOLVENTE = 0.34;
+const ORDEN_PLANTAS = ['baja', 'p1', 'p2', 'atico'];
 const RE_VIDRIO = /^vidrio__T(\d+)__(\d+)__(-?\d+)_(-?\d+)_(-?\d+)$/;
 const ES_MATERIAL_VIDRIO = /vidrio/i;
 
@@ -163,71 +170,143 @@ function crearCartela(texto, fondo, capa) {
   return sp;
 }
 
-/* Plataforma (cajón de cortes.json) que contiene un punto en planta; fuera
-   de toda huella, la más cercana. */
-function plataformaEn(tramos, x, z) {
-  let i = tramos.findIndex((t) => x >= t.x0 && x < t.x1 && z >= t.z0 && z < t.z1);
-  if (i >= 0) return i;
-  let mejor = Infinity;
-  tramos.forEach((t, k) => {
-    const dx = Math.max(t.x0 - x, 0, x - t.x1), dz = Math.max(t.z0 - z, 0, z - t.z1);
-    const d = dx * dx + dz * dz;
-    if (d < mejor) { mejor = d; i = k; }
-  });
-  return Math.max(0, i);
+/* ── Geometría en planta ─────────────────────────────────────────────────── */
+
+/* Polígono sin vértices repetidos consecutivos (el último igual al primero
+   también sobra): earcut los tolera, pero la distancia a segmentos no. */
+function limpiarPoligono(poligono) {
+  const out = [];
+  for (const [x, z] of poligono) {
+    const u = out[out.length - 1];
+    if (u && Math.abs(u[0] - x) < 1e-6 && Math.abs(u[1] - z) < 1e-6) continue;
+    out.push([x, z]);
+  }
+  if (out.length > 1) {
+    const [x0, z0] = out[0], [xn, zn] = out[out.length - 1];
+    if (Math.abs(x0 - xn) < 1e-6 && Math.abs(z0 - zn) < 1e-6) out.pop();
+  }
+  return out;
 }
 
-/* Envolventes translúcidas y cartelas de todas las viviendas, en el marco del
-   SketchUp (ver MARCO). Devuelve Map(id → registro de vivienda). */
-function crearEnvolventes(grupo, unitsById, capaCartelas, definicionCortes) {
-  const layout = computeLayout(unitsById);
+export function dentroDePoligono(poligono, x, z) {
+  let dentro = false;
+  for (let i = 0, j = poligono.length - 1; i < poligono.length; j = i++) {
+    const [xi, zi] = poligono[i], [xj, zj] = poligono[j];
+    if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) dentro = !dentro;
+  }
+  return dentro;
+}
+
+/* Distancia de un punto a la huella: 0 dentro; fuera, la mínima a sus lados. */
+export function distanciaAPoligono(poligono, x, z) {
+  if (dentroDePoligono(poligono, x, z)) return 0;
+  let mejor = Infinity;
+  for (let i = 0, j = poligono.length - 1; i < poligono.length; j = i++) {
+    const [ax, az] = poligono[j], [bx, bz] = poligono[i];
+    const dx = bx - ax, dz = bz - az;
+    const l2 = dx * dx + dz * dz;
+    const t = l2 > 0 ? Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2)) : 0;
+    const px = ax + t * dx - x, pz = az + t * dz - z;
+    mejor = Math.min(mejor, px * px + pz * pz);
+  }
+  return Math.sqrt(mejor);
+}
+
+/* Centroide por área con signo; si cae fuera (viviendas en L o en U), el
+   punto interior más cercano al centro de la caja, buscado en una rejilla de
+   0,25 m. */
+export function centroideInterior(poligono) {
+  let area = 0, cx = 0, cz = 0;
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+  for (let i = 0, j = poligono.length - 1; i < poligono.length; j = i++) {
+    const [xi, zi] = poligono[i], [xj, zj] = poligono[j];
+    const f = xj * zi - xi * zj;
+    area += f; cx += (xj + xi) * f; cz += (zj + zi) * f;
+    minX = Math.min(minX, xi); maxX = Math.max(maxX, xi); minZ = Math.min(minZ, zi); maxZ = Math.max(maxZ, zi);
+  }
+  const centroCaja = [(minX + maxX) / 2, (minZ + maxZ) / 2];
+  if (Math.abs(area) > 1e-9) {
+    cx /= 3 * area; cz /= 3 * area;
+    if (dentroDePoligono(poligono, cx, cz)) return { punto: [cx, cz], area: Math.abs(area) / 2, exterior: false };
+  }
+  const paso = 0.25;
+  let mejor = null, dMejor = Infinity;
+  for (let x = minX + paso / 2; x < maxX; x += paso) for (let z = minZ + paso / 2; z < maxZ; z += paso) {
+    if (!dentroDePoligono(poligono, x, z)) continue;
+    const d = (x - centroCaja[0]) ** 2 + (z - centroCaja[1]) ** 2;
+    if (d < dMejor) { dMejor = d; mejor = [x, z]; }
+  }
+  return { punto: mejor || centroCaja, area: Math.abs(area) / 2, exterior: true };
+}
+
+/* Prisma de una vivienda en coordenadas de mundo: la Shape va en (x, −z)
+   porque rotateX(−90°) manda (x, s, d) a (x, d, −s); la extrusión (0…y1−y0)
+   pasa a +Y y se sube a y0. */
+export function geometriaPrisma(poligono, y0, y1) {
+  const forma = new THREE.Shape();
+  poligono.forEach(([x, z], i) => (i ? forma.lineTo(x, -z) : forma.moveTo(x, -z)));
+  forma.closePath();
+  const geo = new THREE.ExtrudeGeometry(forma, { depth: Math.max(0.05, y1 - y0), bevelEnabled: false, curveSegments: 1 });
+  geo.rotateX(-Math.PI / 2);
+  geo.translate(0, y0, 0);
+  geo.computeBoundingBox();
+  return geo;
+}
+
+/* Prismas translúcidos y cartelas de todas las viviendas a partir de
+   data/viviendas_serenea.json (ver cabecera). Devuelve Map(id → registro),
+   los grupos por planta y la cota mínima de suelo por planta y plataforma. */
+function crearPrismas(grupo, unitsById, capaCartelas, datosViviendas) {
   const viviendas = new Map();
   const plantas = new Map();
-  const tramos = Object.values(definicionCortes.plantas)[0] || [];
-  for (const F of FLOOR_DEFS) {
-    const cotas = definicionCortes.plantas[F.key];
-    if (!cotas) continue;
+  const suelos = {};
+  const entradas = Object.entries(datosViviendas?.viviendas || {});
+  const claves = [...new Set([...ORDEN_PLANTAS, ...entradas.map(([, v]) => v.planta)])];
+  for (const clave of claves) {
     const g = new THREE.Group();
-    g.name = `viviendas-${F.key}`;
+    g.name = `viviendas-${clave}`;
     const cartelas = new THREE.Group();
     cartelas.name = 'cartelas';
     cartelas.visible = false;
     g.add(cartelas);
-    const filas = [F.rows.ne, F.rows.sw, F.rows.inN, F.rows.inS];
-    for (const ids of filas) for (const id of ids) {
-      const u = unitsById.get(id);
-      const r = layout.rects.get(id);
-      if (!u || !r) continue;
-      const x = MARCO.dx + MARCO.sx * r.x;
-      const z = MARCO.dz + MARCO.sz * r.z;
-      const plataforma = plataformaEn(tramos, x, z);
-      const yBase = cotas[plataforma].y - MARCO.bajoCorte;
-      const geo = new THREE.BoxGeometry(r.w - HUECO_ENVOLVENTE, MARCO.alto, r.d - HUECO_ENVOLVENTE);
-      const mat = new THREE.MeshStandardMaterial({
-        color: COLOR_BASE_VIVIENDA.clone(), roughness: 0.55, metalness: 0,
-        emissive: 0x000000, transparent: true, opacity: 0, depthWrite: false,
-      });
-      const mesh = new THREE.Mesh(geo, mat);
-      mesh.name = `vivienda-${id}`;
-      mesh.position.set(x, yBase + MARCO.alto / 2, z);
-      mesh.userData = { unitId: id, floorKey: F.key, plataforma };
-      mesh.renderOrder = 50; // tras el vidrio: el realce se ve a través de la fachada
-      g.add(mesh);
-      const label = crearCartela(id, '#24873f', capaCartelas);
-      label.position.set(x, yBase + MARCO.alto + 2.1, z);
-      const labelR = crearCartela(id, '#e0862b', capaCartelas);
-      labelR.position.copy(label.position);
-      label.visible = false; labelR.visible = false;
-      cartelas.add(label, labelR);
-      mesh.userData.label = label;
-      mesh.userData.labelR = labelR;
-      viviendas.set(id, { id, mesh, floorKey: F.key, plataforma, unidad: u, caja: null, vidrios: [], vidrio: null,
-        mallasVidrio: [], label, labelR });
-    }
     grupo.add(g);
-    plantas.set(F.key, { grupo: g, cartelas });
+    plantas.set(clave, { grupo: g, cartelas });
+    suelos[clave] = [];
   }
-  return { viviendas, plantas, layout };
+  for (const [id, d] of entradas) {
+    const poligono = limpiarPoligono(d.poligono || []);
+    if (poligono.length < 3) { console.warn('[edificio] vivienda sin contorno válido:', id); continue; }
+    const plataforma = d.plataforma ?? 0;
+    const { y0, y1 } = d;
+    const P = plantas.get(d.planta);
+    const s = suelos[d.planta];
+    s[plataforma] = s[plataforma] == null ? y0 : Math.min(s[plataforma], y0);
+    const geo = geometriaPrisma(poligono, y0, y1);
+    const mat = new THREE.MeshStandardMaterial({
+      color: COLOR_BASE_VIVIENDA.clone(), roughness: 0.55, metalness: 0,
+      emissive: 0x000000, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.name = `vivienda-${id}`;
+    mesh.userData = { unitId: id, floorKey: d.planta, plataforma };
+    mesh.renderOrder = 50; // tras el vidrio: el realce se ve a través de la fachada
+    P.grupo.add(mesh);
+    const { punto: centroide, exterior } = centroideInterior(poligono);
+    const label = crearCartela(id, '#24873f', capaCartelas);
+    label.position.set(centroide[0], y1 + ALTURA_CARTELA, centroide[1]);
+    const labelR = crearCartela(id, '#e0862b', capaCartelas);
+    labelR.position.copy(label.position);
+    label.visible = false; labelR.visible = false;
+    P.cartelas.add(label, labelR);
+    mesh.userData.label = label;
+    mesh.userData.labelR = labelR;
+    const bb = geo.boundingBox;
+    const caja = new THREE.Box3(new THREE.Vector3(bb.min.x, y0, bb.min.z), new THREE.Vector3(bb.max.x, y0 + ALTURA_VIVIENDA, bb.max.z));
+    viviendas.set(id, { id, mesh, floorKey: d.planta, plataforma, unidad: unitsById.get(id) || null, caja, poligono, y0, y1,
+      entrada: d.entrada || null, centroide, centroideExterior: exterior, area: d.area, supViv: d.supViv, supUtil: d.supUtil,
+      vidrios: [], vidrio: null, mallasVidrio: [], label, labelR });
+  }
+  return { viviendas, plantas, suelos };
 }
 
 /* Box3 de las mallas visibles de un objeto (Box3.setFromObject no distingue
@@ -262,10 +341,11 @@ export async function cargarEdificio(ctx, slot, opciones = {}) {
       return {};
     }
   };
-  const [units, disponibilidad, definicionCortes, gltf] = await Promise.all([
+  const [units, disponibilidad, definicionCortes, datosViviendas, gltf] = await Promise.all([
     opciones.unitsById ? null : cargarJSON(slot.units || 'data/units.json', false),
     opciones.estados ? null : cargarJSON(slot.availability || 'data/availability.json', true),
     opciones.definicionCortes || cargarJSON(rutas.cortes, false),
+    opciones.viviendas || cargarJSON(rutas.viviendas, false),
     cargarGLB(rutas.envolvente, onProgreso),
   ]);
   onProgreso(1);
@@ -325,27 +405,27 @@ export async function cargarEdificio(ctx, slot, opciones = {}) {
   const mallasEnvolvente = adoptar(envolvente);
   grupo.add(envolvente);
 
-  /* ── Envolventes y cartelas ── */
-  const { viviendas, plantas } = crearEnvolventes(grupo, unitsById, capaCartelas, definicionCortes);
+  /* ── Prismas y cartelas ── */
+  const { viviendas, plantas, suelos } = crearPrismas(grupo, unitsById, capaCartelas, datosViviendas);
   scene.updateMatrixWorld(true);
-  for (const v of viviendas.values()) v.caja = new THREE.Box3().setFromObject(v.mesh);
 
-  /* ── Vidrio por vivienda: el centro del nombre contra las cajas ── */
+  /* ── Vidrio por vivienda: el centro del nombre contra las huellas ── */
   const vidrioBase = [...materiales.values()].find((m) => ES_MATERIAL_VIDRIO.test(m.name)) || null;
-  const vidrio = { total: 0, asignados: 0, comunes: 0, viviendasConVidrio: 0, ms: 0 };
+  const vidrio = { total: 0, asignados: 0, comunes: 0, viviendasConVidrio: 0, sinVidrio: [], ms: 0 };
   const tVidrio = performance.now();
-  const candidatas = [...viviendas.values()].map((v) => ({ v, ampliada: v.caja.clone().expandByScalar(AMPLIACION_CAJA) }));
-  const centro = new THREE.Vector3();
+  const candidatas = [...viviendas.values()];
   for (const m of mallasEnvolvente) {
     const r = RE_VIDRIO.exec(m.name);
     if (!r) continue;
     vidrio.total++;
-    centro.set(+r[3] / 100, +r[4] / 100, +r[5] / 100);
+    const x = +r[3] / 100, y = +r[4] / 100, z = +r[5] / 100;
     let mejor = null, dMejor = Infinity;
-    for (const c of candidatas) {
-      if (!c.ampliada.containsPoint(centro)) continue;
-      const d = c.v.caja.distanceToPoint(centro); // 0 si está dentro de la caja sin ampliar
-      if (d < dMejor) { dMejor = d; mejor = c.v; }
+    for (const v of candidatas) {
+      if (y < v.y0 + RANGO_Y_VIDRIO[0] || y > v.y0 + RANGO_Y_VIDRIO[1]) continue;
+      // criba barata por caja ampliada antes de la distancia exacta
+      if (x < v.caja.min.x - DISTANCIA_VIDRIO || x > v.caja.max.x + DISTANCIA_VIDRIO || z < v.caja.min.z - DISTANCIA_VIDRIO || z > v.caja.max.z + DISTANCIA_VIDRIO) continue;
+      const d = distanciaAPoligono(v.poligono, x, z);
+      if (d <= DISTANCIA_VIDRIO && d < dMejor) { dMejor = d; mejor = v; }
     }
     if (!mejor) { vidrio.comunes++; continue; }
     if (!mejor.vidrio) {
@@ -364,6 +444,8 @@ export async function cargarEdificio(ctx, slot, opciones = {}) {
     vidrioPorMalla.set(m.name, mejor.vidrio);
     vidrio.asignados++;
   }
+  vidrio.sinVidrio = candidatas.filter((v) => !v.vidrios.length).map((v) => v.id);
+  if (vidrio.sinVidrio.length) console.warn('[edificio] viviendas sin vidrio asignado:', vidrio.sinVidrio.join(' '));
   vidrio.ms = Math.round(performance.now() - tVidrio);
 
   /* ── Registro en luz: envolventes de vivienda (los materiales del modelo
@@ -381,13 +463,32 @@ export async function cargarEdificio(ctx, slot, opciones = {}) {
 
   const edificio = {
     grupo, envolvente, niveles, viviendas, estados, pickables, vidrio, units: listaUnits, unitsById,
-    materiales, definicionCortes, rutas,
+    materiales, definicionCortes, rutas, suelos, datosViviendas,
     variantes: new Map(),
     mobiliario: null,
     ventanas: false,
     caja: cajaVisible(envolvente),
     estadoDe: (id) => estados[id] || 'disponible',
     cajaDe: (id) => viviendas.get(id)?.caja ?? null,
+
+    /* Contraste de cada prisma con su polígono: caja del mesh (en mundo)
+       frente a los min/max del polígono y a [y0, y1]. Devuelve el mayor
+       desvío en metros y las viviendas que superan `tolerancia`. */
+    comprobarPrismas(tolerancia = 0.01) {
+      let maxDesvio = 0;
+      const malas = [];
+      const caja = new THREE.Box3();
+      for (const v of viviendas.values()) {
+        caja.setFromObject(v.mesh);
+        let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+        for (const [x, z] of v.poligono) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z); }
+        const d = Math.max(Math.abs(caja.min.x - minX), Math.abs(caja.max.x - maxX), Math.abs(caja.min.z - minZ), Math.abs(caja.max.z - maxZ),
+          Math.abs(caja.min.y - v.y0), Math.abs(caja.max.y - v.y1));
+        maxDesvio = Math.max(maxDesvio, d);
+        if (d > tolerancia) malas.push({ id: v.id, desvio: +d.toFixed(3) });
+      }
+      return { viviendas: viviendas.size, maxDesvio: +maxDesvio.toFixed(4), malas };
+    },
 
     setEstados(mapa) {
       for (const k of Object.keys(estados)) delete estados[k];

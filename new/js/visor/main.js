@@ -45,11 +45,24 @@
      elevación 24°, azimut 55° (desde el sureste): Apolo tiene pegado al
      sur otro volumen de SERENEA tan alto como él (z 40…76) que desde el sur
      franco tapa la fachada; desde el sureste se ve entera la fachada larga
-     sur con sus ventanas y el testero este. 'planta' = caja de Apolo hasta
-     la cota media de corte de esa planta, 42° y azimut 12°: con el eje largo
-     casi horizontal en pantalla la planta llena el ancho (con 55° ocupaba
-     menos de la mitad del cuadro).
+     sur con sus ventanas y el testero este. 'planta' = huella de Apolo
+     limitada en Y a [suelo mínimo de la planta, corte máximo de la planta]
+     (edificio.suelos y cortes.json; no la caja entera del edificio, que
+     alejaba la cámara), elevación 50°, azimut 8° y margen 1,02: con el eje
+     largo (111 m) casi horizontal en pantalla la planta llena el ancho en
+     16:9 (medido en captura: ≥ 85 % del ancho).
      'conjunto' y 'edificio' devuelven el edificio completo.
+   · Planta seccionada a plena luz (integración del v6): al elegir una planta
+     se llama a luz.setRealcePlanta(true) (sol a ≥ 62°, hemisférica ×1,6 e
+     IBL ×1,4; de noche solo la hemisférica ×1,5) y en 'all' se restaura.
+     Con el sol alto y tabiques de 1,3 m las sombras sobre la planta son
+     cortas y suaves. cortes.js recibe en `suelos` el y0 mínimo de las
+     viviendas de cada planta y cajón (edificio.suelos) para atenuar solo lo
+     que queda bajo el suelo real, no "el corte − 3 m".
+   · Trazador solo en 'all': con una planta seccionada el raster (planos de
+     recorte del mobiliario, realce de luz) es la imagen definitiva y el
+     trazado no aporta; además solo asoma ya convergido (minSamples 48,
+     fundido 1,2 s en trazador.js). SSR apagado en post.js.
    · Realce de hover y selección (revisado en el control de calidad): se
      dibuja SIEMPRE la envolvente translúcida de edificio.pintar y, además,
      se tiñe el emisivo del vidrio de la vivienda con el color de su estado.
@@ -97,9 +110,9 @@ const PLANTAS = FLOOR_DEFS.filter((f) => f.key !== 'cubierta');
 const CLAVES_PLANTA = new Set(['all', ...PLANTAS.map((f) => f.key)]);
 const NIVEL_DE = new Map(PLANTAS.map((f, i) => [f.key, i]));
 const RUTA_ENTORNO = 'assets/serenea/entorno.glb';
-const AZIMUT = { conjunto: -60, edificio: 55, planta: 12 };
-const ELEVACION = { conjunto: 16, edificio: 24, planta: 42 };
-const MARGEN = { conjunto: 1.05, edificio: 1.1, planta: 1.04 };
+const AZIMUT = { conjunto: -60, edificio: 55, planta: 8 };
+const ELEVACION = { conjunto: 16, edificio: 24, planta: 50 };
+const MARGEN = { conjunto: 1.05, edificio: 1.1, planta: 1.02 };
 const LADO_CONJUNTO = 600;        // m de lado del encuadre 'conjunto'
 const REPOSO_S = 120;
 const CAMARA_FAR = 9000;          // el entorno llega a 5 km
@@ -301,7 +314,10 @@ function cajaConjunto() {
 function cajaPlanta(clave) {
   const caja = edificio.caja.clone();
   const tramos = cortes?.definicion?.plantas?.[clave];
-  if (tramos) caja.max.y = Math.min(caja.max.y, tramos.reduce((s, t) => s + t.y, 0) / tramos.length);
+  const suelos = (edificio.suelos?.[clave] || []).filter(Number.isFinite);
+  if (tramos) caja.max.y = Math.min(caja.max.y, Math.max(...tramos.map((t) => t.y)));
+  if (suelos.length) caja.min.y = Math.max(caja.min.y, Math.min(...suelos));
+  else if (tramos) caja.min.y = Math.max(caja.min.y, caja.max.y - 3);
   return caja;
 }
 function encuadrarVista(vista, { duracion = 1.6 } = {}) {
@@ -456,6 +472,7 @@ Object.assign(apolo, {
     if (apolo.selected) apolo.select(null);
     post.setEnfoque(null);
     apolo.floor = clave;
+    luz.setRealcePlanta(clave !== 'all');
     edificio.setCartelas(clave === 'all' ? null : clave);
     apolo.hover = null;
     repintar();
@@ -583,8 +600,8 @@ function fotograma() {
 
   /* Hover y vivienda enfocada se realzan con la envolvente y el bokeh, que
      solo existen en el raster: ahí no se cede el fotograma al trazador. */
-  const quieta = !cargando && camara.quieta && !cortes?.enTransicion && !cortes?.provisional && !luz.enTransicion
-    && t >= materialesEnMovimientoHasta && apolo.hover == null && apolo.vista !== 'vivienda';
+  const quieta = !cargando && apolo.floor === 'all' && camara.quieta && !cortes?.enTransicion && !cortes?.provisional
+    && !luz.enTransicion && luz.realce === 0 && t >= materialesEnMovimientoHasta && apolo.hover == null && apolo.vista !== 'vivienda';
   const pintado = trazador.update(dt, { quieta });
   if (!pintado) post.render(dt);
   informarTrazado(pintado);
@@ -632,7 +649,7 @@ async function arrancar() {
   /* Modelo de SketchUp: sin CSG ni tapas (superficies abiertas), variantes
      precortadas cuando lleguen, caras traseras oscuras y atenuación por cota. */
   cortes = crearCortes(ctx, edificio, {
-    luz, definicion: edificio.definicionCortes,
+    luz, definicion: edificio.definicionCortes, suelos: edificio.suelos,
     csg: false, tapasCSG: false, tapasStencil: false, carasOscuras: true, atenuacionPorCota: true,
   });
   cortes.preparar(); // los hooks de material se añaden antes del primer fotograma con edificio
