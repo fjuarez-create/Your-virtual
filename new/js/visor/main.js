@@ -23,26 +23,36 @@
      demo de cortes). Cuando el visor cargue assets/serenea/, bastará con
      pasar `url: 'data/cortes.json'`.
    · Encuadres: azimut 34,8° para todos (el de la cámara (64,48,92) → (0,5,0)
-     del visor actual, medido en planta); 'conjunto' con elevación 35° sobre
+     del visor actual, medido en planta); 'conjunto' con elevación 24° sobre
      la caja del entorno (recortada a ±260 m del edificio para que el
-     terreno lejano no aleje la cámara), 'edificio' con 28° sobre
+     terreno lejano no aleje la cámara; con 35° el horizonte quedaba fuera
+     de plano y el conjunto era un disco de terreno sin cielo, revisado en
+     el control de calidad), 'edificio' con 28° sobre
      edificio.caja, planta con 42° sobre la caja del edificio recortada a la
      cota de corte más alta de esa planta. Las vistas 'conjunto' y
      'edificio' devuelven el edificio completo ('all'): ver un edificio
      seccionado desde 300 m no dice nada.
-   · Realce de hover y selección: se tiñe el EMISIVO del vidrio de la
-     vivienda con el color de su estado (verde/ámbar) en vez de dibujar la
-     envolvente translúcida. Razón: la envolvente solo existe en el raster,
-     y en reposo pinta el trazador, así que el realce desaparecería en cuanto
-     el ratón se parase; el emisivo sí llega al trazado con
-     `trazador.actualizarMateriales()` (milisegundos, sin BVH). Las viviendas
-     sin vidrio asignado (áticos del este, baja del oeste) caen a la
-     envolvente de edificio.pintar, que al menos se ve en raster.
+   · Realce de hover y selección (revisado en el control de calidad): se
+     dibuja SIEMPRE la envolvente translúcida de edificio.pintar (verde/ámbar
+     a través de los muros) y, además, se tiñe el emisivo del vidrio de la
+     vivienda con el color de su estado. Solo con el tinte del vidrio, desde
+     el encuadre de planta el realce era invisible (medido: hover sobre la
+     201 sin ningún cambio en la imagen), y el comercial no sabía qué tenía
+     bajo el cursor. La envolvente solo existe en el raster, así que
+     mientras el cursor está sobre una vivienda (hover) o hay una vivienda
+     enfocada (vista 'vivienda', que además usa el bokeh, también raster) el
+     trazador no arranca: ver `quieta` en el bucle. En conjunto, edificio y
+     planta sin cursor encima, el trazado sigue como pide el contrato; el
+     tinte del vidrio sí llega al trazado con `trazador.actualizarMateriales()`.
+   · Enfoque de vivienda: elevación 36° (camara.js trae 24°): con 24° la
+     vivienda quedaba en el tercio alto del cuadro detrás de los muros
+     seccionados de la fila delantera, medio cuadro fuera de foco.
    · Picking: solo con ratón (pointerType 'mouse'), sobre edificio.pickables
      sin filtrar por `visible` (las envolventes son invisibles en reposo y
-     el Raycaster no lo mira), descartando vendidas y, con una planta activa,
-     las viviendas de otras plantas (las de arriba ya no existen y las de
-     abajo quedan bajo la losa). Un clic sin arrastre (< 6 px) selecciona.
+     el Raycaster no lo mira), saltando las viviendas de otras plantas (las
+     de arriba ya no existen y las de abajo quedan bajo la losa). Una
+     vendida tapa el rayo (inerte, no transparente; revisado en el control
+     de calidad). Un clic sin arrastre (< 6 px) selecciona.
    · Estado de demostración: si availability.json marca menos del 20 % de
      vendidas, cada tercera vivienda por orden de id (empezando por la
      segunda) pasa a vendida; las reservadas del fichero se conservan.
@@ -84,7 +94,7 @@ const PLANTAS = FLOOR_DEFS.filter((f) => f.key !== 'cubierta');
 const CLAVES_PLANTA = new Set(['all', ...PLANTAS.map((f) => f.key)]);
 const NIVEL_DE = new Map(PLANTAS.map((f, i) => [f.key, i]));
 const AZIMUT_BASE = THREE.MathUtils.radToDeg(Math.atan2(64, 92)); // encuadre del visor actual
-const ELEVACION = { conjunto: 35, edificio: 28, planta: 42 };
+const ELEVACION = { conjunto: 24, edificio: 28, planta: 42 };
 const RADIO_CONJUNTO = 260;       // m alrededor del edificio que entran en 'conjunto'
 const REPOSO_S = 120;
 const OFFSET_CORTE = 1.2;         // sobre el forjado, como data/cortes.json
@@ -92,6 +102,7 @@ const COTA_ENTORNO = -0.8;        // app/topo.js: la cota 0 del GLB es la parcel
 const DPR_MAX = { alta: 1.5, media: 1.25 };
 const IBL_TRAZADO = { dia: 0.5, amanecer: 0.75, atardecer: 0.8, noche: 1.6 };
 const REALCE = { hover: 0.9, seleccion: 1.4 }; // intensidad emisiva del vidrio teñido
+const ELEVACION_VIVIENDA = 36;    // ver cabecera: la vivienda centrada y vista desde arriba
 const COLOR_ENTORNO = {
   terreno: 0x6b6f5c, acera: 0x9a968c, podotactil: 0xb0a89a, asfalto: 0x3a3b3d, bordillo: 0xa6a29c,
   marca_vial: 0xd9d9d0, edificacion: 0xb9b3a8, muro: 0x8f8a80, arqueta: 0x6a6a6a, tronco: 0x4a3a2a, copa: 0x3f6a34,
@@ -317,11 +328,7 @@ function repintar() {
   const sel = edificio.viviendas.get(apolo.selected);
   if (hover && hover !== sel && !atenuada(hover.id)) tenirVidrios(hover, REALCE.hover);
   if (sel && !atenuada(sel.id)) tenirVidrios(sel, REALCE.seleccion);
-  edificio.pintar({
-    hover: hover && !hover.vidrios.length ? hover.id : null,
-    seleccionada: sel && !sel.vidrios.length ? sel.id : null,
-    atenuada,
-  });
+  edificio.pintar({ hover: hover?.id ?? null, seleccionada: sel?.id ?? null, atenuada });
   /* Con una vivienda enfocada la cámara está a 10 m: las cartelas vecinas,
      de 3,2 m, taparían media pantalla. Solo queda la suya. */
   if (apolo.vista === 'vivienda' && sel) {
@@ -339,17 +346,19 @@ const ndc = (cx, cy, destino) => {
   const r = canvas.getBoundingClientRect();
   return destino.set(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1);
 };
-function elegible(id) {
-  if (!id || apolo.estadoDe(id) === 'vendida') return false;
-  if (apolo.floor === 'all') return true;
-  return edificio.viviendas.get(id)?.floorKey === apolo.floor;
-}
+/* Las viviendas de otras plantas no cuentan (las de arriba ya no existen y
+   las de abajo quedan bajo la losa); la primera de la planta activa que
+   cruza el rayo decide: si es vendida, tapa lo que hay detrás y no hay
+   nada bajo el cursor (una vendida es inerte, no transparente: si se
+   saltara, el clic seleccionaría la vivienda interior que queda detrás). */
 function pickEn(p) {
   if (!edificio) return null;
   raycaster.setFromCamera(p, camera);
   for (const h of raycaster.intersectObjects(edificio.pickables, false)) {
     const id = h.object.userData.unitId;
-    if (elegible(id)) return id;
+    if (!id) continue;
+    if (apolo.floor !== 'all' && edificio.viviendas.get(id)?.floorKey !== apolo.floor) continue;
+    return apolo.estadoDe(id) === 'vendida' ? null : id;
   }
   return null;
 }
@@ -444,8 +453,11 @@ Object.assign(apolo, {
     return luz.setMomento(clave, { duracion });
   },
 
+  /* `vista` se fija ANTES de setFloor: el evento 'planta' que este emite lo
+     lee el shell para decidir qué botón del raíl marcar. */
   irConjunto({ duracion = 1.6 } = {}) {
     if (!edificio) return Promise.resolve(false);
+    apolo.vista = 'conjunto';
     if (apolo.floor !== 'all') apolo.setFloor('all', { encuadrar: false });
     else if (apolo.selected) apolo.select(null);
     post.setEnfoque(null);
@@ -454,6 +466,7 @@ Object.assign(apolo, {
 
   irEdificio({ duracion = 1.6 } = {}) {
     if (!edificio) return Promise.resolve(false);
+    apolo.vista = 'edificio';
     if (apolo.floor !== 'all') apolo.setFloor('all', { encuadrar: false });
     else if (apolo.selected) apolo.select(null);
     post.setEnfoque(null);
@@ -475,7 +488,7 @@ Object.assign(apolo, {
        edificio. */
     const centro = v.caja.getCenter(new THREE.Vector3());
     const azimut = centro.z >= 0 ? 22 : 158;
-    return camara.enfocarVivienda(v.caja, { duracion, azimut }).then((llego) => {
+    return camara.enfocarVivienda(v.caja, { duracion, azimut, elevacion: ELEVACION_VIVIENDA }).then((llego) => {
       if (llego && apolo.selected === id) post.setEnfoque(camara.distanciaObjetivo);
       return llego;
     });
@@ -547,7 +560,10 @@ function fotograma() {
   if (t < materialesEnMovimientoHasta) materialesPendientes = true;
   else if (materialesPendientes) { materialesPendientes = false; trazador.actualizarMateriales(); }
 
-  const quieta = !cargando && camara.quieta && !cortes?.enTransicion && !luz.enTransicion && t >= materialesEnMovimientoHasta;
+  /* Hover y vivienda enfocada se realzan con la envolvente y el bokeh, que
+     solo existen en el raster: ahí no se cede el fotograma al trazador. */
+  const quieta = !cargando && camara.quieta && !cortes?.enTransicion && !luz.enTransicion && t >= materialesEnMovimientoHasta
+    && apolo.hover == null && apolo.vista !== 'vivienda';
   const pintado = trazador.update(dt, { quieta });
   if (!pintado) post.render(dt);
   informarTrazado(pintado);

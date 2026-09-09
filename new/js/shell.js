@@ -127,6 +127,10 @@ cuandoHayaApp((app) => {
   app.on('seleccion', mostrarFicha);
   $('#fichaVolver').addEventListener('click', () => { app.volverAPlanta(); ficha.hidden = true; });
 
+  /* El reposo vuela solo al conjunto: el raíl lo refleja y se recogen el
+     panel de plantas y la ficha, que ya no corresponden a lo que se ve. */
+  app.on('reposo', () => { cerrarPanel(); ficha.hidden = true; marcarVista('bConjunto'); });
+
   // ── Indicador de carga y línea de progreso del trazador ──
   const progreso = $('#progreso');
   const barra = $('#progresoBarra');
@@ -180,18 +184,29 @@ cuandoHayaApp((app) => {
     if (id === 'capaVideo') $('#videoProm').pause();
   }
 
+  /* data/multimedia.json lista lo que hay: { renders: [{ src, titulo }],
+     video: 'assets/video/….mp4' | null }. Un único manifiesto que siempre
+     existe, en vez de pedir cada fichero y comprobar el 404: el navegador
+     escribe cada 404 como error en la consola y esta app debe abrirse
+     limpia. Se lee una vez y lo comparten las dos capas. */
+  let multimedia = null;
+  async function leerMultimedia() {
+    if (multimedia) return multimedia;
+    try {
+      const r = await fetch('data/multimedia.json');
+      multimedia = r.ok ? await r.json() : {};
+    } catch { multimedia = {}; }
+    return multimedia;
+  }
+
   /* Galería de renders. Todavía no hay ninguno: en cuanto assets/renders/
-     tenga imágenes y un renders.json que las liste, esto las enseña sin
-     tocar nada más. */
+     tenga imágenes y multimedia.json las liste, esto las enseña sin tocar
+     nada más. */
   let rendersMontados = false;
   async function montarRenders() {
     if (rendersMontados) return;
     rendersMontados = true;
-    let lista = [];
-    try {
-      const r = await fetch('data/renders.json');
-      if (r.ok) lista = await r.json();
-    } catch { /* sin listado: se avisa abajo */ }
+    const lista = Array.isArray((await leerMultimedia()).renders) ? multimedia.renders : [];
 
     const tiras = $('#renderTiras');
     const grande = $('#renderGrande');
@@ -222,9 +237,9 @@ cuandoHayaApp((app) => {
     if (videoMontado) return;
     videoMontado = true;
     const v = $('#videoProm');
-    const r = await fetch('assets/video/promocion.mp4', { method: 'HEAD' }).catch(() => null);
-    if (r?.ok) {
-      v.src = 'assets/video/promocion.mp4';
+    const { video } = await leerMultimedia();
+    if (typeof video === 'string' && video) {
+      v.src = video;
       $('#videoPie').textContent = 'SERENEA · Edificio Apolo';
     } else {
       v.style.display = 'none';
