@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Demo · trazador.js — trazado de rayos en reposo</title>
+<base href="/">
+<style>
+  body { margin: 0; background: #111; color: #ddd; font: 13px system-ui, sans-serif; }
+  #c { display: block; width: 960px; height: 540px; }
+  #info { padding: 6px 10px; white-space: pre-wrap; }
+</style>
+<script type="importmap">{"imports":{
+ "three":"/new/vendor/three/three.module.min.js",
+ "three/addons/":"/new/vendor/three/addons/",
+ "three/examples/jsm/":"/new/vendor/three/addons/",
+ "three-mesh-bvh":"/new/vendor/three-mesh-bvh.js",
+ "three-bvh-csg":"/new/vendor/three-bvh-csg.js",
+ "three-gpu-pathtracer":"/new/vendor/three-gpu-pathtracer.js",
+ "camera-controls":"/new/vendor/camera-controls.js",
+ "xatlas-web":"/new/vendor/xatlas-web.js",
+ "app/":"/new/js/"
+}}</script>
+</head>
+<body>
+<canvas id="c" width="960" height="540"></canvas>
+<div id="info">trazador.js — cargando…</div>
+<script type="module">
+/* Demo de trazador.js: Apolo + entorno topográfico, HDRI de mediodía como
+   fondo/IBL/entorno del trazador y un sol DirectionalLight alineado con el
+   sol del HDR (elev. 47°, acimut 45°). La escena lleva además objetos que el
+   trazador NO debe tragarse (ShaderMaterial, sprite, puntos, línea, malla
+   básica) y una cartela en la capa 1, para comprobar el filtrado y la pasada
+   final. El guion de Playwright captura el raster, 8 muestras y 32 muestras.
+
+   Parámetros de URL: ?sol=<factor> escala la DirectionalLight en el trazado
+   (0 = el sol sale solo del disco del HDR); ?ibl=<intensidad> es el
+   envMapIntensity que recibe el trazador. */
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
+import { crearEscena } from 'app/visor/escena.js';
+import { crearTrazador } from 'app/visor/trazador.js';
+
+const params = new URLSearchParams(location.search);
+const factorSol = +(params.get('sol') ?? 1);
+const iblTrazado = +(params.get('ibl') ?? 1);
+const escala = +(params.get('escala') ?? 1); // solo para SwiftShader: renderScale del trazador
+
+const info = document.getElementById('info');
+const canvas = document.getElementById('c');
+const ctx = crearEscena(canvas);
+const { scene, camera, renderer } = ctx;
+renderer.setPixelRatio(1); // SwiftShader: un píxel por píxel
+ctx.setTamano(960, 540);
+
+const estado = window.__estado = { errores: [], fase: 'carga', muestras: 0, tiempos: [] };
+window.__listo = false;
+window.addEventListener('error', (e) => estado.errores.push(String(e.message)));
+window.addEventListener('unhandledrejection', (e) => estado.errores.push('promesa: ' + String(e.reason?.message || e.reason)));
+
+scene.fog = new THREE.Fog(0xd6dde3, 750, 2100);
+
+/* ── Sol alineado con el del HDR ── */
+const dirSol = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToRad(90 - 47), THREE.MathUtils.degToRad(45));
+const sol = new THREE.DirectionalLight(0xfff1dc, 3.0);
+sol.position.copy(dirSol).multiplyScalar(180);
+sol.castShadow = true;
+sol.shadow.mapSize.set(2048, 2048);
+sol.shadow.bias = -0.0004;
+sol.shadow.normalBias = 0.05;
+Object.assign(sol.shadow.camera, { left: -110, right: 110, top: 110, bottom: -110, near: 20, far: 420 });
+scene.add(sol, sol.target);
+scene.add(new THREE.HemisphereLight(0xe3edf8, 0x8b9080, 0.28));
+
+/* ── HDRI ── */
+const t0 = performance.now();
+const hdr = await new Promise((ok, ko) => new HDRLoader().load('assets/sky_day.hdr', ok, undefined, ko));
+hdr.mapping = THREE.EquirectangularReflectionMapping;
+hdr.name = 'cielo_dia_hdr';
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.background = hdr;
+scene.backgroundIntensity = 1.0;
+scene.environment = pmrem.fromEquirectangular(hdr).texture;
+scene.environmentIntensity = 0.3; // en raster el cielo compite con hemisférica y sol
+pmrem.dispose();
+estado.hdr = medirHDR(hdr);
+
+/* Estadísticas del HDR: dónde está el sol, cuánto pesa frente al cielo.
+   Irradiancia horizontal E = Σ L·cos(elev)·dω (dω = (2π/W)(π/H)·cos(elev)). */
+function medirHDR(tex) {
+  const { width: W, height: H, data } = tex.image;
+  const half = data instanceof Uint16Array;
+  const lum = (i) => {
+    let r = data[i], g = data[i + 1], b = data[i + 2];
+    if (half) { r = THREE.DataUtils.fromHalfFloat(r); g = THREE.DataUtils.fromHalfFloat(g); b = THREE.DataUtils.fromHalfFloat(b); }
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  let maxL = 0, maxI = 0, suma = 0, E = 0;
+  for (let y = 0; y < H; y++) {
+    const fila = tex.flipY ? y : H - 1 - y; // fila 0 = cenit tras flipY
+    const elev = Math.PI / 2 - (fila + 0.5) / H * Math.PI;
+    const dw = (2 * Math.PI / W) * (Math.PI / H) * Math.cos(elev);
+    for (let x = 0; x < W; x++) {
+      const l = lum((y * W + x) * 4);
+      suma += l;
+      if (elev > 0) E += l * Math.cos(Math.PI / 2 - elev) * dw; // cos(cenital)
+      if (l > maxL) { maxL = l; maxI = y * W + x; }
+    }
+  }
+  const my = Math.floor(maxI / W), mx = maxI % W;
+  const filaMax = tex.flipY ? my : H - 1 - my;
+  const elevSol = 90 - (filaMax + 0.5) / H * 180;
+  // radio de 2° alrededor del máximo: cuánta irradiancia aporta el disco
+  let Esol = 0;
+  const r = Math.round(2 / 180 * H);
+  for (let y = Math.max(0, my - r); y <= Math.min(H - 1, my + r); y++) {
+    const fila = tex.flipY ? y : H - 1 - y;
+    const elev = Math.PI / 2 - (fila + 0.5) / H * Math.PI;
+    const dw = (2 * Math.PI / W) * (Math.PI / H) * Math.cos(elev);
+    for (let x = mx - r; x <= mx + r; x++) Esol += lum((y * W + ((x + W) % W)) * 4) * Math.sin(elev) * dw;
+  }
+  return { ancho: W, alto: H, tipo: half ? 'half' : 'float', flipY: tex.flipY, maxLum: +maxL.toFixed(1),
+    mediaLum: +(suma / (W * H)).toFixed(3), elevSol: +elevSol.toFixed(1), colSol: mx,
+    irradianciaHorizontal: +E.toFixed(3), irradianciaDiscoSol: +Esol.toFixed(3) };
+}
+
+/* ── Modelos ── */
+const cargador = new GLTFLoader();
+const cargar = (url) => new Promise((ok, ko) => cargador.load(url, ok, undefined, ko));
+const [topo, apolo] = await Promise.all([cargar('assets/entorno_topo.glb'), cargar('assets/apolo_levels.glb')]);
+estado.cargaMs = Math.round(performance.now() - t0);
+
+const colorTopo = {
+  terreno: 0x6b6f5c, acera: 0x9a968c, podotactil: 0xb0a89a, asfalto: 0x3a3b3d, bordillo: 0xa6a29c,
+  marca_vial: 0xd9d9d0, edificacion: 0xb9b3a8, muro: 0x8f8a80, arqueta: 0x6a6a6a, tronco: 0x4a3a2a, copa: 0x3f6a34,
+};
+topo.scene.position.y = -0.8; // como en app/topo.js: la cota 0 del GLB es la parcela
+topo.scene.traverse((o) => {
+  if (!o.isMesh) return;
+  if (!o.geometry.getAttribute('normal')) o.geometry.computeVertexNormals();
+  o.material = new THREE.MeshStandardMaterial({ color: colorTopo[o.name] ?? 0x888888, roughness: 0.95, metalness: 0,
+    flatShading: o.name !== 'terreno' });
+  o.castShadow = true; o.receiveShadow = true;
+});
+scene.add(topo.scene);
+
+/* Materiales como en building.js (sin el grano del shader, que es raster) */
+const matEdificio = {
+  wall: new THREE.MeshStandardMaterial({ color: 0xdcd8d0, roughness: 0.82, metalness: 0, envMapIntensity: 1.15 }),
+  struct: new THREE.MeshStandardMaterial({ color: 0xc9c5bd, roughness: 0.9, metalness: 0 }),
+  slab: new THREE.MeshStandardMaterial({ color: 0xc9c5bd, roughness: 0.9, metalness: 0 }),
+  glass: new THREE.MeshPhysicalMaterial({
+    color: 0x2c3b3e, roughness: 0.045, metalness: 0, transparent: true, opacity: 0.42,
+    envMapIntensity: 2.6, side: THREE.DoubleSide, clearcoat: 1, clearcoatRoughness: 0.02, ior: 1.52,
+  }),
+  cap: new THREE.MeshStandardMaterial({ color: 0x0e1013, roughness: 0.95, metalness: 0, transparent: true, opacity: 0 }),
+};
+let triangulos = 0;
+apolo.scene.traverse((o) => {
+  if (!o.isMesh) return;
+  const [planta, cat] = o.name.split('__');
+  if (planta === 'sotano') { o.visible = false; return; }
+  o.material = matEdificio[cat] || matEdificio.struct;
+  o.castShadow = cat !== 'glass' && cat !== 'cap'; o.receiveShadow = true;
+  triangulos += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3;
+});
+scene.add(apolo.scene);
+estado.triangulosEdificio = Math.round(triangulos);
+
+const caja = new THREE.Box3().setFromObject(apolo.scene);
+const centro = caja.getCenter(new THREE.Vector3());
+const tam = caja.getSize(new THREE.Vector3());
+estado.caja = { min: caja.min.toArray().map((v) => +v.toFixed(1)), max: caja.max.toArray().map((v) => +v.toFixed(1)) };
+
+/* ── Trampas: cosas que el trazador debe ignorar sin romperse ── */
+const trampas = new THREE.Group();
+trampas.name = 'trampas';
+{
+  const marcador = new THREE.Mesh(new THREE.BoxGeometry(3, 3, 3), new THREE.ShaderMaterial({
+    vertexShader: 'void main(){ gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+    fragmentShader: 'void main(){ gl_FragColor = vec4(1.0, 0.2, 0.6, 1.0); }',
+  }));
+  marcador.name = 'marcador_shader';
+  marcador.position.set(caja.max.x + 6, caja.min.y + 1.5, caja.max.z + 6);
+  trampas.add(marcador);
+  const basico = new THREE.Mesh(new THREE.SphereGeometry(1.5, 16, 12), new THREE.MeshBasicMaterial({ color: 0x20c0ff }));
+  basico.name = 'esfera_basica';
+  basico.position.set(caja.max.x + 6, caja.min.y + 1.5, caja.max.z + 12);
+  trampas.add(basico);
+  const nube = new THREE.Sprite(new THREE.SpriteMaterial({ color: 0xffffff, opacity: 0.8, transparent: true }));
+  nube.scale.set(40, 14, 1);
+  nube.position.set(centro.x - 60, caja.max.y + 60, centro.z - 80);
+  trampas.add(nube);
+  const pos = new Float32Array(300 * 3);
+  for (let i = 0; i < 300; i++) { pos[i * 3] = centro.x + (Math.random() - 0.5) * 400; pos[i * 3 + 1] = caja.max.y + 40 + Math.random() * 120; pos[i * 3 + 2] = centro.z + (Math.random() - 0.5) * 400; }
+  const puntos = new THREE.Points(new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(pos, 3)),
+    new THREE.PointsMaterial({ size: 3, sizeAttenuation: false, color: 0xffffff }));
+  trampas.add(puntos);
+  const linea = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(caja.min.x, caja.max.y + 2, caja.min.z), new THREE.Vector3(caja.max.x, caja.max.y + 2, caja.max.z)]),
+    new THREE.LineBasicMaterial({ color: 0xff2020 }));
+  trampas.add(linea);
+}
+scene.add(trampas);
+
+/* Cartela en la capa 1, como las de building.js */
+function cartela(texto, pos) {
+  const cv = document.createElement('canvas'); cv.width = 224; cv.height = 128;
+  const g = cv.getContext('2d');
+  g.fillStyle = '#24873f'; g.fillRect(42, 14, 140, 78);
+  g.fillStyle = '#fff'; g.font = '700 42px system-ui'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText(texto, 112, 54);
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true, toneMapped: false }));
+  sp.scale.set(6.4, 3.66, 1); sp.position.copy(pos); sp.layers.set(ctx.capas.cartelas);
+  return sp;
+}
+scene.add(cartela('204', new THREE.Vector3(centro.x - tam.x * 0.25, caja.max.y + 3, centro.z)));
+
+/* ── Encuadre: elevado, desde el lado del sol, mirando dentro de los patios ── */
+{
+  const dist = Math.max(tam.x, tam.z) * 0.62;
+  const az = THREE.MathUtils.degToRad(38), el = THREE.MathUtils.degToRad(30);
+  camera.position.set(centro.x + dist * Math.cos(el) * Math.sin(az), caja.min.y + dist * Math.sin(el), centro.z + dist * Math.cos(el) * Math.cos(az));
+  camera.lookAt(centro.x - tam.x * 0.05, caja.min.y + tam.y * 0.35, centro.z);
+  camera.updateMatrixWorld(true);
+}
+
+/* ── Trazador: recibe un objeto plano con lo que luz.js expondrá ── */
+const luzPlana = { equirect: hdr, envMapIntensity: iblTrazado, sol };
+const trazador = crearTrazador(ctx, luzPlana, { factorSol, teselasPorFotograma: 1 });
+window.__trazador = trazador;
+if (escala !== 1) trazador.pt.renderScale = escala;
+
+function pintarRaster() {
+  renderer.render(scene, camera);
+  const fondo = scene.background; scene.background = null;
+  renderer.autoClear = false; renderer.clearDepth();
+  camera.layers.set(ctx.capas.cartelas); renderer.render(scene, camera); camera.layers.set(ctx.capas.normal);
+  renderer.autoClear = true; scene.background = fondo;
+}
+trazador.setRaster(pintarRaster);
+
+/* ── Bucle ── */
+let quieta = false;
+const reloj = new THREE.Clock();
+let fotogramasRaster = 0, msRaster = 0, tArranque = 0, ultimaMuestra = -1;
+function fotograma() {
+  requestAnimationFrame(fotograma);
+  const dt = Math.min(reloj.getDelta(), 0.25);
+  const a = performance.now();
+  const pintado = trazador.update(dt, { quieta });
+  if (!pintado) { pintarRaster(); fotogramasRaster++; msRaster += performance.now() - a; }
+  estado.muestras = trazador.muestras;
+  estado.progreso = trazador.progreso;
+  estado.construccion = trazador.ultimaConstruccion;
+  estado.pintadoPorTrazador = pintado;
+  if (pintado && trazador.muestras !== ultimaMuestra) {
+    ultimaMuestra = trazador.muestras;
+    if (Number.isInteger(trazador.muestras) && trazador.muestras > 0) estado.tiempos.push({ muestras: trazador.muestras, s: +((performance.now() - tArranque) / 1000).toFixed(1) });
+  }
+  if (estado.fase === 'trazando' && pintado && !tArranque && trazador.muestras > 0) tArranque = performance.now();
+  info.textContent = `trazador.js · ${estado.fase} · muestras ${trazador.muestras.toFixed(2)} · progreso BVH ${(trazador.progreso * 100).toFixed(0)} % · `
+    + `${trazador.ultimaConstruccion ? JSON.stringify(trazador.ultimaConstruccion) : ''} · errores ${estado.errores.length}`;
+}
+
+window.__demo = {
+  trazador, ctx,
+  trazar() { estado.fase = 'trazando'; quieta = true; tArranque = 0; estado.tiempos = []; },
+  mover() { estado.fase = 'raster'; quieta = false; camera.position.x += 2; camera.updateMatrixWorld(true); },
+  invalidar() { trazador.invalidar(); },
+};
+
+fotograma();
+// unos fotogramas de raster para medir su coste y tener imagen antes de trazar
+await new Promise((r) => setTimeout(r, 1500));
+estado.raster = { fotogramas: fotogramasRaster, msPorFotograma: Math.round(msRaster / Math.max(1, fotogramasRaster)) };
+estado.fase = 'raster';
+estado.activo = trazador.activo;
+window.__listo = true;
+</script>
+</body>
+</html>

@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Demo · cortes.js — plantas seccionadas por tramo</title>
+<base href="/">
+<link rel="icon" href="data:,">
+<style>
+  body { margin: 0; background: #111; color: #ddd; font: 13px system-ui, sans-serif; }
+  #c { display: block; width: 960px; height: 540px; }
+  #info { padding: 6px 10px; white-space: pre-wrap; }
+</style>
+<script type="importmap">{"imports":{
+ "three":"/new/vendor/three/three.module.min.js",
+ "three/addons/":"/new/vendor/three/addons/",
+ "three/examples/jsm/":"/new/vendor/three/addons/",
+ "three-mesh-bvh":"/new/vendor/three-mesh-bvh.js",
+ "three-bvh-csg":"/new/vendor/three-bvh-csg.js",
+ "three-gpu-pathtracer":"/new/vendor/three-gpu-pathtracer.js",
+ "camera-controls":"/new/vendor/camera-controls.js",
+ "xatlas-web":"/new/vendor/xatlas-web.js",
+ "app/":"/new/js/"
+}}</script>
+</head>
+<body>
+<canvas id="c" width="960" height="540"></canvas>
+<div id="info"></div>
+<script type="module">
+/* Demo de cortes.js: edificio Apolo (loadBIM de app/building.js, con sus
+   materiales de grano y vidrio), entorno topográfico, HDRI diurno, sol con
+   sombras. El objeto `edificio` que recibe el módulo se construye aquí a
+   partir de los niveles de loadBIM: { niveles: Map(key → { meshes, byCat,
+   mats }), tramoDe(mesh) }, con tramoDe por el centro de la caja de cada
+   malla contra los x0/x1 de data/cortes.json.
+
+   No hay bucle de animación: el guion de Playwright pide fotogramas con
+   window.__demo (SwiftShader tarda cientos de ms por fotograma y así la
+   mitad de la transición es exactamente la mitad). */
+import * as THREE from 'three';
+import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { crearEscena } from 'app/visor/escena.js';
+import { crearCortes, DURACION } from 'app/visor/cortes.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { loadBIM } from 'app/building.js';
+
+/* ?modelo=levels (por defecto): assets/apolo_levels.glb (Revit, por plantas)
+   con la definición de cortes con la que se generó (SECTIONS de layout.js,
+   copiada en new/_demos/cortes-apolo_levels.json: data/cortes.json ya está
+   en el sistema de coordenadas del SketchUp y no encaja con este GLB).
+   ?modelo=serenea: assets/serenea/apolo_envolvente.glb (SketchUp, mallas
+   por tramo T0..T7) con data/cortes.json tal cual. */
+const params = new URLSearchParams(location.search);
+const MODELO = params.get('modelo') === 'serenea' ? 'serenea' : 'levels';
+
+const info = document.getElementById('info');
+const canvas = document.getElementById('c');
+const ctx = crearEscena(canvas);
+const { scene, camera, renderer } = ctx;
+renderer.setPixelRatio(1); // SwiftShader: un píxel por píxel
+ctx.setTamano(960, 540);
+scene.fog = new THREE.Fog(0xd6dde3, 750, 2100);
+
+const estado = window.__estado = { errores: [], eventos: [], casos: {} };
+window.__listo = false;
+window.addEventListener('error', (e) => estado.errores.push(String(e.message)));
+window.addEventListener('unhandledrejection', (e) => estado.errores.push('rechazo: ' + String(e.reason?.message || e.reason)));
+ctx.on('geometria', (d) => estado.eventos.push('geometria:' + d.planta));
+
+/* Sol del HDRI (elev. 47°, acimut 45°) con sombras, como en la demo de post. */
+const sol = new THREE.DirectionalLight(0xfff1dc, 3.0);
+const dirSol = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToRad(90 - 47), THREE.MathUtils.degToRad(45));
+sol.position.copy(dirSol).multiplyScalar(180);
+sol.castShadow = true;
+sol.shadow.mapSize.set(2048, 2048);
+sol.shadow.bias = -0.0004;
+sol.shadow.normalBias = 0.05;
+Object.assign(sol.shadow.camera, { left: -90, right: 90, top: 90, bottom: -90, near: 20, far: 400 });
+scene.add(sol, sol.target);
+scene.add(new THREE.HemisphereLight(0xe3edf8, 0x8b9080, 0.28));
+
+const t0 = performance.now();
+const cargador = new GLTFLoader();
+const cargar = (url) => new Promise((ok, ko) => cargador.load(url, ok, undefined, ko));
+cargador.setMeshoptDecoder(MeshoptDecoder);
+const [hdr, topo, bim, definicion] = await Promise.all([
+  new Promise((res, rej) => new HDRLoader().load('assets/sky_day.hdr', res, undefined, rej)),
+  MODELO === 'levels' ? cargar('assets/entorno_topo.glb') : null,
+  MODELO === 'levels' ? loadBIM(scene, 'assets/apolo_levels.glb') : cargar('assets/serenea/apolo_envolvente.glb'),
+  fetch(MODELO === 'levels' ? 'new/_demos/cortes-apolo_levels.json' : 'data/cortes.json').then((r) => r.json()),
+]);
+estado.cargaMs = Math.round(performance.now() - t0);
+
+hdr.mapping = THREE.EquirectangularReflectionMapping;
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.background = hdr;
+scene.environment = pmrem.fromEquirectangular(hdr).texture;
+scene.environmentIntensity = 0.3;
+pmrem.dispose();
+
+/* Entorno topográfico, como en la demo de luz. */
+const colorTopo = {
+  terreno: 0x6b6f5c, acera: 0x9a968c, podotactil: 0xb0a89a, asfalto: 0x3a3b3d, bordillo: 0xa6a29c,
+  marca_vial: 0xd9d9d0, edificacion: 0xb9b3a8, muro: 0x8f8a80, arqueta: 0x6a6a6a, tronco: 0x4a3a2a, copa: 0x3f6a34,
+};
+if (topo) topo.scene.position.y = -0.8;
+if (topo) topo.scene.traverse((o) => {
+  if (!o.isMesh) return;
+  if (!o.geometry.getAttribute('normal')) o.geometry.computeVertexNormals();
+  o.material = new THREE.MeshStandardMaterial({ color: colorTopo[o.name] ?? 0x888888, roughness: 0.95, metalness: 0,
+    flatShading: o.name !== 'terreno' });
+  o.castShadow = true; o.receiveShadow = true;
+});
+if (topo) scene.add(topo.scene);
+
+/* El edificio para el módulo. Con 'levels': niveles de loadBIM (cada holder
+   envuelve una malla '<planta>__<categoría>'). Con 'serenea': un solo nivel
+   con todas las mallas de la envolvente y un material de tapa propio. */
+const tramos = Object.values(definicion.plantas)[0];
+const niveles = new Map();
+let triangulos = 0;
+const contar = (m) => { triangulos += (m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count) / 3; };
+let grupoEdificio;
+if (MODELO === 'levels') {
+  bim.group.visible = true;
+  grupoEdificio = bim.group;
+  for (const [clave, L] of bim.levels) {
+    const meshes = L.holders.map((h) => h.children[0]).filter((m) => m?.isMesh);
+    meshes.forEach(contar);
+    niveles.set(clave, { meshes, byCat: L.byCat, mats: L.mats, holders: L.holders });
+  }
+} else {
+  grupoEdificio = bim.scene;
+  const meshes = [];
+  const mats = new Set();
+  bim.scene.traverse((o) => {
+    if (!o.isMesh) return;
+    o.castShadow = true; o.receiveShadow = true;
+    if (o.material.transparent) o.material.depthWrite = false;
+    meshes.push(o); mats.add(o.material); contar(o);
+  });
+  const cap = new THREE.MeshStandardMaterial({ color: 0x0e1013, roughness: 0.95, metalness: 0 });
+  niveles.set('apolo', { meshes, byCat: { cap }, mats: [...mats] });
+  scene.add(bim.scene);
+}
+scene.updateMatrixWorld(true);
+const edificio = {
+  grupo: grupoEdificio, niveles,
+  tramoDe(mesh) {
+    const porNombre = /__T(\d+)__/.exec(mesh.name);
+    if (porNombre) return +porNombre[1];
+    const c = new THREE.Box3().setFromObject(mesh).getCenter(new THREE.Vector3());
+    const i = tramos.findIndex((t) => c.x >= t.x0 && c.x < t.x1 && c.z >= t.z0 && c.z < t.z1);
+    return i >= 0 ? i : null;
+  },
+};
+estado.triangulos = Math.round(triangulos);
+estado.niveles = [...niveles.keys()];
+
+const cortes = crearCortes(ctx, edificio, { definicion });
+await cortes.listo;
+
+/* Encuadres. El edificio va de x -57 a 57; se mira desde el sureste para
+   que se lean los cuatro tramos escalonados a lo largo de x. */
+const cajaEdificio = new THREE.Box3().setFromObject(grupoEdificio);
+const centro = cajaEdificio.getCenter(new THREE.Vector3());
+function encuadrar({ elevacion, acimut, distancia, altoObjetivo }) {
+  const el = THREE.MathUtils.degToRad(elevacion), az = THREE.MathUtils.degToRad(acimut);
+  const objetivo = new THREE.Vector3(centro.x, altoObjetivo, centro.z);
+  camera.position.set(objetivo.x + distancia * Math.cos(el) * Math.sin(az), objetivo.y + distancia * Math.sin(el),
+    objetivo.z + distancia * Math.cos(el) * Math.cos(az));
+  camera.lookAt(objetivo);
+  camera.updateMatrixWorld(true);
+}
+const ENCUADRES = {
+  completo: { elevacion: 20, acimut: 48, distancia: 105, altoObjetivo: 5 },
+  planta: { elevacion: 40, acimut: 38, distancia: 92, altoObjetivo: 3 },
+};
+if (MODELO === 'serenea') {
+  // el SketchUp es más alto (y hasta 24) y el sol viene del noreste en su marco
+  ENCUADRES.completo = { elevacion: 22, acimut: 40, distancia: 130, altoObjetivo: 10 };
+  ENCUADRES.planta = { elevacion: 40, acimut: 38, distancia: 110, altoObjetivo: 10 };
+}
+estado.modelo = MODELO;
+
+let msRender = 0;
+function pintar(dt = 0) {
+  cortes.update(dt);
+  const a = performance.now();
+  renderer.render(scene, camera);
+  msRender = Math.round(performance.now() - a);
+  return msRender;
+}
+
+window.__demo = {
+  cortes, ctx, edificio,
+  /* Sin transición: aplica la planta de golpe y pinta. */
+  async ir(clave, encuadre = 'planta') {
+    window.__listo = false;
+    encuadrar(ENCUADRES[encuadre]);
+    const t = performance.now();
+    await cortes.setPlanta(clave, { animar: false });
+    for (let i = 0; i < 6; i++) cortes.update(0.25); // que la atenuación llegue a su valor
+    const ms = Math.round(performance.now() - t);
+    pintar(0);
+    const r = { planta: cortes.planta, setPlantaMs: ms, renderMs: msRender, tiempos: cortes.tiempos[clave] || null,
+      alturas: cortes.alturas.map((v) => +v.toFixed(2)), visibles: contarVisibles() };
+    estado.casos[clave] = r;
+    info.textContent = `cortes.js · ${clave} · ${JSON.stringify(r)}`;
+    window.__listo = true;
+    return r;
+  },
+  /* Arranca la transición hacia `clave` y la deja a la fracción pedida
+     (0,5 = mitad), pintando ese fotograma. */
+  async transicionHasta(clave, fraccion = 0.5, encuadre = 'planta') {
+    window.__listo = false;
+    encuadrar(ENCUADRES[encuadre]);
+    window.__promesa = cortes.setPlanta(clave, { animar: true });
+    const paso = 0.04;
+    const pasos = Math.round(fraccion * DURACION / paso);
+    for (let i = 0; i < pasos; i++) cortes.update(paso);
+    pintar(0);
+    const r = { planta: cortes.planta, enTransicion: cortes.enTransicion, renderMs: msRender,
+      alturas: cortes.alturas.map((v) => +v.toFixed(2)), visibles: contarVisibles() };
+    estado.casos[clave + '-transicion'] = r;
+    info.textContent = `cortes.js · ${clave} (transición) · ${JSON.stringify(r)}`;
+    window.__listo = true;
+    return r;
+  },
+  /* Termina la transición en curso (CSG incluido) y pinta el resultado. */
+  async terminar() {
+    window.__listo = false;
+    const t = performance.now();
+    for (let i = 0; i < 60 && cortes.enTransicion; i++) cortes.update(0.04);
+    const clave = await window.__promesa;
+    for (let i = 0; i < 6; i++) cortes.update(0.25);
+    const ms = Math.round(performance.now() - t);
+    pintar(0);
+    const r = { planta: cortes.planta, terminarMs: ms, renderMs: msRender, tiempos: cortes.tiempos[clave] || null,
+      alturas: cortes.alturas.map((v) => +v.toFixed(2)), visibles: contarVisibles(), eventos: estado.eventos.slice() };
+    estado.casos[clave] = r;
+    info.textContent = `cortes.js · ${clave} · ${JSON.stringify(r)}`;
+    window.__listo = true;
+    return r;
+  },
+  alturaCorte: (x, z, clave) => cortes.alturaCorte(x, z, clave),
+  /* Encuadre libre para inspeccionar un detalle: { elevacion, acimut, distancia, altoObjetivo, x, z }. */
+  mirar(e) {
+    const el = THREE.MathUtils.degToRad(e.elevacion), az = THREE.MathUtils.degToRad(e.acimut);
+    const objetivo = new THREE.Vector3(e.x ?? centro.x, e.altoObjetivo ?? 3, e.z ?? centro.z);
+    camera.position.set(objetivo.x + e.distancia * Math.cos(el) * Math.sin(az), objetivo.y + e.distancia * Math.sin(el),
+      objetivo.z + e.distancia * Math.cos(el) * Math.cos(az));
+    camera.lookAt(objetivo);
+    camera.updateMatrixWorld(true);
+    pintar(0);
+    return msRender;
+  },
+};
+
+function contarVisibles() {
+  let originales = 0, cortadas = 0, clones = 0, tapas = 0;
+  for (const L of niveles.values()) for (const m of L.meshes) if (m.visible) originales++;
+  cortes.grupo.traverse((o) => {
+    if (!o.isMesh || !o.visible) return;
+    if (o.name.includes('__corte-')) cortadas++;
+    else if (o.name.includes('__clip')) clones++;
+    else if (o.name.startsWith('tapa-')) tapas++;
+  });
+  return { originales, cortadas, clones, tapas };
+}
+
+encuadrar(ENCUADRES.completo);
+pintar(0); // compila los shaders
+estado.inicial = { listoMs: Math.round(performance.now() - t0), renderMs: msRender };
+info.textContent = `cortes.js · listo · ${JSON.stringify(estado.inicial)}`;
+window.__listo = true;
+</script>
+</body>
+</html>
