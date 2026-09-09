@@ -292,10 +292,12 @@ function yminMobiliario(mesh, caja) {
   return m[2] != null ? parseFloat(`${m[1]}.${m[2]}`) : parseInt(m[1], 10) / 100;
 }
 
-/* Caras traseras en gris muy oscuro (contrato del 9-sep): lo que se ve por la
-   boca del corte en modelos sin tapas. Se encadena con el onBeforeCompile que
+/* Caras traseras en gris claro: lo que se ve por la boca del corte en modelos
+   sin tapas. Se encadena con el onBeforeCompile que
    ya tenga el material (grano, CSM) y se distingue en la clave del programa. */
-const COLOR_TRASERA = 'vec3(0.05, 0.055, 0.06)';
+/* Gris claro, no negro: el cliente no quiere ver nada oscuro por la boca del
+   corte; basta con que la cara interior se distinga de la exterior. */
+const COLOR_TRASERA = 'vec3(0.74, 0.72, 0.68)';
 function oscurecerTraseras(material) {
   if (!material || material.userData.carasOscuras || material.userData.sinTraseras) return;
   material.userData.carasOscuras = true;
@@ -375,7 +377,7 @@ const aMapa = (v) => (v instanceof Map ? new Map(v) : new Map(Object.entries(v |
 
 export function crearCortes(ctx, edificio, opciones = {}) {
   const { url = 'data/cortes.json', luz = null, tapasCSG = true, tapasStencil = true, carasOscuras = false,
-    csg = true, atenuacionPorCota = false } = opciones;
+    csg = true, atenuacionPorCota = false, sombraFantasma = false } = opciones;
   const { scene } = ctx;
   const uniformesAtenuacion = crearUniformesAtenuacion();
   const atenCota = { valor: 0, objetivo: 0 };
@@ -776,7 +778,9 @@ export function crearCortes(ctx, edificio, opciones = {}) {
   /* ── Estado final de una planta ── */
   function fantasmasPara(clave) {
     for (const f of fantasmas) f.visible = false;
-    if (clave === 'all') return;
+    /* Apagado por defecto: la losa invisible del nivel superior dejaba la
+       planta seccionada en sombra, y el cliente quiere verla a plena luz. */
+    if (clave === 'all' || !sombraFantasma) return;
     const k = nivelesOrdenados.indexOf(clave);
     const superior = k >= 0 ? nivelesOrdenados[k + 1] : null;
     if (!superior) return;

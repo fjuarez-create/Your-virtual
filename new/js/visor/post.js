@@ -273,7 +273,7 @@ class SSRPassCompuesto extends SSRPass {
 /* ───────────────────────────── crearPost ───────────────────────────── */
 
 const CALIDADES = {
-  alta:  { aoMuestras: 16, aoDenoise: 16, desenfoqueMuestras: 12, ssr: true,  ssrEscala: 0.5 },
+  alta:  { aoMuestras: 16, aoDenoise: 16, desenfoqueMuestras: 12, ssr: false, ssrEscala: 0.5 }, // SSR apagado: dejaba la calle como mojada y con manchas
   media: { aoMuestras: 8,  aoDenoise: 8,  desenfoqueMuestras: 8,  ssr: false, ssrEscala: 0.5 },
 };
 
