@@ -107,10 +107,16 @@
   </div>
 </nav>
 
-<aside id="plantas" aria-label="Selector de planta">
-  <h2>Planta</h2>
+<!-- La barra de plantas nace a la altura exacta del botón de plantas y se
+     despliega en horizontal: 1 · 2 · 3 · 4 · TODO. shell.js le fija la cota
+     leyendo la del botón, así siempre quedan alineados. -->
+<nav id="plantas" aria-label="Selector de planta">
   <div class="rejilla" id="plantasRejilla"></div>
-</aside>
+</nav>
+
+<!-- Marca de la comercializadora, abajo a la derecha. Si el fichero no está
+     todavía, la caja desaparece sin dejar un icono roto. -->
+<div id="marcaGilmar"><img src="assets/logo_gilmar.png" alt="Gilmar" onerror="this.parentNode.hidden=true"></div>
 
 <div id="horas">
   <button class="hora-btn" id="horaPrincipal" aria-label="Momento del día">

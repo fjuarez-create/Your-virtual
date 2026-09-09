@@ -47,7 +47,16 @@ cuandoHayaApp((app) => {
     marcarVista('bEdificio');
   });
 
+  /* La barra se coloca a la altura del botón que la abre; se recalcula al
+     abrir y al cambiar el tamaño de la ventana. */
+  function alinearPanel() {
+    const r = bPlantas.getBoundingClientRect();
+    panel.style.setProperty('--plantas-top', `${Math.round(r.top)}px`);
+  }
+  window.addEventListener('resize', alinearPanel);
+
   bPlantas.addEventListener('click', () => {
+    alinearPanel();
     const abierto = panel.classList.toggle('abierto');
     bPlantas.classList.toggle('on', abierto);
     if (abierto) { bConjunto.classList.remove('on'); bEdificio.classList.remove('on'); }
@@ -72,6 +81,7 @@ cuandoHayaApp((app) => {
   const todo = document.createElement('button');
   todo.className = 'planta-btn ancho';
   todo.textContent = 'TODO';
+  todo.title = 'Edificio completo';
   todo.dataset.planta = 'all';
   rejilla.appendChild(todo);
 

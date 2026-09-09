@@ -127,43 +127,44 @@ html, body {
   transition: opacity 0.16s ease;
 }
 .rail-btn:hover::after { opacity: 1; }
+/* Con la barra de plantas abierta, la etiqueta del botón caería justo encima
+   del primer número: mientras esté activo no se muestra. */
+#bPlantas.on::after { display: none; }
 
 /* ─────────────────────────── Selector de planta ─────────────────────────── */
 
+/* Una barra horizontal a la altura del botón de plantas y de su misma
+   altura, como si el botón se prolongara hacia la escena. La cota vertical
+   (--plantas-top) la escribe shell.js leyendo la del botón, así nunca se
+   desalinean aunque cambie el espaciado del raíl. */
 #plantas {
   position: absolute;
-  left: calc(var(--rail) + 14px);
-  top: 50%;
-  transform: translateY(-50%) translateX(-8px);
-  z-index: 19;
-  padding: 16px 18px 18px;
-  border-radius: 16px;
+  left: calc(var(--rail) + 12px);
+  top: var(--plantas-top, 50%);
+  height: 44px;
+  display: flex;
+  align-items: center;
+  padding: 0 6px;
+  border-radius: var(--radio);
   border: 1px solid var(--linea);
   background: var(--glass-alta);
   backdrop-filter: blur(20px) saturate(1.4);
   -webkit-backdrop-filter: blur(20px) saturate(1.4);
   box-shadow: var(--sombra);
+  z-index: 19;
   opacity: 0;
   pointer-events: none;
+  transform: translateX(-8px);
   transition: opacity 0.2s ease, transform 0.2s ease;
 }
-#plantas.abierto { opacity: 1; pointer-events: auto; transform: translateY(-50%) translateX(0); }
+#plantas.abierto { opacity: 1; pointer-events: auto; transform: none; }
 
-#plantas h2 {
-  margin: 0 0 12px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--linea);
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--tinta-baja);
-}
-
-.rejilla { display: grid; grid-template-columns: repeat(3, 34px); gap: 8px; }
+.rejilla { display: flex; align-items: center; gap: 6px; }
 
 .planta-btn {
-  height: 34px;
+  height: 32px;
+  min-width: 32px;
+  padding: 0;
   border: 1px solid var(--linea);
   border-radius: 9px;
   background: transparent;
@@ -175,7 +176,19 @@ html, body {
 }
 .planta-btn:hover { background: rgba(255, 255, 255, 0.12); border-color: rgba(255, 255, 255, 0.3); }
 .planta-btn.on { background: #fff; color: #12171c; border-color: #fff; }
-.planta-btn.ancho { grid-column: 1 / -1; font-size: 11px; letter-spacing: 0.08em; }
+.planta-btn.ancho { padding: 0 12px; font-size: 10px; letter-spacing: 0.14em; }
+
+/* ─────────────────────────── Marca de la comercializadora ─────────────── */
+
+#marcaGilmar {
+  position: absolute;
+  right: 22px;
+  bottom: 20px;
+  z-index: 18;
+  pointer-events: none;
+  opacity: 0.86;
+}
+#marcaGilmar img { display: block; height: 22px; width: auto; }
 
 /* ─────────────────────────── Momento del día ─────────────────────────── */
 
@@ -332,7 +345,8 @@ html, body {
   .grupo { flex-direction: row; gap: 10px; }
   .grupo + .grupo { margin-top: 0; }
   .rail-btn::after { display: none; }
-  #plantas { left: 50%; top: auto; bottom: 84px; transform: translateX(-50%); }
+  #plantas { left: 50%; top: auto; bottom: 84px; transform: translateX(-50%) translateY(6px); }
   #plantas.abierto { transform: translateX(-50%); }
+  #marcaGilmar { right: 14px; bottom: 80px; }
   .capa { padding: 24px 20px 90px; }
 }
