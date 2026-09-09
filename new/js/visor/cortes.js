@@ -31,8 +31,9 @@
      una abarca los CUATRO tramos (x de -55 a 55). Un solo plano por malla
      no puede cortarlas escalonadas, así que durante la transición cada
      malla que cruza el corte se dibuja una vez por tramo con un clon del
-     material que lleva tres planos (x ≥ x0, x ≤ x1, y ≤ cota): tres
-     rebanadas disjuntas que juntas son la malla escalonada. Si una malla
+     material que lleva los planos laterales de la huella y el horizontal
+     (x ≥ x0, x ≤ x1, z ≥ z0, z ≤ z1, y ≤ cota): rebanadas disjuntas que
+     juntas son la malla escalonada. Si una malla
      cae en un solo tramo (modelo de SketchUp, mobiliario…) lleva un único
      plano, que es lo que describe el contrato. `edificio.tramoDe(mesh)` se
      usa como tramo principal de respaldo cuando la caja de la malla no
@@ -65,8 +66,44 @@
    · El orden de los niveles (para saber cuál está debajo de cuál) sale de
      la cota mínima de las mallas de cada nivel, no de sus nombres.
    · Extras no contemplados: `cortes.precalcular(clave)` calcula y guarda el
-     CSG de una planta sin aplicarlo (para calentar la caché en reposo) y
-     `cortes.tiempos` guarda las medidas (ms, mallas, triángulos) por planta.
+     CSG de una planta sin aplicarlo, una malla por macrotarea (para calentar
+     la caché en reposo sin congelar el visor: el CSG completo de una planta
+     de apolo_levels cuesta 1-4 s); `cortes.tiempos` guarda las medidas (ms,
+     mallas, triángulos, detalle por malla) por planta.
+   · Revisión (contrato del 9-sep, modelo de SketchUp), decisiones añadidas:
+     - Vía principal "cambiar de fichero": `cortes.variantes` es un Map
+       (clave → Object3D ya en la escena, p. ej. apolo_corte_<k>.glb) que
+       puede llegar en `opciones.variantes`, en `edificio.variantes` o
+       rellenarse más tarde. Si hay variante para la planta, al terminar la
+       transición se muestra ella, se oculta la envolvente entera y NO se
+       hace CSG; 'all' oculta todas las variantes. El trazador ve solo lo
+       visible. La transición sigue siendo por planos sobre la envolvente.
+     - Mobiliario: `MOB_*` (contrato antiguo) y `mob__|puerta__…__y<ymin>`
+       (SketchUp) nunca se cortan; se ocultan cuando su ymin queda por
+       encima de la cota de corte de su plataforma (`__T<n>__` del nombre,
+       si no, la huella que contiene su centro). Puede venir en los niveles
+       del edificio o aparte en `opciones.mobiliario` (Object3D o lista).
+     - `opciones.carasOscuras`: pinta las mallas del edificio a doble cara
+       con las caras traseras en gris muy oscuro (onBeforeCompile encadenado
+       con el que ya tuviera el material, p. ej. grano o CSM), que es lo que
+       se ve por la boca del corte en modelos sin tapas. Apagado por defecto.
+     - Planos de recorte por tramo: cinco (x ≥ x0, x ≤ x1, z ≥ z0, z ≤ z1,
+       y ≤ cota); los cuatro laterales solo para mallas que abarcan varios
+       tramos. Con solo los dos de x, una partición en z (los 4×2 del
+       SketchUp) dibujaba la rebanada de la banda vecina a la cota equivocada.
+     - El evaluador CSG pide `uv` cuando la malla lo trae (los materiales con
+       textura del SketchUp lo necesitan); el cortador lleva un uv nulo.
+     - `cortes.dispose()` deshace todo: clones, stencil, tapas, CSG, brushes,
+       y devuelve visibilidad y color a las mallas del edificio.
+     - `setPlanta` con la planta ya aplicada y sin transición en curso no
+       vuelve a aplicar nada ni emite 'geometria' (evita reconstruir el BVH
+       del trazador sin motivo).
+   · Modelos de superficies abiertas (SketchUp): tanto el stencil como la
+     clasificación del CSG suponen sólidos cerrados con normales hacia
+     fuera; con caras sueltas las tapas salen donde no deben (probado con
+     assets/serenea/apolo_envolvente.glb). Para esos modelos,
+     `opciones.tapasCSG = false` y `opciones.tapasStencil = false` cortan sin
+     tapas; el corte en sí (qué queda y qué se va) es correcto igualmente.
    ═══════════════════════════════════════════════════════════════════════════ */
 import * as THREE from 'three';
 import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg';
@@ -83,14 +120,16 @@ const suavizar = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) /
 function geometriaMundo(mesh) {
   const g = mesh.geometry;
   const salida = new THREE.BufferGeometry();
-  for (const nombre of ['position', 'normal']) {
+  for (const nombre of ['position', 'normal', 'uv']) {
     const atr = g.getAttribute(nombre);
     if (!atr) continue;
-    const datos = new Float32Array(atr.count * 3);
+    const n = nombre === 'uv' ? 2 : 3;
+    const datos = new Float32Array(atr.count * n);
     for (let i = 0; i < atr.count; i++) {
-      datos[i * 3] = atr.getX(i); datos[i * 3 + 1] = atr.getY(i); datos[i * 3 + 2] = atr.getZ(i);
+      datos[i * n] = atr.getX(i); datos[i * n + 1] = atr.getY(i);
+      if (n === 3) datos[i * n + 2] = atr.getZ(i);
     }
-    salida.setAttribute(nombre, new THREE.BufferAttribute(datos, 3));
+    salida.setAttribute(nombre, new THREE.BufferAttribute(datos, n));
   }
   if (g.index) salida.setIndex(g.index.clone());
   salida.applyMatrix4(mesh.matrixWorld);
@@ -174,7 +213,29 @@ export function geometriaCortador(tramos, { celda = 1.5, gruesa = 4, techo = TEC
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  // uv nulo: el evaluador exige en ambos brushes los atributos que se le piden
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(pos.length / 3 * 2), 2));
   return g;
+}
+
+/* Quita de un resultado CSG los grupos que llevan el material de tapa (para
+   modelos de superficies abiertas, donde la clasificación dentro/fuera no es
+   fiable y las tapas salen donde no deben). */
+function sinTapas(geometria, material, cap) {
+  const mats = Array.isArray(material) ? material : [material];
+  const grupos = geometria.groups.filter((g) => mats[g.materialIndex] !== cap);
+  if (grupos.length === geometria.groups.length) return [geometria, material];
+  const idx = geometria.index;
+  const total = grupos.reduce((n, g) => n + g.count, 0);
+  const nuevoIdx = new (total > 65535 ? Uint32Array : Uint16Array)(total);
+  let k = 0;
+  for (const g of grupos) for (let i = 0; i < g.count; i++) nuevoIdx[k++] = idx ? idx.getX(g.start + i) : g.start + i;
+  const salida = new THREE.BufferGeometry();
+  for (const nombre of Object.keys(geometria.attributes)) salida.setAttribute(nombre, geometria.getAttribute(nombre));
+  salida.setIndex(new THREE.BufferAttribute(nuevoIdx, 1));
+  let inicio = 0;
+  for (const g of grupos) { salida.addGroup(inicio, g.count, g.materialIndex); inicio += g.count; }
+  return [salida, material];
 }
 
 function triangulosDe(geometria) {
@@ -193,8 +254,43 @@ function clonarMaterial(origen) {
   return c;
 }
 
+/* Mobiliario: 'MOB_*' del contrato antiguo o 'mob__|puerta__…__y<ymin>' del
+   SketchUp (tools/build_serenea.mjs). ymin es la cota mínima de la pieza; si
+   el nombre no la trae, la de su caja. */
+const esMobiliario = (mesh) => /^MOB_/.test(mesh.name) || /^(mob|puerta)__/.test(mesh.name);
+function yminMobiliario(mesh, caja) {
+  /* GLTFLoader sanea los nombres de nodo y les quita los puntos
+     (PropertyBinding.sanitizeNodeName): '__y9.06' llega como '__y906'. El
+     pipeline escribe siempre dos decimales (toFixed(2)), así que sin punto el
+     valor va en centímetros. */
+  const m = /__y(-?\d+)(?:\.(\d+))?$/.exec(mesh.name);
+  if (!m) return caja.min.y;
+  return m[2] != null ? parseFloat(`${m[1]}.${m[2]}`) : parseInt(m[1], 10) / 100;
+}
+
+/* Caras traseras en gris muy oscuro (contrato del 9-sep): lo que se ve por la
+   boca del corte en modelos sin tapas. Se encadena con el onBeforeCompile que
+   ya tenga el material (grano, CSM) y se distingue en la clave del programa. */
+const COLOR_TRASERA = 'vec3(0.05, 0.055, 0.06)';
+function oscurecerTraseras(material) {
+  if (!material || material.userData.carasOscuras) return;
+  material.userData.carasOscuras = true;
+  material.side = THREE.DoubleSide;
+  const previo = material.onBeforeCompile;
+  const clavePrevia = material.customProgramCacheKey?.bind(material);
+  material.onBeforeCompile = function (shader, r) {
+    if (previo) previo.call(this, shader, r);
+    shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>',
+      `#include <color_fragment>\n  if (!gl_FrontFacing) diffuseColor.rgb = ${COLOR_TRASERA};`);
+  };
+  material.customProgramCacheKey = () => `${clavePrevia ? clavePrevia() : ''}|traseras`;
+  material.needsUpdate = true;
+}
+
+const aMapa = (v) => (v instanceof Map ? new Map(v) : new Map(Object.entries(v || {})));
+
 export function crearCortes(ctx, edificio, opciones = {}) {
-  const { url = 'data/cortes.json', luz = null } = opciones;
+  const { url = 'data/cortes.json', luz = null, tapasCSG = true, tapasStencil = true, carasOscuras = false } = opciones;
   const { scene } = ctx;
 
   const grupo = new THREE.Group();
@@ -203,7 +299,7 @@ export function crearCortes(ctx, edificio, opciones = {}) {
 
   const evaluador = new Evaluator();
   evaluador.useGroups = true;
-  evaluador.attributes = ['position', 'normal']; // el GLB no trae uv y el evaluador exige que existan los que se piden
+  evaluador.attributes = ['position', 'normal']; // se ajusta por malla: uv solo si la trae (el evaluador exige que existan)
 
   /* ── Estado ── */
   const cortes = {
@@ -216,7 +312,9 @@ export function crearCortes(ctx, edificio, opciones = {}) {
     tramos: [],          // huellas (x0, x1, z0, z1) comunes a todas las plantas
     techo: 30,           // cota de la cubierta + margen: de aquí baja el plano
     alturas: [],         // cota actual del plano por tramo (durante la transición)
+    variantes: aMapa(opciones.variantes || edificio.variantes), // clave → Object3D precortado (puede rellenarse después)
   };
+  let aplicada = null;             // última planta aplicada de verdad (aplicarFinal)
 
   let piezas = [];                 // una por malla del edificio
   const nivelDeClave = new Map();  // clave → { clave, nivel, mats, minY }
@@ -229,8 +327,9 @@ export function crearCortes(ctx, edificio, opciones = {}) {
   const fantasmas = [];            // losas del nivel superior que solo proyectan sombra
   const trans = { activa: false, t: 0, desde: [], hasta: [], resolver: null, clave: null };
 
-  // Planos por tramo: [x ≥ x0, x ≤ x1, y ≤ cota]. Un fragmento se descarta
-  // cuando queda en el lado negativo de CUALQUIERA de ellos.
+  // Planos por tramo: [x ≥ x0, x ≤ x1, z ≥ z0, z ≤ z1, y ≤ cota]. Un fragmento
+  // se descarta cuando queda en el lado negativo de CUALQUIERA de ellos.
+  const HORIZONTAL = 4;
   const planos = [];
   const tapas = [];                // rectángulos de tapa por stencil, por tramo
   const matsEstencil = [];         // [trasera, delantera] por tramo
@@ -252,10 +351,12 @@ export function crearCortes(ctx, edificio, opciones = {}) {
       planos[i] = [
         new THREE.Plane(new THREE.Vector3(1, 0, 0), -t.x0),
         new THREE.Plane(new THREE.Vector3(-1, 0, 0), t.x1),
+        new THREE.Plane(new THREE.Vector3(0, 0, 1), -t.z0),
+        new THREE.Plane(new THREE.Vector3(0, 0, -1), t.z1),
         new THREE.Plane(new THREE.Vector3(0, -1, 0), cortes.techo),
       ];
       const base = { depthWrite: false, depthTest: false, colorWrite: false, stencilWrite: true,
-        stencilFunc: THREE.AlwaysStencilFunc, clippingPlanes: [planos[i][2]] };
+        stencilFunc: THREE.AlwaysStencilFunc, clippingPlanes: [planos[i][HORIZONTAL]] };
       matsEstencil[i] = [
         new THREE.MeshBasicMaterial({ ...base, side: THREE.BackSide,
           stencilFail: THREE.IncrementWrapStencilOp, stencilZFail: THREE.IncrementWrapStencilOp, stencilZPass: THREE.IncrementWrapStencilOp }),
@@ -311,11 +412,17 @@ export function crearCortes(ctx, edificio, opciones = {}) {
     for (const [clave, nivel] of edificio.niveles) {
       const byCat = nivel.byCat || {};
       // las tapas del CSG viven en el material cap del nivel: tiene que verse
-      if (byCat.cap) { byCat.cap.opacity = 1; if (luz) luz.aplicarMaterial(byCat.cap); }
+      if (byCat.cap) {
+        // building.js lo crea transparent con opacity 0; como transparente iría
+        // a la pasada de transparencias y pisaría el vidrio ya fundido
+        Object.assign(byCat.cap, { opacity: 1, transparent: false, depthWrite: true, needsUpdate: true });
+        if (luz) luz.aplicarMaterial(byCat.cap);
+      }
       const mats = (nivel.mats?.length ? nivel.mats : Object.values(byCat).filter((m) => m && m !== byCat.cap));
       for (const m of mats) {
         if (!m.userData.baseColor) m.userData.baseColor = m.color.clone();
         if (m.userData.baseEnv == null) m.userData.baseEnv = m.envMapIntensity ?? 1;
+        if (carasOscuras) oscurecerTraseras(m);
       }
       const info = { clave, nivel, mats, minY: Infinity };
       nivelDeClave.set(clave, info);
@@ -324,25 +431,40 @@ export function crearCortes(ctx, edificio, opciones = {}) {
         if (!mesh?.isMesh) continue;
         const caja = new THREE.Box3().setFromObject(mesh);
         const esTapa = mesh.material === byCat.cap;
-        const esMob = /^MOB_/.test(mesh.name);
+        const esMob = esMobiliario(mesh);
         if (esTapa) mesh.visible = false;
         const centro = caja.getCenter(new THREE.Vector3());
+        const porNombre = /__T(\d+)__/.exec(mesh.name);
         let tramos = cortes.tramos.map((t, i) => i).filter((i) => {
           const t = cortes.tramos[i];
           return caja.max.x > t.x0 + EPS && caja.min.x < t.x1 - EPS && caja.max.z > t.z0 + EPS && caja.min.z < t.z1 - EPS;
         });
-        const principal = (typeof edificio.tramoDe === 'function' ? edificio.tramoDe(mesh) : null) ?? tramoEn(centro.x, centro.z);
+        const principal = (porNombre && cortes.tramos[+porNombre[1]] ? +porNombre[1] : null)
+          ?? (typeof edificio.tramoDe === 'function' ? edificio.tramoDe(mesh) : null) ?? tramoEn(centro.x, centro.z);
         if (!tramos.length) tramos = [principal];
         const esLosa = mesh.material === byCat.slab || /__slab$/.test(mesh.name);
-        piezas.push({ mesh, clave, nivel: info, caja, tramos, principal, esTapa, esMob, esLosa,
+        piezas.push({ mesh, clave, nivel: info, caja, tramos, principal, esTapa, esMob, esLosa, ymin: yminMobiliario(mesh, caja),
           visibleBase: mesh.visible, clones: new Map(), estencil: new Map(), brush: null });
         if (!esTapa && !esMob) { techo = Math.max(techo, caja.max.y); info.minY = Math.min(info.minY, caja.min.y); }
       }
     }
+    // mobiliario aparte (opciones.mobiliario): nunca se corta, solo se oculta por cota
+    const mob = opciones.mobiliario;
+    const listaMob = Array.isArray(mob) ? mob : [];
+    if (mob && !Array.isArray(mob) && mob.traverse) mob.traverse((o) => { if (o.isMesh) listaMob.push(o); });
+    for (const mesh of listaMob) {
+      if (piezas.some((p) => p.mesh === mesh)) continue;
+      const caja = new THREE.Box3().setFromObject(mesh);
+      const centro = caja.getCenter(new THREE.Vector3());
+      const porNombre = /__T(\d+)__/.exec(mesh.name);
+      const principal = (porNombre && cortes.tramos[+porNombre[1]] ? +porNombre[1] : null) ?? tramoEn(centro.x, centro.z);
+      piezas.push({ mesh, clave: null, nivel: null, caja, tramos: [principal], principal, esTapa: false, esMob: true, esLosa: false,
+        ymin: yminMobiliario(mesh, caja), visibleBase: mesh.visible, clones: new Map(), estencil: new Map(), brush: null });
+    }
     nivelesOrdenados = [...nivelDeClave.values()].sort((a, b) => a.minY - b.minY).map((n) => n.clave);
     if (techo > -Infinity) cortes.techo = techo + 1;
     cortes.alturas = cortes.tramos.map(() => cortes.techo);
-    for (const [i, t] of cortes.tramos.entries()) { planos[i][2].constant = cortes.techo; tapas[i].position.y = cortes.techo; }
+    for (const [i, t] of cortes.tramos.entries()) { planos[i][HORIZONTAL].constant = cortes.techo; tapas[i].position.y = cortes.techo; }
   }
 
   /* ── Transición: clones recortados y stencil ── */
@@ -351,7 +473,7 @@ export function crearCortes(ctx, edificio, opciones = {}) {
     if (clon) return clon;
     const mat = clonarMaterial(pieza.mesh.material);
     // un solo tramo → un solo plano (el del contrato); varios → tres planos por rebanada
-    mat.clippingPlanes = pieza.tramos.length > 1 ? planos[i] : [planos[i][2]];
+    mat.clippingPlanes = pieza.tramos.length > 1 ? planos[i] : [planos[i][HORIZONTAL]];
     mat.clipShadows = true;
     clon = new THREE.Mesh(pieza.mesh.geometry, mat);
     clon.name = `${pieza.mesh.name}__clip${i}`;
@@ -395,12 +517,13 @@ export function crearCortes(ctx, edificio, opciones = {}) {
   function aplicarRecorte() {
     const h = cortes.alturas;
     for (const [i, t] of cortes.tramos.entries()) {
-      planos[i][2].constant = h[i];
+      planos[i][HORIZONTAL].constant = h[i];
       tapas[i].position.y = h[i];
     }
     const cruzan = cortes.tramos.map(() => false);
     for (const p of piezas) {
-      if (p.esTapa || p.esMob || !p.visibleBase) continue;
+      if (p.esTapa || !p.visibleBase) continue;
+      if (p.esMob) { p.mesh.visible = p.ymin < h[p.principal] - EPS; continue; }
       const hs = p.tramos.map((i) => h[i]);
       const min = Math.min(...hs), max = Math.max(...hs);
       let modo;
@@ -413,7 +536,7 @@ export function crearCortes(ctx, edificio, opciones = {}) {
         const clon = necesita ? clonDe(p, i) : p.clones.get(i);
         if (clon) { clon.visible = necesita; if (necesita) sincronizarClon(clon, p); }
         // stencil solo para las mallas que de verdad atraviesan el plano de ese tramo
-        const corta = necesita && p.caja.min.y < h[i] - EPS && p.caja.max.y > h[i] + EPS;
+        const corta = tapasStencil && necesita && p.caja.min.y < h[i] - EPS && p.caja.max.y > h[i] + EPS;
         const par = corta ? estencilDe(p, i) : p.estencil.get(i);
         if (par) for (const s of par) { s.visible = corta; if (corta) { s.matrix.copy(p.mesh.matrixWorld); s.matrixWorld.copy(p.mesh.matrixWorld); } }
         if (corta) cruzan[i] = true;
@@ -452,12 +575,15 @@ export function crearCortes(ctx, edificio, opciones = {}) {
     const cap = pieza.nivel.nivel.byCat?.cap || matTapa;
     const cortador = cortadorDe(clave);
     cortador.material = cap; // con useGroups, las caras nuevas heredan el material del cortador
+    evaluador.attributes = pieza.brush.geometry.hasAttribute('uv') ? ['position', 'normal', 'uv'] : ['position', 'normal'];
     const resultado = evaluador.evaluate(pieza.brush, cortador, SUBTRACTION);
     if (detalle) detalle.push({ malla: pieza.mesh.name, preparacionMs: Math.round(tB - tA), csgMs: Math.round(performance.now() - tB),
       triangulos: triangulosDe(pieza.mesh.geometry) });
-    const pos = resultado.geometry.getAttribute('position');
+    let geometria = resultado.geometry, material = resultado.material;
+    if (!tapasCSG) [geometria, material] = sinTapas(geometria, material, cap);
+    const pos = geometria.getAttribute('position');
     if (!pos || pos.count === 0) return null;
-    const m = new THREE.Mesh(resultado.geometry, resultado.material);
+    const m = new THREE.Mesh(geometria, material);
     m.name = `${pieza.mesh.name}__corte-${clave}`;
     m.castShadow = pieza.mesh.castShadow;
     m.receiveShadow = pieza.mesh.receiveShadow;
@@ -468,28 +594,45 @@ export function crearCortes(ctx, edificio, opciones = {}) {
     return m;
   }
 
+  /* Piezas que cruzan el corte de una planta (las demás quedan intactas u
+     ocultas sin CSG). */
+  function piezasQueCruzan(clave) {
+    const cotas = cotasDe(clave);
+    return piezas.filter((p) => {
+      if (p.esTapa || p.esMob || !p.visibleBase) return false;
+      const hs = p.tramos.map((i) => cotas[i]);
+      return !(p.caja.max.y <= Math.min(...hs) + EPS || p.caja.min.y >= Math.max(...hs) - EPS);
+    });
+  }
+  const parciales = new Map(); // clave → { mapa, detalle, ms } a medio calcular (precalcular asíncrono)
+  function parcialDe(clave) {
+    if (!parciales.has(clave)) parciales.set(clave, { mapa: new Map(), detalle: [], ms: 0 });
+    return parciales.get(clave);
+  }
+  function cortarPieza(p, clave, parcial) {
+    if (parcial.mapa.has(p.mesh)) return;
+    const t0 = performance.now();
+    parcial.mapa.set(p.mesh, cortarMalla(p, clave, parcial.detalle));
+    parcial.ms += performance.now() - t0;
+  }
+  function cerrarCalculo(clave, parcial) {
+    let triEntrada = 0, triSalida = 0;
+    for (const [mesh, cortada] of parcial.mapa) {
+      triEntrada += triangulosDe(mesh.geometry);
+      if (cortada) triSalida += triangulosDe(cortada.geometry);
+    }
+    cortes.tiempos[clave] = { csgMs: Math.round(parcial.ms), mallas: parcial.mapa.size, triangulosEntrada: triEntrada,
+      triangulosSalida: triSalida, detalle: parcial.detalle };
+    cache.set(clave, parcial.mapa);
+    parciales.delete(clave);
+    return parcial.mapa;
+  }
   function calcular(clave) {
     preparar();
     if (cache.has(clave)) return cache.get(clave);
-    const cotas = cotasDe(clave);
-    const mapa = new Map();
-    const t0 = performance.now();
-    let mallas = 0, triEntrada = 0, triSalida = 0;
-    const detalle = [];
-    for (const p of piezas) {
-      if (p.esTapa || p.esMob || !p.visibleBase) continue;
-      const hs = p.tramos.map((i) => cotas[i]);
-      if (p.caja.max.y <= Math.min(...hs) + EPS || p.caja.min.y >= Math.max(...hs) - EPS) continue;
-      const cortada = cortarMalla(p, clave, detalle);
-      mapa.set(p.mesh, cortada);
-      mallas++;
-      triEntrada += triangulosDe(p.mesh.geometry);
-      if (cortada) triSalida += triangulosDe(cortada.geometry);
-    }
-    const ms = Math.round(performance.now() - t0);
-    cortes.tiempos[clave] = { csgMs: ms, mallas, triangulosEntrada: triEntrada, triangulosSalida: triSalida, detalle };
-    cache.set(clave, mapa);
-    return mapa;
+    const parcial = parcialDe(clave);
+    for (const p of piezasQueCruzan(clave)) cortarPieza(p, clave, parcial);
+    return cerrarCalculo(clave, parcial);
   }
 
   /* ── Estado final de una planta ── */
@@ -523,11 +666,16 @@ export function crearCortes(ctx, edificio, opciones = {}) {
     for (const m of cortadasActivas) m.visible = false;
     cortadasActivas = [];
     const cotas = cotasDe(clave);
-    const mapa = cotas ? calcular(clave) : null;
+    // vía principal del contrato: fichero precortado si lo hay; si no, CSG
+    const variante = cotas ? cortes.variantes.get(clave) : null;
+    for (const [k, v] of cortes.variantes) if (v) v.visible = v === variante;
+    const mapa = cotas && !variante ? calcular(clave) : null;
     for (const p of piezas) {
       if (p.esTapa) { p.mesh.visible = false; continue; }
-      if (p.esMob || !p.visibleBase) continue;
+      if (!p.visibleBase) continue;
+      if (p.esMob) { p.mesh.visible = !cotas || p.ymin < cotas[p.principal] - EPS; continue; }
       if (!cotas) { p.mesh.visible = true; continue; }
+      if (variante) { p.mesh.visible = false; continue; }
       if (mapa.has(p.mesh)) {
         p.mesh.visible = false;
         const c = mapa.get(p.mesh);
@@ -539,6 +687,7 @@ export function crearCortes(ctx, edificio, opciones = {}) {
     }
     cortes.alturas = cotas ? cotas.slice() : cortes.tramos.map(() => cortes.techo);
     fantasmasPara(clave);
+    aplicada = clave;
     ctx.emit('geometria', { planta: clave });
   }
 
@@ -574,6 +723,7 @@ export function crearCortes(ctx, edificio, opciones = {}) {
       // una transición nueva interrumpe la anterior: se parte de lo que se ve ahora
       if (trans.activa && trans.resolver) { const r = trans.resolver; trans.resolver = null; r(anterior); }
       const hasta = cotasDe(clave) || cortes.tramos.map(() => cortes.techo);
+      if (clave === anterior && clave === aplicada && !trans.activa) return Promise.resolve(clave);
       if (!animar || duracion <= 0 || (clave === anterior && !trans.activa)) {
         trans.activa = false;
         cortes.enTransicion = false;
@@ -589,9 +739,44 @@ export function crearCortes(ctx, edificio, opciones = {}) {
         // durante la transición manda el recorte: fuera la geometría CSG
         for (const m of cortadasActivas) m.visible = false;
         cortadasActivas = [];
+        for (const v of cortes.variantes.values()) if (v) v.visible = false;
+        for (const p of piezas) if (!p.esTapa && !p.esMob) p.mesh.visible = p.visibleBase;
         fantasmasPara(clave);
         aplicarRecorte();
       });
+    },
+
+    /* Deshace todo lo que el módulo ha puesto en la escena y devuelve las
+       mallas del edificio a su estado (visibilidad, color, envMapIntensity).
+       Las variantes precortadas no son suyas: solo las deja ocultas. */
+    dispose() {
+      trans.activa = false; cortes.enTransicion = false;
+      if (trans.resolver) { const r = trans.resolver; trans.resolver = null; r(cortes.planta); }
+      for (const p of piezas) {
+        p.mesh.visible = p.visibleBase;
+        for (const c of p.clones.values()) c.material.dispose();
+        p.brush?.geometry.dispose();
+        p.fantasma?.material.dispose();
+      }
+      for (const mapa of [...cache.values(), ...[...parciales.values()].map((x) => x.mapa)]) {
+        for (const m of mapa.values()) m?.geometry.dispose();
+      }
+      for (const b of cortadores.values()) b.geometry.dispose();
+      for (const t of tapas) t.geometry.dispose();
+      for (const par of matsEstencil) for (const m of par) m.dispose();
+      matTapa.dispose();
+      for (const [clave, a] of atenuacion) {
+        for (const m of nivelDeClave.get(clave)?.mats || []) {
+          if (m.userData.baseColor && m.color) m.color.copy(m.userData.baseColor);
+          if (m.userData.baseEnv != null && m.envMapIntensity != null) m.envMapIntensity = m.userData.baseEnv;
+        }
+        a.valor = a.objetivo = 0;
+      }
+      for (const v of cortes.variantes.values()) if (v) v.visible = false;
+      grupo.clear();
+      scene.remove(grupo);
+      cache.clear(); parciales.clear(); cortadores.clear(); piezas = []; fantasmas.length = 0;
+      preparado = false; aplicada = null; cortes.planta = 'all';
     },
 
     update(dt) {
@@ -621,9 +806,26 @@ export function crearCortes(ctx, edificio, opciones = {}) {
       return T[tramoEn(x, z)]?.y ?? cortes.techo;
     },
 
-    precalcular(clave) {
-      if (clave === 'all' || !cortes.definicion?.plantas[clave]) return null;
-      calcular(clave);
+    /* Calienta la caché de una planta sin aplicarla. Con `asincrono` corta
+       una malla por macrotarea para no congelar el visor; si mientras tanto
+       alguien pide esa planta, calcular() termina lo que falte de golpe. */
+    async precalcular(clave, { asincrono = true } = {}) {
+      if (clave === 'all') return null;
+      await cortes.listo;
+      if (!cortes.definicion.plantas[clave]) return null;
+      preparar();
+      if (!cache.has(clave)) {
+        if (!asincrono) calcular(clave);
+        else {
+          const parcial = parcialDe(clave);
+          for (const p of piezasQueCruzan(clave)) {
+            if (cache.has(clave)) break;
+            cortarPieza(p, clave, parcial);
+            await new Promise((r) => setTimeout(r, 0));
+          }
+          if (!cache.has(clave)) cerrarCalculo(clave, parcial);
+        }
+      }
       return cortes.tiempos[clave];
     },
 

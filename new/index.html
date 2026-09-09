@@ -12,30 +12,32 @@
 <base href="/">
 <link rel="stylesheet" href="/new/css/shell.css?v=__BUILD__">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#127963;&#65039;</text></svg>">
+<!-- Mapa de importación del contrato (new/js/visor/CONTRATO.md). Los módulos
+     propios llevan ?v=__BUILD__ para que el despliegue invalide la caché;
+     el prefijo "app/" cubre lo que no tenga entrada propia. -->
 <script type="importmap">
 {
   "imports": {
-    "three": "/vendor/three.module.min.js",
-    "three/addons/controls/OrbitControls.js": "/vendor/OrbitControls.js",
-    "three/addons/loaders/GLTFLoader.js": "/vendor/GLTFLoader.js",
-    "three/addons/loaders/RGBELoader.js": "/vendor/RGBELoader.js",
-    "three/addons/utils/BufferGeometryUtils.js": "/vendor/BufferGeometryUtils.js",
-    "three/addons/objects/Sky.js": "/vendor/Sky.js",
-    "three/addons/postprocessing/EffectComposer.js": "/vendor/EffectComposer.js",
-    "three/addons/postprocessing/RenderPass.js": "/vendor/RenderPass.js",
-    "three/addons/postprocessing/UnrealBloomPass.js": "/vendor/UnrealBloomPass.js",
-    "three/addons/postprocessing/OutputPass.js": "/vendor/OutputPass.js",
-    "three/addons/postprocessing/Pass.js": "/vendor/Pass.js",
-    "three/addons/postprocessing/GTAOPass.js": "/vendor/GTAOPass.js",
-    "3d-tiles-renderer": "/vendor/3d-tiles-renderer.js",
+    "three": "/new/vendor/three/three.module.min.js",
+    "three/addons/": "/new/vendor/three/addons/",
+    "three/examples/jsm/": "/new/vendor/three/addons/",
+    "three-mesh-bvh": "/new/vendor/three-mesh-bvh.js",
+    "three-bvh-csg": "/new/vendor/three-bvh-csg.js",
+    "three-gpu-pathtracer": "/new/vendor/three-gpu-pathtracer.js",
+    "camera-controls": "/new/vendor/camera-controls.js",
+    "xatlas-web": "/new/vendor/xatlas-web.js",
+    "app/": "/new/js/",
 
-    "app/main.js": "/new/js/main.js?v=__BUILD__",
+    "app/visor/main.js": "/new/js/visor/main.js?v=__BUILD__",
+    "app/visor/escena.js": "/new/js/visor/escena.js?v=__BUILD__",
+    "app/visor/luz.js": "/new/js/visor/luz.js?v=__BUILD__",
+    "app/visor/post.js": "/new/js/visor/post.js?v=__BUILD__",
+    "app/visor/trazador.js": "/new/js/visor/trazador.js?v=__BUILD__",
+    "app/visor/edificio.js": "/new/js/visor/edificio.js?v=__BUILD__",
+    "app/visor/cortes.js": "/new/js/visor/cortes.js?v=__BUILD__",
+    "app/visor/camara.js": "/new/js/visor/camara.js?v=__BUILD__",
     "app/shell.js": "/new/js/shell.js?v=__BUILD__",
-    "app/environment.js": "/new/js/environment.js?v=__BUILD__",
-    "app/topo.js": "/new/js/topo.js?v=__BUILD__",
-    "app/ui.js": "/new/js/ui.js?v=__BUILD__",
     "app/building.js": "/new/js/building.js?v=__BUILD__",
-    "app/context.js": "/new/js/context.js?v=__BUILD__",
     "app/layout.js": "/new/js/layout.js?v=__BUILD__",
     "app/api.js": "/new/js/api.js?v=__BUILD__",
     "app/promotions.js": "/new/js/promotions.js?v=__BUILD__"
@@ -78,7 +80,12 @@
 
 <div id="app"><canvas id="scene"></canvas></div>
 
-<!-- ═══════════════════ Carcasa nueva ═══════════════════ -->
+<!-- Línea fina de progreso arriba del todo: carga del edificio primero y,
+     después, construcción y convergencia del trazador de rayos. -->
+<div id="progreso" aria-hidden="true"><div id="progresoBarra"></div></div>
+<div id="cargando" role="status" aria-live="polite"><span class="punto"></span><span id="cargandoTexto">Preparando el edificio…</span></div>
+
+<!-- ═══════════════════ Carcasa ═══════════════════ -->
 <nav id="rail" aria-label="Herramientas">
   <div id="brand"><img src="assets/logo_unik.png" alt="UNIK"></div>
 
@@ -108,11 +115,35 @@
 </nav>
 
 <!-- La barra de plantas nace a la altura exacta del botón de plantas y se
-     despliega en horizontal: 1 · 2 · 3 · 4 · TODO. shell.js le fija la cota
-     leyendo la del botón, así siempre quedan alineados. -->
+     despliega en horizontal: 1 · 2 · 3 · 4 · Edificio completo. shell.js le
+     fija la cota leyendo la del botón, así siempre quedan alineados. -->
 <nav id="plantas" aria-label="Selector de planta">
-  <div class="rejilla" id="plantasRejilla"></div>
+  <div class="rejilla" id="plantasRejilla">
+    <button class="planta-btn" data-planta="baja" title="Planta 1">1</button>
+    <button class="planta-btn" data-planta="p1" title="Planta 2">2</button>
+    <button class="planta-btn" data-planta="p2" title="Planta 3">3</button>
+    <button class="planta-btn" data-planta="atico" title="Planta 4">4</button>
+    <button class="planta-btn ancho" data-planta="all" title="Edificio completo">Edificio completo</button>
+  </div>
 </nav>
+
+<!-- Ficha de la vivienda enfocada: cristal, abajo a la izquierda, junto al
+     raíl. Aparece al enfocar y se retira con "Volver a la planta". -->
+<aside id="ficha" aria-label="Ficha de vivienda" hidden>
+  <header>
+    <span class="ficha-id" id="fichaId">—</span>
+    <span class="ficha-estado" id="fichaEstado">Disponible</span>
+  </header>
+  <p class="ficha-tipo" id="fichaTipo"></p>
+  <dl class="ficha-datos">
+    <div><dt>Vivienda</dt><dd id="fichaSupViv"></dd></div>
+    <div><dt>Terraza</dt><dd id="fichaTerraza"></dd></div>
+    <div><dt>Total</dt><dd id="fichaSupTotal"></dd></div>
+    <div><dt>Orientación</dt><dd id="fichaOrient"></dd></div>
+  </dl>
+  <p class="ficha-precio" id="fichaPrecio"></p>
+  <button id="fichaVolver" class="ficha-volver"><svg><use href="#i-back"></use></svg>Volver a la planta</button>
+</aside>
 
 <!-- Marca de la comercializadora, abajo a la derecha. Si el fichero no está
      todavía, la caja desaparece sin dejar un icono roto. -->
@@ -153,153 +184,6 @@
   </div>
 </section>
 
-<!-- La interfaz anterior sigue en el documento porque main.js y ui.js todavía
-     se apoyan en sus elementos. No se ve: se irá retirando pieza a pieza a
-     medida que la carcasa nueva asuma cada función. -->
-<div id="legado" hidden>
-<div id="app">
-  
-
-  <!-- ══════════ HERO / LANDING (UNIK → promociones) ══════════ -->
-  <div id="hero">
-    <div class="hero-inner">
-      <img class="unik-logo" src="assets/logo_unik.png" alt="UNIK">
-      <div class="hero-bottom">
-        <h1>Desarrollos inmobiliarios<br>que redefinen el lujo</h1>
-        <p class="hero-sub">Selecciona una de nuestras promociones.</p>
-        <div id="promoCards"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ══════════ TOP BAR (2 filas planas + switch día/noche colgante) ══════════ -->
-  <header id="topbar" class="ui hidden-ui">
-    <div class="tb-row tb-row1">
-      <button id="backHome" title="Volver a las promociones"><svg><use href="#i-back"/></svg></button>
-      <strong id="brandName">SERENEA</strong>
-      <div class="tb-spacer"></div>
-      <div class="bld-sel" id="bldSel" title="Elegir edificio">
-        <button id="bldBtn" aria-haspopup="listbox" aria-expanded="false">
-          <span id="bldLabel"></span><svg><use href="#i-chev"/></svg>
-        </button>
-        <div id="bldMenu" role="listbox"></div>
-      </div>
-    </div>
-    <div class="tb-row tb-row2">
-      <nav id="floorNav" aria-label="Plantas">
-        <div id="floorBtns"></div>
-        <button class="floor-btn floor-all active" data-floor="all">
-          <span class="fb-short">Todo</span>
-        </button>
-      </nav>
-      <div class="tb-spacer"></div>
-      <button id="envToggle" class="hidden" title="Entorno real" aria-pressed="false">
-        <svg><use href="#i-globe"/></svg>
-      </button>
-      <button id="filtersToggle" title="Filtrar viviendas">
-        <svg><use href="#i-filter"/></svg><span class="ft-label">Filtrar</span>
-        <span class="ft-count" id="filterCount"></span>
-      </button>
-    </div>
-    <button id="dnToggle" class="dn-switch" role="switch" aria-checked="false" aria-label="Modo día / noche">
-      <span class="dn-ico dn-sun"><svg><use href="#i-sun"/></svg></span>
-      <span class="dn-ico dn-moon"><svg><use href="#i-moon"/></svg></span>
-    </button>
-  </header>
-
-  <!-- ══════════ MODOS (píldora inferior) ══════════ -->
-  <nav id="modeBar" class="ui hidden-ui" aria-label="Modo de vista">
-    <button id="modo3d" class="mode-btn active" title="Vista 3D orbital">
-      <svg><use href="#i-cube"/></svg>
-    </button>
-    <button id="modoPlano" class="mode-btn" title="Vista cenital de la planta">
-      <svg><use href="#i-plan"/></svg>
-    </button>
-    <button id="modoLista" class="mode-btn" title="Listado de viviendas">
-      <svg><use href="#i-list"/></svg>
-    </button>
-  </nav>
-
-  <!-- ══════════ FILTERS ══════════ -->
-  <aside id="filters" class="ui">
-    <div id="filtersBody">
-      <div class="f-scroll">
-      <div class="f-group">
-        <p>Dormitorios</p>
-        <div class="chips" id="chipsDorm">
-          <button class="chip" data-dorm="1">1D</button>
-          <button class="chip" data-dorm="2">2D</button>
-          <button class="chip" data-dorm="3">3D</button>
-        </div>
-      </div>
-      <div class="f-group">
-        <p>Estado</p>
-        <div class="chips" id="chipsEstado">
-          <button class="chip" data-estado="disponible"><i class="dot d-disp"></i>Disponible</button>
-          <button class="chip" data-estado="reservada"><i class="dot d-res"></i>Reservada</button>
-          <button class="chip" data-estado="vendida"><i class="dot d-ven"></i>Vendida</button>
-        </div>
-      </div>
-      <div class="f-group">
-        <p>Orientación</p>
-        <div class="chips" id="chipsOrient">
-          <button class="chip" data-orient="Suroeste">Suroeste</button>
-          <button class="chip" data-orient="Noreste">Noreste</button>
-          <button class="chip" data-orient="Jardín interior">Jardín int.</button>
-        </div>
-      </div>
-      <div class="f-group">
-        <p>Precio máximo</p>
-        <input type="range" id="priceMax" min="121000" max="481000" step="5000" value="481000">
-        <div class="price-pill" id="priceMaxLabel"></div>
-      </div>
-      <div class="f-group">
-        <p>Con terraza</p>
-        <div class="chips"><button class="chip" id="chipTerraza">Sólo con terraza</button></div>
-      </div>
-      <button id="filtersReset">Limpiar filtros</button>
-      </div>
-      <button id="filtersApply">Aplicar filtros</button>
-    </div>
-  </aside>
-
-  <!-- ══════════ COMPASS (oculta en el rediseño flat; la aguja sigue viva en JS) ══════════ -->
-  <div id="compass" class="ui hidden-ui" title="Norte"><div id="needle">N</div></div>
-  <div id="attrib" class="ui hidden-ui">Imagen aérea © Esri, Maxar, Earthstar Geographics</div>
-
-  <!-- ══════════ ÚLTIMAS VISTAS (solo pantallas grandes; en memoria) ══════════ -->
-  <nav id="recentDock" class="ui hidden-ui" aria-label="Últimas viviendas vistas"></nav>
-
-  <!-- ══════════ TOOLTIP ══════════ -->
-  <div id="tooltip"></div>
-
-  <!-- ══════════ DETAIL PANEL ══════════ -->
-  <aside id="panel" class="ui">
-    <button id="panelClose" title="Cerrar">✕</button>
-    <div id="panelBody"></div>
-  </aside>
-
-  <!-- ══════════ LISTADO (tarjetas con plano) ══════════ -->
-  <section id="listado">
-    <div id="unitsList"></div>
-  </section>
-
-  <!-- ══════════ LIGHTBOX (planos) ══════════ -->
-  <div id="lightbox">
-    <button id="lbClose">✕</button>
-    <figure><img id="lbImg" alt="Plano de planta"><figcaption id="lbCap"></figcaption></figure>
-  </div>
-
-  <button id="skipIntro">Saltar intro ›</button>
-
-  <div id="loader"><div class="spin"></div><p>Preparando el showroom…</p></div>
-</div>
-
-<!-- Atribución de Google, obligatoria mientras se muestren sus teselas. -->
-<div id="envAttr" class="ui hidden" aria-live="polite"></div>
-</div>
-
-<script>window.MAPS_API_KEY = '__MAPS_KEY__';</script>
-<script type="module">import 'app/main.js'; import 'app/shell.js';</script>
+<script type="module">import 'app/visor/main.js'; import 'app/shell.js';</script>
 </body>
 </html>

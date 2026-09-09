@@ -543,8 +543,11 @@ export function crearLuz(ctx) {
     const conSol = hornearA(M, true);
     const sinSol = hornearA(M, false);
     const env = pmrem.fromEquirectangular(sinSol);
-    sinSol.dispose();
-    return { fondo: conSol, env: env.texture, equirect: conSol, rtEnv: env, tiempoMs: performance.now() - t0 };
+    /* La variante sin disco se conserva (integración): el trazador la usa como
+       entorno, porque él ya recibe el sol como DirectionalLight y con el
+       disco horneado lo contaría dos veces. Con el HDR de día no existe
+       (equirectSinSol = null) y el trazador usa la foto tal cual. */
+    return { fondo: conSol, env: env.texture, equirect: conSol, equirectSinSol: sinSol, rtEnv: env, tiempoMs: performance.now() - t0 };
   }
 
   /* ── Estado en vivo e interpolación ── */
@@ -564,7 +567,12 @@ export function crearLuz(ctx) {
     origen: {}, origenColores: {}, origenDir: new THREE.Vector3(),
     destino: {}, destinoColores: {}, destinoDir: new THREE.Vector3(),
     texturas: null, resolver: null, clave: null,
+    /* factor de exposición con el que se arranca: si una transición
+       interrumpe a otra en pleno bajón, se parte de ese valle y no de 1 (si
+       no, la imagen daría un fogonazo al volver de golpe a exposición plena) */
+    factorInicio: 1,
   };
+  let factorActual = 1;
   for (const k of CLAVES_COLOR) { trans.origenColores[k] = new THREE.Color(); trans.destinoColores[k] = new THREE.Color(); }
 
   const luz = {
@@ -573,6 +581,7 @@ export function crearLuz(ctx) {
     actual,
     ventanas: MOMENTOS.dia.luces,
     equirect: null,
+    equirectSinSol: null, // equirect del momento sin disco solar (null con el HDR de día)
     envMap: null,
     sol,
     csm,
@@ -597,7 +606,8 @@ export function crearLuz(ctx) {
       csm.setupMaterial(material);
       const deCSM = material.onBeforeCompile;
       if (previo) {
-        material.onBeforeCompile = (shader, r) => { previo(shader, r); deCSM(shader, r); };
+        // se conserva `this` = material por si el hook previo lo usa (three lo llama así)
+        material.onBeforeCompile = function (shader, r) { previo.call(this, shader, r); deCSM.call(this, shader, r); };
         /* three usa el texto de onBeforeCompile como clave de caché del
            programa; con el envoltorio todas serían iguales y materiales con
            hooks distintos compartirían shader. */
@@ -611,13 +621,29 @@ export function crearLuz(ctx) {
     setMomento(clave, { duracion = 1.6 } = {}) {
       const M = MOMENTOS[clave];
       if (!M) return Promise.reject(new Error(`luz: momento desconocido "${clave}"`));
+      /* Pedir el momento que ya se ve, sin transición en curso: no hay nada
+         que fundir y un bajón de exposición gratuito se notaría. Se emite el
+         evento igualmente para que la interfaz se sincronice. */
+      if (!trans.activa && luz.momento === clave && trans.clave === clave && trans.cambiado) {
+        ctx.emit('momento', clave);
+        return Promise.resolve(clave);
+      }
       luz.momento = clave;
       luz.parametros = M;
       luz.ventanas = M.luces;
-      // una transición nueva interrumpe la anterior: se parte de lo que se ve ahora
-      if (trans.activa && trans.resolver) trans.resolver(trans.clave);
+      /* Una transición nueva interrumpe la anterior: se congela donde está
+         (la nueva partirá de esos valores) y se resuelve su Promise sin
+         emitir 'momento', que ya no correspondería al momento pedido. */
+      if (trans.activa) {
+        trans.activa = false;
+        luz.enTransicion = false;
+        const r = trans.resolver;
+        trans.resolver = null;
+        r?.(trans.clave);
+      }
       return preparar(clave).then((tex) => {
         if (luz.momento !== clave) return clave; // otro setMomento ganó mientras horneaba
+        trans.factorInicio = factorActual;
         Object.assign(trans.origen, actual);
         for (const k of CLAVES_COLOR) trans.origenColores[k].copy(colores[k]);
         trans.origenDir.copy(dirSol);
@@ -656,7 +682,9 @@ export function crearLuz(ctx) {
            y 0,7 del fundido la imagen se oscurece hasta un 55 % y el salto
            de cielo queda enterrado en el valle. */
         const bump = Math.sin(Math.PI * THREE.MathUtils.clamp((trans.t - 0.3) / 0.4, 0, 1));
-        aplicarEstado(1 - 0.55 * bump);
+        // en el primer 30 % se vuelve suavemente desde el factor con el que se arrancó
+        const base = THREE.MathUtils.lerp(trans.factorInicio, 1, THREE.MathUtils.clamp(trans.t / 0.3, 0, 1));
+        aplicarEstado(base * (1 - 0.55 * bump));
 
         if (trans.t >= 1) {
           trans.activa = false;
@@ -668,7 +696,13 @@ export function crearLuz(ctx) {
           resolver?.(trans.clave);
         }
       }
-      // el CSM se recoloca cada fotograma sobre el frustum actual de la cámara
+      /* El CSM se recoloca cada fotograma sobre el frustum actual de la
+         cámara. CSM.update lee camera.matrixWorld, que three solo refresca al
+         renderizar: sin esta llamada las cascadas irían un fotograma por
+         detrás de la cámara (camara.update acaba de moverla) y al girar
+         rápido el borde de la sombra recortaría. La cámara no tiene hijos:
+         cuesta nada. */
+      camera.updateMatrixWorld();
       if (!proyeccionIgual()) csm.updateFrustums();
       csm.update();
     },
@@ -697,10 +731,28 @@ export function crearLuz(ctx) {
       matHorneado.dispose();
       quad.dispose();
       pmrem.dispose();
-      for (const [, p] of cache) p.then((t) => { t.rtEnv?.dispose(); t.fondo.dispose(); if (t.equirect !== t.fondo) t.equirect.dispose(); });
+      for (const [, p] of cache) p.then((t) => { t.rtEnv?.dispose(); t.fondo.dispose(); if (t.equirect !== t.fondo) t.equirect.dispose(); t.equirectSinSol?.dispose(); });
+      cache.clear();
       csm.dispose();
       csm.remove();
       scene.remove(hemi, relleno, cieloNoche);
+      // estrellas y luna: geometrías, materiales y sus texturas de canvas
+      cieloNoche.traverse((o) => {
+        o.geometry?.dispose();
+        if (o.material) { o.material.map?.dispose(); o.material.dispose(); }
+      });
+      // la escena no debe quedarse apuntando a texturas ya liberadas
+      if (scene.background && scene.background.name?.startsWith('cielo_')) scene.background = null;
+      if (scene.environment && luz.envMap === scene.environment) scene.environment = null;
+      scene.fog = null;
+      luz.envMap = null;
+      luz.equirect = null;
+      luz.equirectSinSol = null;
+      luz.materiales.clear();
+      trans.activa = false;
+      luz.enTransicion = false;
+      /* ctx.on no tiene baja: los escuchadores quedan registrados, pero
+         apuntan a un CSM ya sin luces y a un cambio de tamaño inocuo. */
     },
   };
 
@@ -716,9 +768,11 @@ export function crearLuz(ctx) {
     scene.environment = tex.env;
     luz.envMap = tex.env;
     luz.equirect = tex.equirect;
+    luz.equirectSinSol = tex.equirectSinSol || null;
   }
 
   function aplicarEstado(factorExposicion) {
+    factorActual = factorExposicion;
     for (const l of csm.lights) {
       l.color.copy(colores.sol);
       l.intensity = actual.solInt;

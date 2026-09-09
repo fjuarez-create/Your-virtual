@@ -197,6 +197,36 @@ const CASOS = {
     return { ms, intensidad: post.desenfoque.intensidad, activo: post.desenfoque.enabled,
              muestras: post.desenfoque.material.defines.MUESTRAS };
   },
+  /* Losa invisible (colorWrite=false, como las losas "fantasma" de cortes.js
+     que solo proyectan sombra) sobre la cubierta: no debe oscurecer por AO,
+     ni reflejarse, ni contar para el bokeh. 'fantasma-defecto' desactiva la
+     pasada de ocultación para ver lo que pasaría sin ella. */
+  fantasma(ocultar = true) {
+    encuadrar('general');
+    activarTodo(true);
+    post.setVelocidadCamara(0); post.setEnfoque(null);
+    if (!window.__losa) {
+      /* Muro vertical entre la cámara y la fachada, apoyado en el suelo:
+         sin el arreglo, el suelo mostraría la sombra de contacto (AO) y el
+         reflejo (SSR) de un muro que no se dibuja. */
+      const losa = new THREE.Mesh(new THREE.BoxGeometry(40, 9, 0.4),
+        new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false }));
+      losa.position.set(-8, 3.6, 24); losa.castShadow = true;
+      scene.add(losa); window.__losa = losa;
+    }
+    window.__losa.visible = true;
+    /* post.render fija `enabled` de la pasada cada fotograma; para simular
+       el defecto se anula su render (no oculta nada). */
+    const pasa = post.composer.passes.find((p) => p.constructor.name === 'OcultarInvisiblesPass');
+    const renderOriginal = pasa.render;
+    if (!ocultar) pasa.render = () => {};
+    pintar();
+    const ms = pintar();
+    pasa.render = renderOriginal;
+    window.__losa.visible = false;
+    return { ms, pasada: !!pasa, ocultada: ocultar };
+  },
+  'fantasma-defecto'() { return CASOS.fantasma(false); },
   enfoque() {
     const dist = encuadrar('vivienda');
     activarTodo(true);

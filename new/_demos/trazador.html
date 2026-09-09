@@ -43,7 +43,11 @@ import { crearTrazador } from 'app/visor/trazador.js';
 
 const params = new URLSearchParams(location.search);
 const factorSol = +(params.get('sol') ?? 1);
-const iblTrazado = +(params.get('ibl') ?? 1);
+/* 0,5 y no 1: el HDR de mediodía es brillante (irradiancia horizontal medida
+   4,15) y el raster solo lo mete al 0,3 más una hemisférica de 0,28 (≈2,1 en
+   total); con 1,0 el trazado sale el doble de claro y el fundido salta. En
+   producción este número lo pone luz.js en `envMapIntensity`. */
+const iblTrazado = +(params.get('ibl') ?? 0.5);
 const escala = +(params.get('escala') ?? 1); // solo para SwiftShader: renderScale del trazador
 
 const info = document.getElementById('info');
@@ -142,7 +146,7 @@ topo.scene.traverse((o) => {
     flatShading: o.name !== 'terreno' });
   o.castShadow = true; o.receiveShadow = true;
 });
-scene.add(topo.scene);
+if (params.get('topo') !== '0') scene.add(topo.scene); // depuración: ?topo=0 lo quita
 
 /* Materiales como en building.js (sin el grano del shader, que es raster) */
 const matEdificio = {
@@ -160,6 +164,7 @@ apolo.scene.traverse((o) => {
   if (!o.isMesh) return;
   const [planta, cat] = o.name.split('__');
   if (planta === 'sotano') { o.visible = false; return; }
+  if (params.get('vidrio') === '0' && cat === 'glass') { o.visible = false; return; } // depuración
   o.material = matEdificio[cat] || matEdificio.struct;
   o.castShadow = cat !== 'glass' && cat !== 'cap'; o.receiveShadow = true;
   triangulos += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3;
@@ -216,10 +221,12 @@ function cartela(texto, pos) {
 }
 scene.add(cartela('204', new THREE.Vector3(centro.x - tam.x * 0.25, caja.max.y + 3, centro.z)));
 
-/* ── Encuadre: elevado, desde el lado del sol, mirando dentro de los patios ── */
+/* ── Encuadre: elevado, mirando dentro de los patios, con sombra arrojada a la vista ── */
 {
   const dist = Math.max(tam.x, tam.z) * 0.62;
-  const az = THREE.MathUtils.degToRad(38), el = THREE.MathUtils.degToRad(30);
+  /* Acimut 115°: la fachada +x queda al sol, la −z en sombra (solo luz
+     rebotada y de cielo) y la sombra arrojada cae hacia −x/−z, a la vista. */
+  const az = THREE.MathUtils.degToRad(+(params.get('az') ?? 115)), el = THREE.MathUtils.degToRad(+(params.get('el') ?? 30));
   camera.position.set(centro.x + dist * Math.cos(el) * Math.sin(az), caja.min.y + dist * Math.sin(el), centro.z + dist * Math.cos(el) * Math.cos(az));
   camera.lookAt(centro.x - tam.x * 0.05, caja.min.y + tam.y * 0.35, centro.z);
   camera.updateMatrixWorld(true);
@@ -227,7 +234,7 @@ scene.add(cartela('204', new THREE.Vector3(centro.x - tam.x * 0.25, caja.max.y +
 
 /* ── Trazador: recibe un objeto plano con lo que luz.js expondrá ── */
 const luzPlana = { equirect: hdr, envMapIntensity: iblTrazado, sol };
-const trazador = crearTrazador(ctx, luzPlana, { factorSol, teselasPorFotograma: 1 });
+const trazador = crearTrazador(ctx, luzPlana, { factorSol, teselasPorFotograma: 1, sinWorker: params.get('worker') === '0' });
 window.__trazador = trazador;
 if (escala !== 1) trazador.pt.renderScale = escala;
 
@@ -268,6 +275,28 @@ window.__demo = {
   trazar() { estado.fase = 'trazando'; quieta = true; tArranque = 0; estado.tiempos = []; },
   mover() { estado.fase = 'raster'; quieta = false; camera.position.x += 2; camera.updateMatrixWorld(true); },
   invalidar() { trazador.invalidar(); },
+  /* Simula el final de una transición de luz.js: el sol pasa al oeste (acimut
+     225°, elevación 25°, más cálido y algo más débil) y se emite 'momento'.
+     El trazado debe rehacer sus sombras sin reconstruir el BVH. */
+  moverSol() {
+    const d = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToRad(90 - 25), THREE.MathUtils.degToRad(225));
+    sol.position.copy(d).multiplyScalar(180);
+    sol.color.set(0xffc48a); sol.intensity = 2.6;
+    sol.updateMatrixWorld(true);
+    estado.tiempos = []; tArranque = 0;
+    ctx.emit('momento', 'atardecer');
+    const st = trazador.escena.getObjectByName('sol_trazado');
+    return { solTrazado: st ? st.position.clone().normalize().toArray().map((v) => +v.toFixed(3)) : null,
+      esperado: d.toArray().map((v) => +v.toFixed(3)), muestras: trazador.muestras };
+  },
+  /* Cambia el color de los muros (como un hover o una selección) y pide al
+     trazador que vuelva a subir los materiales sin tocar el BVH. */
+  pintarMuros(hex) {
+    matEdificio.wall.color.set(hex);
+    estado.tiempos = []; tArranque = 0;
+    trazador.actualizarMateriales();
+    return { muestras: trazador.muestras };
+  },
 };
 
 fotograma();

@@ -69,9 +69,30 @@
      no corresponde a la escena) y reconstruye en la próxima pausa. Se
      suscribe también a `ctx.on('geometria')`, que es lo que emite cortes.js.
 
+   · Geometrías cuantizadas. Los GLB de Revit llevan KHR_mesh_quantization
+     (posiciones Int16 normalizadas y escala en el nodo). El generador del
+     trazador clona cada atributo conservando tipo y normalización y escribe
+     las coordenadas de MUNDO en ese Int16: el edificio queda cuantizado a
+     enteros (metros) y el tipo del atributo fusionado depende del orden por
+     uuid, así que el BVH ni coincide con la textura de posiciones ni es
+     determinista (medido: imagen negra con el worker, geometría de escalera
+     con el camino síncrono). `geometriaFlotante()` entrega al trazador una
+     copia con posición/normal/tangente en Float32 (índice y demás atributos
+     compartidos), cacheada por geometría.
+
    · Al cambiar `luz.equirect` o `envMapIntensity` (momento del día) solo se
      llama a `updateEnvironment()`: la tabla de muestreo se recalcula en CPU
-     (unos 50-100 ms con 2048×1024) y no se toca el BVH.
+     (unos 50-100 ms con 2048×1024) y no se toca el BVH. El sol también se
+     resincroniza en 'momento' y al entrar en reposo (dirección, color e
+     intensidad de `luz.sol`) con `updateLights()`, que solo reescribe la
+     textura de luces: luz.js mueve el sol con cada momento y sin esto el
+     trazado conservaría las sombras del momento en que se construyó el BVH.
+
+   · `actualizarMateriales()` (hueco del contrato): hover, selección o
+     ventanas encendidas cambian color/emisivo de materiales ya conocidos
+     por el trazador; `updateMaterials()` los vuelve a subir sin tocar el
+     BVH (milisegundos frente a segundos de `invalidar()`). Se suscribe
+     también a `ctx.on('materiales')` por si edificio.js lo emite.
    ═══════════════════════════════════════════════════════════════════════════ */
 import * as THREE from 'three';
 import { WebGLPathTracer } from 'three-gpu-pathtracer';
@@ -115,7 +136,7 @@ function cuerpoWorker(MeshBVH, BufferGeometry, BufferAttribute) {
   self.postMessage({ listo: true });
 }
 
-async function crearWorkerBVH() {
+export async function crearWorkerBVH() {
   const urlThree = import.meta.resolve('three');
   const urlBVH = import.meta.resolve('three-mesh-bvh');
   const texto = await (await fetch(urlBVH)).text();
@@ -135,7 +156,7 @@ async function crearWorkerBVH() {
 
 /* Adaptador con la interfaz que espera PathTracingSceneGenerator.setBVHWorker:
    generate(geometry, opciones) → Promise<MeshBVH>. */
-function crearAdaptadorBVH(worker) {
+export function crearAdaptadorBVH(worker) {
   let contador = 0;
   return {
     generate(geometry, opciones = {}) {
@@ -169,6 +190,39 @@ function crearAdaptadorBVH(worker) {
   };
 }
 
+/* ── Geometría en coma flotante ────────────────────────────────────────── */
+
+const cacheFlotante = new WeakMap();
+const necesitaFlotante = (a) => !!a && (!(a.array instanceof Float32Array) || a.normalized);
+
+/* Devuelve la misma geometría si ya es Float32, o una copia con posición,
+   normal y tangente desquantizadas (getComponent aplica la normalización).
+   El índice y el resto de atributos se comparten: no se duplican. */
+export function geometriaFlotante(geo) {
+  const { position, normal, tangent } = geo.attributes;
+  if (!necesitaFlotante(position) && !necesitaFlotante(normal) && !necesitaFlotante(tangent)) return geo;
+  let g = cacheFlotante.get(geo);
+  if (g) return g;
+  g = new THREE.BufferGeometry();
+  g.name = geo.name;
+  if (geo.index) g.setIndex(geo.index);
+  for (const [k, a] of Object.entries(geo.attributes)) {
+    if ((k === 'position' || k === 'normal' || k === 'tangent') && necesitaFlotante(a)) {
+      const f = new Float32Array(a.count * a.itemSize);
+      for (let i = 0; i < a.count; i++) for (let c = 0; c < a.itemSize; c++) f[i * a.itemSize + c] = a.getComponent(i, c);
+      g.setAttribute(k, new THREE.BufferAttribute(f, a.itemSize));
+    } else {
+      g.setAttribute(k, a);
+    }
+  }
+  g.groups = geo.groups;
+  g.drawRange = geo.drawRange;
+  g.boundingBox = geo.boundingBox;
+  g.boundingSphere = geo.boundingSphere;
+  cacheFlotante.set(geo, g);
+  return g;
+}
+
 /* ── Módulo ────────────────────────────────────────────────────────────── */
 
 export function crearTrazador(ctx, luz, opciones = {}) {
@@ -179,6 +233,7 @@ export function crearTrazador(ctx, luz, opciones = {}) {
     factorSol: 1,
     teselasPorFotograma: null, // null → según calidad
     enMedia: false,            // permitir el trazador también en calidad 'media'
+    sinWorker: false,          // depuración: BVH síncrono en el hilo principal
     ...opciones,
   };
 
@@ -210,6 +265,7 @@ export function crearTrazador(ctx, luz, opciones = {}) {
     invalidado: true, construyendo: false, listo: false, enReposo: false,
     tQuieta: 0, entorno: null, entornoIntensidad: null,
     adaptador: null, workerFallido: false,
+    dispuesto: false, firmaSol: '',
   };
 
   const trazador = {
@@ -221,11 +277,20 @@ export function crearTrazador(ctx, luz, opciones = {}) {
     ultimaConstruccion: null,   // { mallas, excluidas, triangulos, msTotal, msBVH, modo }
     setRaster(fn) { pintarRaster = fn || ((/* dt */) => renderer.render(scene, camera)); },
     invalidar() {
+      if (estado.dispuesto) return;
       estado.invalidado = true;
       trazador.progreso = 0;
       if (estado.enReposo) { pt.reset(); estado.enReposo = false; }
     },
+    /* Materiales cambiados (hover, selección, ventanas): re-subir sus
+       propiedades sin reconstruir el BVH. Solo tiene sentido con escena
+       construida; si hay una construcción en curso, esta ya los leerá. */
+    actualizarMateriales() {
+      if (!estado.listo || estado.construyendo || estado.dispuesto) return;
+      pt.updateMaterials(); // hace reset()
+    },
     setCalidad(tier) {
+      if (estado.dispuesto) return;
       const c = CALIDADES[tier] || CALIDADES.alta;
       pt.renderScale = c.renderScale;
       pt.bounces = c.bounces;
@@ -234,7 +299,7 @@ export function crearTrazador(ctx, luz, opciones = {}) {
     },
     update(dt, { quieta = false } = {}) {
       dtActual = dt;
-      if (!trazador.activo) return false;
+      if (!trazador.activo || estado.dispuesto) return false;
       if (!quieta) {
         if (estado.enReposo) { pt.reset(); estado.enReposo = false; }
         estado.tQuieta = 0;
@@ -248,6 +313,7 @@ export function crearTrazador(ctx, luz, opciones = {}) {
         estado.enReposo = true;
         pt.updateCamera();          // lee la matriz actual y reinicia la acumulación
         sincronizarEntorno();
+        sincronizarSol();
       }
       const n = conf.teselasPorFotograma ?? (CALIDADES[ctx.calidad] || CALIDADES.alta).teselasPorFotograma;
       for (let i = 0; i < n; i++) pt.renderSample();
@@ -256,8 +322,15 @@ export function crearTrazador(ctx, luz, opciones = {}) {
       return true;
     },
     dispose() {
+      /* ctx.on no tiene baja: los manejadores siguen vivos, así que se
+         marcan como inertes con la bandera y se apaga el módulo. */
+      estado.dispuesto = true;
+      trazador.activo = false;
+      estado.enReposo = false;
       pt.dispose();
+      pt._lowResPathTracer?.dispose?.(); // la biblioteca no lo libera en su dispose()
       estado.adaptador?.dispose();
+      estado.adaptador = null;
       escenaTrazado.clear();
     },
   };
@@ -281,7 +354,7 @@ export function crearTrazador(ctx, luz, opciones = {}) {
       if (!geo?.attributes?.position) return;
       const mats = Array.isArray(o.material) ? o.material : [o.material];
       if (!mats.every(materialValido)) { excluidas++; return; }
-      const clon = new THREE.Mesh(geo, o.material);
+      const clon = new THREE.Mesh(geometriaFlotante(geo), o.material);
       clon.name = o.name;
       clon.matrixAutoUpdate = false;
       clon.matrix.copy(o.matrixWorld);
@@ -291,20 +364,54 @@ export function crearTrazador(ctx, luz, opciones = {}) {
     });
 
     // El sol: una sola DirectionalLight, sea la que da luz o la primera visible.
-    let fuente = luz?.sol || null;
-    if (!fuente) scene.traverseVisible((o) => { if (!fuente && o.isDirectionalLight && o.intensity > 0) fuente = o; });
-    if (fuente && conf.factorSol > 0 && fuente.intensity > 0) {
-      const p = new THREE.Vector3().setFromMatrixPosition(fuente.matrixWorld);
-      const t = new THREE.Vector3().setFromMatrixPosition(fuente.target.matrixWorld);
-      const dir = p.sub(t).normalize();
-      const sol = new THREE.DirectionalLight(fuente.color, fuente.intensity * conf.factorSol);
+    if (conf.factorSol > 0) {
+      const sol = new THREE.DirectionalLight(0xffffff, 0);
       sol.name = 'sol_trazado';
-      sol.position.copy(dir).multiplyScalar(1000);
       sol.target.position.set(0, 0, 0);
       escenaTrazado.add(sol, sol.target);
+      estado.firmaSol = '';
+      sincronizarSol(true);
     }
     sincronizarEntorno(true);
     return { mallas, excluidas, triangulos: Math.round(triangulos) };
+  }
+
+  function fuenteSol() {
+    let fuente = luz?.sol || null;
+    if (!fuente) scene.traverseVisible((o) => { if (!fuente && o.isDirectionalLight && o.intensity > 0) fuente = o; });
+    return fuente;
+  }
+
+  /* Copia dirección, color e intensidad del sol real al del trazado. La
+     dirección sale de matrixWorld − target.matrixWorld, que es lo que lee la
+     biblioteca (vale para el CSM: sus luces siguen a la cámara, pero la
+     resta es siempre la dirección al sol). Con `soloCopiar` no se toca el
+     trazador (la construcción posterior ya leerá las luces). */
+  function sincronizarSol(soloCopiar = false) {
+    const sol = escenaTrazado.getObjectByName('sol_trazado');
+    if (!sol) return false;
+    const fuente = fuenteSol();
+    const _p = new THREE.Vector3(), _t = new THREE.Vector3();
+    if (fuente) {
+      fuente.updateWorldMatrix(true, false);
+      fuente.target.updateWorldMatrix(true, false);
+      _p.setFromMatrixPosition(fuente.matrixWorld).sub(_t.setFromMatrixPosition(fuente.target.matrixWorld)).normalize();
+    }
+    const intensidad = fuente && fuente.visible ? fuente.intensity * conf.factorSol : 0;
+    const firma = fuente
+      ? `${_p.x.toFixed(4)},${_p.y.toFixed(4)},${_p.z.toFixed(4)}|${fuente.color.getHex()}|${intensidad.toFixed(4)}`
+      : 'sin';
+    if (firma === estado.firmaSol) return false;
+    estado.firmaSol = firma;
+    if (fuente) {
+      sol.position.copy(_p).multiplyScalar(1000);
+      sol.color.copy(fuente.color);
+    }
+    sol.intensity = intensidad;
+    sol.visible = intensidad > 0; // la biblioteca ignora luces invisibles: sin sol (noche) no hay que contarlo
+    sol.updateMatrixWorld(true);
+    if (!soloCopiar && estado.listo && !estado.construyendo) pt.updateLights(); // reescribe la textura de luces y hace reset()
+    return true;
   }
 
   function equirectActual() {
@@ -344,7 +451,7 @@ export function crearTrazador(ctx, luz, opciones = {}) {
     const resumen = construirEscenaFiltrada();
     let modo = 'worker';
     try {
-      if (!estado.adaptador && !estado.workerFallido) {
+      if (!estado.adaptador && !estado.workerFallido && !conf.sinWorker) {
         try {
           estado.adaptador = crearAdaptadorBVH(await crearWorkerBVH());
           pt.setBVHWorker(estado.adaptador);
@@ -371,6 +478,7 @@ export function crearTrazador(ctx, luz, opciones = {}) {
     } catch (err) {
       console.error('trazador: no se pudo construir la escena', err);
       trazador.activo = false; // mejor raster para siempre que un fotograma roto
+      estado.invalidado = true; // si alguien reactiva con setCalidad('alta'), que vuelva a intentarlo
     } finally {
       estado.construyendo = false;
       estado.enReposo = false; // la siguiente llamada en reposo fija cámara y entorno
@@ -394,8 +502,13 @@ export function crearTrazador(ctx, luz, opciones = {}) {
 
   ctx.on('calidad', (tier) => trazador.setCalidad(tier));
   ctx.on('tamano', () => { if (estado.enReposo) { pt.reset(); estado.enReposo = false; } });
-  ctx.on('geometria', () => trazador.invalidar());
-  ctx.on('momento', () => { if (estado.listo) sincronizarEntorno(); });
+  ctx.on('geometria', () => { if (!estado.dispuesto) trazador.invalidar(); });
+  ctx.on('materiales', () => trazador.actualizarMateriales());
+  /* Al acabar la transición del momento cambian el cielo Y el sol. Si el
+     trazador está en reposo mostrando imagen, ambos reinician la acumulación
+     (updateEnvironment/updateLights hacen reset); si está construyendo, la
+     entrada en reposo posterior ya los sincroniza. */
+  ctx.on('momento', () => { if (estado.listo && !estado.dispuesto) { sincronizarEntorno(); sincronizarSol(); } });
   trazador.setCalidad(ctx.calidad);
 
   return trazador;

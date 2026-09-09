@@ -28,6 +28,9 @@ concurrency:
 
 jobs:
   deploy:
+    # Los puntos de control del trabajo en curso llevan "[wip]" en el mensaje
+    # y no se publican: la web solo cambia con commits terminados.
+    if: ${{ !contains(github.event.head_commit.message, '[wip]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:

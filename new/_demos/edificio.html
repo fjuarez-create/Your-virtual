@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Demo · edificio.js — vidrio por vivienda y estados</title>
+<base href="/">
+<link rel="icon" href="data:,">
+<style>
+  body { margin: 0; background: #111; color: #ddd; font: 13px system-ui, sans-serif; }
+  #c { display: block; width: 960px; height: 540px; }
+  #info { padding: 6px 10px; white-space: pre-wrap; }
+</style>
+<script type="importmap">{"imports":{
+ "three":"/new/vendor/three/three.module.min.js",
+ "three/addons/":"/new/vendor/three/addons/",
+ "three/examples/jsm/":"/new/vendor/three/addons/",
+ "three-mesh-bvh":"/new/vendor/three-mesh-bvh.js",
+ "three-bvh-csg":"/new/vendor/three-bvh-csg.js",
+ "three-gpu-pathtracer":"/new/vendor/three-gpu-pathtracer.js",
+ "camera-controls":"/new/vendor/camera-controls.js",
+ "xatlas-web":"/new/vendor/xatlas-web.js",
+ "app/":"/new/js/"
+}}</script>
+</head>
+<body>
+<canvas id="c" width="960" height="540"></canvas>
+<div id="info"></div>
+<script type="module">
+/* Demo de edificio.js: el edificio Apolo (loadBIM, vidrio dividido por
+   vivienda), el entorno topográfico, el HDRI diurno y un sol con sombras.
+   Se aplica el estado de demostración 70/30 (cada tercera vivienda por
+   orden de id, empezando por la segunda, vendida; el resto conserva la
+   reserva de availability.json o queda disponible) y se capturan tres casos:
+   día (todo apagado), noche (ventanas encendidas solo en disponibles y
+   reservadas, con fondo oscuro y exposición baja) y hover (una vivienda con
+   hover y otra seleccionada, con las cartelas de su planta).
+
+   Sin bucle de animación: el guion de Playwright pide cada caso con
+   window.__demo (SwiftShader tarda cientos de ms por fotograma). */
+import * as THREE from 'three';
+import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { crearEscena } from 'app/visor/escena.js';
+import { cargarEdificio } from 'app/visor/edificio.js';
+import { ACTIVE_BUILDING } from 'app/promotions.js';
+import { FLOOR_DEFS } from 'app/layout.js';
+
+const info = document.getElementById('info');
+const canvas = document.getElementById('c');
+const ctx = crearEscena(canvas);
+const { scene, camera, renderer } = ctx;
+renderer.setPixelRatio(1); // SwiftShader: un píxel por píxel
+ctx.setTamano(960, 540);
+scene.fog = new THREE.Fog(0xd6dde3, 750, 2100);
+
+const estado = window.__estado = { errores: [], casos: {} };
+window.__listo = false;
+window.addEventListener('error', (e) => estado.errores.push(String(e.message)));
+window.addEventListener('unhandledrejection', (e) => estado.errores.push('rechazo: ' + String(e.reason?.message || e.reason)));
+
+/* Sol del HDRI (elev. 47°, acimut 45°) con sombras, como en las demos de post y cortes. */
+const sol = new THREE.DirectionalLight(0xfff1dc, 3.0);
+const dirSol = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToRad(90 - 47), THREE.MathUtils.degToRad(45));
+sol.position.copy(dirSol).multiplyScalar(180);
+sol.castShadow = true;
+sol.shadow.mapSize.set(2048, 2048);
+sol.shadow.bias = -0.0004;
+sol.shadow.normalBias = 0.05;
+Object.assign(sol.shadow.camera, { left: -90, right: 90, top: 90, bottom: -90, near: 20, far: 400 });
+scene.add(sol, sol.target);
+const hemi = new THREE.HemisphereLight(0xe3edf8, 0x8b9080, 0.28);
+scene.add(hemi);
+
+const t0 = performance.now();
+const cargador = new GLTFLoader();
+const cargar = (url) => new Promise((ok, ko) => cargador.load(url, ok, undefined, ko));
+const [hdr, topo, edificio] = await Promise.all([
+  new Promise((res, rej) => new HDRLoader().load('assets/sky_day.hdr', res, undefined, rej)),
+  cargar('assets/entorno_topo.glb'),
+  cargarEdificio(ctx, ACTIVE_BUILDING),
+]);
+estado.cargaMs = Math.round(performance.now() - t0);
+
+hdr.mapping = THREE.EquirectangularReflectionMapping;
+const pmrem = new THREE.PMREMGenerator(renderer);
+const envDia = pmrem.fromEquirectangular(hdr).texture;
+pmrem.dispose();
+
+/* Entorno topográfico, como en la demo de luz. */
+const colorTopo = {
+  terreno: 0x6b6f5c, acera: 0x9a968c, podotactil: 0xb0a89a, asfalto: 0x3a3b3d, bordillo: 0xa6a29c,
+  marca_vial: 0xd9d9d0, edificacion: 0xb9b3a8, muro: 0x8f8a80, arqueta: 0x6a6a6a, tronco: 0x4a3a2a, copa: 0x3f6a34,
+};
+topo.scene.position.y = -0.8;
+topo.scene.traverse((o) => {
+  if (!o.isMesh) return;
+  if (!o.geometry.getAttribute('normal')) o.geometry.computeVertexNormals();
+  o.material = new THREE.MeshStandardMaterial({ color: colorTopo[o.name] ?? 0x888888, roughness: 0.95, metalness: 0,
+    flatShading: o.name !== 'terreno' });
+  o.castShadow = true; o.receiveShadow = true;
+});
+scene.add(topo.scene);
+
+/* Estado de demostración 70/30. */
+const ids = [...edificio.viviendas.keys()].sort();
+const demo = {};
+ids.forEach((id, i) => {
+  demo[id] = i % 3 === 1 ? 'vendida' : (edificio.estados[id] === 'reservada' ? 'reservada' : 'disponible');
+});
+edificio.setEstados(demo);
+const cuenta = { disponible: 0, reservada: 0, vendida: 0 };
+for (const id of ids) cuenta[edificio.estadoDe(id)]++;
+estado.estados = cuenta;
+estado.vidrio = edificio.vidrio;
+estado.viviendas = ids.length;
+estado.conVidrio = ids.filter((id) => edificio.viviendas.get(id).vidrios.length).length;
+estado.sinVidrio = ids.filter((id) => !edificio.viviendas.get(id).vidrios.length);
+estado.niveles = [...edificio.niveles.keys()];
+estado.tramos = ['baja__wall', 'atico__glass'].map((n) => {
+  const m = edificio.grupo.getObjectByName('bim-' + n)?.children[0];
+  return m ? edificio.tramoDe(m) : null;
+});
+
+/* ── Momentos de la demo: día (HDRI) y noche (fondo oscuro, luna tenue) ── */
+function dia() {
+  scene.background = hdr;
+  scene.backgroundIntensity = 1;
+  scene.environment = envDia;
+  scene.environmentIntensity = 0.3;
+  scene.fog.color.setHex(0xd6dde3);
+  sol.intensity = 3.0; sol.color.setHex(0xfff1dc);
+  sol.position.copy(dirSol).multiplyScalar(180);
+  hemi.color.setHex(0xe3edf8); hemi.groundColor.setHex(0x8b9080); hemi.intensity = 0.28;
+  renderer.toneMappingExposure = 1.0;
+  edificio.setVentanas(false);
+}
+function noche() {
+  scene.background = new THREE.Color(0x05070d);
+  scene.environment = envDia;
+  scene.environmentIntensity = 0.05; // un resto de cielo para que el vidrio apagado aún refleje algo
+  scene.fog.color.setHex(0x05070d);
+  sol.intensity = 0.35; sol.color.setHex(0xbfd1ff); // la luna
+  sol.position.set(60, 150, -45);
+  hemi.color.setHex(0x2a3a5e); hemi.groundColor.setHex(0x0c1016); hemi.intensity = 0.6;
+  renderer.toneMappingExposure = 0.5;
+  edificio.setVentanas(true);
+}
+
+/* Encuadres: el edificio va de x -57 a 57 y su fachada larga mira a +z. */
+const centro = edificio.caja.getCenter(new THREE.Vector3());
+function encuadrar({ elevacion, acimut, distancia, x = centro.x, z = centro.z, alto = 5 }) {
+  const el = THREE.MathUtils.degToRad(elevacion), az = THREE.MathUtils.degToRad(acimut);
+  const objetivo = new THREE.Vector3(x, alto, z);
+  camera.position.set(objetivo.x + distancia * Math.cos(el) * Math.sin(az), objetivo.y + distancia * Math.sin(el),
+    objetivo.z + distancia * Math.cos(el) * Math.cos(az));
+  camera.lookAt(objetivo);
+  camera.updateMatrixWorld(true);
+}
+const ENCUADRES = {
+  general: { elevacion: 14, acimut: 28, distancia: 118, alto: 6 },
+  noche: { elevacion: 9, acimut: 16, distancia: 84, alto: 6, x: 4 },
+  hover: { elevacion: 12, acimut: 10, distancia: 46, alto: 6 },
+};
+
+let msRender = 0;
+function pintar() {
+  const a = performance.now();
+  renderer.render(scene, camera);
+  // cartelas: pasada aparte en la capa 1, sin tone mapping, por encima de todo.
+  // El fondo se anula durante la pasada: si no, el cielo se repinta encima
+  // de la escena (como en el bucle de new/js/main.js).
+  const fondo = scene.background;
+  scene.background = null;
+  camera.layers.set(ctx.capas.cartelas);
+  renderer.autoClear = false;
+  renderer.clearDepth();
+  renderer.render(scene, camera);
+  renderer.autoClear = true;
+  camera.layers.set(ctx.capas.normal);
+  scene.background = fondo;
+  msRender = Math.round(performance.now() - a);
+  return msRender;
+}
+
+function resultado(nombre, extra = {}) {
+  const r = { caso: nombre, renderMs: msRender, ventanas: edificio.ventanas, ...extra };
+  estado.casos[nombre] = r;
+  info.textContent = `edificio.js · ${nombre} · ${JSON.stringify(r)}`;
+  return r;
+}
+
+window.__demo = {
+  edificio, ctx,
+  dia() {
+    window.__listo = false;
+    window.__demo.cajas(false);
+    dia(); edificio.setCartelas(null); edificio.pintar({});
+    encuadrar(ENCUADRES.general);
+    pintar();
+    window.__listo = true;
+    return resultado('dia');
+  },
+  noche() {
+    window.__listo = false;
+    window.__demo.cajas(false);
+    noche(); edificio.setCartelas(null); edificio.pintar({});
+    encuadrar(ENCUADRES.noche);
+    pintar();
+    const encendidas = ids.filter((id) => edificio.viviendas.get(id).vidrios.some((m) => m.emissiveIntensity > 0));
+    window.__listo = true;
+    return resultado('noche', { encendidas: encendidas.length, apagadas: ids.length - encendidas.length,
+      vendidasEncendidas: encendidas.filter((id) => edificio.estadoDe(id) === 'vendida').length });
+  },
+  /* Dos viviendas de la fachada principal de la planta 2 que no estén
+     vendidas (las vendidas son inertes) y tengan vidrio: una con hover y
+     otra seleccionada; cartelas de esa planta visibles. */
+  hover(hover, seleccionada) {
+    window.__listo = false;
+    window.__demo.cajas(false);
+    if (!hover || !seleccionada) {
+      const sw = FLOOR_DEFS.find((f) => f.key === 'p1').rows.sw
+        .filter((id) => edificio.estadoDe(id) !== 'vendida' && edificio.viviendas.get(id).vidrios.length);
+      hover = hover || sw[2]; seleccionada = seleccionada || sw[4];
+    }
+    dia();
+    edificio.setCartelas(edificio.viviendas.get(hover).floorKey);
+    edificio.pintar({ hover, seleccionada });
+    const cH = edificio.cajaDe(hover).getCenter(new THREE.Vector3());
+    const cS = edificio.cajaDe(seleccionada).getCenter(new THREE.Vector3());
+    encuadrar({ ...ENCUADRES.hover, x: (cH.x + cS.x) / 2, z: (cH.z + cS.z) / 2 + 4, alto: cH.y + 1 });
+    pintar();
+    window.__listo = true;
+    return resultado('hover', { hover, seleccionada, estadoHover: edificio.estadoDe(hover),
+      estadoSel: edificio.estadoDe(seleccionada), opacidades: [hover, seleccionada].map((id) => edificio.viviendas.get(id).mesh.material.opacity) });
+  },
+  /* Cajas de vivienda (Box3Helper) para comprobar a ojo que encajan con el BIM. */
+  cajas(ver) {
+    let g = scene.getObjectByName('cajas-debug');
+    if (!g) {
+      g = new THREE.Group(); g.name = 'cajas-debug';
+      for (const v of edificio.viviendas.values()) {
+        const h = new THREE.Box3Helper(v.caja, v.vidrios.length ? 0x22cc66 : 0xee3344);
+        h.material.depthTest = false; h.material.transparent = true; h.material.opacity = 0.9;
+        h.renderOrder = 100;
+        g.add(h);
+      }
+      scene.add(g);
+    }
+    g.visible = !!ver;
+  },
+  /* Encuadre libre para inspeccionar: { elevacion, acimut, distancia, x, z, alto, noche, cajas } */
+  mirar(e) {
+    window.__listo = false;
+    if (e.noche) noche(); else dia();
+    edificio.setCartelas(e.cartelas || null); edificio.pintar({});
+    window.__demo.cajas(!!e.cajas);
+    encuadrar(e);
+    pintar();
+    window.__listo = true;
+    return resultado('mirar', e);
+  },
+};
+
+window.__demo.dia();
+estado.listoMs = Math.round(performance.now() - t0);
+</script>
+</body>
+</html>

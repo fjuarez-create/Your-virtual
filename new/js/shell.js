@@ -1,23 +1,28 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   shell.js — La carcasa nueva, conectada a la escena.
+   shell.js — La carcasa de cristal, conectada al visor nuevo.
 
-   No dibuja nada en 3D: se limita a traducir los botones de la barra a las
-   órdenes que main.js ya entiende. Así la interfaz puede rehacerse entera sin
-   tocar el motor, que es justo lo que estamos haciendo.
+   No dibuja nada en 3D: traduce los botones a la API de window.apolo
+   (new/js/visor/main.js) y escucha sus eventos ('planta', 'seleccion',
+   'momento', 'carga', 'trazado') para marcar el estado. Así la interfaz
+   puede rehacerse entera sin tocar el motor, y el motor no sabe qué botón
+   existe.
    ═══════════════════════════════════════════════════════════════════════════ */
-import { FLOOR_DEFS } from 'app/layout.js';
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
 
-/* main.js publica su estado en window.apolo, pero tarda en arrancar: hay que
-   esperar a que exista antes de colgarle nada. */
+const NOMBRE_ESTADO = { disponible: 'Disponible', reservada: 'Reservada', vendida: 'Vendida' };
+const euros = new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
+const m2 = (v) => (v > 0 ? `${v.toLocaleString('es-ES', { maximumFractionDigits: 2 })} m²` : '—');
+
+/* main.js publica su API en window.apolo al evaluar el módulo, pero el
+   orden de los dos imports del index no está garantizado: se espera. */
 function cuandoHayaApp(fn) {
   if (window.apolo?.setMomento) return fn(window.apolo);
   const reloj = setInterval(() => {
     if (window.apolo?.setMomento) { clearInterval(reloj); fn(window.apolo); }
   }, 60);
-  setTimeout(() => clearInterval(reloj), 20000);
+  setTimeout(() => clearInterval(reloj), 30000);
 }
 
 cuandoHayaApp((app) => {
@@ -35,17 +40,8 @@ cuandoHayaApp((app) => {
     for (const b of [bConjunto, bEdificio, bPlantas]) b.classList.toggle('on', b.id === id);
   }
 
-  bConjunto.addEventListener('click', () => {
-    cerrarPanel();
-    app.setFloor('all');
-    marcarVista('bConjunto');
-  });
-
-  bEdificio.addEventListener('click', () => {
-    cerrarPanel();
-    app.setFloor('all');
-    marcarVista('bEdificio');
-  });
+  bConjunto.addEventListener('click', () => { cerrarPanel(); app.irConjunto(); marcarVista('bConjunto'); });
+  bEdificio.addEventListener('click', () => { cerrarPanel(); app.irEdificio(); marcarVista('bEdificio'); });
 
   /* La barra se coloca a la altura del botón que la abre; se recalcula al
      abrir y al cambiar el tamaño de la ventana. */
@@ -60,6 +56,7 @@ cuandoHayaApp((app) => {
     const abierto = panel.classList.toggle('abierto');
     bPlantas.classList.toggle('on', abierto);
     if (abierto) { bConjunto.classList.remove('on'); bEdificio.classList.remove('on'); }
+    else marcarVista(app.floor === 'all' ? (app.vista === 'conjunto' ? 'bConjunto' : 'bEdificio') : 'bPlantas');
   });
 
   function cerrarPanel() {
@@ -67,65 +64,110 @@ cuandoHayaApp((app) => {
     bPlantas.classList.remove('on');
   }
 
-  // ── Panel de plantas ──
-  const rejilla = $('#plantasRejilla');
-  const plantas = FLOOR_DEFS.filter((f) => f.key !== 'cubierta');
-  for (const F of plantas) {
-    const b = document.createElement('button');
-    b.className = 'planta-btn';
-    b.textContent = F.short;
-    b.dataset.planta = F.key;
-    b.title = F.label;
-    rejilla.appendChild(b);
-  }
-  const todo = document.createElement('button');
-  todo.className = 'planta-btn ancho';
-  todo.textContent = 'TODO';
-  todo.title = 'Edificio completo';
-  todo.dataset.planta = 'all';
-  rejilla.appendChild(todo);
-
-  rejilla.addEventListener('click', (e) => {
+  // ── Panel de plantas (1 · 2 · 3 · 4 · Edificio completo, ya en el HTML) ──
+  $('#plantasRejilla').addEventListener('click', (e) => {
     const b = e.target.closest('.planta-btn');
     if (!b) return;
     app.setFloor(b.dataset.planta);
-    marcarPlanta(b.dataset.planta);
+    if (b.dataset.planta === 'all') { cerrarPanel(); marcarVista('bEdificio'); }
   });
 
   function marcarPlanta(clave) {
     for (const b of $$('.planta-btn')) b.classList.toggle('on', b.dataset.planta === clave);
+    if (clave !== 'all') { bConjunto.classList.remove('on'); bEdificio.classList.remove('on'); bPlantas.classList.add('on'); }
   }
-  marcarPlanta('all');
+  app.on('planta', (clave) => {
+    marcarPlanta(clave);
+    if (clave === 'all' && !panel.classList.contains('abierto')) marcarVista(app.vista === 'conjunto' ? 'bConjunto' : 'bEdificio');
+  });
+  marcarPlanta(app.floor || 'all');
   marcarVista('bConjunto');
 
   // ── Momento del día ──
   const horas = $('#horas');
+  const icono = (momento) => $(`#horas .opcion[data-momento="${momento}"] use`)?.getAttribute('href');
   $('#horaPrincipal').addEventListener('click', () => horas.classList.toggle('abierto'));
   for (const b of $$('#horas .opcion')) {
-    b.addEventListener('click', () => {
-      app.setMomento(b.dataset.momento);
-      for (const o of $$('#horas .opcion')) o.classList.toggle('on', o === b);
-      horas.classList.remove('abierto');
-    });
+    b.addEventListener('click', () => { app.setMomento(b.dataset.momento); horas.classList.remove('abierto'); });
   }
-  $$('#horas .opcion').find((b) => b.dataset.momento === 'dia')?.classList.add('on');
+  function marcarMomento(clave) {
+    for (const o of $$('#horas .opcion')) o.classList.toggle('on', o.dataset.momento === clave);
+    // el botón principal enseña el icono del momento activo
+    const href = icono(clave);
+    if (href) $('#horaPrincipal use').setAttribute('href', href);
+  }
+  app.on('momento', marcarMomento);
+  marcarMomento(app.momento || 'dia');
 
-  // ── Recentrar ──
-  $('#bCentrar').addEventListener('click', () => {
-    app.setFloor(app.floor);   // rehace el encuadre de lo que esté activo
+  // ── Recentrar: repite el encuadre del estado actual ──
+  $('#bCentrar').addEventListener('click', () => app.recentrar());
+
+  // ── Ficha de vivienda ──
+  const ficha = $('#ficha');
+  function mostrarFicha({ id, unidad, estado }) {
+    if (id == null || !unidad) { ficha.hidden = true; return; }
+    $('#fichaId').textContent = `Vivienda ${id}`;
+    const e = $('#fichaEstado');
+    e.textContent = NOMBRE_ESTADO[estado] || estado || '';
+    e.dataset.estado = estado || '';
+    const dorm = unidad.dorm ? `${unidad.dorm} dormitorio${unidad.dorm === 1 ? '' : 's'}` : '';
+    const planta = unidad.planta ? `Planta ${plantaPublica(unidad.planta)}` : '';
+    $('#fichaTipo').textContent = [dorm, planta].filter(Boolean).join(' · ');
+    $('#fichaSupViv').textContent = m2(unidad.supViv);
+    $('#fichaTerraza').textContent = m2(unidad.terraza);
+    $('#fichaSupTotal').textContent = m2(unidad.supTotal);
+    $('#fichaOrient').textContent = unidad.orientacion || '—';
+    $('#fichaPrecio').textContent = unidad.precio ? euros.format(unidad.precio) : '';
+    ficha.hidden = false;
+  }
+  /* units.json conserva la nomenclatura del listado de precios ('Baja',
+     '1ª', '2ª', 'Ático'); la numeración pública coincide con el primer
+     dígito de la vivienda (1xx → planta 1 … 4xx → planta 4). */
+  function plantaPublica(p) { return { 'Baja': '1', '1ª': '2', '2ª': '3', 'Ático': '4' }[p] || p; }
+  app.on('seleccion', mostrarFicha);
+  $('#fichaVolver').addEventListener('click', () => { app.volverAPlanta(); ficha.hidden = true; });
+
+  // ── Indicador de carga y línea de progreso del trazador ──
+  const progreso = $('#progreso');
+  const barra = $('#progresoBarra');
+  const cargando = $('#cargando');
+  const textoCarga = $('#cargandoTexto');
+  const ETAPAS = { luz: 'Cielo listo…', edificio: 'Edificio cargado…', entorno: 'Entorno cargado…', listo: '', error: 'No se pudo cargar el visor' };
+  let cargado = false;
+  function pintarBarra(fraccion, clase) {
+    progreso.className = clase;
+    barra.style.transform = `scaleX(${Math.max(0, Math.min(1, fraccion))})`;
+  }
+  app.on('carga', ({ progreso: p, etapa, error }) => {
+    if (ETAPAS[etapa] !== undefined) textoCarga.textContent = ETAPAS[etapa] || textoCarga.textContent;
+    if (error) { textoCarga.textContent = ETAPAS.error; cargando.classList.add('error'); return; }
+    pintarBarra(p, 'carga');
+    if (p >= 1) {
+      cargado = true;
+      cargando.classList.add('fuera');
+      setTimeout(() => { progreso.className = ''; }, 600);
+    }
+  });
+  /* El trazador: mientras construye el BVH, la línea crece con su progreso;
+     mientras acumula muestras, con la convergencia (32 muestras = línea
+     completa); en movimiento no se ve nada. */
+  app.on('trazado', ({ activo, progreso: p, muestras, pintando }) => {
+    if (!cargado || !activo) return;
+    if (pintando) pintarBarra(Math.min(1, muestras / 32), 'trazado');
+    else if (p > 0 && p < 1) pintarBarra(p, 'bvh');
+    else progreso.className = '';
   });
 
   // ── Capas: renders y vídeo ──
   $('#bRenders').addEventListener('click', () => abrirCapa('capaRenders'));
   $('#bVideo').addEventListener('click', () => abrirCapa('capaVideo'));
-  for (const b of $$('.capa-cerrar')) {
-    b.addEventListener('click', () => cerrarCapa(b.dataset.cierra));
-  }
+  for (const b of $$('.capa-cerrar')) b.addEventListener('click', () => cerrarCapa(b.dataset.cierra));
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     for (const c of $$('.capa.abierta')) cerrarCapa(c.id);
     cerrarPanel();
     horas.classList.remove('abierto');
+    if (!ficha.hidden) { app.volverAPlanta(); ficha.hidden = true; }
   });
 
   function abrirCapa(id) {

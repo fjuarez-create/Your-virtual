@@ -45,6 +45,20 @@
 
    · SMAA va antes de OutputPass como en los ejemplos de three r185 (el
      contrato lo pide así); trabaja sobre el color lineal HDR.
+
+   · Mallas invisibles (revisión). Las pasadas que dibujan la escena con
+     `scene.overrideMaterial` (G-buffer de GTAO, profundidad del Bokeh,
+     máscara del SSR) ignoran `colorWrite`, el stencil y los planos de
+     recorte del material original. cortes.js usa losas "fantasma"
+     (colorWrite=false, solo proyectan sombra) y materiales de stencil con
+     colorWrite=false: sin más, ese techo invisible oscurecería por AO, se
+     reflejaría y desenfocaría. OcultarInvisiblesPass, justo después del
+     RenderPass (que sí las necesita para las sombras), las oculta hasta el
+     final del fotograma; es el mismo criterio que aplica trazador.js. Los
+     planos de recorte por material siguen sin verse en el G-buffer: durante
+     los 0,8 s de transición de cortes la oclusión viene de la geometría sin
+     recortar (aceptado; es transitorio). Y el G-buffer se dibuja a doble
+     cara, porque las mallas cortadas enseñan sus caras traseras.
    ═══════════════════════════════════════════════════════════════════════════ */
 import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -56,6 +70,40 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
 import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { Pass } from 'three/addons/postprocessing/Pass.js';
+
+/* ───────────────────────── Mallas invisibles ───────────────────────── */
+
+/* Oculta, desde aquí hasta que post.render llame a restaurar(), las mallas
+   que solo existen para sombras o stencil (algún material con
+   colorWrite=false): no deben entrar en profundidad, normales ni máscaras.
+   No dibuja nada ni intercambia buffers. */
+class OcultarInvisiblesPass extends Pass {
+  constructor(scene) {
+    super();
+    this.scene = scene;
+    this.needsSwap = false;
+    this._ocultas = [];
+  }
+
+  static esInvisible(o) {
+    if (!o.isMesh || !o.visible) return false;
+    const m = o.material;
+    return Array.isArray(m) ? m.some((x) => x && x.colorWrite === false) : !!m && m.colorWrite === false;
+  }
+
+  render() {
+    this.restaurar(); // por si un fotograma anterior no llegó a hacerlo
+    this.scene.traverse((o) => {
+      if (OcultarInvisiblesPass.esInvisible(o)) { o.visible = false; this._ocultas.push(o); }
+    });
+  }
+
+  restaurar() {
+    for (const o of this._ocultas) o.visible = true;
+    this._ocultas.length = 0;
+  }
+}
 
 /* ───────────────────────── Desenfoque de movimiento ───────────────────────── */
 
@@ -174,6 +222,18 @@ class SSRPassCompuesto extends SSRPass {
   constructor(opciones, gbuffer) {
     super(opciones);
     this.gbuffer = gbuffer; // { depthTexture, normalTexture }
+    this.setSize(this.width, this.height);
+  }
+
+  /* Los destinos beauty (HalfFloat + profundidad), normales y prev del
+     SSRPass original no se usan aquí; a resolución completa serían ~90 MB
+     a 1440p. Se dejan a 1×1 (no se pueden quitar: el shader de depuración
+     y el modo bouncing los referencian). */
+  setSize(width, height) {
+    super.setSize(width, height);
+    this.beautyRenderTarget.setSize(1, 1);
+    this.normalRenderTarget.setSize(1, 1);
+    this.prevRenderTarget.setSize(1, 1);
   }
 
   render(renderer, writeBuffer, readBuffer) {
@@ -237,6 +297,7 @@ export function crearPost(ctx, luz) {
      vista al sesgo, 1 m descartaba casi todas las muestras. */
   const gtao = new GTAOPass(scene, camera, w, h);
   gtao.output = GTAOPass.OUTPUT.Default;
+  gtao.normalMaterial.side = THREE.DoubleSide; // caras traseras de las mallas cortadas
   gtao.blendIntensity = 1.3;
   gtao.updateGtaoMaterial({
     radius: 2.0, distanceExponent: 1.0, thickness: 4.0, distanceFallOff: 0.6, scale: 2.0,
@@ -266,11 +327,14 @@ export function crearPost(ctx, luz) {
      enfocada y sus vecinas siguen nítidas; el fondo a 100 m llega al tope). */
   const bokeh = new BokehPass(scene, camera, { focus: 40, aperture: 0.00025, maxblur: 0.01 });
   bokeh.enabled = false;
+  if (bokeh._materialDepth) bokeh._materialDepth.side = THREE.DoubleSide; // misma razón que el G-buffer
 
   const smaa = new SMAAPass();
   const output = new OutputPass();
+  const ocultar = new OcultarInvisiblesPass(scene);
 
-  for (const p of [renderPass, gtao, ssr, desenfoque, bloom, bokeh, smaa, output]) composer.addPass(p);
+  for (const p of [renderPass, ocultar, gtao, ssr, desenfoque, bloom, bokeh, smaa, output]) composer.addPass(p);
+  let activo = true; // false tras dispose: los eventos de ctx no se pueden desregistrar
 
   const post = {
     composer, gtao, ssr, desenfoque, bloom, bokeh, smaa,
@@ -278,14 +342,20 @@ export function crearPost(ctx, luz) {
     velocidad: 0,
 
     render(dt) {
+      if (!activo) return;
       /* Sin G-buffer no hay profundidad para nadie (ver cabecera). */
       const conGbuffer = gtao.enabled;
       desenfoque.setProfundidad(gtao.depthTexture);
       desenfoque.enabled = conGbuffer && post.velocidad > 0.01;
       ssr.enabled = conGbuffer && ctx.calidad === 'alta' && post.ssrActivo;
       bokeh.enabled = post.enfoque != null;
+      ocultar.enabled = conGbuffer || bokeh.enabled;
 
-      composer.render(dt);
+      try {
+        composer.render(dt);
+      } finally {
+        ocultar.restaurar(); // las mallas de sombra vuelven antes de que nadie más mire la escena
+      }
       desenfoque.actualizarAnterior();
 
       /* Cartelas (capa 1): sin bloom ni tone mapping, siempre por encima. El
@@ -302,6 +372,7 @@ export function crearPost(ctx, luz) {
     },
 
     setTamano(nw, nh) {
+      if (!activo) return;
       const ratio = renderer.getPixelRatio();
       if (nw === w && nh === h && ratio === ratioActual) return;
       w = nw; h = nh; ratioActual = ratio;
@@ -313,6 +384,7 @@ export function crearPost(ctx, luz) {
     },
 
     setCalidad(tier) {
+      if (!activo) return;
       const c = CALIDADES[tier] || CALIDADES.alta;
       gtao.updateGtaoMaterial({ samples: c.aoMuestras });
       gtao.updatePdMaterial({ samples: c.aoDenoise });
@@ -348,6 +420,9 @@ export function crearPost(ctx, luz) {
     },
 
     dispose() {
+      if (!activo) return;
+      activo = false;
+      ocultar.restaurar();
       for (const p of composer.passes) p.dispose?.();
       composer.dispose();
     },

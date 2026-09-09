@@ -157,8 +157,35 @@ const edificio = {
 estado.triangulos = Math.round(triangulos);
 estado.niveles = [...niveles.keys()];
 
-const cortes = crearCortes(ctx, edificio, { definicion });
+const sinTapas = params.get('tapas') === '0'; // ?tapas=0: sin tapas (modelos de superficies abiertas)
+/* Vías del contrato del 9-sep, solo con ?modelo=serenea:
+   ?variantes=1 carga assets/serenea/apolo_corte_<k>.glb (ocultos) y los pasa
+   como opciones.variantes: setPlanta muestra el fichero precortado y no hace
+   CSG. ?mob=1 carga apolo_mobiliario.glb como opciones.mobiliario (se oculta
+   por cota, nunca se corta). ?traseras=1 activa carasOscuras. */
+const variantes = new Map();
+let mobiliario = null;
+if (MODELO === 'serenea' && params.get('variantes') === '1') {
+  for (const k of Object.keys(definicion.plantas)) {
+    const g = await cargar(`assets/serenea/apolo_corte_${k}.glb`);
+    g.scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; if (o.material.transparent) o.material.depthWrite = false; } });
+    g.scene.visible = false;
+    g.scene.name = `corte_${k}`;
+    scene.add(g.scene);
+    variantes.set(k, g.scene);
+  }
+}
+if (MODELO === 'serenea' && params.get('mob') === '1') {
+  const g = await cargar('assets/serenea/apolo_mobiliario.glb');
+  g.scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  scene.add(g.scene);
+  scene.updateMatrixWorld(true);
+  mobiliario = g.scene;
+}
+const cortes = crearCortes(ctx, edificio, { definicion, tapasCSG: !sinTapas, tapasStencil: !sinTapas,
+  carasOscuras: params.get('traseras') === '1', variantes, mobiliario });
 await cortes.listo;
+estado.variantes = [...variantes.keys()];
 
 /* Encuadres. El edificio va de x -57 a 57; se mira desde el sureste para
    que se lean los cuatro tramos escalonados a lo largo de x. */
@@ -260,13 +287,16 @@ window.__demo = {
 function contarVisibles() {
   let originales = 0, cortadas = 0, clones = 0, tapas = 0;
   for (const L of niveles.values()) for (const m of L.meshes) if (m.visible) originales++;
+  let variantesVisibles = 0, mobVisibles = 0, mobOcultos = 0;
+  for (const v of variantes.values()) if (v.visible) variantesVisibles++;
+  if (mobiliario) mobiliario.traverse((o) => { if (o.isMesh) { if (o.visible) mobVisibles++; else mobOcultos++; } });
   cortes.grupo.traverse((o) => {
     if (!o.isMesh || !o.visible) return;
     if (o.name.includes('__corte-')) cortadas++;
     else if (o.name.includes('__clip')) clones++;
     else if (o.name.startsWith('tapa-')) tapas++;
   });
-  return { originales, cortadas, clones, tapas };
+  return { originales, cortadas, clones, tapas, variantesVisibles, mobVisibles, mobOcultos };
 }
 
 encuadrar(ENCUADRES.completo);

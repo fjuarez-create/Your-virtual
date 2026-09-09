@@ -350,3 +350,145 @@ html, body {
   #marcaGilmar { right: 14px; bottom: 80px; }
   .capa { padding: 24px 20px 90px; }
 }
+
+/* ─────────────────────────── Ficha de vivienda ─────────────────────────── */
+
+/* Abajo a la izquierda, pegada al raíl: donde la mirada cae después de la
+   vivienda enfocada, sin tapar el edificio. El mismo cristal que el resto. */
+#ficha {
+  position: absolute;
+  left: calc(var(--rail) + 18px);
+  bottom: 22px;
+  width: 300px;
+  padding: 18px 20px 16px;
+  border-radius: 16px;
+  border: 1px solid var(--linea);
+  background: var(--glass-alta);
+  backdrop-filter: blur(22px) saturate(1.4);
+  -webkit-backdrop-filter: blur(22px) saturate(1.4);
+  box-shadow: var(--sombra);
+  color: var(--tinta);
+  z-index: 21;
+  animation: ficha-entra 0.28s ease;
+}
+@keyframes ficha-entra {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+#ficha header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.ficha-id { font-size: 17px; font-weight: 600; letter-spacing: 0.02em; }
+.ficha-estado {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--linea);
+  color: var(--tinta);
+}
+.ficha-estado[data-estado="disponible"] { background: rgba(53, 214, 154, 0.22); border-color: rgba(53, 214, 154, 0.5); }
+.ficha-estado[data-estado="reservada"] { background: rgba(242, 192, 74, 0.22); border-color: rgba(242, 192, 74, 0.5); }
+.ficha-estado[data-estado="vendida"] { background: rgba(141, 148, 158, 0.22); }
+.ficha-tipo { margin: 6px 0 12px; font-size: 12px; color: var(--tinta-baja); letter-spacing: 0.04em; }
+.ficha-datos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 14px;
+  margin: 0;
+  padding: 12px 0;
+  border-top: 1px solid var(--linea);
+  border-bottom: 1px solid var(--linea);
+}
+.ficha-datos div { display: flex; flex-direction: column; gap: 3px; }
+.ficha-datos dt { font-size: 9.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--tinta-baja); }
+.ficha-datos dd { margin: 0; font-size: 13px; font-weight: 500; }
+.ficha-precio { margin: 12px 0 14px; font-size: 20px; font-weight: 600; letter-spacing: 0.01em; }
+.ficha-volver {
+  width: 100%;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid var(--linea);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--tinta);
+  font-family: var(--tipo);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.16s ease;
+}
+.ficha-volver svg { width: 15px; height: 15px; fill: currentColor; }
+.ficha-volver:hover { background: rgba(255, 255, 255, 0.18); }
+
+/* ─────────────────────────── Carga y trazador ─────────────────────────── */
+
+/* Una línea fina en el borde superior: mientras carga, blanca; después,
+   la del trazador (construcción del BVH en gris, muestras en blanco).
+   Nunca un spinner en medio de la imagen. */
+#progreso {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  z-index: 50;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+#progreso.carga, #progreso.trazado, #progreso.bvh { opacity: 1; }
+#progresoBarra {
+  height: 100%;
+  width: 100%;
+  transform-origin: left center;
+  transform: scaleX(0);
+  background: rgba(255, 255, 255, 0.85);
+  transition: transform 0.25s ease;
+}
+#progreso.bvh #progresoBarra { background: rgba(255, 255, 255, 0.35); }
+#progreso.trazado #progresoBarra { background: rgba(255, 255, 255, 0.6); }
+
+/* Aviso discreto de carga, centrado abajo, que se retira en cuanto hay imagen. */
+#cargando {
+  position: absolute;
+  left: 50%;
+  bottom: 26px;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--linea);
+  background: var(--glass-alta);
+  backdrop-filter: blur(16px) saturate(1.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  color: var(--tinta);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  z-index: 30;
+  pointer-events: none;
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+#cargando.fuera { opacity: 0; transform: translateX(-50%) translateY(10px); }
+#cargando.error { border-color: rgba(255, 120, 120, 0.6); }
+#cargando .punto {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #fff;
+  animation: latido 1.1s ease-in-out infinite;
+}
+@keyframes latido { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+
+@media (max-width: 760px) {
+  #ficha { left: 12px; right: 12px; width: auto; bottom: 84px; }
+  #cargando { bottom: 84px; }
+}

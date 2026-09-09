@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Demo · camara.js — cámara cinematográfica</title>
+<base href="/">
+<link rel="icon" href="data:,">
+<style>
+  body { margin: 0; background: #111; color: #ddd; font: 13px system-ui, sans-serif; }
+  #c { display: block; width: 960px; height: 540px; touch-action: none; }
+  #barra { padding: 6px 10px; display: flex; gap: 6px; flex-wrap: wrap; }
+  #barra button { background: #2a2d33; color: #eee; border: 1px solid #444; padding: 4px 10px; cursor: pointer; }
+  #info { padding: 6px 10px; white-space: pre; font: 12px ui-monospace, monospace; }
+</style>
+<script type="importmap">{"imports":{
+ "three":"/new/vendor/three/three.module.min.js",
+ "three/addons/":"/new/vendor/three/addons/",
+ "three/examples/jsm/":"/new/vendor/three/addons/",
+ "three-mesh-bvh":"/new/vendor/three-mesh-bvh.js",
+ "three-bvh-csg":"/new/vendor/three-bvh-csg.js",
+ "three-gpu-pathtracer":"/new/vendor/three-gpu-pathtracer.js",
+ "camera-controls":"/new/vendor/camera-controls.js",
+ "xatlas-web":"/new/vendor/xatlas-web.js",
+ "app/":"/new/js/"
+}}</script>
+</head>
+<body>
+<canvas id="c" width="960" height="540"></canvas>
+<div id="barra">
+  <button data-ir="conjunto">Conjunto</button>
+  <button data-ir="edificio">Edificio</button>
+  <button data-ir="vivienda">Vivienda</button>
+  <button data-ir="planta">Planta 1</button>
+  <button data-orbita="1">Órbita</button>
+  <button data-reposo="1">Reposo en 4 s</button>
+</div>
+<div id="info"></div>
+<script type="module">
+/* Demo de camara.js: entorno + edificio Apolo (apolo_levels.glb) con
+   materiales sencillos e iluminación básica; lo que se prueba es la cámara.
+
+   Dos modos:
+   - normal: bucle con requestAnimationFrame y tiempo real (para una persona).
+   - ?paso=1: sin bucle; Playwright avanza el tiempo con __demo.pasos(n, dt) y
+     pide fotogramas con __demo.render(). Con SwiftShader un fotograma cuesta
+     cientos de ms, así que el tiempo virtual es la única forma de capturar
+     la mitad exacta de un vuelo y de medir la interrupción con precisión. */
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
+import { crearEscena } from 'app/visor/escena.js';
+import { crearCamara } from 'app/visor/camara.js';
+import { computeLayout, floorYAt, FLOOR_DEFS } from 'app/layout.js';
+
+const PASO = new URLSearchParams(location.search).get('paso') === '1';
+const canvas = document.getElementById('c');
+const ctx = crearEscena(canvas);
+ctx.renderer.setPixelRatio(1);
+ctx.setTamano(960, 540);
+const camara = crearCamara(ctx);
+const estado = window.__estado = { errores: [], eventos: [], encuadres: {} };
+ctx.on('reposo', () => estado.eventos.push('reposo@' + estado.fotogramas));
+window.__listo = false;
+window.addEventListener('error', (e) => estado.errores.push(String(e.message)));
+window.addEventListener('unhandledrejection', (e) => estado.errores.push('rechazo: ' + String(e.reason)));
+
+const cargador = new GLTFLoader();
+const cargar = (url) => new Promise((ok, ko) => cargador.load(url, ok, undefined, ko));
+
+// ── Luz sencilla: cielo HDR como entorno y fondo, sol direccional con sombra ──
+const hemi = new THREE.HemisphereLight(0xbfd4e6, 0x8a8474, 0.6);
+ctx.scene.add(hemi);
+const sol = new THREE.DirectionalLight(0xfff1dc, 2.4);
+sol.position.set(120, 160, 120);
+sol.castShadow = true;
+sol.shadow.mapSize.set(2048, 2048);
+Object.assign(sol.shadow.camera, { left: -90, right: 90, top: 90, bottom: -90, near: 20, far: 500 });
+sol.shadow.bias = -0.0004;
+ctx.scene.add(sol, sol.target);
+ctx.scene.fog = new THREE.Fog(0xcfdde8, 750, 2100);
+
+const matEdificio = {
+  wall: new THREE.MeshStandardMaterial({ color: 0xdcd8d0, roughness: 0.82, metalness: 0, envMapIntensity: 1.1 }),
+  struct: new THREE.MeshStandardMaterial({ color: 0xc9c5bd, roughness: 0.9, metalness: 0 }),
+  slab: new THREE.MeshStandardMaterial({ color: 0xc9c5bd, roughness: 0.9, metalness: 0 }),
+  glass: new THREE.MeshPhysicalMaterial({
+    color: 0x2c3b3e, roughness: 0.05, metalness: 0, transparent: true, opacity: 0.45,
+    envMapIntensity: 2.4, side: THREE.DoubleSide, clearcoat: 1, clearcoatRoughness: 0.02, ior: 1.52,
+  }),
+};
+const colorTopo = {
+  terreno: 0x6b6f5c, acera: 0x9a968c, podotactil: 0xb0a89a, asfalto: 0x3a3b3d, bordillo: 0xa6a29c,
+  marca_vial: 0xd9d9d0, edificacion: 0xb9b3a8, muro: 0x8f8a80, arqueta: 0x6a6a6a, tronco: 0x4a3a2a, copa: 0x3f6a34,
+};
+
+const t0 = performance.now();
+const [topo, apolo, hdr, unidades] = await Promise.all([
+  cargar('assets/entorno_topo.glb'), cargar('assets/apolo_levels.glb'),
+  new Promise((ok, ko) => new HDRLoader().load('assets/sky_day.hdr', ok, undefined, ko)),
+  fetch('data/units.json').then((r) => r.json()),
+]);
+estado.cargaMs = Math.round(performance.now() - t0);
+
+hdr.mapping = THREE.EquirectangularReflectionMapping;
+const pmrem = new THREE.PMREMGenerator(ctx.renderer);
+ctx.scene.environment = pmrem.fromEquirectangular(hdr).texture;
+ctx.scene.background = hdr;
+ctx.scene.backgroundIntensity = 0.9;
+
+topo.scene.position.y = -0.8; // como en app/topo.js: la cota 0 del GLB es la parcela
+topo.scene.traverse((o) => {
+  if (!o.isMesh) return;
+  if (!o.geometry.getAttribute('normal')) o.geometry.computeVertexNormals();
+  o.material = new THREE.MeshStandardMaterial({ color: colorTopo[o.name] ?? 0x888888, roughness: 0.95, metalness: 0,
+    flatShading: o.name !== 'terreno' });
+  o.castShadow = true; o.receiveShadow = true;
+});
+ctx.scene.add(topo.scene);
+/* Suelo de contexto: la topografía es una isla de 280 m; sin un plano debajo
+   el conjunto flota en el cielo del HDR y el límite del suelo no se ve. */
+const suelo = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000),
+  new THREE.MeshStandardMaterial({ color: 0x70735f, roughness: 1, metalness: 0 }));
+suelo.rotation.x = -Math.PI / 2;
+suelo.receiveShadow = true;
+ctx.scene.add(suelo);
+
+const cajaEdificio = new THREE.Box3();
+apolo.scene.traverse((o) => {
+  if (!o.isMesh) return;
+  const [planta, cat] = o.name.split('__');
+  if (planta === 'sotano' || cat === 'cap') { o.visible = false; return; }
+  o.material = matEdificio[cat] || matEdificio.struct;
+  o.castShadow = cat !== 'glass'; o.receiveShadow = true;
+  o.geometry.computeBoundingBox();
+  cajaEdificio.union(o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld));
+});
+ctx.scene.add(apolo.scene);
+apolo.scene.updateMatrixWorld(true);
+
+const cajaEntorno = new THREE.Box3().setFromObject(topo.scene);
+// por debajo de todo el terreno: la parcela cae 10 m hacia el este y no hay que cortarla
+suelo.position.y = cajaEntorno.min.y - 0.3;
+/* 'conjunto': el edificio con su entorno inmediato (caja ×4 en planta), no
+   toda la topografía; el entorno se recorta a lo que realmente existe. */
+const tam = cajaEdificio.getSize(new THREE.Vector3());
+const cajaConjunto = cajaEdificio.clone().expandByVector(new THREE.Vector3(tam.x * 1.5, 0, tam.z * 1.5 + tam.x * 0.4));
+cajaConjunto.min.max(cajaEntorno.min); cajaConjunto.max.min(cajaEntorno.max);
+cajaConjunto.max.y = cajaEdificio.max.y;
+
+// ── Caja de una vivienda real (layout.js, marco antiguo = el de apolo_levels) ──
+const unitsById = new Map(unidades.map((u) => [u.id, u]));
+const layout = computeLayout(unitsById);
+const plantaP1 = FLOOR_DEFS.find((f) => f.key === 'p1') || FLOOR_DEFS[1];
+const idVivienda = plantaP1.rows.sw[Math.floor(plantaP1.rows.sw.length / 2)];
+const r = layout.rects.get(idVivienda);
+const yBase = floorYAt(r.x, plantaP1.level) + 0.16;
+const cajaVivienda = new THREE.Box3(
+  new THREE.Vector3(r.x - r.w / 2, yBase, r.z - r.d / 2),
+  new THREE.Vector3(r.x + r.w / 2, yBase + 2.7, r.z + r.d / 2));
+// contorno de la vivienda, para ver en la captura qué se está encuadrando
+const contorno = new THREE.Box3Helper(cajaVivienda, 0xff7a1a);
+contorno.material.depthTest = false;
+ctx.scene.add(contorno);
+
+const cajaPlanta = cajaEdificio.clone();
+cajaPlanta.max.y = floorYAt(0, plantaP1.level + 1);
+
+const redondear = (v) => v.toArray().map((x) => +x.toFixed(2));
+estado.cajas = {
+  edificio: [redondear(cajaEdificio.min), redondear(cajaEdificio.max)],
+  conjunto: [redondear(cajaConjunto.min), redondear(cajaConjunto.max)],
+  vivienda: { id: idVivienda, min: redondear(cajaVivienda.min), max: redondear(cajaVivienda.max) },
+  entorno: [redondear(cajaEntorno.min), redondear(cajaEntorno.max)],
+};
+
+// ── Encuadres ──
+const ENCUADRES = {
+  conjunto: (d) => camara.encuadrar(cajaConjunto, { azimut: 38, elevacion: 30, margen: 1.05, duracion: d }),
+  edificio: (d) => camara.encuadrar(cajaEdificio, { azimut: 22, elevacion: 28, margen: 1.15, duracion: d }),
+  vivienda: (d) => camara.enfocarVivienda(cajaVivienda, { duracion: d }),
+  planta: (d) => camara.encuadrar(cajaPlanta, { azimut: 22, elevacion: 40, margen: 1.15, duracion: d }),
+};
+
+// ── Bucle / paso a paso ──
+estado.fotogramas = 0;
+let tiempoRender = 0;
+const trayectoria = [];   // posiciones muestreadas durante el vuelo en curso
+function paso(dt) {
+  camara.update(dt);
+  estado.fotogramas++;
+  if (camara.enTransicion) trayectoria.push(ctx.camera.position.toArray());
+}
+estado.renders = 0;
+function render() {
+  const a = performance.now();
+  ctx.renderer.render(ctx.scene, ctx.camera);
+  tiempoRender += performance.now() - a;
+  estado.renders++;
+  estado.msRender = Math.round(tiempoRender / estado.renders);
+  pintarInfo();
+}
+function pintarInfo() {
+  const p = ctx.camera.position, o = camara.objetivo;
+  document.getElementById('info').textContent =
+    `pos ${redondear(p)}  obj ${redondear(o)}  dist ${camara.distanciaObjetivo.toFixed(1)}  ` +
+    `v ${camara.velocidad.toFixed(2)} m/s  quieta ${camara.quieta}  vuelo ${camara.enTransicion} (${camara.progreso.toFixed(2)})  ` +
+    `reposo ${camara.enReposo}  fot ${estado.fotogramas}`;
+}
+
+/* Desviación lateral máxima de la trayectoria respecto a la recta p0→p1:
+   demuestra el arco con un número, además de con la captura. */
+function medirArco(tr) {
+  if (tr.length < 3) return null;
+  const p0 = new THREE.Vector3().fromArray(tr[0]), p1 = new THREE.Vector3().fromArray(tr[tr.length - 1]);
+  const eje = p1.clone().sub(p0), L = eje.length(); eje.normalize();
+  let max = 0;
+  for (const q of tr) {
+    const v = new THREE.Vector3().fromArray(q).sub(p0);
+    const d = v.clone().sub(eje.clone().multiplyScalar(v.dot(eje))).length();
+    if (d > max) max = d;
+  }
+  return { recorrido: +L.toFixed(1), desviacionMax: +max.toFixed(1), muestras: tr.length };
+}
+
+if (!PASO) {
+  const reloj = new THREE.Clock();
+  (function bucle() {
+    requestAnimationFrame(bucle);
+    paso(Math.min(reloj.getDelta(), 0.25));
+    render();
+  })();
+  for (const b of document.querySelectorAll('#barra button')) {
+    b.addEventListener('click', () => {
+      if (b.dataset.ir) ENCUADRES[b.dataset.ir](undefined);
+      else if (b.dataset.orbita) camara.orbitaAutomatica(true);
+      else if (b.dataset.reposo) camara.reposoTras(4, { encuadre: null });
+    });
+  }
+}
+
+window.__demo = {
+  camara, ctx, THREE, cajas: { cajaEdificio, cajaConjunto, cajaVivienda, cajaPlanta },
+  paso, pasos(n, dt = 1 / 60) { for (let i = 0; i < n; i++) paso(dt); },
+  render,
+  /* Lanza un encuadre y devuelve la Promise del vuelo (no la espera: en modo
+     paso el tiempo lo empuja Playwright). */
+  ir(clave, duracion) {
+    trayectoria.length = 0;
+    const promesa = ENCUADRES[clave](duracion);
+    promesa.then((ok) => {
+      estado.encuadres[clave] = { completado: ok, pos: redondear(ctx.camera.position), obj: redondear(camara.objetivo),
+        dist: +camara.distanciaObjetivo.toFixed(1), arco: medirArco(trayectoria) };
+    });
+    return promesa;
+  },
+  posicion: () => ctx.camera.position.toArray(),
+  arco: () => medirArco(trayectoria),
+};
+
+// primera imagen: conjunto sin transición
+await ENCUADRES.conjunto(0);
+paso(1 / 60);
+render();
+estado.listoMs = Math.round(performance.now() - t0);
+window.__listo = true;
+</script>
+</body>
+</html>
