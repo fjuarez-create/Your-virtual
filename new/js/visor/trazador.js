@@ -103,7 +103,7 @@ const CALIDADES = {
   media: { renderScale: 0.75, bounces: 3, teselasPorFotograma: 1 },
 };
 const ESPERA_REPOSO = 0.3;  // s quieta antes de arrancar
-const FUNDIDO_MS = 700;     // raster → trazado (largo, para que el grano no salte a la vista)
+const FUNDIDO_MS = 1200;    // raster → trazado, lento para que el grano no salte a la vista
 
 /* ── Worker de BVH ─────────────────────────────────────────────────────── */
 
@@ -241,7 +241,7 @@ export function crearTrazador(ctx, luz, opciones = {}) {
   pt.renderToCanvas = true;
   pt.rasterizeScene = true;
   pt.dynamicLowRes = conf.bajaResDinamica;
-  pt.minSamples = 12;   // con menos muestras la imagen es grano puro y se nota el cambio
+  pt.minSamples = 48;   // con menos muestras la imagen es grano puro
   pt.fadeDuration = FUNDIDO_MS;
   pt.renderDelay = 0;          // la espera de 300 ms ya la pone este módulo
   pt.tiles.set(3, 3);

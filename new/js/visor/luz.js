@@ -409,7 +409,7 @@ export function crearLuz(ctx) {
     shadowMapSize: ctx.calidad === 'alta' ? 2048 : 1024,
     lightDirection: direccionDe(MOMENTOS.dia.elev, MOMENTOS.dia.azim).negate(),
     lightIntensity: MOMENTOS.dia.solInt,
-    lightNear: 1, lightFar: 3500, // las cascadas llegan a 1,2 km en 'conjunto' (setAlcanceSombras)
+    lightNear: 1, lightFar: 1500,
     /* Margen generoso hacia el sol: con el sol a 4-7° las sombras de un
        edificio de 20 m se alargan cientos de metros y el ortográfico de cada
        cascada tiene que abarcar lo que las proyecta. */
@@ -605,23 +605,14 @@ export function crearLuz(ctx) {
       const clavePrevia = material.customProgramCacheKey?.bind(material);
       csm.setupMaterial(material);
       const deCSM = material.onBeforeCompile;
-      /* El hook de CSM cierra sobre `material` y guarda el shader compilado en
-         csm.shaders con esa clave. cortes.js clona materiales copiando este
-         mismo hook: al compilar el clon (this ≠ material) pisaría la entrada
-         del original, que dejaría de recibir las cotas de las cascadas al
-         cambiar el alcance (setAlcanceSombras). Se restaura la entrada del
-         original y se registra el shader del clon con su propia clave. */
-      material.onBeforeCompile = function (shader, r) {
-        if (previo) previo.call(this, shader, r); // se conserva `this` = material por si el hook previo lo usa
-        const guardado = csm.shaders.get(material);
-        deCSM.call(this, shader, r);
-        if (this !== material) csm.shaders.set(material, guardado);
-        csm.shaders.set(this, shader);
-      };
-      /* three usa el texto de onBeforeCompile como clave de caché del
-         programa; con el envoltorio todas serían iguales y materiales con
-         hooks distintos compartirían shader. */
-      material.customProgramCacheKey = () => `${clavePrevia ? clavePrevia() : ''}|${previo ? previo.toString() : ''}|csm`;
+      if (previo) {
+        // se conserva `this` = material por si el hook previo lo usa (three lo llama así)
+        material.onBeforeCompile = function (shader, r) { previo.call(this, shader, r); deCSM.call(this, shader, r); };
+        /* three usa el texto de onBeforeCompile como clave de caché del
+           programa; con el envoltorio todas serían iguales y materiales con
+           hooks distintos compartirían shader. */
+        material.customProgramCacheKey = () => `${clavePrevia ? clavePrevia() : ''}|${previo.toString()}|csm`;
+      }
       material.needsUpdate = true;
       luz.materiales.add(material);
       return material;
@@ -722,17 +713,6 @@ export function crearLuz(ctx) {
        carga del edificio. */
     precalentar() {
       return Object.keys(MOMENTOS).reduce((p, clave) => p.then(() => preparar(clave)), Promise.resolve()).then(() => tiempos);
-    },
-
-    /* Alcance de las cascadas (maxFar). El CSM reparte las cascadas sobre el
-       frustum de la cámara hasta maxFar: con un valor fijo o las sombras no
-       llegan al edificio desde 'conjunto' (a 600 m) o la primera cascada es
-       demasiado gruesa dentro de una vivienda. main lo ajusta a la distancia
-       cámara-edificio. Cambiar maxFar recalcula los cortes y sus uniformes. */
-    setAlcanceSombras(maxFar) {
-      if (!(maxFar > 0) || csm.maxFar === maxFar) return;
-      csm.maxFar = maxFar;
-      csm.updateFrustums();
     },
 
     setCalidad(tier) {

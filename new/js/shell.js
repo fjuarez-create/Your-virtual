@@ -142,15 +142,7 @@ cuandoHayaApp((app) => {
     progreso.className = clase;
     barra.style.transform = `scaleX(${Math.max(0, Math.min(1, fraccion))})`;
   }
-  app.on('carga', ({ progreso: p, etapa, error, secundaria }) => {
-    /* Mobiliario y plantas cortadas llegan después de la primera imagen: la
-       línea fina los sigue, sin volver a enseñar el aviso de carga. */
-    if (secundaria) {
-      if (!cargado) return;
-      pintarBarra(p, 'carga');
-      if (p >= 1) setTimeout(() => { if (progreso.className === 'carga') progreso.className = ''; }, 600);
-      return;
-    }
+  app.on('carga', ({ progreso: p, etapa, error }) => {
     if (ETAPAS[etapa] !== undefined) textoCarga.textContent = ETAPAS[etapa] || textoCarga.textContent;
     if (error) { textoCarga.textContent = ETAPAS.error; cargando.classList.add('error'); return; }
     pintarBarra(p, 'carga');
