@@ -327,7 +327,9 @@ function oscurecerTraseras(material) {
 
 /* Atenuación de las plantas inferiores en el shader (ver cabecera). Los
    uniformes se crean por instancia de cortes y se comparten entre todos los
-   materiales que pasan por aquí. */
+   materiales que pasan por aquí. Medido en apolo_corte_p1.glb: en la cota
+   de corte de cada cajón no hay caras horizontales (≈ 5 m² en total), los
+   muros quedan abiertos y lo que se ve por la boca es su cara interior. */
 const GLSL_ATENUACION = /* glsl */`
   varying vec3 vPosMundoCorte;
   uniform float uCortes[8];
@@ -397,6 +399,7 @@ export function crearCortes(ctx, edificio, opciones = {}) {
     planta: 'all',
     enTransicion: false,
     provisional: false,  // recorte por planos a la espera de la variante precortada (ver cabecera)
+    uniformes: uniformesAtenuacion, // para depurar/pruebas
     listo: null,
     tiempos: {},
     grupo,
