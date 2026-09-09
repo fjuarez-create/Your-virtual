@@ -132,7 +132,7 @@ oficina · M mantenimiento por re-exportación.
 | Three.js + D5 3.1 modo cine en la oficina | 5 | 5 | 5 | 4 | 5 | 4 | 28 | **Recomendada** como paquete |
 | Babylon.js 9 | 4 | 4 | 5 | 5 | 5 | 3 | 26 | Válida, pero obliga a reescribir sin ganar realismo |
 | Three.js + splat XR Tour de D5 (Spark) | 5 | 5 | 3 | 4 | 5 | 3 | 25 | Fase experimental |
-| D5 3.1 Interactive Presentation + Pixel Streaming LAN, solo | 5 | 3 | 5 | 4 | 2 | 3 | 22 | Complemento, no es web ni tiene datos |
+| D5 3.1 Interactive Presentation + Pixel Streaming LAN, solo | 5 | 3 | 5 | 3 | 2 | 3 | 21 | Complemento, no es web ni tiene datos |
 | UE5 + Pixel Streaming autoalojado en LAN + Datasmith Runtime | 5 | 5 | 3 | 2 | 3 | 2 | 20 | **Alternativa** si se acepta app local y perfil Unreal |
 | UE5 en Arcware / Vagon / Eagle (nube) | 5 | 5 | 3 | 1 | 4 | 2 | 20 | Descartada: cuota mensual y por minuto |
 | PlayCanvas | 4 | 2 | 4 | 3 | 4 | 3 | 20 | Sin planos de corte; editor privado de pago |
@@ -284,8 +284,8 @@ comercializadora:
 Lo que da: el realismo de vuestros renders, en movimiento, en la pantalla o
 tablet de la oficina, con la licencia que ya pagáis. Lo que no da: no es web
 pública, no hay login, no lee la disponibilidad de ningún dato (cada cambio
-se edita en D5), y exige D5 abierto en el PC. Por eso es complemento y no
-núcleo.
+se edita en D5), y exige D5 abierto en el PC. La presentación interactiva no se exporta fuera de D5: la petición sigue
+abierta desde julio de 2026. Por eso es complemento y no núcleo.
 
 Queda por confirmar en vuestro D5: si el streaming exige plan Pro (lo tenéis)
 y cuántos espectadores admite.
@@ -299,7 +299,7 @@ puesto y año si alguien de UNIK abre el editor (0 € si el estudio que lo
 hace factura menos de 1 M USD y vosotros solo ejecutáis la app); (3) aceptar
 que la web en Plesk seguiría siendo el visor Three.js, porque Unreal no se
 publica como web sin GPU. Orden de magnitud de mercado para un encargo así:
-8.000 a 25.000 € (cifras de guías de 2026, no confirmadas con presupuestos).
+10.000 a 30.000 USD (cifras de guías de 2026, no confirmadas con presupuestos).
 
 Si se hiciera, la arquitectura correcta es: app empaquetada en el PC de la
 oficina, pixel streaming autoalojado (MIT) para verla en navegador o tablet
@@ -355,8 +355,9 @@ páginas abiertas. Antes de basar una compra en ellas:
 - Arcware: arcware.com/pricing (10 €/mes + 0,15 €/min o 89 €/mes), solo si
   algún día queréis acceso remoto público.
 - Shapespark: shapespark.com/pricing-perpetual, importe de la perpetua.
-- Hardware: precio en Canarias de un PC con RTX 4070/5070 o superior
-  (2.469 a 3.500 € un equipo con RTX 5080 en septiembre de 2026).
+- Hardware: si el PC que ejecuta D5 puede estar en la oficina, no hace falta
+  otro. Si no, un PC con GPU NVIDIA con codificador NVENC (2.469 a 3.500 € un
+  equipo con RTX 5080 en septiembre de 2026).
 
 ## 13. Método y limitaciones
 
