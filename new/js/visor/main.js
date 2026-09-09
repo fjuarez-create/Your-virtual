@@ -11,7 +11,12 @@
    · Entorno: mientras no llegue el modelo de SketchUp se carga
      `assets/entorno_topo.glb` entero (terreno, calles, vecinos, arbolado)
      con los materiales de las demos y `luz.aplicarMaterial`. Cota −0,8 como
-     en app/topo.js (la cota 0 del GLB es la parcela).
+     en app/topo.js (la cota 0 del GLB es la parcela). Sus mallas se
+     reconstruyen sin triángulos degenerados y con normales calculadas en
+     CPU (ver limpiarGeometria): 383 triángulos de área cero en acera y
+     asfalto producían píxeles NaN que el bloom extendía a toda la imagen
+     (fotograma entero transparente). Debajo va un disco de terreno de 3 km
+     para que el conjunto no flote sobre el cielo.
    · Definición de cortes: `data/cortes.json` ya está en coordenadas del
      SketchUp, así que para apolo_levels.glb la definición se deriva aquí de
      SECTIONS (cota de forjado + offset 1,2, misma receta que el JSON de la
@@ -149,6 +154,60 @@ function definicionCortes() {
   return { edificio: 'apolo', offset: OFFSET_CORTE, plantas };
 }
 
+/* El levantamiento trae triángulos degenerados (área cero). Con ellos, tanto
+   computeVertexNormals (normal (0,0,0) → `normalize()` = NaN en el shader)
+   como el flatShading (normal por derivadas dFdx/dFdy de un triángulo sin
+   área → NaN) producen píxeles NaN, y basta UNO para que el desenfoque del
+   bloom lo extienda a todo el fotograma (medido: imagen entera transparente
+   en el encuadre 'edificio'). Aquí se quitan esos triángulos, se calculan
+   las normales en CPU (por cara si se quiere facetado, sin flatShading) y se
+   sustituye cualquier normal nula o no finita por (0,1,0). */
+function limpiarGeometria(geometria, { facetada }) {
+  const pos = geometria.getAttribute('position');
+  const uv = geometria.getAttribute('uv');
+  const idx = geometria.index;
+  const nTri = (idx ? idx.count : pos.count) / 3;
+  const v = (t, k) => (idx ? idx.getX(t * 3 + k) : t * 3 + k);
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+  const validos = [];
+  for (let t = 0; t < nTri; t++) {
+    a.fromBufferAttribute(pos, v(t, 0)); b.fromBufferAttribute(pos, v(t, 1)); c.fromBufferAttribute(pos, v(t, 2));
+    const area2 = b.sub(a).cross(c.sub(a)).lengthSq();
+    if (Number.isFinite(area2) && area2 > 1e-10) validos.push(t);
+  }
+  let g;
+  if (facetada) {
+    // no indexada: cada cara con sus tres vértices y su normal propia
+    const p = new Float32Array(validos.length * 9);
+    const u = uv ? new Float32Array(validos.length * 6) : null;
+    validos.forEach((t, i) => {
+      for (let k = 0; k < 3; k++) {
+        const j = v(t, k);
+        p.set([pos.getX(j), pos.getY(j), pos.getZ(j)], i * 9 + k * 3);
+        if (u) u.set([uv.getX(j), uv.getY(j)], i * 6 + k * 2);
+      }
+    });
+    g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(p, 3));
+    if (u) g.setAttribute('uv', new THREE.BufferAttribute(u, 2));
+  } else {
+    g = geometria.clone();
+    const ind = new Uint32Array(validos.length * 3);
+    validos.forEach((t, i) => { ind[i * 3] = v(t, 0); ind[i * 3 + 1] = v(t, 1); ind[i * 3 + 2] = v(t, 2); });
+    g.setIndex(new THREE.BufferAttribute(ind, 1));
+  }
+  g.deleteAttribute('normal');
+  g.computeVertexNormals();
+  const n = g.getAttribute('normal');
+  for (let i = 0; i < n.count; i++) {
+    const x = n.getX(i), y = n.getY(i), z = n.getZ(i);
+    if (!Number.isFinite(x + y + z) || x * x + y * y + z * z < 1e-6) n.setXYZ(i, 0, 1, 0);
+  }
+  g.computeBoundingBox(); g.computeBoundingSphere();
+  g.userData.triangulosQuitados = nTri - validos.length;
+  return g;
+}
+
 /* ── Entorno topográfico ── */
 async function cargarEntorno() {
   const gltf = await new Promise((ok, ko) => new GLTFLoader().load('assets/entorno_topo.glb', ok, undefined, ko));
@@ -157,11 +216,12 @@ async function cargarEntorno() {
   grupo.position.y = COTA_ENTORNO;
   grupo.traverse((o) => {
     if (!o.isMesh) return;
-    // polígonos planos triangulados sin normales: sin esto todo saldría negro
-    if (!o.geometry.getAttribute('normal')) o.geometry.computeVertexNormals();
+    // sin normales en el GLB y con triángulos degenerados: ver limpiarGeometria
+    const original = o.geometry;
+    o.geometry = limpiarGeometria(original, { facetada: o.name !== 'terreno' }); // el terreno se lee continuo; el resto, facetado
+    original.dispose();
     o.material = new THREE.MeshStandardMaterial({
       color: COLOR_ENTORNO[o.name] ?? 0x888888, roughness: 0.95, metalness: 0,
-      flatShading: o.name !== 'terreno', // el terreno se lee continuo; el resto, facetado
     });
     o.material.name = `entorno_${o.name}`;
     luz.aplicarMaterial(o.material);
@@ -171,7 +231,23 @@ async function cargarEntorno() {
   });
   scene.add(grupo);
   scene.updateMatrixWorld(true);
-  return { grupo, caja: new THREE.Box3().setFromObject(grupo) };
+  const caja = new THREE.Box3().setFromObject(grupo);
+  /* El levantamiento es una franja de 280×160 m y la equirect es una esfera
+     completa: sin nada debajo, el conjunto flota sobre cielo. Un disco de
+     terreno a la cota más baja del levantamiento, con su mismo color y la
+     niebla de luz.js, le da horizonte hasta que llegue el entorno de 10 km
+     del SketchUp. No entra en la caja del encuadre 'conjunto'. */
+  const suelo = new THREE.Mesh(
+    new THREE.CircleGeometry(3000, 96),
+    new THREE.MeshStandardMaterial({ color: COLOR_ENTORNO.terreno, roughness: 1, metalness: 0 }));
+  suelo.name = 'suelo_lejano';
+  suelo.rotation.x = -Math.PI / 2;
+  suelo.position.set((caja.min.x + caja.max.x) / 2, caja.min.y - 0.05, (caja.min.z + caja.max.z) / 2);
+  suelo.receiveShadow = true;
+  suelo.raycast = () => {};
+  luz.aplicarMaterial(suelo.material);
+  scene.add(suelo);
+  return { grupo, suelo, caja };
 }
 
 /* ── Estado de demostración 70/30 ── */
@@ -205,7 +281,9 @@ function cajaPlanta(clave) {
   return caja;
 }
 function encuadrarVista(vista, { duracion = 1.6 } = {}) {
+  const cambia = apolo.vista !== vista;
   apolo.vista = vista;
+  if (cambia && edificio) repintar(); // las cartelas vecinas dependen de la vista
   const op = { azimut: AZIMUT_BASE, duracion };
   if (vista === 'conjunto') return camara.encuadrar(cajaConjunto(), { ...op, elevacion: ELEVACION.conjunto, margen: 1.05 });
   if (vista === 'planta') return camara.encuadrar(cajaPlanta(apolo.floor), { ...op, elevacion: ELEVACION.planta });
@@ -244,6 +322,11 @@ function repintar() {
     seleccionada: sel && !sel.vidrios.length ? sel.id : null,
     atenuada,
   });
+  /* Con una vivienda enfocada la cámara está a 10 m: las cartelas vecinas,
+     de 3,2 m, taparían media pantalla. Solo queda la suya. */
+  if (apolo.vista === 'vivienda' && sel) {
+    for (const v of edificio.viviendas.values()) if (v !== sel) { v.label.visible = false; v.labelR.visible = false; }
+  }
   trazador.actualizarMateriales();
 }
 
@@ -277,7 +360,7 @@ canvas.addEventListener('pointermove', (e) => {
 });
 canvas.addEventListener('pointerleave', () => { ratonActivo = false; });
 canvas.addEventListener('pointerdown', (e) => {
-  salirDelReposo();
+  alEntradaUsuario();
   bajada = e.button === 0 ? { x: e.clientX, y: e.clientY } : null;
 });
 canvas.addEventListener('pointerup', (e) => {
@@ -289,8 +372,8 @@ canvas.addEventListener('pointerup', (e) => {
   if (id) apolo.enfocarVivienda(id);
   else if (apolo.selected) apolo.select(null);
 });
-canvas.addEventListener('wheel', salirDelReposo, { passive: true });
-canvas.addEventListener('touchstart', salirDelReposo, { passive: true });
+canvas.addEventListener('wheel', alEntradaUsuario, { passive: true });
+canvas.addEventListener('touchstart', alEntradaUsuario, { passive: true });
 
 function actualizarHover() {
   if (!edificio) return;
@@ -302,15 +385,24 @@ function actualizarHover() {
   emitir('hover', id);
 }
 
-/* ── Reposo ── */
+/* ── Reposo ──
+   `entradas` cuenta los gestos del usuario sobre el lienzo; las llamadas de
+   la API (setFloor, enfocarVivienda…) solo apagan el estado de reposo. Así
+   el vuelo a 'conjunto' del propio reposo, que pasa por setFloor('all'),
+   no se confunde con una intervención del usuario y la órbita arranca. */
 let enReposo = false;
+let entradas = 0;
 function salirDelReposo() { enReposo = false; }
+function alEntradaUsuario() { entradas++; enReposo = false; }
 ctx.on('reposo', async () => {
   if (enReposo || cargando) return;
-  enReposo = true;
+  const antes = entradas;
   emitir('reposo');
   const llego = await apolo.irConjunto({ duracion: 2.4 });
-  if (llego && enReposo) camara.orbitaAutomatica(true, { velocidad: 0.05 });
+  if (llego && entradas === antes) {
+    enReposo = true; // hasta el próximo gesto: los 'reposo' periódicos no repiten el vuelo
+    camara.orbitaAutomatica(true, { velocidad: 0.05 });
+  }
 });
 
 /* ── Superficies que reflejan (SSR): vidrios y asfalto, no el monocapa ── */
@@ -375,8 +467,9 @@ Object.assign(apolo, {
     if (!v || apolo.estadoDe(id) === 'vendida') return Promise.resolve(false);
     salirDelReposo();
     if (apolo.floor !== v.floorKey) apolo.setFloor(v.floorKey, { encuadrar: false });
-    apolo.select(id, { enfocar: false });
     apolo.vista = 'vivienda';
+    apolo.select(id, { enfocar: false });
+    repintar(); // select no repinta si ya estaba seleccionada: las cartelas vecinas deben irse igual
     /* Acimut según la fila: la fachada principal (SO) mira a +z, la trasera
        (NE) a −z; desde la fachada opuesta la vivienda se vería a través del
        edificio. */
