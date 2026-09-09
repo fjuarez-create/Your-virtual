@@ -1,0 +1,38 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><base href="/">
+<script type="importmap">{"imports":{"three":"/new/vendor/three/three.module.min.js","three-mesh-bvh":"/new/vendor/three-mesh-bvh.js"}}</script>
+</head><body><script type="module">
+import * as THREE from 'three';
+import { MeshBVH } from 'three-mesh-bvh';
+window.__res = {};
+try {
+  const base = new URL('/new/vendor/three/three.module.min.js', location.href).href;
+  const txt = await (await fetch('/new/vendor/three-mesh-bvh.js')).text();
+  const rewritten = txt.replace(/from\s*["']three["']/g, `from"${base}"`);
+  const alias = rewritten.match(/export\{[^}]*?\b(\w+) as MeshBVH\b/)[1];
+  const src = `import { BufferGeometry as __BG, BufferAttribute as __BA } from "${base}";\n` + rewritten + `\n;const __MeshBVH = ${alias};\nself.onmessage = (e) => {
+    const { position, index } = e.data;
+    const g = new __BG();
+    g.setAttribute('position', new __BA(position, 3));
+    if (index) g.setIndex(new __BA(index, 1));
+    const t0 = performance.now();
+    const bvh = new __MeshBVH(g, { strategy: 2, maxLeafTris: 1, indirect: true, onProgress: (p) => self.postMessage({ progreso: p }) });
+    const ser = __MeshBVH.serialize(bvh, { cloneBuffers: false });
+    self.postMessage({ ok: true, ms: performance.now() - t0, roots: ser.roots.length, hasIndirect: !!ser.indirectBuffer, ser }, [...ser.roots, ser.index.buffer, ...(ser.indirectBuffer ? [ser.indirectBuffer.buffer] : [])]);
+  };`;
+  const url = URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
+  const w = new Worker(url, { type: 'module' });
+  const geo = new THREE.TorusKnotGeometry(1, 0.3, 400, 64);
+  const pos = geo.attributes.position.array.slice();
+  const idx = geo.index.array.slice();
+  window.__res.tris = idx.length / 3;
+  let prog = 0, nprog = 0;
+  w.onmessage = (e) => { if (e.data.progreso !== undefined) { prog = e.data.progreso; nprog++; return; }
+    const { ser, ...rest } = e.data;
+    const bvh = MeshBVH.deserialize(ser, geo, { setIndex: true });
+    window.__res.worker = rest; window.__res.prog = prog; window.__res.nprog = nprog;
+    window.__res.deser = { roots: bvh._roots.length, indirect: bvh._indirectBuffer?.length, tieneGeom: bvh.geometry === geo };
+    window.__listo = true; };
+  w.onerror = (e) => { window.__res.blobError = String(e.message || e); window.__listo = true; };
+  w.postMessage({ position: pos, index: idx }, [pos.buffer, idx.buffer]);
+} catch (e) { window.__res.err = String(e); window.__listo = true; }
+</script></body></html>

@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Demo · luz.js — momentos del día</title>
+<base href="/">
+<link rel="icon" href="data:,">
+<style>
+  body { margin: 0; background: #111; color: #ddd; font: 13px system-ui, sans-serif; }
+  #c { display: block; width: 960px; height: 540px; }
+  #equi { display: block; width: 512px; height: 256px; background: #000; }
+  #info { padding: 6px 10px; white-space: pre; }
+</style>
+<script type="importmap">{"imports":{
+ "three":"/new/vendor/three/three.module.min.js",
+ "three/addons/":"/new/vendor/three/addons/",
+ "three/examples/jsm/":"/new/vendor/three/addons/",
+ "three-mesh-bvh":"/new/vendor/three-mesh-bvh.js",
+ "three-bvh-csg":"/new/vendor/three-bvh-csg.js",
+ "three-gpu-pathtracer":"/new/vendor/three-gpu-pathtracer.js",
+ "camera-controls":"/new/vendor/camera-controls.js",
+ "xatlas-web":"/new/vendor/xatlas-web.js",
+ "app/":"/new/js/"
+}}</script>
+</head>
+<body>
+<canvas id="c" width="960" height="540"></canvas>
+<canvas id="equi" width="512" height="256"></canvas>
+<div id="info"></div>
+<script type="module">
+/* Demo de luz.js: entorno + edificio con materiales estándar sencillos (sin
+   dividir por vivienda), CSM aplicado a todos, y los cuatro momentos con su
+   equirect horneada dibujada en un canvas 2D. */
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { crearEscena } from 'app/visor/escena.js';
+import { crearLuz } from 'app/visor/luz.js';
+
+const canvas = document.getElementById('c');
+const ctx = crearEscena(canvas);
+ctx.renderer.setPixelRatio(1); // SwiftShader: cada píxel cuenta
+ctx.setTamano(960, 540);
+const luz = crearLuz(ctx);
+const estado = window.__estado = { momentos: {}, errores: [], eventos: [] };
+ctx.on('momento', (clave) => estado.eventos.push(clave));
+window.__listo = false;
+window.addEventListener('error', (e) => estado.errores.push(String(e.message)));
+
+const cargador = new GLTFLoader();
+const cargar = (url) => new Promise((ok, ko) => cargador.load(url, ok, undefined, ko));
+
+// ── Materiales sencillos ──
+const matEdificio = {
+  wall: new THREE.MeshStandardMaterial({ color: 0xdcd8d0, roughness: 0.82, metalness: 0, envMapIntensity: 1.1 }),
+  struct: new THREE.MeshStandardMaterial({ color: 0xc9c5bd, roughness: 0.9, metalness: 0 }),
+  slab: new THREE.MeshStandardMaterial({ color: 0xc9c5bd, roughness: 0.9, metalness: 0 }),
+  glass: new THREE.MeshPhysicalMaterial({
+    color: 0x2c3b3e, roughness: 0.05, metalness: 0, transparent: true, opacity: 0.45,
+    envMapIntensity: 2.4, side: THREE.DoubleSide, clearcoat: 1, clearcoatRoughness: 0.02, ior: 1.52,
+    emissive: 0xffd9a0, emissiveIntensity: 0,
+  }),
+};
+const colorTopo = {
+  terreno: 0x6b6f5c, acera: 0x9a968c, podotactil: 0xb0a89a, asfalto: 0x3a3b3d, bordillo: 0xa6a29c,
+  marca_vial: 0xd9d9d0, edificacion: 0xb9b3a8, muro: 0x8f8a80, arqueta: 0x6a6a6a, tronco: 0x4a3a2a, copa: 0x3f6a34,
+};
+
+const t0 = performance.now();
+const [topo, apolo] = await Promise.all([cargar('assets/entorno_topo.glb'), cargar('assets/apolo_levels.glb')]);
+estado.cargaMs = Math.round(performance.now() - t0);
+
+topo.scene.position.y = -0.8; // como en app/topo.js: la cota 0 del GLB es la parcela
+topo.scene.traverse((o) => {
+  if (!o.isMesh) return;
+  if (!o.geometry.getAttribute('normal')) o.geometry.computeVertexNormals();
+  o.material = new THREE.MeshStandardMaterial({ color: colorTopo[o.name] ?? 0x888888, roughness: 0.95, metalness: 0,
+    flatShading: o.name !== 'terreno' });
+  o.castShadow = true; o.receiveShadow = true;
+  luz.aplicarMaterial(o.material);
+});
+ctx.scene.add(topo.scene);
+
+let triangulos = 0;
+apolo.scene.traverse((o) => {
+  if (!o.isMesh) return;
+  const [planta, cat] = o.name.split('__');
+  if (planta === 'sotano' || cat === 'cap') { o.visible = false; return; }
+  o.material = matEdificio[cat] || matEdificio.struct;
+  o.castShadow = cat !== 'glass'; o.receiveShadow = true;
+  triangulos += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3;
+});
+for (const m of Object.values(matEdificio)) luz.aplicarMaterial(m);
+ctx.scene.add(apolo.scene);
+estado.triangulos = Math.round(triangulos);
+
+// ── Encuadre: desde el sureste, un poco elevado, sobre la caja del edificio ──
+const caja = new THREE.Box3().setFromObject(apolo.scene);
+const centro = caja.getCenter(new THREE.Vector3());
+const tam = caja.getSize(new THREE.Vector3());
+/* Cámara baja y casi horizontal: así el encuadre llega hasta unos 20° de
+   elevación, donde el cielo procedural ya es azul, y no se queda en la franja
+   brumosa del horizonte. */
+const dist = Math.max(tam.x, tam.z) * 1.35;
+const az = THREE.MathUtils.degToRad(58), el = THREE.MathUtils.degToRad(7);
+ctx.camera.position.set(centro.x + dist * Math.cos(el) * Math.sin(az), caja.min.y + dist * Math.sin(el), centro.z + dist * Math.cos(el) * Math.cos(az));
+ctx.camera.lookAt(centro.x, ctx.camera.position.y - dist * Math.tan(THREE.MathUtils.degToRad(2.5)), centro.z);
+ctx.camera.updateMatrixWorld();
+estado.caja = { min: caja.min.toArray().map((v) => +v.toFixed(1)), max: caja.max.toArray().map((v) => +v.toFixed(1)) };
+
+// ── Bucle ──
+const reloj = new THREE.Clock();
+let fotogramas = 0, tiempoRender = 0;
+function fotograma() {
+  requestAnimationFrame(fotograma);
+  const dt = Math.min(reloj.getDelta(), 0.25); // SwiftShader: no dejar que un fotograma lento se coma el fundido
+  luz.update(dt);
+  matEdificio.glass.emissiveIntensity = luz.ventanas ? 1.4 : 0;
+  const a = performance.now();
+  ctx.renderer.render(ctx.scene, ctx.camera);
+  tiempoRender += performance.now() - a;
+  fotogramas++;
+}
+
+// ── Miniatura de la equirect con tone mapping simple (Reinhard + gamma) ──
+function dibujarEquirect(clave) {
+  const tex = luz.equirect;
+  const lienzo = document.getElementById('equi');
+  const g = lienzo.getContext('2d');
+  const { width: W, height: H, data } = tex.image;
+  const img = g.createImageData(512, 256);
+  const half = data instanceof Uint16Array;
+  const M = luz.parametros;
+  const expo = M.noche ? 6 : 1.4;
+  let maxL = 0, media = 0;
+  // color lineal en el cenit y en el horizonte (media sobre el acimut), para afinar la tabla
+  const muestra = (v) => {
+    const sy = tex.flipY ? Math.floor((1 - v) * (H - 1)) : Math.floor(v * (H - 1));
+    const acc = [0, 0, 0];
+    for (let sx = 0; sx < W; sx += 8) {
+      const i = (sy * W + sx) * 4;
+      for (let k = 0; k < 3; k++) acc[k] += half ? THREE.DataUtils.fromHalfFloat(data[i + k]) : data[i + k];
+    }
+    return acc.map((x) => +(x / (W / 8)).toFixed(3));
+  };
+  for (let y = 0; y < 256; y++) {
+    // HDRLoader deja la fila 0 arriba (flipY); el horneado deja la fila 0 abajo
+    const fy = Math.floor(y * H / 256);
+    const sy = tex.flipY ? fy : H - 1 - fy;
+    for (let x = 0; x < 512; x++) {
+      const sx = Math.floor(x * W / 512);
+      const i = (sy * W + sx) * 4;
+      let r = data[i], gg = data[i + 1], b = data[i + 2];
+      if (half) { r = THREE.DataUtils.fromHalfFloat(r); gg = THREE.DataUtils.fromHalfFloat(gg); b = THREE.DataUtils.fromHalfFloat(b); }
+      const l = 0.2126 * r + 0.7152 * gg + 0.0722 * b;
+      if (l > maxL) maxL = l; media += l;
+      const o = (y * 512 + x) * 4;
+      const tm = (v) => Math.round(255 * Math.pow(Math.min(1, (v * expo) / (1 + v * expo)), 1 / 2.2));
+      img.data[o] = tm(r); img.data[o + 1] = tm(gg); img.data[o + 2] = tm(b); img.data[o + 3] = 255;
+    }
+  }
+  g.putImageData(img, 0, 0);
+  return { ancho: W, alto: H, tipo: half ? 'half' : 'float', maxLum: +maxL.toFixed(2), mediaLum: +(media / (512 * 256)).toFixed(4),
+    cenit: muestra(0.95), medio: muestra(0.75), horizonte: muestra(0.53), suelo: muestra(0.3) };
+}
+
+window.__demo = {
+  luz, ctx,
+  async ir(clave, duracion = 1.6) {
+    window.__listo = false;
+    const t = performance.now();
+    await luz.setMomento(clave, { duracion });
+    const ms = Math.round(performance.now() - t);
+    // dos fotogramas más para que el estado final se vea pintado
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const equi = dibujarEquirect(clave);
+    estado.momentos[clave] = { transicionMs: ms, equirect: equi, solDir: luz.direccionSol.toArray().map((v) => +v.toFixed(3)),
+      ventanas: luz.ventanas, exposicion: ctx.renderer.toneMappingExposure, fondo: ctx.scene.background?.name,
+      fotogramas, msPorFotograma: Math.round(tiempoRender / Math.max(1, fotogramas)), preparacionMs: luz.tiempos[clave],
+      materialesCSM: luz.materiales.size };
+    document.getElementById('info').textContent = JSON.stringify(estado.momentos[clave]);
+    window.__listo = true;
+    return estado.momentos[clave];
+  },
+};
+
+fotograma();
+await luz.listo;
+await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+estado.inicial = { fondo: ctx.scene.background?.name, listoMs: Math.round(performance.now() - t0) };
+window.__listo = true;
+</script>
+</body>
+</html>

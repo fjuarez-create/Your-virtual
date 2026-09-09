@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Demo · post.js</title>
+<base href="/">
+<link rel="icon" href="data:,">
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  canvas { display: block; width: 100vw; height: 100vh; }
+  #info { position: fixed; left: 8px; bottom: 6px; color: #fff; font: 12px/1.3 system-ui, sans-serif;
+          background: rgba(0,0,0,.45); padding: 4px 8px; border-radius: 4px; pointer-events: none; }
+</style>
+<script type="importmap">{"imports":{
+ "three":"/new/vendor/three/three.module.min.js",
+ "three/addons/":"/new/vendor/three/addons/",
+ "three/examples/jsm/":"/new/vendor/three/addons/",
+ "three-mesh-bvh":"/new/vendor/three-mesh-bvh.js",
+ "three-bvh-csg":"/new/vendor/three-bvh-csg.js",
+ "three-gpu-pathtracer":"/new/vendor/three-gpu-pathtracer.js",
+ "camera-controls":"/new/vendor/camera-controls.js",
+ "xatlas-web":"/new/vendor/xatlas-web.js",
+ "app/":"/new/js/"
+}}</script>
+</head>
+<body>
+<canvas id="lienzo"></canvas>
+<div id="info">post.js — cargando…</div>
+<script type="module">
+/* Demo de post.js: edificio Apolo, suelo, sol con sombras y HDRI diurno.
+   Expone window.__caso(nombre) para que el guion de Playwright pida cada
+   caso y capture: 'sin' (RenderPass + Output), 'con' (cadena completa),
+   'movimiento' (barrido de cámara entre dos fotogramas) y 'enfoque'
+   (bokeh a la distancia de una vivienda). */
+import * as THREE from 'three';
+import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
+import { crearEscena } from 'app/visor/escena.js';
+import { crearPost } from 'app/visor/post.js';
+import { loadBIM } from 'app/building.js';
+
+const info = document.getElementById('info');
+const canvas = document.getElementById('lienzo');
+const ctx = crearEscena(canvas);
+const { scene, camera, renderer } = ctx;
+const W = 960, H = 540;
+renderer.setPixelRatio(1); // SwiftShader: un píxel por píxel
+ctx.setTamano(W, H);
+
+scene.fog = new THREE.Fog(0xd6dde3, 750, 2100);
+
+/* Sol del HDRI (elev. 47°, acimut 45°), como en main.js. */
+const sol = new THREE.DirectionalLight(0xfff1dc, 3.0);
+const dirSol = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToRad(90 - 47), THREE.MathUtils.degToRad(45));
+sol.position.copy(dirSol).multiplyScalar(180);
+sol.castShadow = true;
+sol.shadow.mapSize.set(2048, 2048);
+sol.shadow.bias = -0.0004;
+sol.shadow.normalBias = 0.05;
+Object.assign(sol.shadow.camera, { left: -90, right: 90, top: 90, bottom: -90, near: 20, far: 400 });
+scene.add(sol, sol.target);
+scene.add(new THREE.HemisphereLight(0xe3edf8, 0x8b9080, 0.28));
+
+/* Suelo: plano grande que recibe sombras. */
+const suelo = new THREE.Mesh(
+  new THREE.PlaneGeometry(1200, 1200),
+  new THREE.MeshStandardMaterial({ color: 0x9a968c, roughness: 0.9, metalness: 0 }),
+);
+suelo.rotation.x = -Math.PI / 2;
+suelo.position.y = -0.85;
+suelo.receiveShadow = true;
+scene.add(suelo);
+
+/* Una cartela en la capa 1 para comprobar la pasada final sin post. */
+function cartela(texto, pos) {
+  const cv = document.createElement('canvas'); cv.width = 256; cv.height = 96;
+  const c = cv.getContext('2d');
+  c.fillStyle = '#24873f'; c.fillRect(24, 8, 208, 72);
+  c.fillStyle = '#fff'; c.font = 'bold 44px system-ui'; c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.fillText(texto, 128, 46);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), depthTest: false, fog: false }));
+  sp.scale.set(8, 3, 1); sp.position.copy(pos); sp.layers.set(ctx.capas.cartelas);
+  return sp;
+}
+scene.add(cartela('204', new THREE.Vector3(-42, 9.5, 16)));
+
+const estado = { casos: {}, tiempos: {} };
+window.__estado = estado;
+
+/* HDRI + edificio. */
+const hdr = await new Promise((res, rej) => new HDRLoader().load('assets/sky_day.hdr', res, undefined, rej));
+hdr.mapping = THREE.EquirectangularReflectionMapping;
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.background = hdr;
+scene.backgroundIntensity = 1.0;
+scene.environment = pmrem.fromEquirectangular(hdr).texture;
+scene.environmentIntensity = 0.3;
+pmrem.dispose();
+
+const bim = await loadBIM(scene, 'assets/apolo_levels.glb');
+bim.group.visible = true;
+let triangulos = 0;
+const vidrios = [];
+bim.group.traverse((o) => {
+  if (!o.isMesh) return;
+  triangulos += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3;
+  if (o.name.endsWith('__glass')) vidrios.push(o);
+});
+estado.triangulos = Math.round(triangulos);
+
+const post = crearPost(ctx, null);
+post.setReflectantes([...vidrios, suelo]);
+post.setMomento({ bloom: 0.14, umbral: 0.92, exposicion: 1.0 });
+
+/* Encuadres. 'general' mira a la fachada SO con las esquinas y los vuelos
+   del ático a la vista; 'vivienda' se acerca a una vivienda de la esquina
+   oeste con el resto del edificio alejándose detrás. */
+const ENCUADRES = {
+  general:  { pos: new THREE.Vector3(16, 13, 44), obj: new THREE.Vector3(-14, 5.5, 4) },
+  vivienda: { pos: new THREE.Vector3(-98, 9, 46), obj: new THREE.Vector3(-44, 6, 12) },
+};
+function encuadrar(nombre) {
+  const e = ENCUADRES[nombre];
+  camera.position.copy(e.pos);
+  camera.lookAt(e.obj);
+  camera.updateMatrixWorld(true);
+  return e.pos.distanceTo(e.obj);
+}
+
+function activarTodo(activo) {
+  post.gtao.enabled = activo;
+  post.bloom.enabled = activo;
+  post.smaa.enabled = activo;
+}
+
+const reloj = new THREE.Clock();
+function pintar() {
+  const t0 = performance.now();
+  post.render(Math.min(reloj.getDelta(), 0.05));
+  return performance.now() - t0;
+}
+
+const CASOS = {
+  /* Solo la oclusión, para afinar radio y escala mirando el término. */
+  ao() {
+    encuadrar('general');
+    activarTodo(true);
+    post.setVelocidadCamara(0); post.setEnfoque(null);
+    post.gtao.output = 5; // GTAOPass.OUTPUT.Denoise
+    const ms = pintar();
+    post.gtao.output = 0;
+    return { ms };
+  },
+  /* Cambio de calidad y de tamaño: no debe fallar ni dejar destinos con
+     el tamaño viejo. Deja la página como estaba. */
+  redimension() {
+    encuadrar('general');
+    activarTodo(true);
+    post.setVelocidadCamara(0); post.setEnfoque(null);
+    ctx.setCalidad('media'); ctx.setTamano(800, 450);
+    const msMedia = pintar();
+    const enMedia = { ssr: post.ssr.enabled, aoMuestras: post.gtao.gtaoMaterial.defines.SAMPLES,
+                      ancho: post.composer.renderTarget1.width, alto: post.composer.renderTarget1.height,
+                      aoAncho: post.gtao.gtaoRenderTarget.width };
+    ctx.setCalidad('alta'); renderer.setPixelRatio(1); ctx.setTamano(W, H);
+    const msAlta = pintar();
+    return { msMedia, msAlta, enMedia, ancho: post.composer.renderTarget1.width, aoAncho: post.gtao.gtaoRenderTarget.width,
+             ssr: post.ssr.enabled };
+  },
+  sin() {
+    encuadrar('general');
+    activarTodo(false);
+    post.setVelocidadCamara(0); post.setEnfoque(null);
+    return { ms: pintar(), pasadas: post.composer.passes.filter((p) => p.enabled).length };
+  },
+  con() {
+    encuadrar('general');
+    activarTodo(true);
+    post.setVelocidadCamara(0); post.setEnfoque(null);
+    pintar(); // calienta shaders (SMAA carga sus texturas, SSR compila)
+    return { ms: pintar(), pasadas: post.composer.passes.filter((p) => p.enabled).length,
+             ssr: post.ssr.enabled, desenfoque: post.desenfoque.enabled };
+  },
+  movimiento() {
+    encuadrar('general');
+    activarTodo(true);
+    post.setEnfoque(null);
+    post.setVelocidadCamara(0);
+    pintar(); // fotograma A: fija la matriz "anterior"
+    /* Barrido: la cámara gira 2° alrededor del objetivo entre A y B, como en
+       un arrastre rápido; a 25 m/s el desenfoque va a intensidad máxima. */
+    const e = ENCUADRES.general;
+    camera.position.sub(e.obj).applyAxisAngle(new THREE.Vector3(0, 1, 0), THREE.MathUtils.degToRad(2)).add(e.obj);
+    camera.lookAt(e.obj);
+    camera.updateMatrixWorld(true);
+    post.setVelocidadCamara(25);
+    const ms = pintar();
+    return { ms, intensidad: post.desenfoque.intensidad, activo: post.desenfoque.enabled,
+             muestras: post.desenfoque.material.defines.MUESTRAS };
+  },
+  enfoque() {
+    const dist = encuadrar('vivienda');
+    activarTodo(true);
+    post.setVelocidadCamara(0);
+    post.setEnfoque(dist);
+    pintar();
+    return { ms: pintar(), foco: dist, bokeh: post.bokeh.enabled };
+  },
+};
+
+window.__caso = async (nombre) => {
+  const r = CASOS[nombre]();
+  estado.casos[nombre] = r;
+  info.textContent = `post.js · ${nombre} · ${(r.ms ?? r.msAlta).toFixed(0)} ms · ${estado.triangulos} tri`;
+  await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
+  return r;
+};
+
+/* Un fotograma inicial para que todo compile antes de medir. */
+CASOS.con();
+info.textContent = `post.js · listo · ${estado.triangulos} triángulos`;
+window.__listo = true;
+</script>
+</body>
+</html>
