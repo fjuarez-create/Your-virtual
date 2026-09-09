@@ -46,7 +46,9 @@
      sur otro volumen de SERENEA tan alto como él (z 40…76) que desde el sur
      franco tapa la fachada; desde el sureste se ve entera la fachada larga
      sur con sus ventanas y el testero este. 'planta' = caja de Apolo hasta
-     la cota media de corte de esa planta, 42°, mismo azimut (vuelo corto).
+     la cota media de corte de esa planta, 42° y azimut 12°: con el eje largo
+     casi horizontal en pantalla la planta llena el ancho (con 55° ocupaba
+     menos de la mitad del cuadro).
      'conjunto' y 'edificio' devuelven el edificio completo.
    · Realce de hover y selección (revisado en el control de calidad): se
      dibuja SIEMPRE la envolvente translúcida de edificio.pintar y, además,
@@ -95,9 +97,9 @@ const PLANTAS = FLOOR_DEFS.filter((f) => f.key !== 'cubierta');
 const CLAVES_PLANTA = new Set(['all', ...PLANTAS.map((f) => f.key)]);
 const NIVEL_DE = new Map(PLANTAS.map((f, i) => [f.key, i]));
 const RUTA_ENTORNO = 'assets/serenea/entorno.glb';
-const AZIMUT = { conjunto: -60, edificio: 55, planta: 55 };
+const AZIMUT = { conjunto: -60, edificio: 55, planta: 12 };
 const ELEVACION = { conjunto: 16, edificio: 24, planta: 42 };
-const MARGEN = { conjunto: 1.05, edificio: 1.1, planta: 1.15 };
+const MARGEN = { conjunto: 1.05, edificio: 1.1, planta: 1.04 };
 const LADO_CONJUNTO = 600;        // m de lado del encuadre 'conjunto'
 const REPOSO_S = 120;
 const CAMARA_FAR = 9000;          // el entorno llega a 5 km
