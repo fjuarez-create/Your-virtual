@@ -2,116 +2,122 @@
    main.js (visor) — Orquestación de los módulos y API pública `window.apolo`.
 
    Crea el ctx (escena.js), la luz, el post, el trazador, el edificio activo
-   de app/promotions.js, los cortes y la cámara; carga el entorno topográfico
-   y expone en `window.apolo` lo que usa new/js/shell.js. Aquí no hay nada de
-   render propio: el bucle solo llama a los módulos en el orden del contrato.
+   de app/promotions.js (modelo de SketchUp de assets/serenea/), los cortes y
+   la cámara; carga el entorno y expone en `window.apolo` lo que usa
+   new/js/shell.js. Aquí no hay nada de render propio: el bucle solo llama a
+   los módulos en el orden del contrato.
 
    Decisiones donde el contrato deja hueco (documentadas aquí):
 
-   · Entorno: mientras no llegue el modelo de SketchUp se carga
-     `assets/entorno_topo.glb` entero (terreno, calles, vecinos, arbolado)
-     con los materiales de las demos y `luz.aplicarMaterial`. Cota −0,8 como
-     en app/topo.js (la cota 0 del GLB es la parcela). Sus mallas se
-     reconstruyen sin triángulos degenerados y con normales calculadas en
-     CPU (ver limpiarGeometria): 383 triángulos de área cero en acera y
-     asfalto producían píxeles NaN que el bloom extendía a toda la imagen
-     (fotograma entero transparente). Debajo va un disco de terreno de 3 km
-     para que el conjunto no flote sobre el cielo.
-   · Definición de cortes: `data/cortes.json` ya está en coordenadas del
-     SketchUp, así que para apolo_levels.glb la definición se deriva aquí de
-     SECTIONS (cota de forjado + offset 1,2, misma receta que el JSON de la
-     demo de cortes). Cuando el visor cargue assets/serenea/, bastará con
-     pasar `url: 'data/cortes.json'`.
-   · Encuadres: azimut 34,8° para todos (el de la cámara (64,48,92) → (0,5,0)
-     del visor actual, medido en planta); 'conjunto' con elevación 24° sobre
-     la caja del entorno (recortada a ±260 m del edificio para que el
-     terreno lejano no aleje la cámara; con 35° el horizonte quedaba fuera
-     de plano y el conjunto era un disco de terreno sin cielo, revisado en
-     el control de calidad), 'edificio' con 28° sobre
-     edificio.caja, planta con 42° sobre la caja del edificio recortada a la
-     cota de corte más alta de esa planta. Las vistas 'conjunto' y
-     'edificio' devuelven el edificio completo ('all'): ver un edificio
-     seccionado desde 300 m no dice nada.
+   · Carga: primero entorno.glb + apolo_envolvente.glb (primera imagen);
+     después, con el evento 'carga' (`secundaria: true`), el mobiliario y las
+     cuatro variantes cortadas por edificio.cargarSecundarios, que main
+     registra en cortes.js según llegan. Los cielos de los otros momentos se
+     hornean 2,5 s después de la primera imagen.
+   · Entorno (assets/serenea/entorno.glb, 1.442 mallas sin nombre): se
+     fusionan por material en unas 35 mallas Float32 en coordenadas de mundo
+     (fusionarEntorno): 1.442 llamadas de dibujo por cada una de las cinco
+     pasadas que lo dibujan (tres cascadas de sombra, G-buffer y color) eran
+     demasiadas para nada. Los materiales son los del GLB con dos retoques:
+     sin alphaTest (las texturas son opacas) y sin la metalicidad 0,5 con que
+     SketchUp exporta lo que no tiene material PBR (césped y asfalto
+     metálicos). El mar lleva rugosidad baja para reflejar el cielo; el
+     vidrio de los vecinos, el mismo vidrio físico del edificio. La
+     conversión a Float32 sanea de paso las normales nulas o no finitas
+     (una sola produce un píxel NaN que el bloom extiende a todo el
+     fotograma: pantalla transparente, ya sufrido con entorno_topo.glb). Con
+     este entorno no hacía falta quitar triángulos degenerados (probado).
+   · Niebla y far: el terreno llega a 5 km, así que la cámara ve hasta 9 km y
+     la niebla de luz.js (que nace con 750-2100 m) se estira a 1.400-5.200 m
+     para que el borde del terreno se funda con el cielo en vez de cortarse.
+     El cielo nocturno de luz.js (estrellas a 3.400 m, luna a 3.000 m) se
+     escala ×2,4 para que quede detrás del terreno lejano.
+   · Sombras: el CSM reparte sus cascadas hasta maxFar, y un valor fijo o no
+     llega al edificio desde 'conjunto' o resulta grueso dentro de una
+     vivienda. Cada fotograma se pide a luz.setAlcanceSombras la distancia
+     cámara-edificio + 250 m (redondeada a 50 m, entre 300 y 1.200) para que
+     las cascadas cubran Apolo ± 150 m desde cualquier encuadre.
+   · Encuadres (data/serenea_modelo.json vía edificio.caja), medidos con
+     capturas: 'conjunto' = caja de Apolo ampliada a 600 m de lado, desde el
+     suroeste (azimut −60°) y elevación 16°: con 22° el horizonte quedaba en
+     el borde superior sin cielo, y el mar está al este (x ≥ 580 m, cota
+     −71), así que hay que mirar hacia allí. 'edificio' = caja de Apolo,
+     elevación 24°, azimut 55° (desde el sureste): Apolo tiene pegado al
+     sur otro volumen de SERENEA tan alto como él (z 40…76) que desde el sur
+     franco tapa la fachada; desde el sureste se ve entera la fachada larga
+     sur con sus ventanas y el testero este. 'planta' = caja de Apolo hasta
+     la cota media de corte de esa planta, 42° y azimut 12°: con el eje largo
+     casi horizontal en pantalla la planta llena el ancho (con 55° ocupaba
+     menos de la mitad del cuadro).
+     'conjunto' y 'edificio' devuelven el edificio completo.
    · Realce de hover y selección (revisado en el control de calidad): se
-     dibuja SIEMPRE la envolvente translúcida de edificio.pintar (verde/ámbar
-     a través de los muros) y, además, se tiñe el emisivo del vidrio de la
-     vivienda con el color de su estado. Solo con el tinte del vidrio, desde
-     el encuadre de planta el realce era invisible (medido: hover sobre la
-     201 sin ningún cambio en la imagen), y el comercial no sabía qué tenía
-     bajo el cursor. La envolvente solo existe en el raster, así que
-     mientras el cursor está sobre una vivienda (hover) o hay una vivienda
-     enfocada (vista 'vivienda', que además usa el bokeh, también raster) el
-     trazador no arranca: ver `quieta` en el bucle. En conjunto, edificio y
-     planta sin cursor encima, el trazado sigue como pide el contrato; el
-     tinte del vidrio sí llega al trazado con `trazador.actualizarMateriales()`.
-   · Enfoque de vivienda: elevación 36° (camara.js trae 24°): con 24° la
-     vivienda quedaba en el tercio alto del cuadro detrás de los muros
-     seccionados de la fila delantera, medio cuadro fuera de foco.
-   · Picking: solo con ratón (pointerType 'mouse'), sobre edificio.pickables
-     sin filtrar por `visible` (las envolventes son invisibles en reposo y
-     el Raycaster no lo mira), saltando las viviendas de otras plantas (las
-     de arriba ya no existen y las de abajo quedan bajo la losa). Una
-     vendida tapa el rayo (inerte, no transparente; revisado en el control
-     de calidad). Un clic sin arrastre (< 6 px) selecciona.
+     dibuja SIEMPRE la envolvente translúcida de edificio.pintar y, además,
+     se tiñe el emisivo del vidrio de la vivienda con el color de su estado.
+     La envolvente solo existe en el raster, así que con hover o con una
+     vivienda enfocada (bokeh, también raster) el trazador no arranca: ver
+     `quieta` en el bucle. Tampoco arranca mientras cortes.provisional (el
+     recorte por planos a la espera de la variante precortada: el trazador
+     no entiende de planos y vería el edificio entero).
+   · Enfoque de vivienda: elevación 36°, azimut 22° si la vivienda está en
+     la mitad sur del edificio (fachada principal) y 158° si está en la norte.
+   · Picking: solo con ratón, sobre edificio.pickables sin filtrar por
+     `visible`, saltando las viviendas de otras plantas; una vendida tapa el
+     rayo (inerte). Un clic sin arrastre (< 6 px) selecciona.
    · Estado de demostración: si availability.json marca menos del 20 % de
      vendidas, cada tercera vivienda por orden de id (empezando por la
      segunda) pasa a vendida; las reservadas del fichero se conservan.
    · Trazador: recibe un objeto luz envuelto con `equirectSinSol` como
-     entorno (evita contar dos veces el sol horneado; con el HDR de día no
-     hay variante y se usa la foto) y una intensidad de entorno calibrada
-     por momento (IBL_TRAZADO), porque el raster suma hemisférica y relleno
-     que el trazado no tiene. Los valores de amanecer/atardecer/noche son
-     una estimación a partir del 0,5 medido de día: afinar en GPU real.
+     entorno y una intensidad de entorno calibrada por momento (IBL_TRAZADO).
    · Reposo: camara.reposoTras(120) solo emite; aquí se vuela a 'conjunto'
-     y se enciende la órbita al llegar. La órbita es movimiento, así que el
-     trazador no corre en reposo de órbita (sí cuando la cámara se para).
+     y se enciende la órbita al llegar.
    · post.setMomento durante el fundido de luz se llama con bloom y umbral
-     interpolados pero SIN exposición: luz.js escribe la exposición cada
-     fotograma (con el bajón del fundido) y pisarla desde aquí la rompería.
-   · Pixel ratio: escena.js permite DPR 2 en 'alta'; toda la cadena de post
-     se cuadruplicaría en pantallas HiDPI, así que se limita a 1,5 (1,25 en
-     'media').
+     interpolados pero SIN exposición: luz.js escribe la exposición.
+   · Pixel ratio: limitado a 1,5 (1,25 en 'media').
    · Extras fuera del contrato, para el shell y las pruebas:
-     apolo.recentrar(), apolo.vista ('conjunto'|'edificio'|'planta'|
-     'vivienda'), apolo.cargado, evento 'trazado' ({ activo, progreso,
-     muestras, pintando }) y apolo.modulos (los módulos, para depurar).
+     apolo.recentrar(), apolo.vista, apolo.cargado, evento 'trazado',
+     apolo.modulos y apolo.tiempos (ms de carga de cada fichero).
    ═══════════════════════════════════════════════════════════════════════════ */
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { crearEscena } from 'app/visor/escena.js';
 import { crearLuz, MOMENTOS } from 'app/visor/luz.js';
 import { crearPost } from 'app/visor/post.js';
 import { crearTrazador } from 'app/visor/trazador.js';
-import { cargarEdificio, EMISIVO_VENTANA, INTENSIDAD_VENTANA } from 'app/visor/edificio.js';
+import { cargarEdificio, crearVidrioFisico, EMISIVO_VENTANA, INTENSIDAD_VENTANA } from 'app/visor/edificio.js';
 import { crearCortes } from 'app/visor/cortes.js';
 import { crearCamara } from 'app/visor/camara.js';
 import { ACTIVE_BUILDING } from 'app/promotions.js';
-import { SECTIONS, FLOOR_DEFS } from 'app/layout.js';
+import { FLOOR_DEFS } from 'app/layout.js';
 import { ESTADO_COLORS } from 'app/building.js';
 
 /* ── Constantes ── */
 const PLANTAS = FLOOR_DEFS.filter((f) => f.key !== 'cubierta');
 const CLAVES_PLANTA = new Set(['all', ...PLANTAS.map((f) => f.key)]);
 const NIVEL_DE = new Map(PLANTAS.map((f, i) => [f.key, i]));
-const AZIMUT_BASE = THREE.MathUtils.radToDeg(Math.atan2(64, 92)); // encuadre del visor actual
-const ELEVACION = { conjunto: 24, edificio: 28, planta: 42 };
-const RADIO_CONJUNTO = 260;       // m alrededor del edificio que entran en 'conjunto'
+const RUTA_ENTORNO = 'assets/serenea/entorno.glb';
+const AZIMUT = { conjunto: -60, edificio: 55, planta: 12 };
+const ELEVACION = { conjunto: 16, edificio: 24, planta: 42 };
+const MARGEN = { conjunto: 1.05, edificio: 1.1, planta: 1.04 };
+const LADO_CONJUNTO = 600;        // m de lado del encuadre 'conjunto'
 const REPOSO_S = 120;
-const OFFSET_CORTE = 1.2;         // sobre el forjado, como data/cortes.json
-const COTA_ENTORNO = -0.8;        // app/topo.js: la cota 0 del GLB es la parcela
+const CAMARA_FAR = 9000;          // el entorno llega a 5 km
+const NIEBLA = { near: 1400, far: 5200 };
+const ESCALA_CIELO_NOCHE = 2.4;   // estrellas y luna detrás del terreno lejano
+const SOMBRAS = { margen: 250, min: 300, max: 1200, paso: 50 };
 const DPR_MAX = { alta: 1.5, media: 1.25 };
 const IBL_TRAZADO = { dia: 0.5, amanecer: 0.75, atardecer: 0.8, noche: 1.6 };
 const REALCE = { hover: 0.9, seleccion: 1.4 }; // intensidad emisiva del vidrio teñido
 const ELEVACION_VIVIENDA = 36;    // ver cabecera: la vivienda centrada y vista desde arriba
-const COLOR_ENTORNO = {
-  terreno: 0x6b6f5c, acera: 0x9a968c, podotactil: 0xb0a89a, asfalto: 0x3a3b3d, bordillo: 0xa6a29c,
-  marca_vial: 0xd9d9d0, edificacion: 0xb9b3a8, muro: 0x8f8a80, arqueta: 0x6a6a6a, tronco: 0x4a3a2a, copa: 0x3f6a34,
-};
+const AZIMUT_VIVIENDA = { sur: 22, norte: 158 };
 
 /* ── Escena base ── */
 const canvas = document.getElementById('scene');
 const ctx = crearEscena(canvas);
 const { renderer, scene, camera } = ctx;
+camera.far = CAMARA_FAR;
+camera.updateProjectionMatrix();
 
 function aplicarDPR(tier) {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, DPR_MAX[tier] || DPR_MAX.alta));
@@ -133,7 +139,7 @@ const emitir = (evento, datos) => bus.dispatchEvent(new CustomEvent(evento, { de
 
 const apolo = {
   floor: 'all', momento: 'dia', selected: null, hover: null, vista: 'conjunto',
-  units: [], unitsById: new Map(), estados: {}, cargado: false,
+  units: [], unitsById: new Map(), estados: {}, cargado: false, tiempos: {},
   on(evento, fn) { bus.addEventListener(evento, (e) => fn(e.detail)); },
   enter() { /* compatibilidad con shell.js: no hay portada que atravesar */ },
   estadoDe: (id) => apolo.estados[id] || 'disponible',
@@ -142,6 +148,9 @@ window.apolo = apolo;
 
 /* ── Módulos ── */
 const luz = crearLuz(ctx);
+scene.fog.near = NIEBLA.near;
+scene.fog.far = NIEBLA.far;
+luz.cieloNoche.scale.setScalar(ESCALA_CIELO_NOCHE);
 const post = crearPost(ctx, luz);
 const camara = crearCamara(ctx);
 const luzTrazado = {
@@ -156,109 +165,116 @@ let edificio = null, cortes = null, entorno = null;
 let cargando = true;
 apolo.modulos = { ctx, luz, post, camara, trazador, get edificio() { return edificio; }, get cortes() { return cortes; }, get entorno() { return entorno; } };
 
-/* ── Definición de cortes para apolo_levels.glb (ver cabecera) ── */
-function definicionCortes() {
-  const plantas = {};
-  for (const F of PLANTAS) {
-    plantas[F.key] = SECTIONS.map((s) => ({ x0: s.x0, x1: s.x1, z0: -45, z1: 45, y: s.floors[F.level] + OFFSET_CORTE }));
-  }
-  return { edificio: 'apolo', offset: OFFSET_CORTE, plantas };
+/* ── Entorno ── */
+const cargadorGLB = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+function cargarGLB(url, onProgreso) {
+  return new Promise((ok, ko) => cargadorGLB.load(url, ok, (xhr) => {
+    if (onProgreso && xhr.lengthComputable && xhr.total > 0) onProgreso(xhr.loaded / xhr.total);
+  }, ko));
 }
 
-/* El levantamiento trae triángulos degenerados (área cero). Con ellos, tanto
-   computeVertexNormals (normal (0,0,0) → `normalize()` = NaN en el shader)
-   como el flatShading (normal por derivadas dFdx/dFdy de un triángulo sin
-   área → NaN) producen píxeles NaN, y basta UNO para que el desenfoque del
-   bloom lo extienda a todo el fotograma (medido: imagen entera transparente
-   en el encuadre 'edificio'). Aquí se quitan esos triángulos, se calculan
-   las normales en CPU (por cara si se quiere facetado, sin flatShading) y se
-   sustituye cualquier normal nula o no finita por (0,1,0). */
-function limpiarGeometria(geometria, { facetada }) {
-  const pos = geometria.getAttribute('position');
-  const uv = geometria.getAttribute('uv');
-  const idx = geometria.index;
-  const nTri = (idx ? idx.count : pos.count) / 3;
-  const v = (t, k) => (idx ? idx.getX(t * 3 + k) : t * 3 + k);
-  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
-  const validos = [];
-  for (let t = 0; t < nTri; t++) {
-    a.fromBufferAttribute(pos, v(t, 0)); b.fromBufferAttribute(pos, v(t, 1)); c.fromBufferAttribute(pos, v(t, 2));
-    const area2 = b.sub(a).cross(c.sub(a)).lengthSq();
-    if (Number.isFinite(area2) && area2 > 1e-10) validos.push(t);
-  }
-  let g;
-  if (facetada) {
-    // no indexada: cada cara con sus tres vértices y su normal propia
-    const p = new Float32Array(validos.length * 9);
-    const u = uv ? new Float32Array(validos.length * 6) : null;
-    validos.forEach((t, i) => {
-      for (let k = 0; k < 3; k++) {
-        const j = v(t, k);
-        p.set([pos.getX(j), pos.getY(j), pos.getZ(j)], i * 9 + k * 3);
-        if (u) u.set([uv.getX(j), uv.getY(j)], i * 6 + k * 2);
+/* Geometría Float32 en coordenadas de mundo (las posiciones del GLB vienen
+   cuantizadas a Int16 con la escala en el nodo) con las normales saneadas:
+   ver cabecera. Sin índice se genera uno, porque mergeGeometries exige que
+   todas lo tengan o ninguna. */
+function geometriaMundo(mesh, { conUV }) {
+  const g = mesh.geometry;
+  const salida = new THREE.BufferGeometry();
+  for (const nombre of ['position', 'normal', 'uv']) {
+    if (nombre === 'uv' && !conUV) continue;
+    const atr = g.getAttribute(nombre);
+    const n = nombre === 'uv' ? 2 : 3;
+    const cuenta = g.getAttribute('position').count;
+    const datos = new Float32Array(cuenta * n);
+    if (atr) {
+      for (let i = 0; i < cuenta; i++) {
+        datos[i * n] = atr.getX(i); datos[i * n + 1] = atr.getY(i);
+        if (n === 3) datos[i * n + 2] = atr.getZ(i);
       }
-    });
-    g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.BufferAttribute(p, 3));
-    if (u) g.setAttribute('uv', new THREE.BufferAttribute(u, 2));
-  } else {
-    g = geometria.clone();
-    const ind = new Uint32Array(validos.length * 3);
-    validos.forEach((t, i) => { ind[i * 3] = v(t, 0); ind[i * 3 + 1] = v(t, 1); ind[i * 3 + 2] = v(t, 2); });
-    g.setIndex(new THREE.BufferAttribute(ind, 1));
+    }
+    salida.setAttribute(nombre, new THREE.BufferAttribute(datos, n));
   }
-  g.deleteAttribute('normal');
-  g.computeVertexNormals();
-  const n = g.getAttribute('normal');
-  for (let i = 0; i < n.count; i++) {
-    const x = n.getX(i), y = n.getY(i), z = n.getZ(i);
-    if (!Number.isFinite(x + y + z) || x * x + y * y + z * z < 1e-6) n.setXYZ(i, 0, 1, 0);
+  const idx = g.index;
+  const ind = new Uint32Array(idx ? idx.count : salida.getAttribute('position').count);
+  for (let i = 0; i < ind.length; i++) ind[i] = idx ? idx.getX(i) : i;
+  salida.setIndex(new THREE.BufferAttribute(ind, 1));
+  salida.applyMatrix4(mesh.matrixWorld);
+  if (!g.getAttribute('normal')) salida.computeVertexNormals();
+  const nor = salida.getAttribute('normal');
+  let nulas = 0;
+  for (let i = 0; i < nor.count; i++) {
+    const x = nor.getX(i), y = nor.getY(i), z = nor.getZ(i);
+    if (!Number.isFinite(x + y + z) || x * x + y * y + z * z < 1e-6) { nor.setXYZ(i, 0, 1, 0); nulas++; }
   }
-  g.computeBoundingBox(); g.computeBoundingSphere();
-  g.userData.triangulosQuitados = nTri - validos.length;
-  return g;
+  salida.userData.normalesNulas = nulas;
+  return salida;
 }
 
-/* ── Entorno topográfico ── */
-async function cargarEntorno() {
-  const gltf = await new Promise((ok, ko) => new GLTFLoader().load('assets/entorno_topo.glb', ok, undefined, ko));
-  const grupo = gltf.scene;
+/* Retoques a los materiales del entorno (ver cabecera). Devuelve el material
+   que se usará; el vidrio se sustituye por el físico del edificio. */
+function materialEntorno(m) {
+  const nombre = m.name || '';
+  if (/vidrio|^glass$/i.test(nombre)) {
+    // el edificio se carga en paralelo: el entorno lleva su propio vidrio físico
+    m.dispose();
+    const vidrio = crearVidrioFisico();
+    vidrio.name = `entorno_${nombre}`;
+    luz.aplicarMaterial(vidrio);
+    return vidrio;
+  }
+  m.alphaTest = 0;
+  m.transparent = false;
+  m.depthWrite = true;
+  m.envMapIntensity = 1;
+  const exportado = Math.abs(m.metalness - 0.5) < 1e-3 && Math.abs(m.roughness - 0.5) < 1e-3; // sin PBR en SketchUp
+  if (nombre === 'mar_atlantico_costa') { m.roughness = 0.18; m.metalness = 0; }
+  else if (nombre === 'metal') { m.roughness = 0.45; m.metalness = 0.7; }
+  else if (/^ortho$|^PNOA_/.test(nombre)) { m.roughness = 1; m.metalness = 0; }
+  else if (exportado) { m.roughness = 0.9; m.metalness = 0; }
+  m.name = nombre;
+  luz.aplicarMaterial(m);
+  return m;
+}
+
+async function cargarEntorno(onProgreso) {
+  const t0 = performance.now();
+  const gltf = await cargarGLB(RUTA_ENTORNO, onProgreso);
+  const tCarga = performance.now();
+  gltf.scene.updateMatrixWorld(true);
+  const grupo = new THREE.Group();
   grupo.name = 'entorno';
-  grupo.position.y = COTA_ENTORNO;
-  grupo.traverse((o) => {
+  const porMaterial = new Map();
+  gltf.scene.traverse((o) => {
     if (!o.isMesh) return;
-    // sin normales en el GLB y con triángulos degenerados: ver limpiarGeometria
-    const original = o.geometry;
-    o.geometry = limpiarGeometria(original, { facetada: o.name !== 'terreno' }); // el terreno se lee continuo; el resto, facetado
-    original.dispose();
-    o.material = new THREE.MeshStandardMaterial({
-      color: COLOR_ENTORNO[o.name] ?? 0x888888, roughness: 0.95, metalness: 0,
-    });
-    o.material.name = `entorno_${o.name}`;
-    luz.aplicarMaterial(o.material);
-    o.castShadow = true;
-    o.receiveShadow = true;
-    o.raycast = () => {}; // el picking va solo por las envolventes de vivienda
+    const m = Array.isArray(o.material) ? o.material[0] : o.material;
+    if (!porMaterial.has(m)) porMaterial.set(m, []);
+    porMaterial.get(m).push(o);
   });
+  let mallas = 0, triangulos = 0, normalesNulas = 0;
+  for (const [material, lista] of porMaterial) {
+    const conUV = !!material.map;
+    const geometrias = lista.map((o) => geometriaMundo(o, { conUV }));
+    const fusionada = geometrias.length === 1 ? geometrias[0] : mergeGeometries(geometrias, false);
+    if (!fusionada) { console.warn('[apolo] entorno: no se pudo fusionar', material.name); continue; }
+    for (const g of geometrias) { normalesNulas += g.userData.normalesNulas || 0; if (g !== fusionada) g.dispose(); }
+    fusionada.computeBoundingBox(); fusionada.computeBoundingSphere();
+    const mat = materialEntorno(material);
+    const mesh = new THREE.Mesh(fusionada, mat);
+    mesh.name = `entorno_${material.name}`;
+    const terreno = /^ortho$|^PNOA_|mar_atlantico/.test(material.name);
+    mesh.castShadow = !terreno; // 330 k triángulos en tres cascadas por un relieve que no hace sombra
+    mesh.receiveShadow = true;
+    mesh.raycast = () => {}; // el picking va solo por las envolventes de vivienda
+    grupo.add(mesh);
+    mallas++;
+    triangulos += fusionada.index.count / 3;
+  }
+  for (const o of gltf.scene.children) o.traverse((x) => x.geometry?.dispose());
   scene.add(grupo);
   scene.updateMatrixWorld(true);
   const caja = new THREE.Box3().setFromObject(grupo);
-  /* El levantamiento es una franja de 280×160 m y la equirect es una esfera
-     completa: sin nada debajo, el conjunto flota sobre cielo. Un disco de
-     terreno a la cota más baja del levantamiento, con su mismo color y la
-     niebla de luz.js, le da horizonte hasta que llegue el entorno de 10 km
-     del SketchUp. No entra en la caja del encuadre 'conjunto'. */
-  const suelo = new THREE.Mesh(
-    new THREE.CircleGeometry(3000, 96),
-    new THREE.MeshStandardMaterial({ color: COLOR_ENTORNO.terreno, roughness: 1, metalness: 0 }));
-  suelo.name = 'suelo_lejano';
-  suelo.rotation.x = -Math.PI / 2;
-  suelo.position.set((caja.min.x + caja.max.x) / 2, caja.min.y - 0.05, (caja.min.z + caja.max.z) / 2);
-  suelo.receiveShadow = true;
-  suelo.raycast = () => {};
-  luz.aplicarMaterial(suelo.material);
-  scene.add(suelo);
-  return { grupo, suelo, caja };
+  apolo.tiempos.entorno = { descargaMs: Math.round(tCarga - t0), fusionMs: Math.round(performance.now() - tCarga), mallas, mallasOrigen: [...porMaterial.values()].reduce((s, l) => s + l.length, 0), triangulos: Math.round(triangulos), normalesNulas };
+  return { grupo, caja };
 }
 
 /* ── Estado de demostración 70/30 ── */
@@ -276,29 +292,25 @@ function estadosDemostracion(ed) {
 /* ── Encuadres ── */
 function cajaConjunto() {
   const caja = edificio.caja.clone();
-  if (entorno) {
-    const centro = edificio.caja.getCenter(new THREE.Vector3());
-    const tope = new THREE.Box3(
-      new THREE.Vector3(centro.x - RADIO_CONJUNTO, -Infinity, centro.z - RADIO_CONJUNTO),
-      new THREE.Vector3(centro.x + RADIO_CONJUNTO, Infinity, centro.z + RADIO_CONJUNTO));
-    caja.union(entorno.caja.clone().intersect(tope));
-  }
+  const centro = caja.getCenter(new THREE.Vector3());
+  caja.min.x = centro.x - LADO_CONJUNTO / 2; caja.max.x = centro.x + LADO_CONJUNTO / 2;
+  caja.min.z = centro.z - LADO_CONJUNTO / 2; caja.max.z = centro.z + LADO_CONJUNTO / 2;
+  caja.min.y = Math.min(caja.min.y, entorno ? Math.max(entorno.caja.min.y, caja.min.y - 30) : caja.min.y);
   return caja;
 }
 function cajaPlanta(clave) {
   const caja = edificio.caja.clone();
   const tramos = cortes?.definicion?.plantas?.[clave];
-  if (tramos) caja.max.y = Math.min(caja.max.y, Math.max(...tramos.map((t) => t.y)));
+  if (tramos) caja.max.y = Math.min(caja.max.y, tramos.reduce((s, t) => s + t.y, 0) / tramos.length);
   return caja;
 }
 function encuadrarVista(vista, { duracion = 1.6 } = {}) {
   const cambia = apolo.vista !== vista;
   apolo.vista = vista;
   if (cambia && edificio) repintar(); // las cartelas vecinas dependen de la vista
-  const op = { azimut: AZIMUT_BASE, duracion };
-  if (vista === 'conjunto') return camara.encuadrar(cajaConjunto(), { ...op, elevacion: ELEVACION.conjunto, margen: 1.05 });
-  if (vista === 'planta') return camara.encuadrar(cajaPlanta(apolo.floor), { ...op, elevacion: ELEVACION.planta });
-  return camara.encuadrar(edificio.caja, { ...op, elevacion: ELEVACION.edificio });
+  if (vista === 'conjunto') return camara.encuadrar(cajaConjunto(), { azimut: AZIMUT.conjunto, elevacion: ELEVACION.conjunto, margen: MARGEN.conjunto, duracion });
+  if (vista === 'planta') return camara.encuadrar(cajaPlanta(apolo.floor), { azimut: AZIMUT.planta, elevacion: ELEVACION.planta, margen: MARGEN.planta, duracion });
+  return camara.encuadrar(edificio.caja, { azimut: AZIMUT.edificio, elevacion: ELEVACION.edificio, margen: MARGEN.edificio, duracion });
 }
 
 /* ── Realce de viviendas (ver cabecera) ── */
@@ -348,9 +360,7 @@ const ndc = (cx, cy, destino) => {
 };
 /* Las viviendas de otras plantas no cuentan (las de arriba ya no existen y
    las de abajo quedan bajo la losa); la primera de la planta activa que
-   cruza el rayo decide: si es vendida, tapa lo que hay detrás y no hay
-   nada bajo el cursor (una vendida es inerte, no transparente: si se
-   saltara, el clic seleccionaría la vivienda interior que queda detrás). */
+   cruza el rayo decide: si es vendida, tapa lo que hay detrás. */
 function pickEn(p) {
   if (!edificio) return null;
   raycaster.setFromCamera(p, camera);
@@ -414,16 +424,27 @@ ctx.on('reposo', async () => {
   }
 });
 
-/* ── Superficies que reflejan (SSR): vidrios y asfalto, no el monocapa ── */
+/* ── Superficies que reflejan (SSR): vidrios, asfalto y mar ── */
 function actualizarReflectantes() {
   const lista = [];
-  scene.traverse((o) => {
-    if (!o.isMesh || !o.visible) return;
+  scene.traverseVisible((o) => {
+    if (!o.isMesh) return;
     const m = Array.isArray(o.material) ? o.material[0] : o.material;
     if (m?.isMeshPhysicalMaterial && m.transparent) lista.push(o);
-    else if (o.name === 'asfalto') lista.push(o);
+    else if (o.name === 'entorno_asphalt' || o.name === 'entorno_mar_atlantico_costa') lista.push(o);
   });
   post.setReflectantes(lista);
+}
+
+/* ── Alcance de las sombras según la distancia al edificio (ver cabecera) ── */
+let alcanceSombras = 0;
+const centroEdificio = new THREE.Vector3();
+function ajustarSombras() {
+  const d = camera.position.distanceTo(centroEdificio);
+  const deseado = THREE.MathUtils.clamp(Math.round((d + SOMBRAS.margen) / SOMBRAS.paso) * SOMBRAS.paso, SOMBRAS.min, SOMBRAS.max);
+  if (deseado === alcanceSombras) return;
+  alcanceSombras = deseado;
+  luz.setAlcanceSombras(deseado);
 }
 
 /* ── API pública ── */
@@ -483,11 +504,11 @@ Object.assign(apolo, {
     apolo.vista = 'vivienda';
     apolo.select(id, { enfocar: false });
     repintar(); // select no repinta si ya estaba seleccionada: las cartelas vecinas deben irse igual
-    /* Acimut según la fila: la fachada principal (SO) mira a +z, la trasera
-       (NE) a −z; desde la fachada opuesta la vivienda se vería a través del
+    /* Acimut según la mitad del edificio: la fachada principal mira al sur
+       (+z); desde la fachada opuesta la vivienda se vería a través del
        edificio. */
     const centro = v.caja.getCenter(new THREE.Vector3());
-    const azimut = centro.z >= 0 ? 22 : 158;
+    const azimut = centro.z >= centroEdificio.z ? AZIMUT_VIVIENDA.sur : AZIMUT_VIVIENDA.norte;
     return camara.enfocarVivienda(v.caja, { duracion, azimut, elevacion: ELEVACION_VIVIENDA }).then((llego) => {
       if (llego && apolo.selected === id) post.setEnfoque(camara.distanciaObjetivo);
       return llego;
@@ -546,6 +567,7 @@ function fotograma() {
   const dt = Math.min(reloj.getDelta(), 0.1);
   const t = reloj.elapsedTime;
   camara.update(dt);
+  if (edificio) ajustarSombras();
   luz.update(dt);
   cortes?.update(dt);
   actualizarHover();
@@ -554,18 +576,15 @@ function fotograma() {
   if (luz.enTransicion) post.setMomento({ bloom: luz.actual.bloom, umbral: luz.actual.umbral });
   if (apolo.vista === 'vivienda' && post.enfoque != null) post.setEnfoque(camara.distanciaObjetivo);
 
-  /* La atenuación de plantas de cortes cambia color/envMapIntensity durante
-     ~1,5 s tras setPlanta; cuando termina, el trazador vuelve a subir los
-     materiales una sola vez. */
+  /* La atenuación de plantas de cortes cambia los materiales durante ~1,5 s
+     tras setPlanta; cuando termina, el trazador vuelve a subirlos una vez. */
   if (t < materialesEnMovimientoHasta) materialesPendientes = true;
   else if (materialesPendientes) { materialesPendientes = false; trazador.actualizarMateriales(); }
 
   /* Hover y vivienda enfocada se realzan con la envolvente y el bokeh, que
      solo existen en el raster: ahí no se cede el fotograma al trazador. */
-  /* El trazado solo entra con el edificio completo: en las plantas seccionadas
-     aporta poco y su grano inicial molesta más de lo que ayuda. */
-  const quieta = !cargando && apolo.floor === 'all' && camara.quieta && !cortes?.enTransicion && !luz.enTransicion && t >= materialesEnMovimientoHasta
-    && apolo.hover == null && apolo.vista !== 'vivienda';
+  const quieta = !cargando && camara.quieta && !cortes?.enTransicion && !cortes?.provisional && !luz.enTransicion
+    && t >= materialesEnMovimientoHasta && apolo.hover == null && apolo.vista !== 'vivienda';
   const pintado = trazador.update(dt, { quieta });
   if (!pintado) post.render(dt);
   informarTrazado(pintado);
@@ -581,26 +600,28 @@ function informarTrazado(pintando) {
 
 /* ── Carga ── */
 const progreso = { luz: 0, edificio: 0, entorno: 0 };
-const PESOS = { luz: 0.1, edificio: 0.55, entorno: 0.35 };
+const PESOS = { luz: 0.1, edificio: 0.45, entorno: 0.45 };
 function avanzar(etapa, valor) {
-  progreso[etapa] = valor;
+  progreso[etapa] = Math.max(progreso[etapa], valor);
   const total = Object.keys(PESOS).reduce((s, k) => s + PESOS[k] * progreso[k], 0);
-  emitir('carga', { progreso: Math.min(1, total), etapa });
+  emitir('carga', { progreso: Math.min(1, total), etapa: valor >= 1 ? etapa : `${etapa}…` });
 }
 
 async function arrancar() {
+  const t0 = performance.now();
   emitir('carga', { progreso: 0, etapa: 'inicio' });
   fotograma(); // el cielo ya se ve mientras llega el edificio
   await luz.listo;
   avanzar('luz', 1);
 
   const [ed, ent] = await Promise.all([
-    cargarEdificio(ctx, ACTIVE_BUILDING, { luz }).then((e) => { avanzar('edificio', 1); return e; }),
-    cargarEntorno().then((e) => { avanzar('entorno', 1); return e; })
-      .catch((err) => { console.warn('[apolo] sin entorno topográfico:', err); avanzar('entorno', 1); return null; }),
+    cargarEdificio(ctx, ACTIVE_BUILDING, { luz, onProgreso: (f) => avanzar('edificio', f) }).then((e) => { avanzar('edificio', 1); return e; }),
+    cargarEntorno((f) => avanzar('entorno', f)).then((e) => { avanzar('entorno', 1); return e; })
+      .catch((err) => { console.warn('[apolo] sin entorno:', err); avanzar('entorno', 1); return null; }),
   ]);
   edificio = ed;
   entorno = ent;
+  edificio.caja.getCenter(centroEdificio);
   apolo.units = edificio.units;
   apolo.unitsById = edificio.unitsById;
   apolo.estados = edificio.estados;
@@ -608,27 +629,40 @@ async function arrancar() {
   if (demo) edificio.setEstados(demo);
   edificio.setVentanas(MOMENTOS[apolo.momento].luces);
 
-  cortes = crearCortes(ctx, edificio, { luz, definicion: definicionCortes(), tapasCSG: false, tapasStencil: false, carasOscuras: true, sombraFantasma: false });
+  /* Modelo de SketchUp: sin CSG ni tapas (superficies abiertas), variantes
+     precortadas cuando lleguen, caras traseras oscuras y atenuación por cota. */
+  cortes = crearCortes(ctx, edificio, {
+    luz, definicion: edificio.definicionCortes,
+    csg: false, tapasCSG: false, tapasStencil: false, carasOscuras: true, atenuacionPorCota: true,
+  });
+  cortes.preparar(); // los hooks de material se añaden antes del primer fotograma con edificio
   actualizarReflectantes();
   repintar();
 
   // la cámara toma el objetivo antes del primer fotograma con edificio
   encuadrarVista('conjunto', { duracion: 0 });
+  ajustarSombras();
   camara.reposoTras(REPOSO_S);
   cargando = false;
   apolo.cargado = true;
+  apolo.tiempos.primeraImagenMs = Math.round(performance.now() - t0);
+  apolo.tiempos.vidrio = edificio.vidrio;
   emitir('carga', { progreso: 1, etapa: 'listo' });
   emitir('planta', apolo.floor);
   emitir('momento', apolo.momento);
 
-  /* Trabajo en segundo plano tras la primera imagen: los otros tres cielos
-     (horneado + PMREM) y el CSG de las cuatro plantas, para que el primer
-     cambio de momento o de planta no lo pague el usuario. */
+  /* Segundo plano tras la primera imagen: mobiliario y variantes cortadas
+     (se registran en cortes según llegan), y los otros tres cielos. */
+  edificio.cargarSecundarios({
+    onProgreso: (f, etapa) => emitir('carga', { progreso: f, etapa, secundaria: true }),
+    alMobiliario: (objeto) => { cortes.registrarMobiliario(objeto); ctx.emit('geometria', { mobiliario: true }); },
+    alVariante: (clave, objeto) => cortes.registrarVariante(clave, objeto),
+  }).then((tiempos) => {
+    apolo.tiempos.secundarios = tiempos;
+    emitir('carga', { progreso: 1, etapa: 'secundarios', secundaria: true });
+  }).catch((e) => console.warn('[apolo] carga secundaria:', e));
   setTimeout(async () => {
     try { await luz.precalentar(); } catch (e) { console.warn('[apolo] precalentar luz:', e); }
-    for (const F of PLANTAS) {
-      try { await cortes.precalcular(F.key); } catch (e) { console.warn('[apolo] precalcular cortes:', e); }
-    }
   }, 2500);
 }
 
