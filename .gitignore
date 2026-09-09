@@ -2,3 +2,4 @@ node_modules/
 .DS_Store
 publish/
 index.local.html
+tools/node_modules

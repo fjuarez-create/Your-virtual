@@ -1,0 +1,32 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>ver assets</title><base href="/"><link rel="icon" href="data:,">
+<script type="importmap">{"imports":{"three":"/new/vendor/three/three.module.min.js","three/addons/":"/new/vendor/three/addons/"}}</script>
+<style>html,body{margin:0;height:100%;background:#9fb3c8}canvas{display:block}</style></head><body><canvas id="c"></canvas>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
+const q = new URLSearchParams(location.search);
+const ficheros = (q.get('f') || '').split(',').filter(Boolean);
+const cam = (q.get('cam') || '60,60,60').split(',').map(Number);
+const obj = (q.get('obj') || '0,0,0').split(',').map(Number);
+try {
+  const canvas = document.getElementById('c');
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.setSize(innerWidth, innerHeight); renderer.toneMapping = THREE.AgXToneMapping; renderer.shadowMap.enabled = false;
+  const scene = new THREE.Scene(); scene.background = new THREE.Color(0x9fb3c8);
+  const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.5, 20000); camera.position.set(...cam); camera.lookAt(...obj);
+  const hdr = await new HDRLoader().loadAsync('assets/sky_day.hdr'); hdr.mapping = THREE.EquirectangularReflectionMapping; scene.environment = hdr; scene.environmentIntensity = 0.5;
+  const sol = new THREE.DirectionalLight(0xfff1dc, 3); sol.position.set(60, 120, 80); sol.castShadow = true; sol.shadow.mapSize.set(2048, 2048); sol.shadow.camera.left = -120; sol.shadow.camera.right = 120; sol.shadow.camera.top = 120; sol.shadow.camera.bottom = -120; sol.shadow.camera.far = 600; sol.target.position.set(...obj); scene.add(sol, sol.target);
+  scene.add(new THREE.HemisphereLight(0xdfe8f5, 0x8a8478, 0.5));
+  const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+  const estado = { mallas: 0, tris: 0, nombres: [] };
+  for (const f of ficheros) {
+    const g = await loader.loadAsync(f);
+    g.scene.traverse((o) => { if (o.isMesh) { estado.mallas++; estado.tris += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3; o.castShadow = o.receiveShadow = true; if (estado.nombres.length < 12) estado.nombres.push(o.name); if (o.material && /Vidrio/i.test(o.material.name)) { o.material.transparent = true; o.material.opacity = 0.5; } } });
+    scene.add(g.scene);
+  }
+  renderer.render(scene, camera);
+  window.__estado = estado; window.__listo = true;
+} catch (e) { window.__error = String(e && e.stack || e); }
+</script></body></html>

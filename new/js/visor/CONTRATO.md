@@ -306,3 +306,72 @@ que `data/availability.json` traiga otra cosa.
 
 Con `<base href="/">` en la página, `assets/…` y `data/…` resuelven a la
 raíz del sitio, que es donde viven.
+
+## Modelo de SketchUp (añadido el 9-sep-2026, prevalece sobre lo anterior)
+
+Ya existe el modelo real exportado desde SketchUp, procesado por
+`tools/build_serenea.mjs` en `assets/serenea/`. **El visor carga estos
+ficheros, no `apolo_levels.glb` ni `entorno_topo.glb`.** Todos comparten el
+origen y los ejes del SketchUp (metros, Y arriba): el edificio Apolo ocupa
+x 11,2…122,3 · y 0…24,3 · z −39,5…−8,4 (centro 66,7 · 12,1 · −23,9); el
+entorno llega hasta ±5 km (costa con ortofoto). Cajas y centros en
+`data/serenea_modelo.json`.
+
+| Fichero | Qué es | Nombres de malla |
+|---|---|---|
+| `entorno.glb` | terreno, costa, calles, vecinos, campo de fútbol, los otros cuatro edificios (volúmenes) | libres |
+| `apolo_envolvente.glb` | muros, forjados, carpinterías, escaleras, pilares, **edificio completo** | `<cat>__T<plataforma>__<material>`; cat ∈ envolvente · carpinteria · escalera · pilar |
+| `apolo_envolvente.glb` (mismo fichero) | **un vidrio por hueco**, 175 mallas | `vidrio__T<plataforma>__<n>__<xcm>_<ycm>_<zcm>` (centro en centímetros enteros) |
+| `apolo_mobiliario.glb` | mobiliario y puertas, unidos por plataforma y franja de 3 m | `mob|puerta__T<plataforma>__Y<franja>__<material>__y<ymin>` |
+| `apolo_corte_baja.glb`, `_p1`, `_p2`, `_atico` | la envolvente **ya cortada** por el fondo de los ocho cajones de esa planta (todo lo que queda por debajo), vidrios incluidos | mismos nombres que la envolvente |
+
+`data/cortes.json` trae ahora los **ocho cajones reales por planta**
+(`plantas.baja|p1|p2|atico: [{x0,x1,z0,z1,y}]`, y = cota de corte); las
+plataformas van de oeste (alto) a este (bajo) y en dos bandas de z. Cotas de
+corte de la planta 1: 11,85 · 11,07 · 10,35 · 9,67 · 8,96 · 8,19 · 7,56 ·
+6,75; cada planta siguiente suma 3,00 m.
+
+Consecuencias para los módulos:
+
+- **cortes.js**: la vía principal es **cambiar de fichero**: `setPlanta(k)`
+  muestra `apolo_corte_<k>.glb` (precargado) y oculta la envolvente completa;
+  'all' hace lo contrario. La transición de 0,8 s se hace con los planos de
+  recorte por plataforma sobre la envolvente completa (bajando desde la
+  cubierta hasta la cota de cada cajón) y al terminar se cambia al fichero
+  precortado, que es lo que ve el trazador. El CSG en el navegador queda
+  como alternativa para modelos pequeños. **Tapas:** no hay geometría de
+  tapa; las mallas cortadas se pintan a doble cara y las caras traseras en
+  oscuro (`onBeforeCompile`: `if (!gl_FrontFacing) diffuseColor.rgb =
+  vec3(0.05, 0.055, 0.06);`), que es lo que se ve por la boca del corte.
+  Mobiliario: al elegir planta se ocultan las mallas de mobiliario cuyo
+  `y<ymin>` del nombre queda por encima de la cota de corte de su plataforma.
+- **Atenuar las plantas inferiores** ya no va por mallas por planta: se hace
+  en el material con un uniforme `yCorte` por plataforma (o global con la
+  cota media) que oscurece y quita entorno a los fragmentos con
+  `worldY < yCorte − 3.2` (la planta activa es la franja de 3 m bajo el corte).
+- **edificio.js**: carga envolvente + mobiliario + las cuatro variantes
+  cortadas (en segundo plano, tras la primera imagen). Los vidrios se asignan
+  a viviendas por su centro (`xcm,ycm,zcm` del nombre) contra la caja de cada
+  vivienda; hasta que el SketchUp traiga grupos `VIV_`, las cajas de vivienda
+  salen de `app/layout.js` transformadas al marco nuevo (ver abajo). Materiales:
+  el vidrio se sustituye por el vidrio físico del visor (clon por vivienda con
+  emisivo); el monocapa y el travertino conservan sus texturas.
+- **Marco antiguo → nuevo** (para las envolventes de vivienda de layout.js,
+  provisional): el edificio antiguo iba centrado en (0,0) con X a lo largo;
+  el nuevo tiene el centro en (66,72, −23,94) y la misma orientación en X.
+  Transformación provisional: `x' = x + 66,72`, `z' = z − 23,94`,
+  `y' = y + Δ` con Δ = cota de corte de la plataforma − 1,2 − cota del
+  forjado antiguo de su tramo. **Comprobar visualmente** y, si no cuadra,
+  dejar las envolventes desactivadas y anotarlo: es preferible a cartelas
+  flotando en el aire.
+- **camara.js / main.js**: encuadres a partir de `serenea_modelo.json`:
+  'conjunto' = caja del edificio ampliada ×6 en planta (unos 600 m), no todo
+  el entorno de 10 km; 'edificio' = caja de Apolo con elevación 28° desde el
+  sur (z positivo mira al edificio desde −z… comprobar con una captura que se
+  ve la fachada larga); 'planta' = caja de Apolo hasta la cota de corte.
+- **luz.js**: sin cambios; el sol y el CSM cubren la caja de Apolo ± 150 m.
+- **post.js / trazador.js**: sin cambios. El trazador incluye la variante
+  cortada visible y excluye la completa oculta.
+- Peso: envolvente 12 MB, mobiliario 30 MB, cortes 6–12 MB cada uno, entorno
+  14 MB. Cargar en este orden: entorno + envolvente (primera imagen), luego
+  mobiliario y cortes en segundo plano con `apolo.on('carga')`.
