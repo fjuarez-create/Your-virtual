@@ -134,7 +134,26 @@ const CAMARA_FAR = 9000;          // el entorno llega a 5 km
 const NIEBLA = { near: 1400, far: 5200 };
 const ESCALA_CIELO_NOCHE = 2.4;   // estrellas y luna detrás del terreno lejano
 const SOMBRAS = { margen: 250, min: 300, max: 1200, paso: 50 };
-const DPR_MAX = { alta: 1.5, media: 1.25 };
+const DPR_MAX = { alta: 1.5, media: 1.25, movil: 1 };
+
+/* ── Móvil ──
+   El teléfono no puede con esta cadena: el trazador de caminos sube a la
+   tarjeta un árbol de toda la escena (cientos de megas) y el post encadena
+   seis destinos de pantalla completa. El navegador cierra la pestaña sin
+   avisar ("no se puede abrir esta página"). En móvil se renuncia al trazado
+   y a las pasadas caras: quedan el raster con sombras, el bloom y la salida,
+   que es justo lo que enseña el visor clásico. ?movil=1 / ?movil=0 fuerzan
+   el modo en cualquier equipo. */
+const MOVIL = (() => {
+  const q = new URLSearchParams(location.search).get('movil');
+  if (q === '1') return true;
+  if (q === '0') return false;
+  const ua = navigator.userAgent || '';
+  const tactil = (navigator.maxTouchPoints || 0) > 1;
+  return /iPhone|iPad|iPod|Android/i.test(ua)
+    || (tactil && /Macintosh/.test(ua))
+    || (tactil && Math.min(screen.width, screen.height) < 900);
+})();
 const IBL_TRAZADO = { dia: 0.5, amanecer: 0.75, atardecer: 0.8, noche: 1.6 };
 const REALCE = { hover: 0.9, seleccion: 1.4 }; // intensidad emisiva del vidrio teñido
 const ELEVACION_VIVIENDA = 36;    // ver cabecera: la vivienda centrada y vista desde arriba
@@ -148,7 +167,8 @@ camera.far = CAMARA_FAR;
 camera.updateProjectionMatrix();
 
 function aplicarDPR(tier) {
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, DPR_MAX[tier] || DPR_MAX.alta));
+  const tope = MOVIL ? DPR_MAX.movil : (DPR_MAX[tier] || DPR_MAX.alta);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, tope));
 }
 aplicarDPR(ctx.calidad);
 
@@ -179,14 +199,20 @@ const luz = crearLuz(ctx);
 scene.fog.near = NIEBLA.near;
 scene.fog.far = NIEBLA.far;
 luz.cieloNoche.scale.setScalar(ESCALA_CIELO_NOCHE);
-const post = crearPost(ctx, luz);
+if (MOVIL) { ctx.setCalidad('media'); aplicarDPR('movil'); } // setCalidad reajusta el DPR: se vuelve a bajar
+const post = crearPost(ctx, luz, { ligero: MOVIL });
 const camara = crearCamara(ctx);
 const luzTrazado = {
   get equirect() { return luz.equirectSinSol || luz.equirect; },
   get sol() { return luz.sol; },
   get envMapIntensity() { return IBL_TRAZADO[luz.momento] ?? luz.actual.ibl; },
 };
-const trazador = crearTrazador(ctx, luzTrazado);
+/* En móvil ni se construye: crear el trazador ya reserva memoria de vídeo. */
+const trazador = MOVIL ? {
+  activo: false, muestras: 0, progreso: 0,
+  setRaster() {}, actualizarMateriales() {}, invalidar() {},
+  update() { return false; }, setCalidad() {}, dispose() {},
+} : crearTrazador(ctx, luzTrazado);
 trazador.setRaster((dt) => post.render(dt));
 
 let edificio = null, cortes = null, entorno = null;
@@ -326,6 +352,25 @@ function cajaConjunto() {
   caja.min.y = Math.min(caja.min.y, entorno ? Math.max(entorno.caja.min.y, caja.min.y - 30) : caja.min.y);
   return caja;
 }
+/* Cota mínima admitida para la cámara en un punto: el suelo de la planta
+   baja de ese cajón, más un metro de holgura. */
+function sueloTerreno(x, z) {
+  const tramos = edificio?.definicionCortes?.plantas?.baja;
+  const suelos = edificio?.suelos?.baja;
+  if (!tramos || !suelos) return 1.5;
+  let i = tramos.findIndex((t) => x >= t.x0 && x < t.x1 && z >= t.z0 && z < t.z1);
+  if (i < 0) {
+    let mejor = Infinity;
+    tramos.forEach((t, k) => {
+      const dx = Math.max(t.x0 - x, 0, x - t.x1), dz = Math.max(t.z0 - z, 0, z - t.z1);
+      const d = dx * dx + dz * dz;
+      if (d < mejor) { mejor = d; i = k; }
+    });
+  }
+  const y = suelos[Math.max(0, i)];
+  return Number.isFinite(y) ? y + 1 : 1.5;
+}
+
 function cajaPlanta(clave) {
   const caja = edificio.caja.clone();
   const tramos = cortes?.definicion?.plantas?.[clave];
@@ -665,6 +710,11 @@ async function arrancar() {
 
   /* Modelo de SketchUp: sin CSG ni tapas (superficies abiertas), variantes
      precortadas cuando lleguen, caras traseras oscuras y atenuación por cota. */
+  /* La cámara no baja del suelo del edificio: el terreno se escalona casi
+     cinco metros de un testero al otro, así que el límite se toma del cajón
+     que le corresponde a cada punto. */
+  camara.setSuelo(sueloTerreno);
+
   cortes = crearCortes(ctx, edificio, {
     luz, definicion: edificio.definicionCortes, suelos: edificio.suelos,
     csg: false, tapasCSG: false, tapasStencil: false, carasOscuras: true, atenuacionPorCota: true,

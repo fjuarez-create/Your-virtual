@@ -268,7 +268,10 @@ export async function cargarModelo(scene, unitsById, { estadoDe = () => 'disponi
       suelos[d.planta] = [];
     }
     const P = plantas.get(d.planta);
-    suelos[d.planta].push(d.y0);
+    /* Por cajón (plataforma), no en una lista suelta: la cámara y los
+       encuadres necesitan saber a qué cota está el suelo en cada tramo. */
+    const plat = d.plataforma ?? 0;
+    suelos[d.planta][plat] = Math.min(suelos[d.planta][plat] ?? Infinity, d.y0);
     const mat = new THREE.MeshStandardMaterial({
       color: COLOR_PRISMA.clone(), roughness: 0.55, metalness: 0, emissive: 0x000000,
       transparent: true, opacity: 0, depthWrite: false, depthTest: false, side: THREE.DoubleSide,
@@ -386,10 +389,21 @@ export async function cargarModelo(scene, unitsById, { estadoDe = () => 'disponi
     setNight(on) { noche = !!on; aplicarNoche(); },
     refrescarEstados() { aplicarNoche(); },
 
+    /* Cota mínima a la que se admite la cámara en un punto: el suelo de la
+       planta baja de ese cajón más un metro. El terreno se escalona de oeste
+       a este casi cinco metros, así que un número fijo no vale: o dejaba la
+       cámara bajo el edificio en el extremo alto o la levantaba de más en el
+       bajo. */
+    sueloEn(x, z) {
+      const s = suelos.baja;
+      if (!s || !s.length) return caja.min.y + 1;
+      return s[Math.min(plataformaEn(tramos, x - grupo.position.x, z - grupo.position.z), s.length - 1)] + 1;
+    },
+
     /* Cota del suelo y del corte de una planta, para encuadrar la cámara. */
     cotasPlanta(clave) {
       const cotas = cotasDe(clave);
-      const s = (suelos[clave] || []).filter(Number.isFinite);
+      const s = [...(suelos[clave] || [])].filter(Number.isFinite);
       return {
         suelo: s.length ? Math.min(...s) : (cotas ? Math.min(...cotas) - 3 : caja.min.y),
         corte: cotas ? Math.max(...cotas) : caja.max.y,

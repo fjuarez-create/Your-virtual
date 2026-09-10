@@ -46,7 +46,7 @@ function instalar() {
   instalado = true;
 }
 
-const SUELO = 1.5;                             // altura mínima de la cámara (m)
+const SUELO = 1.5;                             // altura mínima de la cámara (m) si nadie dice otra cosa
 const POLAR_MAX = THREE.MathUtils.degToRad(88); // no mirar desde debajo del horizonte
 const POLAR_MIN = 0.02;                        // evita la singularidad cenital
 const DIST_MIN = 3, DIST_MAX = 900;
@@ -205,6 +205,14 @@ export function crearCamara(ctx) {
     return { centro, dist: THREE.MathUtils.clamp(dist, DIST_MIN, DIST_MAX) };
   }
 
+  /* Cota mínima admitida en un punto (ver limitarSuelo). */
+  let sueloDe = null;
+  function sueloEn(x, z) {
+    if (!sueloDe) return SUELO;
+    const v = sueloDe(x, z);
+    return Number.isFinite(v) ? v : SUELO;
+  }
+
   function encuadrar(caja, { azimut, elevacion, margen = 1.15, duracion = 1.6, arco = 0.35 } = {}) {
     const az = azimut !== undefined ? grados(azimut) : controles.azimuthAngle;
     const polar = elevacion !== undefined
@@ -214,7 +222,8 @@ export function crearCamara(ctx) {
     const direccion = new THREE.Vector3(Math.sin(polar) * Math.sin(az), Math.cos(polar), Math.sin(polar) * Math.cos(az));
     const { centro, dist } = distanciaParaCaja(caja, direccion, margen);
     const posicion = direccion.multiplyScalar(dist).add(centro);
-    if (posicion.y < SUELO) posicion.y = SUELO;
+    const yMin = sueloEn(posicion.x, posicion.z);
+    if (posicion.y < yMin) posicion.y = yMin;
     return volarA({ posicion, objetivo: centro }, { duracion, arco });
   }
 
@@ -239,12 +248,16 @@ export function crearCamara(ctx) {
     ultimaEntrada = reloj;
   }
 
-  /* Recorte del polar para no bajar de SUELO: la cámara está a
-     y = objetivo.y + d·cos(polar), luego cos(polar) ≥ (SUELO − objetivo.y)/d. */
+  /* Recorte del polar para no bajar del suelo: la cámara está a
+     y = objetivo.y + d·cos(polar), luego cos(polar) ≥ (suelo − objetivo.y)/d.
+     El suelo no es un número fijo: main lo fija con la cota real del terreno
+     en cada punto (`setSuelo`), porque el de SERENEA se escalona casi cinco
+     metros de un testero al otro y con un valor único la cámara se metía bajo
+     el edificio en el extremo alto. */
   function limitarSuelo() {
     const oy = controles.getTarget(_tmp, true).y;
     const d = Math.max(controles.distance, DIST_MIN);
-    const cosMin = (SUELO - oy) / d;
+    const cosMin = (sueloEn(camera.position.x, camera.position.z) - oy) / d;
     let polarMax = POLAR_MAX;
     if (cosMin > -1) polarMax = Math.min(POLAR_MAX, Math.acos(Math.min(1, cosMin)));
     controles.maxPolarAngle = Math.max(POLAR_MIN, polarMax);
@@ -314,6 +327,8 @@ export function crearCamara(ctx) {
   return {
     controles,
     volarA, encuadrar, enfocarVivienda, orbitaAutomatica, reposoTras, update, interrumpir, destruir,
+    /** Cota mínima de la cámara en cada punto: fn(x, z) → y mínima. */
+    setSuelo(fn) { sueloDe = typeof fn === 'function' ? fn : null; },
     get quieta() { return !vuelo && !usuarioActivo && !orbita.activa && reloj - ultimoMovimiento >= QUIETA_TRAS; },
     get velocidad() { return velocidad; },
     get enTransicion() { return !!vuelo; },

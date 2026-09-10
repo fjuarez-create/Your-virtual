@@ -20,6 +20,23 @@ import { ACTIVE_DEV, ACTIVE_BUILDING } from 'app/promotions.js';
 
 const $ = (s) => document.querySelector(s);
 
+/* ── Móvil ──
+   El navegador del teléfono trabaja con una fracción de la memoria de vídeo
+   de un ordenador y cierra la pestaña sin avisar en cuanto se pasa. Aquí eso
+   se traduce en no pedir multimuestreo (dos destinos de pantalla completa
+   con cuatro muestras cada uno) y en limitar la densidad de píxeles. Se puede
+   forzar en cualquier equipo con ?movil=1 y desactivar con ?movil=0. */
+const MOVIL = (() => {
+  const q = new URLSearchParams(location.search).get('movil');
+  if (q === '1') return true;
+  if (q === '0') return false;
+  const ua = navigator.userAgent || '';
+  const tactil = (navigator.maxTouchPoints || 0) > 1;
+  return /iPhone|iPad|iPod|Android/i.test(ua)
+    || (tactil && /Macintosh/.test(ua))                       // iPad reciente
+    || (tactil && Math.min(screen.width, screen.height) < 900);
+})();
+
 /* ─────────────────────────── Estado global ─────────────────────────── */
 const app = {
   units: [],
@@ -52,7 +69,7 @@ window.apolo = app; // depuración
 /* ─────────────────────────── Escena ─────────────────────────── */
 const canvas = $('#scene');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, MOVIL ? 1.5 : 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 /* AgX en vez de ACES: ACES empasta la parte alta de la curva, y con un
@@ -266,8 +283,8 @@ scene.add(fill);
    antialias:true del lienzo no llegaba a aplicarse y todos los cantos salían
    dentados. Pedirle muestras al destino lo devuelve. */
 const composer = new EffectComposer(renderer);
-composer.renderTarget1.samples = 4;
-composer.renderTarget2.samples = 4;
+composer.renderTarget1.samples = MOVIL ? 0 : 4;
+composer.renderTarget2.samples = MOVIL ? 0 : 4;
 composer.addPass(new RenderPass(scene, camera));
 
 /* Oclusión ambiental: oscurece esquinas, retranqueos de ventana, encuentros de
@@ -317,6 +334,9 @@ $('#attrib')?.remove();
 app.THREE = THREE;
 app.cam = camera;
 app.ctl = controls;
+app.renderer = renderer;
+app.scene = scene;
+app.composer = composer;
 
 /* ─────────────────────────── Tween de cámara ─────────────────────────── */
 let camTween = null;
@@ -700,6 +720,17 @@ function updateCompass() {
   needle.style.transform = `rotate(${(-az * 180) / Math.PI - 45}deg)`;
 }
 
+/* La cámara no baja nunca del suelo del edificio: ni por debajo de los
+   forjados ni bajo la calle. El límite lo da el modelo en cada punto, porque
+   el terreno se escalona casi cinco metros de un testero al otro. */
+function limitarSuelo() {
+  if (!M) return;
+  const yMin = M.sueloEn(camera.position.x, camera.position.z);
+  if (camera.position.y < yMin) camera.position.y = yMin;
+  const yMinObjetivo = M.sueloEn(controls.target.x, controls.target.z) - 2.5;
+  if (controls.target.y < yMinObjetivo) controls.target.y = yMinObjetivo;
+}
+
 /* ─────────────────────────── Bucle ─────────────────────────── */
 const clock = new THREE.Clock();
 let autoRotate = true;
@@ -733,6 +764,7 @@ function loop() {
   updateHover();
   updateCompass();
   if (!intro) controls.update();
+  limitarSuelo();
   composer.render();
   // pasada de cartelas (capa 1): sin bloom ni tone mapping, siempre visibles.
   // El fondo se anula durante la pasada para no repintar el cielo encima
@@ -748,32 +780,34 @@ function loop() {
   scene.background = bg;
 }
 
-/* ─────────────────────────── Resize ─────────────────────────── */
+/* ─────────────────────────── Resize ───────────────────────────
+   La medida la manda la caja CSS del lienzo (#scene llena #app), no
+   `innerHeight` ni `visualViewport`: en el navegador del móvil esas dos dan
+   una altura menor mientras están las barras, y `setSize` escribía ese alto
+   en el estilo del lienzo. Resultado: el 3D ocupaba un tercio de la pantalla
+   y el resto quedaba en negro. Con `setSize(w, h, false)` el estilo no se
+   toca y un ResizeObserver avisa de cualquier cambio de tamaño, venga de
+   donde venga (giro, barras que aparecen, teclado, split view). */
+const tam = { w: 0, h: 0 };
+
 function onResize() {
-  // visualViewport da la medida real; innerWidth se queda corto cuando hay
-  // barras del navegador de por medio.
-  const vv = window.visualViewport;
-  const w = Math.round(vv ? vv.width : innerWidth);
-  const h = Math.round(vv ? vv.height : innerHeight);
+  const w = Math.max(1, canvas.clientWidth || Math.round(window.visualViewport?.width || innerWidth));
+  const h = Math.max(1, canvas.clientHeight || Math.round(window.visualViewport?.height || innerHeight));
+  if (w === tam.w && h === tam.h) return;
+  tam.w = w; tam.h = h;
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
-  renderer.setSize(w, h);
+  renderer.setSize(w, h, false);
   composer.setSize(w, h);
   gtao.setSize(w, h);
 }
 
-/* Al girar el móvil, iOS avisa del cambio con las medidas TODAVÍA en vertical.
-   Si se hace caso a ese primer aviso, el lienzo se queda con el ancho antiguo y
-   aparecen franjas a los lados. Por eso se repite el ajuste en los instantes
-   siguientes, hasta que el navegador da la medida buena. */
-function resizeSoon() {
-  onResize();
-  requestAnimationFrame(onResize);
-  for (const ms of [60, 180, 400, 700]) setTimeout(onResize, ms);
-}
-window.addEventListener('resize', resizeSoon);
-window.addEventListener('orientationchange', resizeSoon);
+if (typeof ResizeObserver === 'function') new ResizeObserver(onResize).observe(canvas);
+window.addEventListener('resize', onResize);
+window.addEventListener('orientationchange', onResize);
+window.addEventListener('pageshow', onResize);
 window.visualViewport?.addEventListener('resize', onResize);
+window.visualViewport?.addEventListener('scroll', onResize);
 onResize();
 
 /* ─────────────────────────── Arranque ─────────────────────────── */

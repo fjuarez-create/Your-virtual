@@ -293,8 +293,13 @@ const CALIDADES = {
   media: { aoMuestras: 8,  aoDenoise: 8,  desenfoqueMuestras: 8,  ssr: false, ssrEscala: 0.5 },
 };
 
-export function crearPost(ctx, luz) {
+/* `ligero`: cadena mínima para el móvil (ver cabecera del visor). Se quedan
+   el render, el bloom y la salida; no se crean la oclusión, los reflejos, el
+   desenfoque de movimiento, el bokeh ni el suavizado, que son seis destinos
+   de pantalla completa que el navegador del teléfono no puede sostener. */
+export function crearPost(ctx, luz, opciones = {}) {
   const { renderer, scene, camera } = ctx;
+  const ligero = !!opciones.ligero;
   const tam = new THREE.Vector2();
   renderer.getSize(tam);
   let w = Math.max(1, tam.x), h = Math.max(1, tam.y);
@@ -311,7 +316,8 @@ export function crearPost(ctx, luz) {
      halos alrededor de cada hueco. `thickness` es la diferencia de
      profundidad hasta la que un vecino cuenta como oclusor: en una fachada
      vista al sesgo, 1 m descartaba casi todas las muestras. */
-  const gtao = new GTAOPass(scene, camera, w, h);
+  const gtao = ligero ? null : new GTAOPass(scene, camera, w, h);
+  if (gtao) {
   gtao.output = GTAOPass.OUTPUT.Default;
   gtao.normalMaterial.side = THREE.DoubleSide; // caras traseras de las mallas cortadas
   gtao.blendIntensity = PERFILES_AO.exterior.mezcla;
@@ -320,20 +326,23 @@ export function crearPost(ctx, luz) {
     samples: CALIDADES.alta.aoMuestras, screenSpaceRadius: false,
   });
   gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, radiusExponent: 1, rings: 2, samples: CALIDADES.alta.aoDenoise });
+  }
 
   /* El G-buffer de GTAO es la única fuente de profundidad y normales de la
      cadena; ver la cabecera del fichero. */
-  const gbuffer = { get depthTexture() { return gtao.depthTexture; }, get normalTexture() { return gtao.normalTexture; } };
+  const gbuffer = { get depthTexture() { return gtao?.depthTexture; }, get normalTexture() { return gtao?.normalTexture; } };
 
-  const ssr = new SSRPassCompuesto({ renderer, scene, camera, width: w, height: h, selects: null }, gbuffer);
-  ssr.opacity = 0.35;
-  ssr.maxDistance = 60;
-  ssr.thickness = 0.35;          // metros: grosor que se supone a cada píxel
-  ssr.resolutionScale = CALIDADES.alta.ssrEscala;
-  ssr.blur = true;
+  const ssr = ligero ? null : new SSRPassCompuesto({ renderer, scene, camera, width: w, height: h, selects: null }, gbuffer);
+  if (ssr) {
+    ssr.opacity = 0.35;
+    ssr.maxDistance = 60;
+    ssr.thickness = 0.35;        // metros: grosor que se supone a cada píxel
+    ssr.resolutionScale = CALIDADES.alta.ssrEscala;
+    ssr.blur = true;
+  }
 
-  const desenfoque = new DesenfoqueMovimientoPass(camera, { muestras: CALIDADES.alta.desenfoqueMuestras });
-  desenfoque.enabled = false;    // se enciende con velocidad > 0
+  const desenfoque = ligero ? null : new DesenfoqueMovimientoPass(camera, { muestras: CALIDADES.alta.desenfoqueMuestras });
+  if (desenfoque) desenfoque.enabled = false;    // se enciende con velocidad > 0
 
   const parametrosIniciales = luz?.parametros || { bloom: 0.14, umbral: 0.92, exposicion: 1.0 };
   const bloom = new UnrealBloomPass(new THREE.Vector2(w, h), parametrosIniciales.bloom, 0.5, parametrosIniciales.umbral);
@@ -341,15 +350,17 @@ export function crearPost(ctx, luz) {
   /* Bokeh: `focus` en metros; `aperture` es UV por metro fuera de foco
      (0,00025 → a 12 m del foco, 0,003 de UV, ~6 px a 1080p: la vivienda
      enfocada y sus vecinas siguen nítidas; el fondo a 100 m llega al tope). */
-  const bokeh = new BokehPass(scene, camera, { focus: 40, aperture: 0.00025, maxblur: 0.01 });
-  bokeh.enabled = false;
-  if (bokeh._materialDepth) bokeh._materialDepth.side = THREE.DoubleSide; // misma razón que el G-buffer
+  const bokeh = ligero ? null : new BokehPass(scene, camera, { focus: 40, aperture: 0.00025, maxblur: 0.01 });
+  if (bokeh) {
+    bokeh.enabled = false;
+    if (bokeh._materialDepth) bokeh._materialDepth.side = THREE.DoubleSide; // misma razón que el G-buffer
+  }
 
-  const smaa = new SMAAPass();
+  const smaa = ligero ? null : new SMAAPass();
   const output = new OutputPass();
   const ocultar = new OcultarInvisiblesPass(scene);
 
-  for (const p of [renderPass, ocultar, gtao, ssr, desenfoque, bloom, bokeh, smaa, output]) composer.addPass(p);
+  for (const p of [renderPass, ocultar, gtao, ssr, desenfoque, bloom, bokeh, smaa, output]) if (p) composer.addPass(p);
   let activo = true; // false tras dispose: los eventos de ctx no se pueden desregistrar
 
   const post = {
@@ -360,19 +371,21 @@ export function crearPost(ctx, luz) {
     render(dt) {
       if (!activo) return;
       /* Sin G-buffer no hay profundidad para nadie (ver cabecera). */
-      const conGbuffer = gtao.enabled;
-      desenfoque.setProfundidad(gtao.depthTexture);
-      desenfoque.enabled = conGbuffer && post.velocidad > 0.01;
-      ssr.enabled = conGbuffer && ctx.calidad === 'alta' && post.ssrActivo;
-      bokeh.enabled = post.enfoque != null;
-      ocultar.enabled = conGbuffer || bokeh.enabled;
+      const conGbuffer = !!gtao?.enabled;
+      if (desenfoque) {
+        desenfoque.setProfundidad(gtao?.depthTexture);
+        desenfoque.enabled = conGbuffer && post.velocidad > 0.01;
+      }
+      if (ssr) ssr.enabled = conGbuffer && ctx.calidad === 'alta' && post.ssrActivo;
+      if (bokeh) bokeh.enabled = post.enfoque != null;
+      ocultar.enabled = conGbuffer || !!bokeh?.enabled;
 
       try {
         composer.render(dt);
       } finally {
         ocultar.restaurar(); // las mallas de sombra vuelven antes de que nadie más mire la escena
       }
-      desenfoque.actualizarAnterior();
+      desenfoque?.actualizarAnterior();
 
       /* Cartelas (capa 1): sin bloom ni tone mapping, siempre por encima. El
          fondo se anula para no repintar el cielo sobre la escena compuesta. */
@@ -402,10 +415,10 @@ export function crearPost(ctx, luz) {
     setCalidad(tier) {
       if (!activo) return;
       const c = CALIDADES[tier] || CALIDADES.alta;
-      gtao.updateGtaoMaterial({ samples: c.aoMuestras });
-      gtao.updatePdMaterial({ samples: c.aoDenoise });
-      desenfoque.setMuestras(c.desenfoqueMuestras);
-      ssr.resolutionScale = c.ssrEscala;
+      gtao?.updateGtaoMaterial({ samples: c.aoMuestras });
+      gtao?.updatePdMaterial({ samples: c.aoDenoise });
+      desenfoque?.setMuestras(c.desenfoqueMuestras);
+      if (ssr) ssr.resolutionScale = c.ssrEscala;
       post.ssrActivo = c.ssr;
       // el pixel ratio ha podido cambiar (escena.setCalidad): rehacer destinos
       ratioActual = renderer.getPixelRatio();
@@ -415,12 +428,12 @@ export function crearPost(ctx, luz) {
 
     setEnfoque(distancia) {
       post.enfoque = (typeof distancia === 'number' && distancia > 0) ? distancia : null;
-      if (post.enfoque != null) bokeh.uniforms.focus.value = post.enfoque;
+      if (post.enfoque != null && bokeh) bokeh.uniforms.focus.value = post.enfoque;
     },
 
     setVelocidadCamara(v) {
       post.velocidad = Math.max(0, Number(v) || 0);
-      desenfoque.velocidad = post.velocidad;
+      if (desenfoque) desenfoque.velocidad = post.velocidad;
     },
 
     setMomento(parametros) {
@@ -435,13 +448,14 @@ export function crearPost(ctx, luz) {
       const P = PERFILES_AO[perfil] || PERFILES_AO.exterior;
       if (post.oclusion === perfil) return;
       post.oclusion = perfil;
+      if (!gtao) return;
       gtao.blendIntensity = P.mezcla;
       gtao.updateGtaoMaterial({ ...P.gtao });
     },
 
     /** Mallas que reflejan (vidrios, suelo…); null → todas, al 0,35. */
     setReflectantes(mallas) {
-      ssr.selects = Array.isArray(mallas) && mallas.length ? mallas : null;
+      if (ssr) ssr.selects = Array.isArray(mallas) && mallas.length ? mallas : null;
     },
 
     dispose() {
