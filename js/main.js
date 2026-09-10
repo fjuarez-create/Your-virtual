@@ -431,7 +431,7 @@ const HACIA_NORTE = 4;
 function goFloor(key, dur = 1.3) {
   const { suelo, corte } = M ? M.cotasPlanta(key) : { suelo: 0, corte: 12 };
   const y = (suelo + corte) / 2;
-  const d = distanciaParaLargo(1.0);
+  const d = distanciaParaLargo(1.07); // un poco de aire: con 1,0 los testeros quedaban justo en el borde
   tweenCamera(
     new THREE.Vector3(5, y + d * 0.86, d * 0.50 - HACIA_NORTE),
     new THREE.Vector3(0, y, -HACIA_NORTE),
