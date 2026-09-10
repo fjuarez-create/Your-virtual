@@ -85,10 +85,11 @@ remote_count() {
 
 # Tamaño en bytes de un fichero remoto (0 si no está). Contar ficheros no basta
 # para los modelos: un GLB a medio subir sigue estando y rompe el visor.
+# `cls --size` redondea a kilobytes; el LIST crudo da los bytes exactos en la
+# quinta columna, que es lo que hay que comparar.
 remote_size() {
-  run_lftp "$OPTS" "cd \"$DIR\"; cls -1 --size \"$1\"" 2>/dev/null \
-    | tr -d '\r' | awk 'NF { for (i = 1; i <= NF; i++) if ($i ~ /^[0-9]+$/) { print $i; exit } }' \
-    | head -1
+  run_lftp "$OPTS" "cd \"$DIR\"; ls \"$1\"" 2>/dev/null \
+    | tr -d '\r' | awk 'NF >= 5 && $5 ~ /^[0-9]+$/ { print $5; exit }'
 }
 
 if [ "$WHAT" = check ]; then
