@@ -204,7 +204,7 @@ function prepararMaterial(m) {
 
 /* ── Carga ─────────────────────────────────────────────────────────────── */
 
-export async function cargarModelo(scene, unitsById, { estadoDe = () => 'disponible', onProgreso = () => {} } = {}) {
+export async function cargarModelo(scene, unitsById, { estadoDe = () => 'disponible', onProgreso = () => {}, plantasBajoDemanda = false } = {}) {
   onProgreso('Descargando el modelo…', 0);
   const [modelo, definicionCortes, datos, gEntorno, gEnvolvente] = await Promise.all([
     leerJSON(RUTAS.modelo), leerJSON(RUTAS.cortes), leerJSON(RUTAS.viviendas),
@@ -338,6 +338,7 @@ export async function cargarModelo(scene, unitsById, { estadoDe = () => 'disponi
 
   /* ── Estado ── */
   const variantes = new Map();
+  const pendientes = new Map();
   let mobiliario = null;
   const piezasMob = [];   // { mesh, ymin, plataforma }
   let planta = 'all';
@@ -383,7 +384,31 @@ export async function cargarModelo(scene, unitsById, { estadoDe = () => 'disponi
        elevar plantas ni fundir nada: el corte del cliente manda. */
     setFloor(clave) {
       planta = clave;
+      /* Con las plantas bajo demanda (móvil) la variante se pide al elegirla;
+         hasta que llega se sigue viendo la envolvente completa. */
+      if (clave !== 'all' && !variantes.has(clave)) M.cargarVariante(clave);
       aplicarPlanta();
+    },
+
+    /* Una planta cortada, a petición. */
+    async cargarVariante(clave) {
+      const url = RUTAS.variantes[clave];
+      if (!url || variantes.has(clave)) return variantes.get(clave) || null;
+      if (pendientes.has(clave)) return pendientes.get(clave);
+      const tarea = cargarGLB(url).then((g) => {
+        const obj = g.scene;
+        obj.name = 'corte-' + clave;
+        obj.visible = false;
+        asignarVidrios(adoptar(obj));
+        variantes.set(clave, obj);
+        grupo.add(obj);
+        aplicarPlanta();
+        aplicarNoche();
+        return obj;
+      }).catch((e) => { console.warn('[apolo] planta ' + clave + ':', e); return null; })
+        .finally(() => pendientes.delete(clave));
+      pendientes.set(clave, tarea);
+      return tarea;
     },
 
     setNight(on) { noche = !!on; aplicarNoche(); },
@@ -427,15 +452,13 @@ export async function cargarModelo(scene, unitsById, { estadoDe = () => 'disponi
       grupo.add(mobiliario);
       aplicarMobiliario();
       onPaso('mobiliario');
-      for (const [clave, url] of Object.entries(RUTAS.variantes)) {
-        const g = await cargarGLB(url);
-        const obj = g.scene;
-        obj.name = 'corte-' + clave;
-        obj.visible = false;
-        asignarVidrios(adoptar(obj));
-        variantes.set(clave, obj);
-        grupo.add(obj);
-        onPaso(clave);
+      /* En el móvil no se descargan las cuatro de golpe: son 35 MB de
+         geometría que la tarjeta del teléfono no tiene por qué sostener. */
+      if (!plantasBajoDemanda) {
+        for (const clave of Object.keys(RUTAS.variantes)) {
+          await M.cargarVariante(clave);
+          onPaso(clave);
+        }
       }
       aplicarPlanta();
     },

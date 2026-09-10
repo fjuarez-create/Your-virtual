@@ -533,6 +533,10 @@ Object.assign(apolo, {
     if (apolo.selected) apolo.select(null);
     post.setEnfoque(null);
     apolo.floor = clave;
+    /* En el móvil la planta cortada se pide al elegirla (ver cargarSecundarios). */
+    if (MOVIL && clave !== 'all' && !edificio.variantes.has(clave)) {
+      edificio.cargarVariante(clave, (k, objeto) => cortes?.registrarVariante(k, objeto));
+    }
     luz.setRealcePlanta(clave !== 'all');
     post.setOclusion(clave === 'all' ? 'exterior' : 'interior');
     edificio.setCartelas(clave === 'all' ? null : clave);
@@ -738,6 +742,10 @@ async function arrancar() {
   /* Segundo plano tras la primera imagen: mobiliario y variantes cortadas
      (se registran en cortes según llegan), y los otros tres cielos. */
   edificio.cargarSecundarios({
+    /* En el móvil las cuatro plantas cortadas (35 MB de geometría) no se
+       descargan de entrada: cada una llega cuando se elige, y mientras tanto
+       cortes.js recorta por planos. */
+    plantas: MOVIL ? [] : null,
     onProgreso: (f, etapa) => emitir('carga', { progreso: f, etapa, secundaria: true }),
     alMobiliario: (objeto) => { cortes.registrarMobiliario(objeto); ctx.emit('geometria', { mobiliario: true }); },
     alVariante: (clave, objeto) => cortes.registrarVariante(clave, objeto),

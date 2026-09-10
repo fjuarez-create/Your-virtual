@@ -841,6 +841,7 @@ async function boot() {
     const paso = $('#loader')?.querySelector('p');
     M = await cargarModelo(scene, app.unitsById, {
       estadoDe: app.estadoDe,
+      plantasBajoDemanda: MOVIL,
       onProgreso: (texto) => { if (paso) paso.textContent = texto; },
     });
     app.modelo = M;

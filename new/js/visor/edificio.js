@@ -590,9 +590,47 @@ export async function cargarEdificio(ctx, slot, opciones = {}) {
        cabecera). `onProgreso(fraccion, etapa)` va de 0 a 1 sobre los cinco
        ficheros; `alMobiliario(objeto)` y `alVariante(clave, objeto)` avisan
        cuando cada uno está en la escena. */
-    async cargarSecundarios({ onProgreso: avisar = () => {}, alMobiliario = () => {}, alVariante = () => {} } = {}) {
-      const tareas = [{ etapa: 'mobiliario', url: rutas.mobiliario }, ...Object.entries(rutas.variantes).map(([clave, url]) => ({ etapa: `corte_${clave}`, clave, url }))];
+    /* `plantas`: qué variantes cortadas se descargan ahora. null = todas
+       (escritorio); una lista vacía deja solo el mobiliario y las plantas se
+       piden luego con `cargarVariante`, que es lo que hace el móvil para no
+       tener 35 MB de geometría en la tarjeta desde el primer momento.
+       Mientras una variante no está, cortes.js recorta por planos igual. */
+    /* Una variante cortada, a petición (ver cargarSecundarios). Devuelve el
+       objeto ya colgado del grupo, o null si no se pudo. */
+    async cargarVariante(clave, alVariante) {
+      if (edificio.variantes.has(clave)) return edificio.variantes.get(clave);
+      const url = rutas.variantes[clave];
+      if (!url) return null;
+      if (edificio._pendientes?.has(clave)) return edificio._pendientes.get(clave);
+      edificio._pendientes = edificio._pendientes || new Map();
+      const tarea = (async () => {
+        try {
+          const g = await cargarGLB(url);
+          const objeto = g.scene;
+          objeto.name = `corte_${clave}`;
+          adoptar(objeto);
+          objeto.visible = false;
+          grupo.add(objeto);
+          edificio.variantes.set(clave, objeto);
+          nivel.mats = matsNivel();
+          (alVariante || edificio._alVariante || (() => {}))(clave, objeto);
+          return objeto;
+        } catch (e) {
+          console.warn(`[edificio] no se pudo cargar ${url}:`, e);
+          return null;
+        } finally {
+          edificio._pendientes.delete(clave);
+        }
+      })();
+      edificio._pendientes.set(clave, tarea);
+      return tarea;
+    },
+
+    async cargarSecundarios({ onProgreso: avisar = () => {}, alMobiliario = () => {}, alVariante = () => {}, plantas = null } = {}) {
+      const claves = plantas === null ? Object.keys(rutas.variantes) : plantas.filter((k) => rutas.variantes[k]);
+      const tareas = [{ etapa: 'mobiliario', url: rutas.mobiliario }, ...claves.map((clave) => ({ etapa: `corte_${clave}`, clave, url: rutas.variantes[clave] }))];
       const tiempos = {};
+      edificio._alVariante = alVariante;
       for (const [i, t] of tareas.entries()) {
         const t0 = performance.now();
         let g;
