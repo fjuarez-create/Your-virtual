@@ -46,12 +46,22 @@
      como un gemelo digital comercial, no con la luz rasante del momento.
      Con el realce activo (main lo enciende al elegir planta y lo apaga en
      'all') el sol sube a ≥ 62° de elevación conservando el acimut del
-     momento, la hemisférica se multiplica ×1,6 y el IBL ×1,4 en amanecer,
-     día y atardecer; de noche la luna se queda donde está, el IBL no cambia
-     y la hemisférica sube ×1,5 para que la planta se lea. Todo con un
+     momento, la hemisférica se multiplica ×1,45 y el IBL ×1,25 en amanecer,
+     día y atardecer (con ×1,6/×1,4 la planta salía velada: blancos casi
+     saturados y poco contraste en los tabiques; con estos, luminancia media
+     medida ≈ 170 y sin negros); de noche la luna se queda donde está, la
+     hemisférica sube ×2,4 y el IBL ×1,3 (con ×1,5 los patios y los
+     interiores quedaban negros: 37 % de píxeles con L < 50). Todo con un
      fundido de 1 s (REALCE.duracion) sobre `luz.realce`, aplicado encima de
      los valores interpolados del momento: cambiar de momento con el realce
      activo lo conserva, y volver a 'all' lo restaura.
+   · Noche, revisión: el disco de la luna (×6 en el shader) va solo en la
+     equirect CON sol (fondo y trazador); en la del PMREM se queda el halo
+     (`lunaDisco` = 0). Con el disco en la IBL y environmentIntensity 1,5,
+     claraboyas y paneles de cubierta reflejaban un punto de 1,5 y salían
+     como manchas blancas saturadas con halo de bloom, más brillantes que
+     las ventanas encendidas. Además la noche baja el IBL a 1,2 y sube el
+     umbral del bloom a 0,8 (las ventanas, emisivo 1,4, siguen por encima).
    ═══════════════════════════════════════════════════════════════════════════ */
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
@@ -104,8 +114,8 @@ export const MOMENTOS = {
     mie: 0.004, mieG: 0.8,
     sol: 0xbfd1ff, solInt: 0.45, cielo: 0x2a3a5e, suelo: 0x0c1016, hemiInt: 0.6,
     relleno: 0x8fa8d8, rellenoInt: 0.45, exposicion: 1.05, niebla: 0x0b111c,
-    bloom: 0.5, umbral: 0.72, hdri: false, luces: true,
-    ibl: 1.5, fondo: 1.0, solMax: 0, noche: 1,
+    bloom: 0.5, umbral: 0.8, hdri: false, luces: true,
+    ibl: 1.2, fondo: 1.0, solMax: 0, noche: 1,
     luna: { elev: 9, azim: 226, int: 1.0 },
     /* Las estrellas horneadas se dejan tenues: al ampliar la equirect en
        pantalla (unas 5× a 1080p) cada una se convierte en una mancha; las
@@ -116,7 +126,7 @@ export const MOMENTOS = {
 
 const ANCHO = 1024, ALTO = 512;
 /* Realce de la planta seccionada (ver cabecera). */
-export const REALCE = { elevacion: 62, hemi: 1.6, ibl: 1.4, hemiNoche: 1.5, duracion: 1.0 };
+export const REALCE = { elevacion: 62, hemi: 1.45, ibl: 1.25, hemiNoche: 2.4, iblNoche: 1.3, duracion: 1.0 };
 const CLAVES_NUM = ['solInt', 'hemiInt', 'rellenoInt', 'exposicion', 'bloom', 'umbral', 'ibl', 'fondo', 'noche'];
 const CLAVES_COLOR = ['sol', 'cielo', 'suelo', 'relleno', 'niebla'];
 
@@ -149,6 +159,7 @@ const FRAG_HORNEADO = /* glsl */`
   uniform float noche;          // peso del modelo nocturno (0 de día, 1 de noche)
   uniform vec3 lunaDir;
   uniform float lunaInt;
+  uniform float lunaDisco;
   uniform vec3 resplandor;
   uniform float resplandorInt;
   uniform float estrellasInt;
@@ -255,7 +266,7 @@ const FRAG_HORNEADO = /* glsl */`
     float cosL = dot( d, lunaDir );
     float disco = smoothstep( 0.99996, 0.999985, cosL ); // ~0,4° de radio, como el sprite del raster
     float halo = pow( max( cosL, 0.0 ), 600.0 ) * 0.10 + pow( max( cosL, 0.0 ), 30.0 ) * 0.014;
-    c += vec3( 0.93, 0.96, 1.0 ) * lunaInt * ( disco * 6.0 + halo );
+    c += vec3( 0.93, 0.96, 1.0 ) * lunaInt * ( disco * 6.0 * lunaDisco + halo );
 
     c += estrellas( d ) * estrellasInt * smoothstep( -0.02, 0.06, h );
     return c;
@@ -467,6 +478,7 @@ export function crearLuz(ctx) {
       noche: { value: 0 },
       lunaDir: { value: lunaDir.clone() },
       lunaInt: { value: 1 },
+      lunaDisco: { value: 1 },
       resplandor: { value: new THREE.Color(0xff9a4a) },
       resplandorInt: { value: 0.15 },
       estrellasInt: { value: 1 },
@@ -491,6 +503,7 @@ export function crearLuz(ctx) {
     u.solMax.value = M.solMax;
     u.noche.value = M.noche;
     u.lunaInt.value = conSol ? (M.luna?.int ?? 1) : 0.25;
+    u.lunaDisco.value = conSol ? 1 : 0; // el disco (×6) solo en el fondo y el trazador: en el PMREM era un punto de 1,5 que el vidrio y el metal de cubierta reflejaban con halo de bloom
     u.resplandor.value.setHex(M.resplandor ?? 0xff9a4a);
     u.resplandorInt.value = M.resplandorInt ?? 0;
     u.estrellasInt.value = M.estrellas ?? 0;
@@ -830,7 +843,7 @@ export function crearLuz(ctx) {
     luz.realce = realce.valor;
     const noche = THREE.MathUtils.clamp(actual.noche ?? 0, 0, 1);
     const fHemi = THREE.MathUtils.lerp(1, THREE.MathUtils.lerp(REALCE.hemi, REALCE.hemiNoche, noche), r);
-    const fIbl = THREE.MathUtils.lerp(1, THREE.MathUtils.lerp(REALCE.ibl, 1, noche), r);
+    const fIbl = THREE.MathUtils.lerp(1, THREE.MathUtils.lerp(REALCE.ibl, REALCE.iblNoche, noche), r);
     dirEfectiva.copy(dirSol);
     const pesoDir = r * (1 - noche);
     if (pesoDir > 0) {

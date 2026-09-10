@@ -46,6 +46,16 @@
    · SMAA va antes de OutputPass como en los ejemplos de three r185 (el
      contrato lo pide así); trabaja sobre el color lineal HDR.
 
+   · Perfiles de oclusión (`post.setOclusion('exterior' | 'interior')`,
+     integración del v6). El radio de 2 m con `scale` 2 está pensado para la
+     fachada a 40-60 m; dentro de una planta seccionada (cámara a 10-15 m,
+     tabiques de 1,3 m y mobiliario por todas partes) esa misma oclusión
+     pinta manchas negras en cada rincón (medido: 14 % de píxeles con
+     luminancia < 50 en la vivienda enfocada, 0 % sin GTAO). El perfil
+     'interior' (radio 0,7 m, grosor 1,5, escala 1, mezcla 0,9) deja solo el
+     contacto de muebles y tabiques con el suelo. main lo activa al elegir
+     planta y vuelve a 'exterior' en 'all'.
+
    · Mallas invisibles (revisión). Las pasadas que dibujan la escena con
      `scene.overrideMaterial` (G-buffer de GTAO, profundidad del Bokeh,
      máscara del SSR) ignoran `colorWrite`, el stencil y los planos de
@@ -272,6 +282,12 @@ class SSRPassCompuesto extends SSRPass {
 
 /* ───────────────────────────── crearPost ───────────────────────────── */
 
+/* Perfiles de oclusión (ver cabecera). */
+export const PERFILES_AO = {
+  exterior: { mezcla: 1.3, gtao: { radius: 2.0, thickness: 4.0, scale: 2.0 } },
+  interior: { mezcla: 0.9, gtao: { radius: 0.7, thickness: 1.5, scale: 1.0 } },
+};
+
 const CALIDADES = {
   alta:  { aoMuestras: 16, aoDenoise: 16, desenfoqueMuestras: 12, ssr: false, ssrEscala: 0.5 }, // SSR apagado: dejaba la calle como mojada y con manchas
   media: { aoMuestras: 8,  aoDenoise: 8,  desenfoqueMuestras: 8,  ssr: false, ssrEscala: 0.5 },
@@ -298,9 +314,9 @@ export function crearPost(ctx, luz) {
   const gtao = new GTAOPass(scene, camera, w, h);
   gtao.output = GTAOPass.OUTPUT.Default;
   gtao.normalMaterial.side = THREE.DoubleSide; // caras traseras de las mallas cortadas
-  gtao.blendIntensity = 1.3;
+  gtao.blendIntensity = PERFILES_AO.exterior.mezcla;
   gtao.updateGtaoMaterial({
-    radius: 2.0, distanceExponent: 1.0, thickness: 4.0, distanceFallOff: 0.6, scale: 2.0,
+    ...PERFILES_AO.exterior.gtao, distanceExponent: 1.0, distanceFallOff: 0.6,
     samples: CALIDADES.alta.aoMuestras, screenSpaceRadius: false,
   });
   gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, radiusExponent: 1, rings: 2, samples: CALIDADES.alta.aoDenoise });
@@ -414,6 +430,15 @@ export function crearPost(ctx, luz) {
       if (parametros.exposicion !== undefined) renderer.toneMappingExposure = parametros.exposicion;
     },
 
+    /** Perfil de oclusión: 'exterior' (fachada) o 'interior' (planta seccionada). */
+    setOclusion(perfil) {
+      const P = PERFILES_AO[perfil] || PERFILES_AO.exterior;
+      if (post.oclusion === perfil) return;
+      post.oclusion = perfil;
+      gtao.blendIntensity = P.mezcla;
+      gtao.updateGtaoMaterial({ ...P.gtao });
+    },
+
     /** Mallas que reflejan (vidrios, suelo…); null → todas, al 0,35. */
     setReflectantes(mallas) {
       ssr.selects = Array.isArray(mallas) && mallas.length ? mallas : null;
@@ -428,6 +453,7 @@ export function crearPost(ctx, luz) {
     },
   };
   post.ssrActivo = CALIDADES.alta.ssr;
+  post.oclusion = 'exterior';
 
   ctx.on('tamano', ({ w: nw, h: nh }) => post.setTamano(nw, nh));
   ctx.on('calidad', (tier) => post.setCalidad(tier));

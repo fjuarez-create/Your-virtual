@@ -38,25 +38,36 @@
      cámara-edificio + 250 m (redondeada a 50 m, entre 300 y 1.200) para que
      las cascadas cubran Apolo ± 150 m desde cualquier encuadre.
    · Encuadres (data/serenea_modelo.json vía edificio.caja), medidos con
-     capturas: 'conjunto' = caja de Apolo ampliada a 600 m de lado, desde el
+     capturas: 'conjunto' = caja de Apolo ampliada a 480 m de lado, desde el
      suroeste (azimut −60°) y elevación 16°: con 22° el horizonte quedaba en
      el borde superior sin cielo, y el mar está al este (x ≥ 580 m, cota
-     −71), así que hay que mirar hacia allí. 'edificio' = caja de Apolo,
-     elevación 24°, azimut 55° (desde el sureste): Apolo tiene pegado al
-     sur otro volumen de SERENEA tan alto como él (z 40…76) que desde el sur
-     franco tapa la fachada; desde el sureste se ve entera la fachada larga
-     sur con sus ventanas y el testero este. 'planta' = huella de Apolo
-     limitada en Y a [suelo mínimo de la planta, corte máximo de la planta]
-     (edificio.suelos y cortes.json; no la caja entera del edificio, que
-     alejaba la cámara), elevación 50°, azimut 8° y margen 1,02: con el eje
-     largo (111 m) casi horizontal en pantalla la planta llena el ancho en
-     16:9 (medido en captura: ≥ 85 % del ancho).
+     −71), así que hay que mirar hacia allí (con 600 m de lado Apolo era el
+     7,7 % del ancho y solo se identificaba por el campo de fútbol).
+     'edificio' = caja de Apolo, elevación 32°, azimut 40° (desde el
+     sureste), margen 1,03: Apolo tiene pegado al sur otro volumen de
+     SERENEA tan alto como él (z 40…76) que desde el sur franco tapa la
+     fachada, y con 24°/55° ese bloque seguía en primer plano tapando la
+     esquina suroeste y las plantas bajas de la mitad izquierda (Apolo al
+     50 % del ancho); más alto y más de frente se pasa por encima de él y
+     se ve entera la fachada larga sur con sus ventanas y el testero este.
+     'planta' = huella de Apolo limitada en Y a [suelo mínimo de la planta,
+     corte máximo de la planta] (edificio.suelos y cortes.json; no la caja
+     entera del edificio, que alejaba la cámara), elevación 50°, azimut 8° y
+     margen 1,02: con el eje largo (111 m) casi horizontal en pantalla la
+     planta llena el ancho en 16:9 (medido en captura: ≥ 85 % del ancho).
+     La caja se alarga PLANTA_HACIA_NORTE m hacia el norte (−z) para que el
+     centro del encuadre quede algo al norte del edificio: así la planta
+     baja en el fotograma y el bloque vecino del sur, blanco y a 50 m de la
+     cámara, deja de ocupar el cuarto inferior de la imagen; el ancho no
+     cambia (solo el eje largo cuenta en 16:9).
      'conjunto' y 'edificio' devuelven el edificio completo.
    · Planta seccionada a plena luz (integración del v6): al elegir una planta
      se llama a luz.setRealcePlanta(true) (sol a ≥ 62°, hemisférica ×1,6 e
      IBL ×1,4; de noche solo la hemisférica ×1,5) y en 'all' se restaura.
      Con el sol alto y tabiques de 1,3 m las sombras sobre la planta son
-     cortas y suaves. cortes.js recibe en `suelos` el y0 mínimo de las
+     cortas y suaves. post.setOclusion('interior') rebaja la oclusión
+     (la de fachada pintaba manchas negras dentro). cortes.js recibe en
+     `suelos` el y0 mínimo de las
      viviendas de cada planta y cajón (edificio.suelos) para atenuar solo lo
      que queda bajo el suelo real, no "el corte − 3 m".
    · Trazador solo en 'all': con una planta seccionada el raster (planos de
@@ -110,10 +121,11 @@ const PLANTAS = FLOOR_DEFS.filter((f) => f.key !== 'cubierta');
 const CLAVES_PLANTA = new Set(['all', ...PLANTAS.map((f) => f.key)]);
 const NIVEL_DE = new Map(PLANTAS.map((f, i) => [f.key, i]));
 const RUTA_ENTORNO = 'assets/serenea/entorno.glb';
-const AZIMUT = { conjunto: -60, edificio: 55, planta: 8 };
-const ELEVACION = { conjunto: 16, edificio: 24, planta: 50 };
-const MARGEN = { conjunto: 1.05, edificio: 1.1, planta: 1.02 };
-const LADO_CONJUNTO = 600;        // m de lado del encuadre 'conjunto'
+const AZIMUT = { conjunto: -60, edificio: 40, planta: 8 };
+const ELEVACION = { conjunto: 16, edificio: 32, planta: 50 };
+const MARGEN = { conjunto: 1.05, edificio: 1.03, planta: 1.02 };
+const LADO_CONJUNTO = 480;        // m de lado del encuadre 'conjunto'
+const PLANTA_HACIA_NORTE = 22;    // m que se alarga la caja de planta hacia −z (ver cabecera)
 const REPOSO_S = 120;
 const CAMARA_FAR = 9000;          // el entorno llega a 5 km
 const NIEBLA = { near: 1400, far: 5200 };
@@ -318,6 +330,7 @@ function cajaPlanta(clave) {
   if (tramos) caja.max.y = Math.min(caja.max.y, Math.max(...tramos.map((t) => t.y)));
   if (suelos.length) caja.min.y = Math.max(caja.min.y, Math.min(...suelos));
   else if (tramos) caja.min.y = Math.max(caja.min.y, caja.max.y - 3);
+  caja.min.z -= PLANTA_HACIA_NORTE; // el bloque vecino del sur fuera del cuarto inferior (ver cabecera)
   return caja;
 }
 function encuadrarVista(vista, { duracion = 1.6 } = {}) {
@@ -473,6 +486,7 @@ Object.assign(apolo, {
     post.setEnfoque(null);
     apolo.floor = clave;
     luz.setRealcePlanta(clave !== 'all');
+    post.setOclusion(clave === 'all' ? 'exterior' : 'interior');
     edificio.setCartelas(clave === 'all' ? null : clave);
     apolo.hover = null;
     repintar();

@@ -43,7 +43,17 @@
      en baja, 1,8-2,5 m. La caja del registro (`caja`) es la huella del
      polígono × [y0, y0 + 2,7], para encuadrar la cámara.
    · Cartela en el centroide del polígono (área con signo; si cae fuera, el
-     punto interior más cercano al centro de la caja) a y1 + 1,2 m.
+     punto interior más cercano al centro de la caja) a y1 + 1,2 m. Tamaño
+     CONSTANTE en pantalla (`sizeAttenuation: false`, CARTELA_PX de alto para
+     un lienzo de 720 px; escala con la altura del lienzo): con 3,2 m de
+     ancho en mundo, desde el encuadre de planta (cámara a ~150 m) el número
+     medía 26×12 px y no se leía; y en la vivienda enfocada (cámara a 10 m)
+     tapaba media pantalla. La escala se calcula con el fov de la cámara.
+   · Cajas de encuadre (`caja`) que se solapan: las viviendas en L o en U
+     (426/427 y 405/407 del ático, 4,7 y 2,1 m² de caja común) comparten
+     caja sin compartir superficie (solape real de polígonos: 0 m²,
+     rasterizado a 5 cm). No es un defecto: el picking y el realce van por
+     el mesh del polígono, y la caja solo sirve para encuadrar la cámara.
    · Vidrio por vivienda: el pipeline trae un vidrio por hueco con el centro
      en el nombre (`vidrio__T<plataforma>__<n>__<xcm>_<ycm>_<zcm>`). Se asigna
      POR POLÍGONO, no por caja: cada vidrio va a la vivienda cuya huella
@@ -56,6 +66,14 @@
      cae en ninguna huella (portales, zonas comunes) queda con el vidrio
      común, que no se enciende nunca. `edificio.vidrio` guarda el recuento
      (total, asignados, comunes, viviendasConVidrio, sinVidrio).
+   · Normales nulas: los GLB del v6 traen decenas de miles de vértices con
+     normal (0,0,0) (29 k en la envolvente, 11 k en el mobiliario, 13 k en
+     cada variante: caras degeneradas del SketchUp). `normalize()` de un
+     vector nulo es NaN, y un solo píxel NaN se extiende con el bloom a todo
+     el fotograma (pantalla negra en planta, manchas negras en vivienda:
+     medido con un render a Float32). `adoptar` sanea cada geometría al
+     cargarla, como hace main.js con el entorno: normal nula o no finita →
+     (0, 1, 0). El recuento queda en `edificio.saneado.normalesNulas`.
    · `Material.clone()` copia `userData` pasándolo por JSON; los clones de
      vidrio reciben un userData nuevo con `baseOpacity`, `baseEnv`,
      `baseColor` y `unitId` correctos.
@@ -91,6 +109,7 @@ export const DISTANCIA_VIDRIO = 0.45;    // m del centro del vidrio a la huella 
 export const RANGO_Y_VIDRIO = [-0.5, 3.2]; // y del vidrio respecto al suelo de la vivienda
 export const ALTURA_VIVIENDA = 2.7;      // m; alto de la caja de encuadre
 export const ALTURA_CARTELA = 1.2;       // m sobre y1
+export const CARTELA_PX = 46;            // alto del sprite de la cartela en px para un lienzo de 720 px (ver cabecera)
 export const EMISIVO_VENTANA = 0xffd9a0; // luz cálida de interior
 export const INTENSIDAD_VENTANA = 1.4;   // por encima de 1 para que el bloom lo recoja
 
@@ -140,8 +159,11 @@ export function crearVidrioFisico() {
 }
 
 /* Cartela de vivienda (copia de makeLabelSprite de app/building.js): caja con
-   rabito y el número en blanco, fuera del tone mapping y en la capa 1. */
-function crearCartela(texto, fondo, capa) {
+   rabito y el número en blanco, fuera del tone mapping y en la capa 1.
+   Tamaño constante en pantalla (ver cabecera): con sizeAttenuation=false el
+   sprite mide `escala / tan(fov/2)` del alto del lienzo (en NDC, sobre 2),
+   así que CARTELA_PX px a 720 px son escalaY = CARTELA_PX/720 · 2 · tan(fov/2). */
+function crearCartela(texto, fondo, capa, fovGrados = 45) {
   const cv = document.createElement('canvas');
   cv.width = 224; cv.height = 128;
   const c2 = cv.getContext('2d');
@@ -163,9 +185,10 @@ function crearCartela(texto, fondo, capa) {
   const tex = new THREE.CanvasTexture(cv);
   tex.anisotropy = 8;
   tex.colorSpace = THREE.SRGBColorSpace;
-  const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true, toneMapped: false });
+  const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true, toneMapped: false, sizeAttenuation: false });
   const sp = new THREE.Sprite(mat);
-  sp.scale.set(3.2, 1.83, 1);
+  const escalaY = (CARTELA_PX / 720) * 2 * Math.tan(THREE.MathUtils.degToRad(fovGrados) / 2);
+  sp.scale.set(escalaY * cv.width / cv.height, escalaY, 1);
   sp.layers.set(capa);
   return sp;
 }
@@ -256,7 +279,7 @@ export function geometriaPrisma(poligono, y0, y1) {
 /* Prismas translúcidos y cartelas de todas las viviendas a partir de
    data/viviendas_serenea.json (ver cabecera). Devuelve Map(id → registro),
    los grupos por planta y la cota mínima de suelo por planta y plataforma. */
-function crearPrismas(grupo, unitsById, capaCartelas, datosViviendas) {
+function crearPrismas(grupo, unitsById, capaCartelas, datosViviendas, fovCamara = 45) {
   const viviendas = new Map();
   const plantas = new Map();
   const suelos = {};
@@ -292,9 +315,9 @@ function crearPrismas(grupo, unitsById, capaCartelas, datosViviendas) {
     mesh.renderOrder = 50; // tras el vidrio: el realce se ve a través de la fachada
     P.grupo.add(mesh);
     const { punto: centroide, exterior } = centroideInterior(poligono);
-    const label = crearCartela(id, '#24873f', capaCartelas);
+    const label = crearCartela(id, '#24873f', capaCartelas, fovCamara);
     label.position.set(centroide[0], y1 + ALTURA_CARTELA, centroide[1]);
-    const labelR = crearCartela(id, '#e0862b', capaCartelas);
+    const labelR = crearCartela(id, '#e0862b', capaCartelas, fovCamara);
     labelR.position.copy(label.position);
     label.visible = false; labelR.visible = false;
     P.cartelas.add(label, labelR);
@@ -380,6 +403,23 @@ export async function cargarEdificio(ctx, slot, opciones = {}) {
     materiales.set(nombre, r);
     return r;
   }
+  /* Normales nulas o no finitas → (0, 1, 0) (ver cabecera). Las normales
+     del GLB vienen normalizadas en Int8; setXYZ codifica de vuelta. */
+  const saneado = { normalesNulas: 0, geometrias: 0 };
+  const geometriasSaneadas = new WeakSet();
+  function sanearNormales(geometria) {
+    if (geometriasSaneadas.has(geometria)) return;
+    geometriasSaneadas.add(geometria);
+    saneado.geometrias++;
+    const nor = geometria.getAttribute('normal');
+    if (!nor) { geometria.computeVertexNormals(); return; }
+    let nulas = 0;
+    for (let i = 0; i < nor.count; i++) {
+      const x = nor.getX(i), y = nor.getY(i), z = nor.getZ(i);
+      if (!Number.isFinite(x + y + z) || x * x + y * y + z * z < 1e-4) { nor.setXYZ(i, 0, 1, 0); nulas++; }
+    }
+    if (nulas) { nor.needsUpdate = true; saneado.normalesNulas += nulas; }
+  }
   /* Da a todas las mallas de un objeto los materiales del registro (y a los
      vidrios ya asignados, el de su vivienda) y las banderas del visor. */
   function adoptar(raiz, { mobiliario = false } = {}) {
@@ -387,6 +427,7 @@ export async function cargarEdificio(ctx, slot, opciones = {}) {
     raiz.traverse((o) => {
       if (!o.isMesh) return;
       mallas.push(o);
+      sanearNormales(o.geometry);
       const deVivienda = vidrioPorMalla.get(o.name);
       if (deVivienda) o.material = deVivienda;
       else if (Array.isArray(o.material)) o.material = o.material.map(materialDe);
@@ -406,7 +447,7 @@ export async function cargarEdificio(ctx, slot, opciones = {}) {
   grupo.add(envolvente);
 
   /* ── Prismas y cartelas ── */
-  const { viviendas, plantas, suelos } = crearPrismas(grupo, unitsById, capaCartelas, datosViviendas);
+  const { viviendas, plantas, suelos } = crearPrismas(grupo, unitsById, capaCartelas, datosViviendas, ctx.camera?.fov ?? 45);
   scene.updateMatrixWorld(true);
 
   /* ── Vidrio por vivienda: el centro del nombre contra las huellas ── */
@@ -463,7 +504,7 @@ export async function cargarEdificio(ctx, slot, opciones = {}) {
 
   const edificio = {
     grupo, envolvente, niveles, viviendas, estados, pickables, vidrio, units: listaUnits, unitsById,
-    materiales, definicionCortes, rutas, suelos, datosViviendas,
+    materiales, definicionCortes, rutas, suelos, datosViviendas, saneado,
     variantes: new Map(),
     mobiliario: null,
     ventanas: false,

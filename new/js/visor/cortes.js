@@ -149,6 +149,20 @@
        transición, también en el estado final); las que quedan enteras por
        debajo siguen intactas. El trazador solo corre en 'all', donde no hay
        planos, así que no ve nunca un clon recortado.
+     - Falsos techos bajo el plano de corte (control de calidad, ronda 2):
+       en las viviendas cuyo suelo queda 2,7 m bajo su corte (107-109 de la
+       baja, cajón 6: suelo 4,86 frente a corte 7,56) el falso techo, a
+       2,45 m, no llegaba al plano y la variante precortada lo conservaba;
+       visto desde arriba y a plena luz era una placa blanca que tapaba las
+       tres viviendas. Ni `mostrarMobiliario`/`clonDe` (solo recortan lo
+       que cruza el plano) ni la atenuación por cota (actúa bajo el suelo)
+       podían quitarlo, y los planos de corte del cliente son intocables.
+       Se resuelve en el pipeline (tools/build_serenea.mjs, BANDA_FALSO_TECHO):
+       las variantes salen sin las caras horizontales de acabado interior
+       de la banda [cota − 0,4, cota] de cada cajón (316 m² en la baja,
+       incluidas las tiras de pasillo de los cajones 0, 2 y 4; 1 m² en p1 y
+       p2; 55 m² de zonas comunes en el ático). Este módulo no tiene que
+       hacer nada, pero conviene saberlo si se vuelve a ver una placa así.
    ═══════════════════════════════════════════════════════════════════════════ */
 import * as THREE from 'three';
 import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg';
@@ -545,7 +559,8 @@ export function crearCortes(ctx, edificio, opciones = {}) {
     }).then((def) => { fijarDefinicion(def); return def; });
   }
 
-  const cotasDe = (clave) => (clave === 'all' ? null : cortes.definicion?.plantas?.[clave]?.map((t) => t.y) ?? null);
+  // declaración (no const): fijarDefinicion la usa antes de llegar aquí
+  function cotasDe(clave) { return clave === 'all' ? null : cortes.definicion?.plantas?.[clave]?.map((t) => t.y) ?? null; }
 
   function tramoEn(x, z) {
     const T = cortes.tramos;

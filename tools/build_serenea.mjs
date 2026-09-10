@@ -2,7 +2,12 @@
    build_serenea.mjs — Del GLB exportado por SketchUp a los ficheros del visor.
 
    Uso:  node tools/build_serenea.mjs <SERENEA_..._Entrega.glb> [--salida <dir>]
-                                      [--sin-cortes] [--mob-generico]
+                                      [--sin-cortes] [--solo-cortes] [--mob-generico]
+
+   --solo-cortes regenera únicamente las cuatro variantes cortadas (y
+   data/cortes.json), sin tocar envolvente, mobiliario, entorno ni
+   serenea_modelo.json: es lo que se usa cuando cambia solo la regla de
+   corte, para no volver a escribir 40 MB de binarios idénticos.
 
    Entrada: el modelo completo exportado por SketchUp (Archivo → Exportar →
    Modelo 3D → GLB) con el entorno, los cinco edificios y, para Apolo, los
@@ -23,13 +28,26 @@
                             solo se ocultan
      apolo_corte_<planta>.glb  la envolvente cortada por el fondo de cada
                             cajón (triángulo a triángulo, sin tapas: las
-                            pone el visor); una por planta (baja, p1, p2, atico)
+                            pone el visor); una por planta (baja, p1, p2, atico).
+                            Los FALSOS TECHOS que quedan justo bajo el plano
+                            se eliminan (ver `cortarPorPlano`): en las
+                            viviendas cuyo suelo está 2,7 m bajo el corte
+                            (107-109 de la baja) el falso techo, a 2,45 m,
+                            sobrevivía al corte y se veía desde arriba como
+                            una placa blanca que tapaba la vivienda entera.
      data/cortes.json       los ocho cajones de cada planta
      data/serenea_modelo.json  cajas, centros y plataformas para los encuadres
 
    Todo en las coordenadas del propio SketchUp: el origen es el mismo para el
    entorno y para cada edificio, que es lo que permite volcar un edificio
    nuevo sin ubicarlo a mano.
+
+   Normales: el SketchUp exporta decenas de miles de vértices con normal
+   (0,0,0) (caras degeneradas); `primitivaDesde` las sustituye por la normal
+   de la cara (o +Y si la cara también es degenerada), porque una normal
+   nula produce un píxel NaN en el visor y el bloom lo extiende a todo el
+   fotograma. El visor las sanea también al cargar (edificio.sanearNormales),
+   pero lo limpio es que no salgan de aquí.
 
    Nombres de malla (contrato del visor, new/js/visor/CONTRATO.md):
      <cat>__T<plataforma>__<material>                          envolvente y variantes
@@ -51,10 +69,11 @@ const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const argv = process.argv.slice(2);
 const ENTRADA = argv.find((a) => !a.startsWith('--'));
 const SIN_CORTES = argv.includes('--sin-cortes');
+const SOLO_CORTES = argv.includes('--solo-cortes'); // solo las variantes cortadas (ver cabecera)
 const MOB_GENERICO = argv.includes('--mob-generico'); // todo el mobiliario con un solo material, como hasta el v5
 const iSalida = argv.indexOf('--salida');
 const SALIDA = path.resolve(RAIZ, iSalida >= 0 && argv[iSalida + 1] ? argv[iSalida + 1] : path.join('assets', 'serenea'));
-if (!ENTRADA) { console.error('uso: node tools/build_serenea.mjs <modelo.glb> [--salida <dir>] [--sin-cortes] [--mob-generico]'); process.exit(1); }
+if (!ENTRADA) { console.error('uso: node tools/build_serenea.mjs <modelo.glb> [--salida <dir>] [--sin-cortes] [--solo-cortes] [--mob-generico]'); process.exit(1); }
 fs.mkdirSync(SALIDA, { recursive: true });
 
 /* Planta lógica del visor ↔ componente de SketchUp. Las claves son las que
@@ -76,6 +95,15 @@ const SIMPLIFICACION = {
   envolvente: { ratio: 0.5, error: 0.005 }, // solo materiales sin textura (carpintería de aluminio, pavimentos, pintura)
 };
 const ES_FOLLAJE = /Hoja|Pinna|Peciolo|Rama|Sotobosque|olivo|areca|filodendro|planta|Tronco|arbol|palmera/i;
+/* Falsos techos bajo el plano de corte (solo en las variantes cortadas, ver
+   `cortarPorPlano`): caras horizontales de acabado interior que quedan a
+   menos de BANDA_FALSO_TECHO m bajo la cota de su cajón. Medido en el v6: en
+   esa banda solo hay falsos techos (306 m² en la baja, 265 de ellos en las
+   viviendas 107-109) y tiras de pasillo; el suelo de la planta activa está
+   siempre ≥ 1,3 m por debajo del corte y no entra. Por material, para no
+   tocar albardillas ni pavimentos de terraza. */
+const ES_FALSO_TECHO = /Pintura interior|Falso techo|Escayola|Yeso/i;
+const BANDA_FALSO_TECHO = 0.4;
 const ES_PERSONA = /^Sree|persona|people|human/i;
 
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({ 'meshopt.encoder': MeshoptEncoder });
@@ -348,12 +376,36 @@ function materialDeSalida(d, pieza) {
 }
 const tieneTextura = (m) => !!(m && (m.getBaseColorTexture() || m.getMetallicRoughnessTexture() || m.getNormalTexture()));
 
+/* Normales nulas o no finitas → normal de la cara (ver cabecera). Devuelve
+   cuántas se han corregido. */
+const contadorNormales = { nulas: 0 };
+function sanearNormales(g) {
+  const nor = g.attributes.normal; if (!nor) return 0;
+  const pos = g.attributes.position, idx = g.index;
+  const n = idx ? idx.count : pos.count;
+  const N = nor.array, P = pos.array;
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), f = new THREE.Vector3();
+  let nulas = 0;
+  const esNula = (k) => { const x = N[k * 3], y = N[k * 3 + 1], z = N[k * 3 + 2]; return !Number.isFinite(x + y + z) || x * x + y * y + z * z < 1e-4; };
+  for (let i = 0; i < n; i += 3) {
+    const ia = idx ? idx.getX(i) : i, ib = idx ? idx.getX(i + 1) : i + 1, ic = idx ? idx.getX(i + 2) : i + 2;
+    if (!esNula(ia) && !esNula(ib) && !esNula(ic)) continue;
+    a.fromArray(P, ia * 3); b.fromArray(P, ib * 3); c.fromArray(P, ic * 3);
+    f.subVectors(b, a).cross(c.sub(a));
+    if (f.lengthSq() < 1e-12) f.set(0, 1, 0); else f.normalize();
+    for (const k of [ia, ib, ic]) if (esNula(k)) { N[k * 3] = f.x; N[k * 3 + 1] = f.y; N[k * 3 + 2] = f.z; nulas++; }
+  }
+  contadorNormales.nulas += nulas;
+  return nulas;
+}
+
 /* BufferGeometry de three → primitiva glTF. */
 function primitivaDesde(d, g, material) {
   const buffer = d.getRoot().listBuffers()[0] || d.createBuffer();
   const prim = d.createPrimitive().setMaterial(material);
   const pos = d.createAccessor().setType('VEC3').setArray(new Float32Array(g.attributes.position.array)).setBuffer(buffer);
   prim.setAttribute('POSITION', pos);
+  sanearNormales(g);
   if (g.attributes.normal) prim.setAttribute('NORMAL', d.createAccessor().setType('VEC3').setArray(new Float32Array(g.attributes.normal.array)).setBuffer(buffer));
   if (g.attributes.uv) prim.setAttribute('TEXCOORD_0', d.createAccessor().setType('VEC2').setArray(new Float32Array(g.attributes.uv.array)).setBuffer(buffer));
   if (g.index) prim.setIndices(d.createAccessor().setType('SCALAR').setArray(new Uint32Array(g.index.array)).setBuffer(buffer));
@@ -469,7 +521,8 @@ async function guardar(d, nombre) {
   const mb = (fs.statSync(ruta).size / 1048576).toFixed(1);
   let tris = 0; for (const m of d.getRoot().listMeshes()) for (const p of m.listPrimitives()) { const i = p.getIndices(); tris += (i ? i.getCount() : p.getAttribute('POSITION').getCount()) / 3; }
   const mallas = d.getRoot().listMeshes().length;
-  log(`→ ${nombre}: ${mb} MB, ${Math.round(tris)} triángulos, ${mallas} mallas, ${d.getRoot().listMaterials().length} materiales, ${d.getRoot().listTextures().length} texturas`);
+  log(`→ ${nombre}: ${mb} MB, ${Math.round(tris)} triángulos, ${mallas} mallas, ${d.getRoot().listMaterials().length} materiales, ${d.getRoot().listTextures().length} texturas; normales nulas corregidas: ${contadorNormales.nulas}`);
+  contadorNormales.nulas = 0;
   resultados.push({ nombre, mb: +mb, tris: Math.round(tris), mallas });
   return ruta;
 }
@@ -489,17 +542,20 @@ async function construirEnvolvente(nombreFichero, planta = null) {
   for (const p of piezas) {
     if (p.cat === 'mob' || p.cat === 'puerta') continue;
     if (p.caja.min.y >= yMaxCorte) continue;                       // entera por encima del corte: fuera
-    const g = planta && p.caja.max.y > yMinCorte ? cortarPorPlano(p.geometria, planta) : p.geometria;
+    const mat = materialDeSalida(d, p);
+    const falsoTecho = !!planta && ES_FALSO_TECHO.test(mat?.getName() || '');
+    const g = planta && (p.caja.max.y > yMinCorte - (falsoTecho ? BANDA_FALSO_TECHO : 0)) ? cortarPorPlano(p.geometria, planta, { falsoTecho }) : p.geometria;
     if (!g.attributes.position.count) continue;
     trisAntes += trisDe(g);
-    const mat = materialDeSalida(d, p);
     if (p.cat === 'vidrio') { añadirMalla(d, esc, nombreVidrio(p, nVidrio++), [{ g, material: mat }]); continue; }
     const clave = `${p.cat}__T${p.plataforma}__${mat.getName()}`;
     if (!grupos.has(clave)) grupos.set(clave, { material: mat, lista: [] });
     grupos.get(clave).lista.push({ g, clase: 'envolvente', material: mat });
   }
   for (const [clave, { material, lista }] of grupos) añadirMalla(d, esc, clave, [{ g: unirYSimplificar(lista, { simplificarEnvolvente: true }), material }]);
-  log(`${nombreFichero}: ${nVidrio} vidrios, ${grupos.size} grupos; ${Math.round(trisAntes)} tris de entrada, simplificación sin textura ${Math.round(estadisticaSimplificacion.antes)} → ${Math.round(estadisticaSimplificacion.despues)}`);
+  log(`${nombreFichero}: ${nVidrio} vidrios, ${grupos.size} grupos; ${Math.round(trisAntes)} tris de entrada, simplificación sin textura ${Math.round(estadisticaSimplificacion.antes)} → ${Math.round(estadisticaSimplificacion.despues)}`
+    + (planta ? `; falsos techos bajo el corte eliminados: ${contadorFalsoTecho.triangulos} triángulos, ${contadorFalsoTecho.area.toFixed(1)} m²` : ''));
+  contadorFalsoTecho.triangulos = 0; contadorFalsoTecho.area = 0;
   await optimizar(d, { texturas: 1024 });
   await guardar(d, nombreFichero);
 }
@@ -510,8 +566,13 @@ async function construirEnvolvente(nombreFichero, planta = null) {
    No se generan tapas: las mallas que llegan del DWG son superficies
    abiertas y un CSG sobre ellas inventa tapas gigantes. La tapa la pone el
    visor pintando oscuras las caras traseras de la envolvente cortada, que
-   es lo que se ve por la boca del corte. */
-function cortarPorPlano(g, planta) {
+   es lo que se ve por la boca del corte.
+   Con `falsoTecho` (material de acabado interior) se eliminan además los
+   triángulos horizontales (Δy < 2 cm) que quedan en la banda
+   [cota − BANDA_FALSO_TECHO, cota]: son falsos techos que el plano no
+   alcanza y que, vistos desde arriba, taparían la vivienda (ver cabecera). */
+const contadorFalsoTecho = { triangulos: 0, area: 0 };
+function cortarPorPlano(g, planta, { falsoTecho = false } = {}) {
   const pos = g.attributes.position, nor = g.attributes.normal, uv = g.attributes.uv;
   const idx = g.index ? g.index.array : null;
   const n = idx ? idx.length : pos.count;
@@ -523,6 +584,15 @@ function cortarPorPlano(g, planta) {
     const t = [v(i), v(i + 1), v(i + 2)];
     const cx = (t[0].p[0] + t[1].p[0] + t[2].p[0]) / 3, cz = (t[0].p[2] + t[1].p[2] + t[2].p[2]) / 3;
     const yc = cortes.plantas[planta][plataformaDe(cx, cz)].y;
+    if (falsoTecho) {
+      const ys = t.map((a) => a.p[1]);
+      const yMin = Math.min(...ys), yMax = Math.max(...ys);
+      if (yMax - yMin < 0.02 && yMax <= yc + 1e-4 && yMin >= yc - BANDA_FALSO_TECHO) {
+        const ax = t[1].p[0] - t[0].p[0], az = t[1].p[2] - t[0].p[2], bx = t[2].p[0] - t[0].p[0], bz = t[2].p[2] - t[0].p[2];
+        contadorFalsoTecho.triangulos++; contadorFalsoTecho.area += Math.abs(ax * bz - az * bx) / 2;
+        continue;
+      }
+    }
     const arriba = t.map((a) => a.p[1] > yc);
     const cuantos = arriba.filter(Boolean).length;
     if (cuantos === 0) { t.forEach(push); continue; }
@@ -547,10 +617,10 @@ function cortarPorPlano(g, planta) {
   return r;
 }
 
-await construirEnvolvente('apolo_envolvente.glb');
+if (!SOLO_CORTES) await construirEnvolvente('apolo_envolvente.glb');
 
 /* ─────────────────────────── 5. Mobiliario y puertas ─────────────────────────── */
-{
+if (!SOLO_CORTES) {
   const d = documentoVacio(); const esc = d.createScene('apolo_mobiliario');
   d.getRoot().setDefaultScene(esc);
   const grupos = new Map();
@@ -577,7 +647,7 @@ await construirEnvolvente('apolo_envolvente.glb');
 if (!SIN_CORTES) for (const P of PLANTAS) await construirEnvolvente(`apolo_corte_${P.key}.glb`, P.key);
 
 /* ─────────────────────────── 7. Entorno ─────────────────────────── */
-{
+if (!SOLO_CORTES) {
   const d = cloneDocument(doc);
   const r = d.getRoot(); const esc = r.listScenes()[0];
   const cima = esc.listChildren()[0];
@@ -603,7 +673,7 @@ if (!SIN_CORTES) for (const P of PLANTAS) await construirEnvolvente(`apolo_corte
 }
 
 /* ─────────────────────────── 8. Modelo: cajas y encuadres ─────────────────────────── */
-{
+if (!SOLO_CORTES) {
   /* La caja de Apolo es la del DWG (idéntica de un modelo a otro: Apolo no se
      mueve). Los extras que se le suman (personas, fotovoltaica) se apuntan
      aparte para saber si sobresalen. */
