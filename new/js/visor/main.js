@@ -9,11 +9,11 @@
 
    Decisiones donde el contrato deja hueco (documentadas aquí):
 
-   · Carga: primero entorno.glb + apolo_envolvente.glb (primera imagen);
-     después, con el evento 'carga' (`secundaria: true`), el mobiliario y las
-     cuatro variantes cortadas por edificio.cargarSecundarios, que main
-     registra en cortes.js según llegan. Los cielos de los otros momentos se
-     hornean 2,5 s después de la primera imagen.
+   · Carga: cielo + entorno.glb + apolo_envolvente.glb en paralelo;
+     después, con el evento 'carga' (`secundaria: true`), el mobiliario.
+     Cada variante cortada se solicita al visitar su planta y se conserva
+     para las siguientes visitas. Los demás cielos se hornean 2,5 s después
+     de la primera imagen.
    · Entorno (assets/serenea/entorno.glb, 1.442 mallas sin nombre): se
      fusionan por material en unas 35 mallas Float32 en coordenadas de mundo
      (fusionarEntorno): 1.442 llamadas de dibujo por cada una de las cinco
@@ -92,7 +92,8 @@
      y se enciende la órbita al llegar.
    · post.setMomento durante el fundido de luz se llama con bloom y umbral
      interpolados pero SIN exposición: luz.js escribe la exposición.
-   · Pixel ratio: limitado a 1,5 (1,25 en 'media').
+   · Pixel ratio: limitado a 1,5 (1,25 en 'media', 1 en móvil); adaptativo
+     en movimiento, con restitución del máximo al detenerse.
    · Extras fuera del contrato, para el shell y las pruebas:
      apolo.recentrar(), apolo.vista, apolo.cargado, evento 'trazado',
      apolo.modulos y apolo.tiempos (ms de carga de cada fichero).
@@ -108,6 +109,7 @@ import { crearTrazador } from 'app/visor/trazador.js';
 import { cargarEdificio, crearVidrioFisico, EMISIVO_VENTANA, INTENSIDAD_VENTANA } from 'app/visor/edificio.js';
 import { crearCortes } from 'app/visor/cortes.js';
 import { crearCamara } from 'app/visor/camara.js';
+import { crearControlResolucion } from 'app/visor/rendimiento.js';
 import { ACTIVE_BUILDING } from 'app/promotions.js';
 import { FLOOR_DEFS } from 'app/layout.js';
 import { ESTADO_COLORS } from 'app/building.js';
@@ -185,9 +187,12 @@ const { renderer, scene, camera } = ctx;
 camera.far = CAMARA_FAR;
 camera.updateProjectionMatrix();
 
+let resolucion = null;
 function aplicarDPR(tier) {
   const tope = MOVIL ? DPR_MAX.movil : (DPR_MAX[tier] || DPR_MAX.alta);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, tope));
+  const maximo = Math.min(window.devicePixelRatio || 1, tope);
+  renderer.setPixelRatio(maximo);
+  resolucion?.setLimites(0.75, maximo);
 }
 aplicarDPR(ctx.calidad);
 
@@ -214,11 +219,13 @@ const apolo = {
 window.apolo = apolo;
 
 /* ── Módulos ── */
+/* CSM decide el número de cascadas en su constructor: cambiar la calidad
+   después solo reduce sus texturas y deja la tercera cascada en el móvil. */
+if (MOVIL) { ctx.setCalidad('media'); aplicarDPR('movil'); }
 const luz = crearLuz(ctx);
 scene.fog.near = NIEBLA.near;
 scene.fog.far = NIEBLA.far;
 luz.cieloNoche.scale.setScalar(ESCALA_CIELO_NOCHE);
-if (MOVIL) { ctx.setCalidad('media'); aplicarDPR('movil'); } // setCalidad reajusta el DPR: se vuelve a bajar
 const post = crearPost(ctx, luz, { ligero: MOVIL });
 const camara = crearCamara(ctx);
 const luzTrazado = {
@@ -234,9 +241,17 @@ const trazador = MOVIL ? {
 } : crearTrazador(ctx, luzTrazado);
 trazador.setRaster((dt) => post.render(dt));
 
+resolucion = crearControlResolucion({
+  maximo: renderer.getPixelRatio(),
+  alCambiar(ratio) {
+    renderer.setPixelRatio(ratio);
+    redimensionar(); // compositor y trazador reciben el mismo tamaño
+  },
+});
+
 let edificio = null, cortes = null, entorno = null;
 let cargando = true;
-apolo.modulos = { ctx, luz, post, camara, trazador, get edificio() { return edificio; }, get cortes() { return cortes; }, get entorno() { return entorno; } };
+apolo.modulos = { ctx, luz, post, camara, trazador, resolucion, get edificio() { return edificio; }, get cortes() { return cortes; }, get entorno() { return entorno; } };
 
 /* ── Entorno ── */
 /* De noche el barrio se enciende un poco: sin esto el pueblo y la costa
@@ -714,6 +729,8 @@ function repintar() {
 const raycaster = new THREE.Raycaster();
 const puntero = new THREE.Vector2(-2, -2);
 let ratonActivo = false;
+let hoverPendiente = true;
+const matrizHover = new THREE.Matrix4(), proyeccionHover = new THREE.Matrix4();
 let bajada = null;
 const ndc = (cx, cy, destino) => {
   const r = canvas.getBoundingClientRect();
@@ -734,11 +751,12 @@ function pickEn(p) {
   return null;
 }
 canvas.addEventListener('pointermove', (e) => {
+  hoverPendiente = true;
   if (e.pointerType !== 'mouse') { ratonActivo = false; return; }
   ratonActivo = true;
   ndc(e.clientX, e.clientY, puntero);
 });
-canvas.addEventListener('pointerleave', () => { ratonActivo = false; });
+canvas.addEventListener('pointerleave', () => { ratonActivo = false; hoverPendiente = true; });
 canvas.addEventListener('pointerdown', (e) => {
   alEntradaUsuario();
   bajada = e.button === 0 ? { x: e.clientX, y: e.clientY } : null;
@@ -757,6 +775,13 @@ canvas.addEventListener('touchstart', alEntradaUsuario, { passive: true });
 
 function actualizarHover() {
   if (!edificio) return;
+  /* Una cámara quieta y un puntero inmóvil dan la misma vivienda. También
+     se compara la proyección: al redimensionar puede cambiar el resultado. */
+  if (!hoverPendiente && matrizHover.equals(camera.matrixWorld)
+    && proyeccionHover.equals(camera.projectionMatrix)) return;
+  hoverPendiente = false;
+  matrizHover.copy(camera.matrixWorld);
+  proyeccionHover.copy(camera.projectionMatrix);
   const id = ratonActivo ? pickEn(puntero) : null;
   if (id === apolo.hover) return;
   apolo.hover = id;
@@ -822,14 +847,16 @@ Object.assign(apolo, {
     if (apolo.selected) apolo.select(null);
     post.setEnfoque(null);
     apolo.floor = clave;
-    /* En el móvil la planta cortada se pide al elegirla (ver cargarSecundarios). */
-    if (MOVIL && clave !== 'all' && !edificio.variantes.has(clave)) {
+    /* La planta solicitada tiene prioridad sobre las que todavía no se
+       han visitado. El recorte provisional mantiene la transición actual. */
+    if (clave !== 'all' && !edificio.variantes.has(clave)) {
       edificio.cargarVariante(clave, (k, objeto) => cortes?.registrarVariante(k, objeto));
     }
     luz.setRealcePlanta(clave !== 'all');
     post.setOclusion(clave === 'all' ? 'exterior' : 'interior');
     edificio.setCartelas(clave === 'all' ? null : clave);
     apolo.hover = null;
+    hoverPendiente = true;
     repintar();
     emitir('planta', clave);
     materialesEnMovimientoHasta = reloj.elapsedTime + 1.8; // rampa de atenuación de cortes
@@ -949,7 +976,8 @@ ctx.on('momento', (clave) => {
   emitir('momento', clave);
   trazador.actualizarMateriales(); // las ventanas cambiaron de emisivo
 });
-ctx.on('geometria', () => actualizarReflectantes());
+ctx.on('geometria', () => { hoverPendiente = true; actualizarReflectantes(); });
+ctx.on('materiales', () => { hoverPendiente = true; });
 
 /* ── Bucle ── */
 const reloj = new THREE.Clock();
@@ -958,13 +986,20 @@ let materialesPendientes = false;
 const ultimoTrazado = { activo: null, progreso: -1, muestras: -1, pintando: null };
 function fotograma() {
   requestAnimationFrame(fotograma);
-  const dt = Math.min(reloj.getDelta(), 0.1);
+  const dtReal = reloj.getDelta();
+  if (document.hidden) return;
+  const dt = Math.min(dtReal, 0.1);
   const t = reloj.elapsedTime;
   camara.update(dt);
   if (edificio) ajustarSombras();
   luz.update(dt);
   cortes?.update(dt);
   actualizarHover();
+
+  resolucion.update(dtReal, {
+    moviendo: !camara.quieta || !!cortes?.enTransicion || luz.enTransicion,
+    medir: !cargando,
+  });
 
   post.setVelocidadCamara(camara.velocidad);
   if (luz.enTransicion) post.setMomento({ bloom: luz.actual.bloom, umbral: luz.actual.umbral });
@@ -1028,13 +1063,13 @@ async function arrancar() {
   const t0 = performance.now();
   emitir('carga', { progreso: 0, etapa: 'inicio' });
   fotograma(); // el cielo ya se ve mientras llega el edificio
-  await luz.listo;
-  avanzar('luz', 1);
-
+  /* El cielo y los modelos son descargas independientes. Los materiales
+     se registran en luz al llegar y la integración espera a los tres. */
   const [ed, ent] = await Promise.all([
     cargarEdificio(ctx, ACTIVE_BUILDING, { luz, onProgreso: (f) => avanzar('edificio', f) }).then((e) => { avanzar('edificio', 1); return e; }),
     cargarEntorno((f) => avanzar('entorno', f)).then((e) => { avanzar('entorno', 1); return e; })
       .catch((err) => { console.warn('[apolo] sin entorno:', err); avanzar('entorno', 1); return null; }),
+    luz.listo.then(() => avanzar('luz', 1)),
   ]);
   edificio = ed;
   entorno = ent;
@@ -1076,13 +1111,12 @@ async function arrancar() {
   emitir('planta', apolo.floor);
   emitir('momento', apolo.momento);
 
-  /* Segundo plano tras la primera imagen: mobiliario y variantes cortadas
-     (se registran en cortes según llegan), y los otros tres cielos. */
+  /* Segundo plano tras la primera imagen: mobiliario y los otros cielos.
+     Las variantes cortadas se registran al pedir su planta. */
   edificio.cargarSecundarios({
-    /* En el móvil las cuatro plantas cortadas (35 MB de geometría) no se
-       descargan de entrada: cada una llega cuando se elige, y mientras tanto
-       cortes.js recorta por planos. */
-    plantas: MOVIL ? [] : null,
+    /* Las cuatro variantes suman 33,6 MB. Se conservan las ya visitadas;
+       las demás no compiten con el mobiliario ni ocupan memoria al abrir. */
+    plantas: [],
     onProgreso: (f, etapa) => emitir('carga', { progreso: f, etapa, secundaria: true }),
     alMobiliario: (objeto) => { cortes.registrarMobiliario(objeto); ctx.emit('geometria', { mobiliario: true }); },
     alVariante: (clave, objeto) => cortes.registrarVariante(clave, objeto),

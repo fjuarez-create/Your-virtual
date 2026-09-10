@@ -234,6 +234,7 @@ export function crearTrazador(ctx, luz, opciones = {}) {
     teselasPorFotograma: null, // null → según calidad
     enMedia: false,            // permitir el trazador también en calidad 'media'
     sinWorker: false,          // depuración: BVH síncrono en el hilo principal
+    maxMuestras: 512,          // después se presenta la imagen acumulada; 0 permite acumular sin límite
     ...opciones,
   };
 
@@ -316,7 +317,11 @@ export function crearTrazador(ctx, luz, opciones = {}) {
         sincronizarSol();
       }
       const n = conf.teselasPorFotograma ?? (CALIDADES[ctx.calidad] || CALIDADES.alta).teselasPorFotograma;
-      for (let i = 0; i < n; i++) pt.renderSample();
+      /* La biblioteca permite seguir presentando la imagen sin lanzar
+         nuevos rayos. Movimiento, materiales o luz reinician las muestras
+         y reanudan el refinado automáticamente. */
+      pt.pausePathTracing = conf.maxMuestras > 0 && pt.samples >= conf.maxMuestras;
+      for (let i = 0; i < (pt.pausePathTracing ? 1 : n); i++) pt.renderSample();
       trazador.muestras = pt.samples;
       if (conf.cartelas) pintarCartelas();
       return true;

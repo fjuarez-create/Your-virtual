@@ -80,6 +80,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
 import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
 import { Pass } from 'three/addons/postprocessing/Pass.js';
 
 /* ───────────────────────── Mallas invisibles ───────────────────────── */
@@ -293,10 +294,9 @@ const CALIDADES = {
   media: { aoMuestras: 8,  aoDenoise: 8,  desenfoqueMuestras: 8,  ssr: false, ssrEscala: 0.5 },
 };
 
-/* `ligero`: cadena mínima para el móvil (ver cabecera del visor). Se quedan
-   el render, el bloom y la salida; no se crean la oclusión, los reflejos, el
-   desenfoque de movimiento, el bokeh ni el suavizado, que son seis destinos
-   de pantalla completa que el navegador del teléfono no puede sostener. */
+/* `ligero`: render, bloom, salida y un suavizado FXAA de una pasada. Usa
+   los buffers del compositor; no crea los destinos de SMAA, la oclusión,
+   los reflejos, el desenfoque de movimiento ni el bokeh. */
 export function crearPost(ctx, luz, opciones = {}) {
   const { renderer, scene, camera } = ctx;
   const ligero = !!opciones.ligero;
@@ -332,7 +332,11 @@ export function crearPost(ctx, luz, opciones = {}) {
      cadena; ver la cabecera del fichero. */
   const gbuffer = { get depthTexture() { return gtao?.depthTexture; }, get normalTexture() { return gtao?.normalTexture; } };
 
-  const ssr = ligero ? null : new SSRPassCompuesto({ renderer, scene, camera, width: w, height: h, selects: null }, gbuffer);
+  /* Una pasada desactivada también reserva destinos de render al crearla.
+     Los perfiles actuales no usan SSR; la demo puede solicitarlo mediante
+     opciones.reflejos sin imponer ese coste al showroom. */
+  const conSSR = !ligero && (opciones.reflejos === true || Object.values(CALIDADES).some((c) => c.ssr));
+  const ssr = conSSR ? new SSRPassCompuesto({ renderer, scene, camera, width: w, height: h, selects: null }, gbuffer) : null;
   if (ssr) {
     ssr.opacity = 0.35;
     ssr.maxDistance = 60;
@@ -358,13 +362,17 @@ export function crearPost(ctx, luz, opciones = {}) {
 
   const smaa = ligero ? null : new SMAAPass();
   const output = new OutputPass();
+  /* A DPR 1, el móvil antes quedaba sin ningún antialias. FXAA opera sobre
+     la imagen de salida y conserva nítida la interfaz HTML superpuesta. */
+  const fxaa = ligero ? new ShaderPass(FXAAShader) : null;
+  if (fxaa) fxaa.setSize = (ancho, alto) => fxaa.uniforms.resolution.value.set(1 / Math.max(1, ancho), 1 / Math.max(1, alto));
   const ocultar = new OcultarInvisiblesPass(scene);
 
-  for (const p of [renderPass, ocultar, gtao, ssr, desenfoque, bloom, bokeh, smaa, output]) if (p) composer.addPass(p);
+  for (const p of [renderPass, ocultar, gtao, ssr, desenfoque, bloom, bokeh, smaa, output, fxaa]) if (p) composer.addPass(p);
   let activo = true; // false tras dispose: los eventos de ctx no se pueden desregistrar
 
   const post = {
-    composer, gtao, ssr, desenfoque, bloom, bokeh, smaa,
+    composer, gtao, ssr, desenfoque, bloom, bokeh, smaa, fxaa,
     enfoque: null,
     velocidad: 0,
 
@@ -404,12 +412,16 @@ export function crearPost(ctx, luz, opciones = {}) {
       if (!activo) return;
       const ratio = renderer.getPixelRatio();
       if (nw === w && nh === h && ratio === ratioActual) return;
+      const cambiaTamano = nw !== w || nh !== h;
+      const cambiaRatio = ratio !== ratioActual;
       w = nw; h = nh; ratioActual = ratio;
       /* composer.setSize multiplica por el pixel ratio y se lo pasa a cada
          pasada, así todos los destinos intermedios miden lo mismo que el
          lienzo en píxeles de dispositivo. */
-      composer.setPixelRatio(renderer.getPixelRatio());
-      composer.setSize(w, h);
+      /* setPixelRatio ya redimensiona todas las pasadas. Durante el ajuste
+         automático el tamaño CSS no cambia: no reasignar dos veces. */
+      if (cambiaRatio) composer.setPixelRatio(ratio);
+      if (cambiaTamano) composer.setSize(w, h);
     },
 
     setCalidad(tier) {
@@ -421,9 +433,7 @@ export function crearPost(ctx, luz, opciones = {}) {
       if (ssr) ssr.resolutionScale = c.ssrEscala;
       post.ssrActivo = c.ssr;
       // el pixel ratio ha podido cambiar (escena.setCalidad): rehacer destinos
-      ratioActual = renderer.getPixelRatio();
-      composer.setPixelRatio(ratioActual);
-      composer.setSize(w, h);
+      post.setTamano(w, h);
     },
 
     setEnfoque(distancia) {

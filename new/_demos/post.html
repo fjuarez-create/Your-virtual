@@ -107,7 +107,7 @@ bim.group.traverse((o) => {
 });
 estado.triangulos = Math.round(triangulos);
 
-const post = crearPost(ctx, null);
+const post = crearPost(ctx, null, { reflejos: true });
 post.setReflectantes([...vidrios, suelo]);
 post.setMomento({ bloom: 0.14, umbral: 0.92, exposicion: 1.0 });
 
