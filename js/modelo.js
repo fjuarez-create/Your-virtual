@@ -186,6 +186,7 @@ function crearVidrio() {
     ior: 1.52, reflectivity: 0.62, emissive: EMISIVO_VENTANA, emissiveIntensity: 0,
   });
   m.userData.baseOpacity = m.opacity;
+  m.userData.sinTraseras = true;   // por dentro se vería opaco
   return m;
 }
 
