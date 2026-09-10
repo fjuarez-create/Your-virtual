@@ -126,7 +126,7 @@ export const MOMENTOS = {
 
 const ANCHO = 1024, ALTO = 512;
 /* Realce de la planta seccionada (ver cabecera). */
-export const REALCE = { elevacion: 62, hemi: 1.45, ibl: 1.25, hemiNoche: 2.4, iblNoche: 1.3, duracion: 1.0 };
+export const REALCE = { elevacion: 62, hemi: 1.45, ibl: 1.25, hemiNoche: 4.2, iblNoche: 1.8, duracion: 1.0 };
 const CLAVES_NUM = ['solInt', 'hemiInt', 'rellenoInt', 'exposicion', 'bloom', 'umbral', 'ibl', 'fondo', 'noche'];
 const CLAVES_COLOR = ['sol', 'cielo', 'suelo', 'relleno', 'niebla'];
 

@@ -337,8 +337,8 @@ const INTRO = {
     new THREE.Vector3(320, 350, 580),
     new THREE.Vector3(60, 210, 400),
     new THREE.Vector3(-150, 110, 240),
-    new THREE.Vector3(-90, 66, 145),
-    new THREE.Vector3(72, 56, 100),
+    new THREE.Vector3(-70, 70, 120),
+    new THREE.Vector3(65, 91, 93),
   ], false, 'centripetal', 0.4),
   t0: new THREE.Vector3(0, 150, -60),
   t1: new THREE.Vector3(0, 9, 0),
@@ -421,13 +421,22 @@ function goOverview(dur = 1.6) {
   tweenCamera(new THREE.Vector3(cx, cy, cz), new THREE.Vector3(tx, ty, tz), dur);
 }
 
+/* Al sur de Apolo, pegado, va uno de los edificios propuestos de SERENEA, tan
+   largo y tan alto como él. Desde el sur bajo tapa media planta, así que la
+   vista de planta mira desde muy arriba (unos 63°) y con el objetivo corrido
+   HACIA_NORTE metros al norte: la cámara queda justo encima del vecino y la
+   planta ocupa el fotograma entero. */
+const HACIA_NORTE = 4;
+
 function goFloor(key, dur = 1.3) {
   const { suelo, corte } = M ? M.cotasPlanta(key) : { suelo: 0, corte: 12 };
   const y = (suelo + corte) / 2;
-  const d = distanciaParaLargo();
-  // elevación alta (unos 52°) y casi de frente al eje largo: la planta se lee
-  // como un plano habitado, que es de lo que va esta vista
-  tweenCamera(new THREE.Vector3(6, y + d * 0.78, d * 0.62), new THREE.Vector3(0, y, 0), dur);
+  const d = distanciaParaLargo(1.0);
+  tweenCamera(
+    new THREE.Vector3(5, y + d * 0.86, d * 0.50 - HACIA_NORTE),
+    new THREE.Vector3(0, y, -HACIA_NORTE),
+    dur
+  );
 }
 
 function goPlano(key, dur = 1.2) {

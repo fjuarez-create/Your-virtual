@@ -22,7 +22,10 @@ export const DEVELOPMENTS = [
         name: 'Apolo',
         active: true,
         center: [0, 9, 0],        // objetivo de cámara (centro de Apolo, a media altura)
-        camera: [72, 56, 100],    // posición de cámara del encuadre general
+        camera: [65, 91, 93],     // desde el sureste, a 140 m y 36° de altura: la
+                                  // visual pasa por encima del edificio propuesto
+                                  // que SERENEA tiene pegado al sur y entra la
+                                  // fachada larga entera
         units: 'data/units.json',
         availability: 'data/availability.json',
         modelo: 'assets/serenea/apolo_envolvente.glb',
