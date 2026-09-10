@@ -207,6 +207,12 @@ export function crearCamara(ctx) {
 
   /* Cota mínima admitida en un punto (ver limitarSuelo). */
   let sueloDe = null;
+  /* Volumen que la cámara no puede atravesar: la huella del edificio y su
+     techo visible (la cubierta con el edificio completo; la cota de corte con
+     una planta aislada). Se trata como en un videojuego: no se atraviesan
+     muros ni se ve el proyecto desde debajo. `setVolumen(null)` lo desactiva. */
+  let volumen = null;
+  const MARGEN_VOLUMEN = 0.6;   // m de holgura sobre el techo y fuera de la fachada
   function sueloEn(x, z) {
     if (!sueloDe) return SUELO;
     const v = sueloDe(x, z);
@@ -263,6 +269,43 @@ export function crearCamara(ctx) {
     controles.maxPolarAngle = Math.max(POLAR_MIN, polarMax);
   }
 
+  /* Si la cámara ha entrado en el volumen del edificio (o por debajo del
+     suelo), se la devuelve fuera por el camino más corto: hacia arriba si ya
+     está cerca del techo, y si no, por la fachada más próxima. Se escribe en
+     los controles, no en la cámara, para que el estado interno no se pelee
+     con la corrección en el fotograma siguiente. */
+  const _p = new THREE.Vector3(), _t = new THREE.Vector3();
+  function limitarVolumen() {
+    controles.getPosition(_p, true);
+    let tocado = false;
+
+    const ySuelo = sueloEn(_p.x, _p.z);
+    if (_p.y < ySuelo) { _p.y = ySuelo; tocado = true; }
+
+    if (volumen) {
+      const { min, max, techo } = volumen;
+      const dentro = _p.x > min.x && _p.x < max.x && _p.z > min.z && _p.z < max.z && _p.y < techo;
+      if (dentro) {
+        const salidas = [
+          { d: _p.x - min.x, eje: 'x', v: min.x },
+          { d: max.x - _p.x, eje: 'x', v: max.x },
+          { d: _p.z - min.z, eje: 'z', v: min.z },
+          { d: max.z - _p.z, eje: 'z', v: max.z },
+          { d: techo - _p.y, eje: 'y', v: techo },
+        ];
+        salidas.sort((a, b) => a.d - b.d);
+        const s = salidas[0];
+        _p[s.eje] = s.v;
+        tocado = true;
+      }
+    }
+
+    if (!tocado) return;
+    controles.getTarget(_t, true);
+    controles.setPosition(_p.x, _p.y, _p.z, false);
+    controles.setTarget(_t.x, _t.y, _t.z, false);
+  }
+
   function update(dt) {
     if (!(dt > 0)) dt = 0;
     reloj += dt;
@@ -296,6 +339,7 @@ export function crearCamara(ctx) {
 
     limitarSuelo();
     if (controles.update(dt)) marcarMovimiento();
+    if (!vuelo) limitarVolumen(); // durante un vuelo manda el guion de cámara
     if (usuarioActivo) marcarMovimiento();
 
     if (salto) {
@@ -329,6 +373,15 @@ export function crearCamara(ctx) {
     volarA, encuadrar, enfocarVivienda, orbitaAutomatica, reposoTras, update, interrumpir, destruir,
     /** Cota mínima de la cámara en cada punto: fn(x, z) → y mínima. */
     setSuelo(fn) { sueloDe = typeof fn === 'function' ? fn : null; },
+
+    /** Volumen infranqueable: { min: {x,z}, max: {x,z}, techo } o null. */
+    setVolumen(v) {
+      volumen = v && Number.isFinite(v.techo) ? {
+        min: { x: v.min.x + MARGEN_VOLUMEN, z: v.min.z + MARGEN_VOLUMEN },
+        max: { x: v.max.x - MARGEN_VOLUMEN, z: v.max.z - MARGEN_VOLUMEN },
+        techo: v.techo + MARGEN_VOLUMEN,
+      } : null;
+    },
     get quieta() { return !vuelo && !usuarioActivo && !orbita.activa && reloj - ultimoMovimiento >= QUIETA_TRAS; },
     get velocidad() { return velocidad; },
     get enTransicion() { return !!vuelo; },

@@ -109,7 +109,10 @@ export const DISTANCIA_VIDRIO = 0.45;    // m del centro del vidrio a la huella 
 export const RANGO_Y_VIDRIO = [-0.5, 3.2]; // y del vidrio respecto al suelo de la vivienda
 export const ALTURA_VIVIENDA = 2.7;      // m; alto de la caja de encuadre
 export const ALTURA_CARTELA = 1.2;       // m sobre y1
-export const CARTELA_PX = 46;            // alto del sprite de la cartela en px para un lienzo de 720 px (ver cabecera)
+/* Estor bajado de las vendidas (ver setVentanas): cuánto se oscurece el
+   vidrio, cuánto reflejo pierde y cuánto se cierra. */
+export const ESTOR = { color: 0.35, reflejo: 0.25, opacidad: 0.3 };
+export const CARTELA_PX = 34;            // alto del sprite de la cartela en px para un lienzo de 720 px (ver cabecera)
 export const EMISIVO_VENTANA = 0xffd9a0; // luz cálida de interior
 export const INTENSIDAD_VENTANA = 1.4;   // por encima de 1 para que el bloom lo recoja
 
@@ -164,24 +167,31 @@ export function crearVidrioFisico() {
    sprite mide `escala / tan(fov/2)` del alto del lienzo (en NDC, sobre 2),
    así que CARTELA_PX px a 720 px son escalaY = CARTELA_PX/720 · 2 · tan(fov/2). */
 function crearCartela(texto, fondo, capa, fovGrados = 45) {
+  /* Píldora con esquinas redondeadas y rabito corto, del tamaño de un botón
+     del menú: la cartela de antes (caja recta, 42 px en negrita) pesaba
+     demasiado sobre el modelo y tapaba la vivienda de al lado. */
   const cv = document.createElement('canvas');
   cv.width = 224; cv.height = 128;
   const c2 = cv.getContext('2d');
-  c2.shadowColor = 'rgba(17,17,18,0.3)';
-  c2.shadowBlur = 10;
-  c2.shadowOffsetY = 5;
+  const x0 = 56, y0 = 26, x1 = 168, y1 = 88, r = 16, rabo = 10;
+  c2.shadowColor = 'rgba(17,17,18,0.28)';
+  c2.shadowBlur = 8;
+  c2.shadowOffsetY = 3;
   c2.fillStyle = fondo;
-  const x0 = 42, y0 = 14, x1 = 182, y1 = 92;
   c2.beginPath();
-  c2.moveTo(x0, y0); c2.lineTo(x1, y0); c2.lineTo(x1, y1);
-  c2.lineTo(125, y1); c2.lineTo(112, y1 + 19); c2.lineTo(99, y1);
-  c2.lineTo(x0, y1); c2.closePath();
+  c2.moveTo(x0 + r, y0);
+  c2.lineTo(x1 - r, y0); c2.quadraticCurveTo(x1, y0, x1, y0 + r);
+  c2.lineTo(x1, y1 - r); c2.quadraticCurveTo(x1, y1, x1 - r, y1);
+  c2.lineTo(112 + rabo, y1); c2.lineTo(112, y1 + rabo); c2.lineTo(112 - rabo, y1);
+  c2.lineTo(x0 + r, y1); c2.quadraticCurveTo(x0, y1, x0, y1 - r);
+  c2.lineTo(x0, y0 + r); c2.quadraticCurveTo(x0, y0, x0 + r, y0);
+  c2.closePath();
   c2.fill();
   c2.shadowColor = 'transparent';
   c2.fillStyle = '#ffffff';
-  c2.font = '700 42px "Open Sans", "Segoe UI", sans-serif';
+  c2.font = '600 34px "Open Sans", "Segoe UI", sans-serif';
   c2.textAlign = 'center'; c2.textBaseline = 'middle';
-  c2.fillText(texto, 112, 54);
+  c2.fillText(texto, 112, 58);
   const tex = new THREE.CanvasTexture(cv);
   tex.anisotropy = 8;
   tex.colorSpace = THREE.SRGBColorSpace;
@@ -501,6 +511,9 @@ export async function cargarEdificio(ctx, slot, opciones = {}) {
   const pickables = [...viviendas.values()].map((v) => v.mesh);
   let ultimo = { hover: null, seleccionada: null, atenuada: null };
   let cartelasDe = null;
+  /* Vivienda "abierta": ya se ha entrado a verla por dentro, así que no lleva
+     ni prisma ni cartela; estorbarían justo lo que se ha ido a ver. */
+  let abierta = null;
 
   const edificio = {
     grupo, envolvente, niveles, viviendas, estados, pickables, vidrio, units: listaUnits, unitsById,
@@ -539,12 +552,23 @@ export async function cargarEdificio(ctx, slot, opciones = {}) {
     },
 
     /* Enciende el interior de disponibles y reservadas; una vendida es de
-       alguien y su ventana no cuenta la historia comercial. */
+       alguien y su ventana no cuenta la historia comercial. Además, la
+       vendida baja el estor: su vidrio se oscurece y pierde reflejo, de modo
+       que se lee como ocupada y no como un fallo del visor (antes solo se
+       distinguía por no tener cartela, y parecía que no se podía pinchar). */
     setVentanas(encendidas) {
       edificio.ventanas = !!encendidas;
       for (const v of viviendas.values()) {
-        const on = edificio.ventanas && edificio.estadoDe(v.id) !== 'vendida';
-        for (const m of v.vidrios) m.emissiveIntensity = on ? INTENSIDAD_VENTANA : 0;
+        const vendida = edificio.estadoDe(v.id) === 'vendida';
+        const on = edificio.ventanas && !vendida;
+        for (const m of v.vidrios) {
+          m.emissiveIntensity = on ? INTENSIDAD_VENTANA : 0;
+          const base = m.userData.baseColor;
+          if (base) m.color.copy(base).multiplyScalar(vendida ? ESTOR.color : 1);
+          if (m.userData.baseEnv !== undefined) m.envMapIntensity = m.userData.baseEnv * (vendida ? ESTOR.reflejo : 1);
+          if (m.userData.baseOpacity !== undefined) m.opacity = vendida ? Math.min(1, m.userData.baseOpacity + ESTOR.opacidad) : m.userData.baseOpacity;
+          m.roughness = vendida ? 0.35 : 0.05;
+        }
       }
     },
 
@@ -557,22 +581,35 @@ export async function cargarEdificio(ctx, slot, opciones = {}) {
         const vendida = estado === 'vendida';
         const dim = atenuada ? !!atenuada(v.id) : false;
         mat.color.copy(col);
-        if (v.id === seleccionada && !vendida && !dim) {
-          mat.opacity = 0.45;
-          mat.emissive.copy(col).multiplyScalar(0.35);
+        /* Más ligeros que antes: el verde y el naranja tapaban la vivienda
+           que querían señalar. Y la vivienda ya abierta no lleva prisma: se
+           ha entrado a verla por dentro. */
+        if (v.id === abierta) {
+          mat.opacity = 0;
+          mat.emissive.setHex(0x000000);
+        } else if (v.id === seleccionada && !vendida && !dim) {
+          mat.opacity = 0.26;
+          mat.emissive.copy(col).multiplyScalar(0.22);
         } else if (v.id === hover && !vendida && !dim) {
-          mat.opacity = 0.32;
-          mat.emissive.copy(col).multiplyScalar(0.2);
+          mat.opacity = 0.18;
+          mat.emissive.copy(col).multiplyScalar(0.14);
         } else {
           mat.opacity = 0;
           mat.emissive.setHex(0x000000);
         }
         mat.depthTest = false; // realce visible a través de los muros
         v.mesh.visible = mat.opacity > 0; // en reposo no se dibuja (ver cabecera: G-buffer del post)
-        const marcable = !dim && cartelasDe === v.floorKey;
+        const marcable = !dim && cartelasDe === v.floorKey && v.id !== abierta;
         v.label.visible = marcable && estado === 'disponible';
         v.labelR.visible = marcable && estado === 'reservada';
       }
+    },
+
+    /* La vivienda que se está visitando por dentro (o null). */
+    setViviendaAbierta(id) {
+      if (abierta === id) return;
+      abierta = id;
+      edificio.pintar(ultimo);
     },
 
     /* Cartelas de una planta ('baja' | 'p1' | 'p2' | 'atico') o ninguna. */

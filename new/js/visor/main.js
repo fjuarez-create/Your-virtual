@@ -121,11 +121,11 @@ const PLANTAS = FLOOR_DEFS.filter((f) => f.key !== 'cubierta');
 const CLAVES_PLANTA = new Set(['all', ...PLANTAS.map((f) => f.key)]);
 const NIVEL_DE = new Map(PLANTAS.map((f, i) => [f.key, i]));
 const RUTA_ENTORNO = 'assets/serenea/entorno.glb';
-const AZIMUT = { conjunto: -60, edificio: 40, planta: 8 };
-const ELEVACION = { conjunto: 16, edificio: 32, planta: 50 };
-const MARGEN = { conjunto: 1.05, edificio: 1.03, planta: 1.02 };
-const LADO_CONJUNTO = 330;        // m del encuadre 'conjunto' en el eje largo (x)
-const FONDO_CONJUNTO = 190;       // m del mismo encuadre en z: la caja no es cuadrada, porque
+const AZIMUT = { conjunto: -52, edificio: 46, planta: 8, plano: 0 };
+const ELEVACION = { conjunto: 21, edificio: 24, planta: 50, plano: 88 };
+const MARGEN = { conjunto: 1.04, edificio: 1.02, planta: 1.02, plano: 1.03 };
+const LADO_CONJUNTO = 215;        // m del encuadre 'conjunto' en el eje largo (x)
+const FONDO_CONJUNTO = 130;       // m del mismo encuadre en z: la caja no es cuadrada, porque
                                   // en 16:9 una caja cuadrada se encuadra por el alto y deja
                                   // el edificio en una décima parte del ancho
 const PLANTA_HACIA_NORTE = 22;    // m que se alarga la caja de planta hacia −z (ver cabecera)
@@ -186,7 +186,7 @@ const bus = new EventTarget();
 const emitir = (evento, datos) => bus.dispatchEvent(new CustomEvent(evento, { detail: datos }));
 
 const apolo = {
-  floor: 'all', momento: 'dia', selected: null, hover: null, vista: 'conjunto',
+  floor: 'all', momento: 'dia', selected: null, hover: null, vista: 'conjunto', plano: false,
   units: [], unitsById: new Map(), estados: {}, cargado: false, tiempos: {},
   on(evento, fn) { bus.addEventListener(evento, (e) => fn(e.detail)); },
   enter() { /* compatibilidad con shell.js: no hay portada que atravesar */ },
@@ -220,6 +220,22 @@ let cargando = true;
 apolo.modulos = { ctx, luz, post, camara, trazador, get edificio() { return edificio; }, get cortes() { return cortes; }, get entorno() { return entorno; } };
 
 /* ── Entorno ── */
+/* De noche el barrio se enciende un poco: sin esto el pueblo y la costa
+   quedaban como un decorado apagado. No son farolas de verdad, es un emisivo
+   cálido muy bajo sobre los materiales del entorno; por debajo del umbral del
+   bloom, para que no florezca. */
+const materialesEntorno = [];
+const EMISIVO_PUEBLO = new THREE.Color(0xffb46a);
+const EMISIVO_PUEBLO_MAX = 0.09;
+function encenderEntorno(fraccionNoche) {
+  const f = Math.max(0, Math.min(1, fraccionNoche || 0));
+  for (const m of materialesEntorno) {
+    if (!m.emissive) continue;
+    m.emissive.copy(EMISIVO_PUEBLO);
+    m.emissiveIntensity = EMISIVO_PUEBLO_MAX * f;
+  }
+}
+
 const cargadorGLB = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
 function cargarGLB(url, onProgreso) {
   return new Promise((ok, ko) => cargadorGLB.load(url, ok, (xhr) => {
@@ -313,6 +329,7 @@ async function cargarEntorno(onProgreso) {
     for (const g of geometrias) { normalesNulas += g.userData.normalesNulas || 0; if (g !== fusionada) g.dispose(); }
     fusionada.computeBoundingBox(); fusionada.computeBoundingSphere();
     const mat = materialEntorno(material);
+    materialesEntorno.push(mat);
     const mesh = new THREE.Mesh(fusionada, mat);
     mesh.name = `entorno_${material.name}`;
     const terreno = /^ortho$|^PNOA_|mar_atlantico/.test(material.name);
@@ -352,6 +369,18 @@ function cajaConjunto() {
   caja.min.y = Math.min(caja.min.y, entorno ? Math.max(entorno.caja.min.y, caja.min.y - 30) : caja.min.y);
   return caja;
 }
+/* Volumen que la cámara no puede atravesar: la huella del edificio hasta su
+   techo visible (la cubierta con el edificio completo, la cota de corte con
+   una planta aislada). Se comporta como en un videojuego: no se traspasan
+   muros ni se ve el proyecto desde abajo. */
+function actualizarVolumen() {
+  if (!edificio) return;
+  const caja = edificio.caja;
+  const tramos = edificio.definicionCortes?.plantas?.[apolo.floor];
+  const techo = apolo.floor === 'all' || !tramos ? caja.max.y : Math.max(...tramos.map((t) => t.y));
+  camara.setVolumen({ min: { x: caja.min.x, z: caja.min.z }, max: { x: caja.max.x, z: caja.max.z }, techo });
+}
+
 /* Cota mínima admitida para la cámara en un punto: el suelo de la planta
    baja de ese cajón, más un metro de holgura. */
 function sueloTerreno(x, z) {
@@ -381,12 +410,21 @@ function cajaPlanta(clave) {
   caja.min.z -= PLANTA_HACIA_NORTE; // el bloque vecino del sur fuera del cuarto inferior (ver cabecera)
   return caja;
 }
+/* Vista cenital de la planta activa: la cámara justo encima, con la fuga que
+   ya tiene la cámara (no se toca el fov). Es el cuarto botón del raíl. */
+function cajaPlano(clave) {
+  const caja = cajaPlanta(clave);
+  caja.min.z -= 2; caja.max.z += 2;   // un respiro arriba y abajo del fotograma
+  return caja;
+}
+
 function encuadrarVista(vista, { duracion = 1.6 } = {}) {
   const cambia = apolo.vista !== vista;
   apolo.vista = vista;
   if (cambia && edificio) repintar(); // las cartelas vecinas dependen de la vista
   if (vista === 'conjunto') return camara.encuadrar(cajaConjunto(), { azimut: AZIMUT.conjunto, elevacion: ELEVACION.conjunto, margen: MARGEN.conjunto, duracion });
   if (vista === 'planta') return camara.encuadrar(cajaPlanta(apolo.floor), { azimut: AZIMUT.planta, elevacion: ELEVACION.planta, margen: MARGEN.planta, duracion });
+  if (vista === 'plano') return camara.encuadrar(cajaPlano(apolo.floor), { azimut: AZIMUT.plano, elevacion: ELEVACION.plano, margen: MARGEN.plano, duracion });
   return camara.encuadrar(edificio.caja, { azimut: AZIMUT.edificio, elevacion: ELEVACION.edificio, margen: MARGEN.edificio, duracion });
 }
 
@@ -526,7 +564,10 @@ function ajustarSombras() {
 
 /* ── API pública ── */
 Object.assign(apolo, {
-  setFloor(clave, { encuadrar = true, duracion = 1.6 } = {}) {
+  /* Cortar NO mueve la cámara: el comercial se coloca donde quiere y va
+     pasando plantas desde ahí. Solo el modo plano (el cuarto botón del raíl)
+     lleva la cámara al cenital. `encuadrar` fuerza uno u otro si hace falta. */
+  setFloor(clave, { encuadrar = null, duracion = 1.6 } = {}) {
     if (!CLAVES_PLANTA.has(clave)) return Promise.reject(new Error(`apolo: planta desconocida "${clave}"`));
     if (!edificio) return Promise.resolve(false);
     salirDelReposo();
@@ -545,8 +586,21 @@ Object.assign(apolo, {
     emitir('planta', clave);
     materialesEnMovimientoHasta = reloj.elapsedTime + 1.8; // rampa de atenuación de cortes
     const corte = cortes.setPlanta(clave);
-    if (encuadrar) encuadrarVista(clave === 'all' ? 'edificio' : 'planta', { duracion });
+    actualizarVolumen();
+    const mover = encuadrar === null ? (apolo.plano && clave !== 'all') : encuadrar;
+    if (mover) encuadrarVista(apolo.plano && clave !== 'all' ? 'plano' : (clave === 'all' ? 'edificio' : 'planta'), { duracion });
     return corte;
+  },
+
+  /* Cuarto botón del raíl: la misma barra de plantas, pero mirando el modelo
+     desde arriba. Al apagarlo la cámara se queda donde esté. */
+  setPlano(activo, { duracion = 1.6 } = {}) {
+    apolo.plano = !!activo;
+    emitir('plano', apolo.plano);
+    if (!apolo.plano) return Promise.resolve(false);
+    if (apolo.floor === 'all') return apolo.setFloor('baja', { encuadrar: true, duracion });
+    apolo.vista = 'plano';
+    return encuadrarVista('plano', { duracion });
   },
 
   setMomento(clave, { duracion = 1.6 } = {}) {
@@ -554,6 +608,7 @@ Object.assign(apolo, {
     apolo.momento = clave;
     // las ventanas cambian al arrancar el fundido; el bajón de exposición lo tapa
     if (edificio) { edificio.setVentanas(MOMENTOS[clave].luces); repintar(); }
+    encenderEntorno(MOMENTOS[clave].noche);
     return luz.setMomento(clave, { duracion });
   },
 
@@ -593,7 +648,12 @@ Object.assign(apolo, {
     const centro = v.caja.getCenter(new THREE.Vector3());
     const azimut = centro.z >= centroEdificio.z ? AZIMUT_VIVIENDA.sur : AZIMUT_VIVIENDA.norte;
     return camara.enfocarVivienda(v.caja, { duracion, azimut, elevacion: ELEVACION_VIVIENDA }).then((llego) => {
-      if (llego && apolo.selected === id) post.setEnfoque(camara.distanciaObjetivo);
+      if (llego && apolo.selected === id) {
+        post.setEnfoque(camara.distanciaObjetivo);
+        /* Ya se está dentro: el prisma de color y la cartela sobran y tapan
+           justo lo que se ha venido a ver. */
+        edificio.setViviendaAbierta(id);
+      }
       return llego;
     });
   },
@@ -601,14 +661,17 @@ Object.assign(apolo, {
   volverAPlanta({ duracion = 1.4 } = {}) {
     if (!edificio) return Promise.resolve(false);
     post.setEnfoque(null);
+    edificio.setViviendaAbierta(null);
     if (apolo.selected) apolo.select(null);
-    return encuadrarVista(apolo.floor === 'all' ? 'edificio' : 'planta', { duracion });
+    return encuadrarVista(apolo.plano && apolo.floor !== 'all' ? 'plano'
+      : (apolo.floor === 'all' ? 'edificio' : 'planta'), { duracion });
   },
 
   select(id, { enfocar = true } = {}) {
     if (!edificio) return;
     if (id != null && (!edificio.viviendas.has(id) || apolo.estadoDe(id) === 'vendida')) return;
     if (id == null) post.setEnfoque(null);
+    if (id !== apolo.selected) edificio.setViviendaAbierta(null); // otra vivienda: vuelve el prisma
     if (apolo.selected === id) return;
     apolo.selected = id;
     repintar();
@@ -718,6 +781,7 @@ async function arrancar() {
      cinco metros de un testero al otro, así que el límite se toma del cajón
      que le corresponde a cada punto. */
   camara.setSuelo(sueloTerreno);
+  actualizarVolumen();
 
   cortes = crearCortes(ctx, edificio, {
     luz, definicion: edificio.definicionCortes, suelos: edificio.suelos,

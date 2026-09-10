@@ -725,12 +725,32 @@ function updateCompass() {
 /* La cámara no baja nunca del suelo del edificio: ni por debajo de los
    forjados ni bajo la calle. El límite lo da el modelo en cada punto, porque
    el terreno se escalona casi cinco metros de un testero al otro. */
+const MARGEN_VOLUMEN = 0.6;   // m de holgura fuera de la fachada y sobre el techo
+
 function limitarSuelo() {
   if (!M) return;
-  const yMin = M.sueloEn(camera.position.x, camera.position.z);
-  if (camera.position.y < yMin) camera.position.y = yMin;
+  const p = camera.position;
+  const yMin = M.sueloEn(p.x, p.z);
+  if (p.y < yMin) p.y = yMin;
   const yMinObjetivo = M.sueloEn(controls.target.x, controls.target.z) - 2.5;
   if (controls.target.y < yMinObjetivo) controls.target.y = yMinObjetivo;
+
+  /* Tampoco se atraviesan los muros: si la cámara entra en la huella del
+     edificio por debajo de lo que se está viendo (la cubierta con el edificio
+     completo, la cota de corte con una planta aislada), se la devuelve fuera
+     por el lado más cercano. Como en un videojuego: el que mira no atraviesa
+     paredes ni se mete debajo del proyecto. */
+  const caja = M.caja;
+  const techo = (M.planta === 'all' ? caja.max.y : M.cotasPlanta(M.planta).corte) + MARGEN_VOLUMEN;
+  const minX = caja.min.x + MARGEN_VOLUMEN, maxX = caja.max.x - MARGEN_VOLUMEN;
+  const minZ = caja.min.z + MARGEN_VOLUMEN, maxZ = caja.max.z - MARGEN_VOLUMEN;
+  if (p.x <= minX || p.x >= maxX || p.z <= minZ || p.z >= maxZ || p.y >= techo) return;
+  const salidas = [
+    [p.x - minX, 'x', minX], [maxX - p.x, 'x', maxX],
+    [p.z - minZ, 'z', minZ], [maxZ - p.z, 'z', maxZ],
+    [techo - p.y, 'y', techo],
+  ].sort((a, b) => a[0] - b[0]);
+  p[salidas[0][1]] = salidas[0][2];
 }
 
 /* ─────────────────────────── Bucle ─────────────────────────── */

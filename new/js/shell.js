@@ -34,14 +34,15 @@ cuandoHayaApp((app) => {
   const bConjunto = $('#bConjunto');
   const bEdificio = $('#bEdificio');
   const bPlantas = $('#bPlantas');
+  const bPlano = $('#bPlano');
   const panel = $('#plantas');
 
   function marcarVista(id) {
-    for (const b of [bConjunto, bEdificio, bPlantas]) b.classList.toggle('on', b.id === id);
+    for (const b of [bConjunto, bEdificio, bPlantas, bPlano]) b.classList.toggle('on', b.id === id);
   }
 
-  bConjunto.addEventListener('click', () => { cerrarPanel(); app.irConjunto(); marcarVista('bConjunto'); });
-  bEdificio.addEventListener('click', () => { cerrarPanel(); app.irEdificio(); marcarVista('bEdificio'); });
+  bConjunto.addEventListener('click', () => { cerrarPanel(); app.setPlano(false); app.irConjunto(); marcarVista('bConjunto'); });
+  bEdificio.addEventListener('click', () => { cerrarPanel(); app.setPlano(false); app.irEdificio(); marcarVista('bEdificio'); });
 
   /* La barra se coloca a la altura del botón que la abre; se recalcula al
      abrir y al cambiar el tamaño de la ventana. */
@@ -51,17 +52,27 @@ cuandoHayaApp((app) => {
   }
   window.addEventListener('resize', alinearPanel);
 
-  bPlantas.addEventListener('click', () => {
+  /* Plantas (perspectiva) y Plano (cenital) comparten la misma barra: cambia
+     solo si al elegir planta la cámara se coloca encima o se queda donde
+     está. `abrirPlantas` recuerda cuál de los dos botones la ha abierto. */
+  function abrirPlantas(boton, plano) {
     alinearPanel();
-    const abierto = panel.classList.toggle('abierto');
-    bPlantas.classList.toggle('on', abierto);
+    const abierto = !panel.classList.contains('abierto') || boton.classList.contains('on') === false;
+    panel.classList.toggle('abierto', abierto);
+    app.setPlano(plano && abierto);
+    bPlantas.classList.toggle('on', abierto && !plano);
+    bPlano.classList.toggle('on', abierto && plano);
     if (abierto) { bConjunto.classList.remove('on'); bEdificio.classList.remove('on'); }
-    else marcarVista(app.floor === 'all' ? (app.vista === 'conjunto' ? 'bConjunto' : 'bEdificio') : 'bPlantas');
-  });
+    else marcarVista(app.floor === 'all' ? (app.vista === 'conjunto' ? 'bConjunto' : 'bEdificio') : (plano ? 'bPlano' : 'bPlantas'));
+  }
+
+  bPlantas.addEventListener('click', () => abrirPlantas(bPlantas, false));
+  bPlano.addEventListener('click', () => abrirPlantas(bPlano, true));
 
   function cerrarPanel() {
     panel.classList.remove('abierto');
     bPlantas.classList.remove('on');
+    bPlano.classList.remove('on');
   }
 
   // ── Panel de plantas (1 · 2 · 3 · 4 · Edificio completo, ya en el HTML) ──
@@ -74,8 +85,20 @@ cuandoHayaApp((app) => {
 
   function marcarPlanta(clave) {
     for (const b of $$('.planta-btn')) b.classList.toggle('on', b.dataset.planta === clave);
-    if (clave !== 'all') { bConjunto.classList.remove('on'); bEdificio.classList.remove('on'); bPlantas.classList.add('on'); }
+    if (clave !== 'all') {
+      bConjunto.classList.remove('on'); bEdificio.classList.remove('on');
+      bPlantas.classList.toggle('on', !app.plano);
+      bPlano.classList.toggle('on', !!app.plano);
+    }
   }
+  /* El modo plano también puede encenderse desde fuera (app.setPlano): el
+     raíl se entera por el evento, no solo por el clic. */
+  app.on('plano', (activo) => {
+    if (app.floor === 'all') return;
+    bPlantas.classList.toggle('on', !activo);
+    bPlano.classList.toggle('on', !!activo);
+  });
+
   app.on('planta', (clave) => {
     marcarPlanta(clave);
     if (clave === 'all' && !panel.classList.contains('abierto')) marcarVista(app.vista === 'conjunto' ? 'bConjunto' : 'bEdificio');

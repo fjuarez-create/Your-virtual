@@ -81,9 +81,11 @@ export const MOMENTOS = {
   amanecer: {
     nombre: 'Amanecer', elev: 7, azim: 76, turbidez: 3.6, rayleigh: 2.2,
     mie: 0.004, mieG: 0.82,
-    sol: 0xffc48a, solInt: 2.6, cielo: 0xb9c6e2, suelo: 0x55564e, hemiInt: 0.22,
-    relleno: 0xa8bcdc, rellenoInt: 0.16, exposicion: 1.06, niebla: 0xc9c2c6,
-    bloom: 0.28, umbral: 0.82, hdri: false, luces: true,
+    /* Bajado tras la revisión: con 2,6 y exposición 1,06 la fachada que da al
+       este se quemaba (blancos planos, sin dibujo en el monocapa). */
+    sol: 0xffc48a, solInt: 2.05, cielo: 0xb9c6e2, suelo: 0x55564e, hemiInt: 0.24,
+    relleno: 0xa8bcdc, rellenoInt: 0.16, exposicion: 0.98, niebla: 0xc9c2c6,
+    bloom: 0.2, umbral: 0.88, hdri: false, luces: true,
     ibl: 0.55, fondo: 0.7, solMax: 12000, noche: 0,
   },
   dia: {
@@ -98,11 +100,15 @@ export const MOMENTOS = {
     /* El sol rasante solo se lee si el cielo deja de mandar: con la luz
        hemisférica alta, la fachada recibe tanta luz difusa que el naranja del
        sol no llega a notarse y la hora del día no cambia nada. */
-    nombre: 'Atardecer', elev: 4, azim: 250, turbidez: 5.5, rayleigh: 3.0,
+    /* Acimut: 0° es el sur y 270° el oeste (ver direccionDe). Con 250 el sol
+       caía por el noroeste y dejaba la fachada principal, la sur, a
+       contraluz. A 288 se pone por el oeste tirando al sur y la fachada larga
+       recibe la luz rasante, que es lo que se quiere enseñar. */
+    nombre: 'Atardecer', elev: 4, azim: 288, turbidez: 5.5, rayleigh: 3.0,
     mie: 0.0035, mieG: 0.84,
-    sol: 0xff8c3a, solInt: 3.2, cielo: 0xe0a878, suelo: 0x4a3a2c, hemiInt: 0.16,
-    relleno: 0xc98a52, rellenoInt: 0.16, exposicion: 1.12, niebla: 0xe0a06a,
-    bloom: 0.38, umbral: 0.78, hdri: false, luces: true,
+    sol: 0xff8c3a, solInt: 2.6, cielo: 0xe0a878, suelo: 0x4a3a2c, hemiInt: 0.18,
+    relleno: 0xc98a52, rellenoInt: 0.16, exposicion: 1.03, niebla: 0xe0a06a,
+    bloom: 0.3, umbral: 0.84, hdri: false, luces: true,
     ibl: 0.6, fondo: 0.7, solMax: 12000, noche: 0,
   },
   noche: {
