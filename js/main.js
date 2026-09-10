@@ -68,10 +68,35 @@ window.apolo = app; // depuración
 
 /* ─────────────────────────── Escena ─────────────────────────── */
 const canvas = $('#scene');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+/* `antialias` no pinta nada aquí: con el compositor puesto, lo único que se
+   dibuja en el framebuffer por defecto es el cuadrilátero de salida y los
+   sprites de cartela, que no tienen cantos que suavizar. El suavizado real lo
+   dan las cuatro muestras de composer.renderTarget1/2. Pedirlo igualmente
+   reservaba un framebuffer multimuestreado de unos 27 MB que no se usaba, y
+   en un iPhone esos megas son parte de lo que hace que Safari tire el
+   contexto. `stencil:false` quita otro adjunto que tampoco se usa. */
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false, stencil: false, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, MOVIL ? 1.5 : 2));
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = MOVIL ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
+
+/* Si iOS se queda sin memoria y mata el contexto, el lienzo se queda negro
+   para siempre y el bucle sigue dibujando sobre un contexto muerto. Con esto
+   se sabe que ha pasado y, al volver, se baja el listón para no repetirlo. */
+let contextoPerdido = false;
+canvas.addEventListener('webglcontextlost', (e) => {
+  e.preventDefault();               // sin esto iOS no puede restaurarlo
+  contextoPerdido = true;
+  console.warn('[apolo] contexto WebGL perdido');
+}, false);
+canvas.addEventListener('webglcontextrestored', () => {
+  contextoPerdido = false;
+  console.warn('[apolo] contexto WebGL restaurado');
+  renderer.setPixelRatio(1);        // menos píxeles, menos posibilidades de repetirlo
+  sun.shadow.mapSize.set(1024, 1024);
+  sun.shadow.map?.dispose(); sun.shadow.map = null;
+  sun.shadow.needsUpdate = true;
+}, false);
 /* Los planos de recorte del mobiliario (modelo.js) van por material. */
 renderer.localClippingEnabled = true;
 /* AgX en vez de ACES: ACES empasta la parte alta de la curva, y con un
@@ -269,7 +294,20 @@ sun.castShadow = true;
 // sobre 150 m se pasa de 12 cm por texel a menos de 4, que es lo que hace
 // falta para que se resuelva el canto de un antepecho o el retranqueo de una
 // ventana. Fuera de esa caja no hay nada que proyecte sombra que importe.
-sun.shadow.mapSize.set(4096, 4096);
+/* 4096² son unos 134 MB de memoria de vídeo en un mapa RGBA con
+   profundidad. En un teléfono eso, sumado a las texturas, es lo que agotaba
+   el presupuesto de Safari. 1024² sobre 150 m siguen siendo 15 cm por texel,
+   de sobra para lo que se ve en una pantalla de móvil. */
+sun.shadow.mapSize.set(MOVIL ? 1024 : 4096, MOVIL ? 1024 : 4096);
+/* Y no hace falta redibujarlo en cada fotograma: el sol solo se mueve al
+   cambiar de día a noche y al terminar de cargar. Se refresca a mano. */
+sun.shadow.autoUpdate = false;
+sun.shadow.needsUpdate = true;
+/* Lo que cambia lo que proyecta sombra es una lista corta: aislar una planta
+   (cambia la envolvente por la variante cortada y esconde el mobiliario de
+   arriba), pasar a noche (se mueve el sol) y que terminen de llegar las
+   piezas. En todos esos puntos se llama aquí. */
+const refrescarSombra = () => { sun.shadow.needsUpdate = true; };
 sun.shadow.camera.left = -75; sun.shadow.camera.right = 75;
 sun.shadow.camera.top = 75; sun.shadow.camera.bottom = -75;
 sun.shadow.camera.far = 340;
@@ -298,7 +336,13 @@ composer.addPass(new RenderPass(scene, camera));
 const qsAO = new URLSearchParams(location.search).get('ao');
 const usarAO = qsAO === '1' || (qsAO !== '0' && Math.min(screen.width, screen.height) >= 700);
 
-const gtao = new GTAOPass(scene, camera, innerWidth, innerHeight);
+/* Si no se va a usar, NO se construye: GTAOPass reserva cuatro destinos de
+   pantalla completa en cuanto nace, y en un teléfono esa memoria es
+   exactamente la que hace que Safari tire el contexto de WebGL (pantalla en
+   negro y tirón al restaurarlo). Antes se creaba siempre y solo se apagaba
+   con `enabled`, que no libera nada. */
+const gtao = usarAO ? new GTAOPass(scene, camera, innerWidth, innerHeight) : null;
+if (gtao) {
 gtao.enabled = usarAO;
 gtao.output = GTAOPass.OUTPUT.Default;
 /* El radio va en metros y marca hasta dónde busca oclusión. Con 0,55 m solo
@@ -319,6 +363,7 @@ gtao.updateGtaoMaterial({
 // filtrado más ancho: funde el ruido del muestreo sin comerse el contacto
 gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3.5, radius: 8, samples: 16 });
 composer.addPass(gtao);
+}
 const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.14, 0.5, 0.92);
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
@@ -423,8 +468,8 @@ function repaint() {
     app.selected,
     app.hover,
     fadeOf,
-    () => false,
-    (floorKey) => app.floor === floorKey   // solo la planta aislada lleva prisma apagado
+    app.night,                             // de noche se encienden las libres
+    (floorKey) => app.floor === floorKey   // solo la planta aislada lleva prisma de luz
   );
 }
 
@@ -477,6 +522,7 @@ app.setFloor = (key) => {
   app.floor = key;
   UI.markFloorButtons(key);
   if (M) M.setFloor(key);
+  refrescarSombra();
   if (app.selected && key !== 'all' && app.unitsById.get(app.selected)
     && floorOf(app.unitsById.get(app.selected)) !== key) app.select(null);
   if (key === 'all') {
@@ -642,6 +688,7 @@ app.setNight = (on) => {
   // Ventanas: se encienden las de las viviendas que siguen a la venta; las
   // vendidas se quedan a oscuras, como en el visor nuevo.
   if (M) M.setNight(on);
+  refrescarSombra();
   UI.markDayNight(on);
 };
 
@@ -781,8 +828,23 @@ const clock = new THREE.Clock();
 let autoRotate = true;
 controls.addEventListener('start', () => { autoRotate = false; });
 
-function loop() {
+/* Con la pestaña en segundo plano no se dibuja: WebKit purga recursos de GPU
+   de las pestañas ocultas, y volver con el reloj acumulado daba un salto de
+   cámara y un fotograma en negro. */
+let corriendo = true;
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { corriendo = false; return; }
+  if (corriendo) return;
+  corriendo = true;
+  clock.getDelta();          // descarta el tiempo que ha pasado oculto
+  onResize({ inmediato: true });
   requestAnimationFrame(loop);
+});
+
+function loop() {
+  if (!corriendo) return;    // lo vuelve a arrancar visibilitychange
+  requestAnimationFrame(loop);
+  if (contextoPerdido) return;
   const rawDt = clock.getDelta();
   const dt = Math.min(rawDt, 0.05);
 
@@ -815,14 +877,16 @@ function loop() {
   // El fondo se anula durante la pasada para no repintar el cielo encima
   // de la escena ya compuesta.
   const bg = scene.background;
-  scene.background = null;
-  renderer.autoClear = false;
-  renderer.clearDepth();
-  camera.layers.set(1);
-  renderer.render(scene, camera);
-  camera.layers.set(0);
-  renderer.autoClear = true;
-  scene.background = bg;
+  try {
+    scene.background = null;
+    renderer.autoClear = false;
+    camera.layers.set(1);
+    renderer.render(scene, camera);
+  } finally {
+    camera.layers.set(0);
+    renderer.autoClear = true;
+    scene.background = bg;
+  }
 }
 
 /* ─────────────────────────── Resize ───────────────────────────
@@ -835,7 +899,22 @@ function loop() {
    donde venga (giro, barras que aparecen, teclado, split view). */
 const tam = { w: 0, h: 0 };
 
-function onResize() {
+/* ── Por qué esto va con retardo ──
+   Cambiar el tamaño no es gratis: `composer.setSize` DESTRUYE y vuelve a
+   crear los dos destinos de pantalla completa, y GTAOPass otros cuatro. En
+   iOS, al plegarse la barra de direcciones, el alto del lienzo cambia en cada
+   fotograma de la animación, así que se estaban recreando seis destinos
+   sesenta veces por segundo. Eso es exactamente lo que se veía: parpadeo y
+   pantallazos en negro mientras se desplaza, y un tirón al soltar.
+   Ahora el cambio se aplica una sola vez, cuando el tamaño lleva un cuarto de
+   segundo quieto. Mientras tanto el 3D se estira un poco, que no se nota, en
+   vez de apagarse. El primer ajuste sí es inmediato, y el giro de pantalla
+   también, que ahí el salto es grande y conviene verlo ya. */
+const ESPERA_TAM = 250;   // ms de quietud antes de tocar los destinos
+let plazoTam = null;
+
+function aplicarTam() {
+  plazoTam = null;
   const w = Math.max(1, canvas.clientWidth || Math.round(window.visualViewport?.width || innerWidth));
   const h = Math.max(1, canvas.clientHeight || Math.round(window.visualViewport?.height || innerHeight));
   if (w === tam.w && h === tam.h) return;
@@ -843,16 +922,21 @@ function onResize() {
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
   renderer.setSize(w, h, false);
-  composer.setSize(w, h);
-  gtao.setSize(w, h);
+  composer.setSize(w, h);   // ya redimensiona el GTAO, y en píxeles de dispositivo
 }
 
-if (typeof ResizeObserver === 'function') new ResizeObserver(onResize).observe(canvas);
-window.addEventListener('resize', onResize);
-window.addEventListener('orientationchange', onResize);
-window.addEventListener('pageshow', onResize);
-window.visualViewport?.addEventListener('resize', onResize);
-window.visualViewport?.addEventListener('scroll', onResize);
+function onResize({ inmediato = false } = {}) {
+  if (plazoTam) { clearTimeout(plazoTam); plazoTam = null; }
+  if (inmediato || tam.w === 0) { aplicarTam(); return; }
+  plazoTam = setTimeout(aplicarTam, ESPERA_TAM);
+}
+
+if (typeof ResizeObserver === 'function') new ResizeObserver(() => onResize()).observe(canvas);
+window.addEventListener('resize', () => onResize());
+window.addEventListener('orientationchange', () => onResize({ inmediato: true }));
+window.addEventListener('pageshow', () => onResize({ inmediato: true }));
+window.visualViewport?.addEventListener('resize', () => onResize());
+window.visualViewport?.addEventListener('scroll', () => onResize());
 onResize();
 
 /* ─────────────────────────── Arranque ─────────────────────────── */
@@ -887,16 +971,20 @@ async function boot() {
     M = await cargarModelo(scene, app.unitsById, {
       estadoDe: app.estadoDe,
       plantasBajoDemanda: MOVIL,
+      /* Techo de textura: ver js/texturas.js. Sin él, el modelo sube casi
+         400 MB de imágenes a la tarjeta y Safari tira el contexto. */
+      texturaMax: MOVIL ? 512 : 1024,
       onProgreso: (texto) => { if (paso) paso.textContent = texto; },
     });
     app.modelo = M;
     B = { unitMeshes: M.unitMeshes, pickables: M.pickables };
     M.setFloor(app.floor);
     M.setNight(app.night);
+    refrescarSombra();
     repaint();
     /* Mobiliario y plantas cortadas: 40 MB que llegan después de la primera
        imagen, para que el showroom se pueda enseñar mientras terminan. */
-    M.cargarSecundarios().then(() => { M.setFloor(app.floor); repaint(); })
+    M.cargarSecundarios().then(() => { M.setFloor(app.floor); refrescarSombra(); repaint(); })
       .catch((e) => console.warn('[apolo] secundarios:', e));
 
     UI.initUI(app);

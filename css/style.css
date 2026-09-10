@@ -43,9 +43,18 @@ input, textarea { -webkit-user-select: text; user-select: text; }
    El fondo se pinta también en html/body para que, si algún navegador
    insiste en enmarcar la página, el marco no salga blanco. */
 html, body { width: 100%; max-width: 100%; overflow-x: hidden; }
-#app { width: 100vw; height: 100dvh; }
+/* `svh` en vez de `dvh`: `dvh` es dinámico por definición y en iOS cambia de
+   forma CONTINUA mientras se pliega la barra de direcciones, así que el
+   lienzo se redimensionaba en cada fotograma de esa animación y con él todos
+   los destinos de render. `svh` es la altura con las barras puestas y no se
+   anima. La página no hace scroll, así que es exactamente la altura útil. */
+#app { width: 100%; height: 100svh; }
+@supports not (height: 100svh) { #app { height: 100dvh; } }
 @supports not (height: 100dvh) { #app { height: 100vh; } }
-#scene { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+/* El fondo del lienzo con el color del cielo: si en algún momento el
+   navegador compone un fotograma que la aplicación no ha dibujado (cambio de
+   tamaño, vuelta de segundo plano), se ve cielo y no un pantallazo negro. */
+#scene { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; background: #d6dde3; }
 
 /* Phosphor dibuja con relleno, no con trazo: sin esto los iconos saldrían
    negros sobre los botones activos en vez de heredar el color del botón. */

@@ -34,6 +34,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { limitarMaterial } from 'app/texturas.js';
 
 export const RUTAS = {
   modelo: 'data/serenea_modelo.json',
@@ -155,7 +156,12 @@ function crearCartela(texto, fondo) {
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText(texto, 112, 54);
   const tex = new THREE.CanvasTexture(cv);
-  tex.anisotropy = 8;
+  /* Sin anisotropía ni mipmaps: la cartela es un billboard que se ve casi
+     siempre al mismo tamaño, así que la pirámide de mipmaps solo era memoria.
+     Son 332 lienzos (166 viviendas × verde y naranja) y cada mip cuesta. */
+  tex.anisotropy = 1;
+  tex.generateMipmaps = false;
+  tex.minFilter = THREE.LinearFilter;
   tex.colorSpace = THREE.SRGBColorSpace;
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true, toneMapped: false }));
   sp.scale.set(3.4, 1.94, 1);
@@ -456,7 +462,7 @@ function prepararMaterial(m) {
 
 /* ── Carga ─────────────────────────────────────────────────────────────── */
 
-export async function cargarModelo(scene, unitsById, { estadoDe = () => 'disponible', onProgreso = () => {}, plantasBajoDemanda = false } = {}) {
+export async function cargarModelo(scene, unitsById, { estadoDe = () => 'disponible', onProgreso = () => {}, plantasBajoDemanda = false, texturaMax = 0 } = {}) {
   onProgreso('Descargando el modelo…', 0);
   const [modelo, definicionCortes, datos, gEntorno, gEnvolvente] = await Promise.all([
     leerJSON(RUTAS.modelo), leerJSON(RUTAS.cortes), leerJSON(RUTAS.viviendas),
@@ -487,7 +493,7 @@ export async function cargarModelo(scene, unitsById, { estadoDe = () => 'disponi
     raiz.traverse((o) => {
       if (!o.isMesh) return;
       const ms = Array.isArray(o.material) ? o.material : [o.material];
-      for (const m of ms) { prepararMaterial(m); if (m?.name) materiales.set(m.name, m); }
+      for (const m of ms) { limitarMaterial(m, texturaMax); prepararMaterial(m); if (m?.name) materiales.set(m.name, m); }
       // El terreno lejano no proyecta sombra: el mapa de sombras cubre la
       // parcela, y hacerle sitio a 5 km de costa lo dejaría inservible.
       const cerca = !lejos || (o.geometry.boundingSphere ?? (o.geometry.computeBoundingSphere(), o.geometry.boundingSphere)).radius < 400;

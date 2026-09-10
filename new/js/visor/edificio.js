@@ -103,6 +103,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { limitarMaterial } from 'app/visor/texturas.js';
 import { ESTADO_COLORS } from 'app/building.js';
 
 export const DISTANCIA_VIDRIO = 0.45;    // m del centro del vidrio a la huella de la vivienda (ver cabecera)
@@ -128,6 +129,16 @@ export const ESTOR = { color: 0.35, reflejo: 0.25, opacidad: 0.3 };
    se lee como "solo entra un tercio de la luz": se ven los muebles, pero la
    vivienda está claramente apagada, y nunca sale negra. */
 export const LUZ_VENDIDA = 0.1;
+/* De noche la escena ya está oscura de por sí: con 0,1 la vendida salía negra
+   plana y artificial. Con 0,55 se sigue leyendo apagada al lado de una
+   encendida, que es todo lo que tiene que hacer. */
+export const LUZ_VENDIDA_NOCHE = 0.55;
+/* Y al revés: de noche, la vivienda LIBRE o RESERVADA se enciende. El mismo
+   prisma multiplicativo, pero con un factor mayor que uno y cálido, así que
+   el interior sube de luz y se tiñe de bombilla. Es un solo dibujo por
+   vivienda y no hace falta ninguna luz de verdad en la escena: cien luces
+   puntuales no las mueve ningún teléfono. */
+export const LUZ_ENCENDIDA = [2.35, 1.95, 1.35];
 export const CARTELA_PX = 34;            // alto del sprite de la cartela en px para un lienzo de 720 px (ver cabecera)
 export const EMISIVO_VENTANA = 0xffd9a0; // luz cálida de interior
 export const INTENSIDAD_VENTANA = 1.4;   // por encima de 1 para que el bloom lo recoja
@@ -146,15 +157,28 @@ export const RUTAS = {
 };
 
 const COLOR_BASE_VIVIENDA = new THREE.Color(0xe9e7e1);
-function crearMaterialApagado() {
-  const m = new THREE.MeshBasicMaterial({
+/* Un material por estado, compartido por las 166 viviendas: son idénticos,
+   y así hay un programa en vez de ciento sesenta y seis. El color va en
+   espacio lineal a propósito: es un factor de luz, no un color de pintura, y
+   por encima de uno enciende en vez de apagar (el destino es medio flotante,
+   así que admite valores mayores que uno sin recortar). */
+const materialesLuz = new Map();
+function materialLuz(nombre, r, g, b) {
+  let m = materialesLuz.get(nombre);
+  if (m) return m;
+  m = new THREE.MeshBasicMaterial({
     transparent: true, opacity: 1, depthWrite: false, depthTest: true, premultipliedAlpha: true,
     side: THREE.FrontSide, blending: THREE.MultiplyBlending, toneMapped: false, fog: false,
   });
-  m.color.setRGB(LUZ_VENDIDA, LUZ_VENDIDA, LUZ_VENDIDA, THREE.LinearSRGBColorSpace);
-  m.name = 'vivienda_apagada';
+  m.color.setRGB(r, g, b, THREE.LinearSRGBColorSpace);
+  m.name = nombre;
+  materialesLuz.set(nombre, m);
   return m;
 }
+const matApagada = (noche) => (noche
+  ? materialLuz('vivienda_apagada_noche', LUZ_VENDIDA_NOCHE, LUZ_VENDIDA_NOCHE, LUZ_VENDIDA_NOCHE)
+  : materialLuz('vivienda_apagada', LUZ_VENDIDA, LUZ_VENDIDA, LUZ_VENDIDA));
+const matEncendida = () => materialLuz('vivienda_encendida', ...LUZ_ENCENDIDA);
 const ORDEN_PLANTAS = ['baja', 'p1', 'p2', 'atico'];
 const RE_VIDRIO = /^vidrio__T(\d+)__(\d+)__(-?\d+)_(-?\d+)_(-?\d+)$/;
 const ES_MATERIAL_VIDRIO = /vidrio/i;
@@ -218,7 +242,12 @@ function crearCartela(texto, fondo, capa, fovGrados = 45) {
   c2.textAlign = 'center'; c2.textBaseline = 'middle';
   c2.fillText(texto, 112, 58);
   const tex = new THREE.CanvasTexture(cv);
-  tex.anisotropy = 8;
+  /* Sin anisotropía ni mipmaps: la cartela tiene tamaño constante en pantalla
+     (sizeAttenuation false), así que la pirámide de mipmaps solo era memoria.
+     Son 332 lienzos, dos por vivienda. */
+  tex.anisotropy = 1;
+  tex.generateMipmaps = false;
+  tex.minFilter = THREE.LinearFilter;
   tex.colorSpace = THREE.SRGBColorSpace;
   const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true, toneMapped: false, sizeAttenuation: false });
   const sp = new THREE.Sprite(mat);
@@ -346,7 +375,7 @@ function crearPrismas(grupo, unitsById, capaCartelas, datosViviendas, fovCamara 
     });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.name = `vivienda-${id}`;
-    mesh.userData = { unitId: id, floorKey: d.planta, plataforma, matRealce: mat, matApagada: null };
+    mesh.userData = { unitId: id, floorKey: d.planta, plataforma, matRealce: mat };
     mesh.renderOrder = 50; // tras el vidrio: el realce se ve a través de la fachada
     P.grupo.add(mesh);
     const { punto: centroide, exterior } = centroideInterior(poligono);
@@ -378,6 +407,10 @@ function cajaVisible(objeto) {
 
 export async function cargarEdificio(ctx, slot, opciones = {}) {
   const luz = typeof opciones.aplicarMaterial === 'function' ? opciones : (opciones.luz || null);
+  /* Techo de textura: ver texturas.js. Se aplica al registrar cada material,
+     antes de que la malla llegue a dibujarse, así que la imagen grande no
+     sube nunca a la tarjeta. */
+  const texturaMax = opciones.texturaMax || 0;
   const rutas = { ...RUTAS, ...(slot.modelo || {}), ...(opciones.rutas || {}) };
   const onProgreso = opciones.onProgreso || (() => {});
   const { scene } = ctx;
@@ -427,6 +460,7 @@ export async function cargarEdificio(ctx, slot, opciones = {}) {
       m.dispose();
     } else {
       r = m;
+      limitarMaterial(r, texturaMax);
       r.alphaTest = 0;
       if (!(r.transparent && r.opacity < 1)) { r.transparent = false; r.depthWrite = true; }
       r.side = THREE.FrontSide; // cortes.js lo pasa a doble cara con las traseras oscuras
@@ -540,6 +574,7 @@ export async function cargarEdificio(ctx, slot, opciones = {}) {
   const pickables = [...viviendas.values()].map((v) => v.mesh);
   let ultimo = { hover: null, seleccionada: null, atenuada: null };
   let cartelasDe = null;
+  let noche = false;
   /* Vivienda "abierta": ya se ha entrado a verla por dentro, así que no lleva
      ni prisma ni cartela; estorbarían justo lo que se ha ido a ver. */
   let abierta = null;
@@ -613,18 +648,30 @@ export async function cargarEdificio(ctx, slot, opciones = {}) {
         /* Más ligeros que antes: el verde y el naranja tapaban la vivienda
            que querían señalar. Y la vivienda ya abierta no lleva prisma: se
            ha entrado a verla por dentro. */
+        /* Solo la planta que se está mirando lleva prisma de luz. En cenital,
+           con las cuatro plantas puestas, los prismas de las de arriba se
+           apilaban sobre el de abajo y cada uno volvía a multiplicar: la
+           vivienda salía negra. Uno por rayo y ya. */
+        const enPlanta = cartelasDe === v.floorKey;
         if (vendida && v.id !== abierta) {
-          const u = v.mesh.userData;
-          if (!u.matApagada) u.matApagada = crearMaterialApagado();
-          v.mesh.material = u.matApagada;
-          /* Solo la planta que se está mirando. En cenital, con las cuatro
-             plantas puestas, los prismas de las de arriba se apilaban sobre
-             el de abajo y cada uno volvía a multiplicar: la vivienda salía
-             negra. Uno por rayo y ya. */
-          v.mesh.visible = cartelasDe === v.floorKey;
+          v.mesh.material = matApagada(noche);
+          v.mesh.visible = enPlanta;
           v.mesh.renderOrder = 20;           // antes que el realce, después de lo opaco
           v.label.visible = false;
           v.labelR.visible = false;
+          continue;
+        }
+        /* De noche, la vivienda libre o reservada se enciende: el mismo prisma
+           multiplicativo con un factor mayor que uno y cálido. Se cede el
+           turno al realce cuando el ratón está encima o está seleccionada,
+           porque ese aviso manda sobre la ambientación. */
+        if (noche && enPlanta && v.id !== abierta && !dim && v.id !== hover && v.id !== seleccionada) {
+          v.mesh.material = matEncendida();
+          v.mesh.visible = true;
+          v.mesh.renderOrder = 20;
+          const marcable = !dim && v.id !== abierta;
+          v.label.visible = marcable && estado === 'disponible';
+          v.labelR.visible = marcable && estado === 'reservada';
           continue;
         }
         v.mesh.material = v.mesh.userData.matRealce;
@@ -648,6 +695,14 @@ export async function cargarEdificio(ctx, slot, opciones = {}) {
         v.label.visible = marcable && estado === 'disponible';
         v.labelR.visible = marcable && estado === 'reservada';
       }
+    },
+
+    /* Noche: cambia el prisma de luz de cada vivienda (apagada más suave en
+       las vendidas, encendido cálido en las libres y reservadas). */
+    setNoche(activa) {
+      if (noche === !!activa) return;
+      noche = !!activa;
+      edificio.pintar(ultimo);
     },
 
     /* La vivienda que se está visitando por dentro (o null). */

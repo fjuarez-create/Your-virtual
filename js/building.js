@@ -23,16 +23,31 @@ import * as THREE from 'three';
    se lee como "solo entra un tercio de la luz": se ven los muebles, pero la
    vivienda está claramente apagada, y nunca sale negra. */
 export const LUZ_VENDIDA = 0.1;
+/* De noche la escena ya está oscura: con 0,1 la vendida salía negra plana. */
+export const LUZ_VENDIDA_NOCHE = 0.55;
+/* Y al revés: de noche la vivienda libre o reservada se ENCIENDE con el mismo
+   prisma, con factor mayor que uno y cálido. Un dibujo por vivienda, sin
+   meter cien luces puntuales en la escena. */
+export const LUZ_ENCENDIDA = [2.35, 1.95, 1.35];
 
-function crearMaterialApagado() {
-  const m = new THREE.MeshBasicMaterial({
+/* Un material por estado, compartido por las 166 viviendas. */
+const materialesLuz = new Map();
+function materialLuz(nombre, r, g, b) {
+  let m = materialesLuz.get(nombre);
+  if (m) return m;
+  m = new THREE.MeshBasicMaterial({
     transparent: true, opacity: 1, depthWrite: false, depthTest: true, premultipliedAlpha: true,
     side: THREE.FrontSide, blending: THREE.MultiplyBlending, toneMapped: false, fog: false,
   });
-  m.color.setRGB(LUZ_VENDIDA, LUZ_VENDIDA, LUZ_VENDIDA, THREE.LinearSRGBColorSpace);
-  m.name = 'vivienda_apagada';
+  m.color.setRGB(r, g, b, THREE.LinearSRGBColorSpace);
+  m.name = nombre;
+  materialesLuz.set(nombre, m);
   return m;
 }
+const matApagada = (noche) => (noche
+  ? materialLuz('vivienda_apagada_noche', LUZ_VENDIDA_NOCHE, LUZ_VENDIDA_NOCHE, LUZ_VENDIDA_NOCHE)
+  : materialLuz('vivienda_apagada', LUZ_VENDIDA, LUZ_VENDIDA, LUZ_VENDIDA));
+const matEncendida = () => materialLuz('vivienda_encendida', ...LUZ_ENCENDIDA);
 
 export const ESTADO_COLORS = {
   disponible: new THREE.Color(0x35d69a),
@@ -45,7 +60,7 @@ export const ESTADO_COLORS = {
  * estadoDe: (id) => 'disponible'|'reservada'|'vendida'
  * dimmedDe: (id) => boolean (no pasa los filtros)
  */
-export function paintUnits(unitMeshes, estadoDe, dimmedDe, selectedId, hoverId, fadeOf = () => 1, dollOf = () => false, enPlantaVista = () => true) {
+export function paintUnits(unitMeshes, estadoDe, dimmedDe, selectedId, hoverId, fadeOf = () => 1, noche = false, enPlantaVista = () => true) {
   for (const [id, mesh] of unitMeshes) {
     const estado = estadoDe(id);
     const col = ESTADO_COLORS[estado] || ESTADO_COLORS.disponible;
@@ -54,17 +69,26 @@ export function paintUnits(unitMeshes, estadoDe, dimmedDe, selectedId, hoverId, 
     const vendida = estado === 'vendida';
     const dimmed = dimmedDe(id);
     const fade = fadeOf(mesh.userData.floorKey);
-    /* Vendida y con su planta aislada: se apaga. Solo la planta que se está
-       mirando: en cenital, con las cuatro puestas, los prismas de arriba se
-       apilan sobre el de abajo y cada uno vuelve a multiplicar, de modo que
-       la vivienda sale negra. Uno por rayo y ya. */
-    if (vendida && enPlantaVista(mesh.userData.floorKey)) {
-      if (!mesh.userData.matApagada) mesh.userData.matApagada = crearMaterialApagado();
-      mesh.material = mesh.userData.matApagada;
+    /* Solo la planta que se está mirando lleva prisma de luz: en cenital, con
+       las cuatro puestas, los prismas de arriba se apilan sobre el de abajo y
+       cada uno vuelve a multiplicar, de modo que la vivienda sale negra. */
+    const enPlanta = enPlantaVista(mesh.userData.floorKey);
+    if (vendida && enPlanta) {
+      mesh.material = matApagada(noche);
       mesh.visible = true;
       mesh.renderOrder = 20;
       if (mesh.userData.label) mesh.userData.label.visible = false;
       if (mesh.userData.labelR) mesh.userData.labelR.visible = false;
+      continue;
+    }
+    /* De noche, la libre o reservada se enciende, salvo que el ratón esté
+       encima o esté seleccionada: ese aviso manda sobre la ambientación. */
+    if (noche && enPlanta && !dimmed && id !== selectedId && id !== hoverId) {
+      mesh.material = matEncendida();
+      mesh.visible = true;
+      mesh.renderOrder = 20;
+      if (mesh.userData.label) mesh.userData.label.visible = estado === 'disponible';
+      if (mesh.userData.labelR) mesh.userData.labelR.visible = estado === 'reservada';
       continue;
     }
     mesh.material = mat;

@@ -108,6 +108,7 @@ import { crearTrazador } from 'app/visor/trazador.js';
 import { cargarEdificio, crearVidrioFisico, EMISIVO_VENTANA, INTENSIDAD_VENTANA } from 'app/visor/edificio.js';
 import { crearCortes } from 'app/visor/cortes.js';
 import { crearCamara } from 'app/visor/camara.js';
+import { limitarMaterial, megapixeles } from 'app/visor/texturas.js';
 import { ACTIVE_BUILDING } from 'app/promotions.js';
 import { FLOOR_DEFS } from 'app/layout.js';
 import { ESTADO_COLORS } from 'app/building.js';
@@ -173,7 +174,14 @@ const MOVIL = (() => {
     || (tactil && /Macintosh/.test(ua))
     || (tactil && Math.min(screen.width, screen.height) < 900);
 })();
-const IBL_TRAZADO = { dia: 0.5, amanecer: 0.75, atardecer: 0.8, noche: 1.6 };
+/* Techo de textura. El entorno trae diez imágenes de 2048² y el edificio
+   diecinueve de 1024²: con sus mipmaps, casi 400 MB de memoria de GPU. El
+   teléfono no los tiene y Safari responde tirando el contexto de WebGL, que
+   es el parpadeo y el negro que se veían. A 512 el conjunto baja a unos
+   40 MB y a esta distancia no se nota; en escritorio basta con 1024 para el
+   entorno, que es una ortofoto vista desde más de cien metros. */
+const TEXTURA_MAX = MOVIL ? 512 : 1024;
+const IBL_TRAZADO = { dia: 0.5, manana: 0.7, atardecer: 0.8, noche: 1.6 };
 const REALCE = { hover: 0.9, seleccion: 1.4 }; // intensidad emisiva del vidrio teñido
 const ELEVACION_VIVIENDA = 36;    // ver cabecera: la vivienda centrada y vista desde arriba
 const AZIMUT_VIVIENDA = { sur: 22, norte: 158 };
@@ -191,13 +199,41 @@ function aplicarDPR(tier) {
 }
 aplicarDPR(ctx.calidad);
 
-function redimensionar() {
+/* ── Por qué el redimensionado va con retardo ──
+   `ctx.setTamano` acaba en `composer.setSize`, que DESTRUYE y vuelve a crear
+   todos los destinos de pantalla completa de la cadena de post. En iOS, al
+   plegarse la barra de direcciones el alto cambia en cada fotograma de la
+   animación, así que se estaban recreando en cada uno: parpadeo, fotogramas
+   en negro y un tirón al soltar. Se aplica una sola vez, cuando el tamaño
+   lleva un cuarto de segundo quieto; mientras tanto la imagen se estira un
+   poco, que no se nota. El primer ajuste y el giro de pantalla van directos.
+   El ResizeObserver cubre lo que no avisa por `resize` (barras, teclado,
+   vista dividida). */
+const ESPERA_TAM = 250;
+let plazoTam = null;
+const tamAplicado = { w: 0, h: 0 };
+
+function aplicarTamano() {
+  plazoTam = null;
   const w = Math.max(1, canvas.clientWidth || window.innerWidth);
   const h = Math.max(1, canvas.clientHeight || window.innerHeight);
+  if (w === tamAplicado.w && h === tamAplicado.h) return;
+  tamAplicado.w = w; tamAplicado.h = h;
   ctx.setTamano(w, h);
 }
-redimensionar();
-window.addEventListener('resize', redimensionar);
+
+function redimensionar({ inmediato = false } = {}) {
+  if (plazoTam) { clearTimeout(plazoTam); plazoTam = null; }
+  if (inmediato || tamAplicado.w === 0) { aplicarTamano(); return; }
+  plazoTam = setTimeout(aplicarTamano, ESPERA_TAM);
+}
+redimensionar({ inmediato: true });
+window.addEventListener('resize', () => redimensionar());
+window.addEventListener('orientationchange', () => redimensionar({ inmediato: true }));
+window.addEventListener('pageshow', () => redimensionar({ inmediato: true }));
+window.visualViewport?.addEventListener('resize', () => redimensionar());
+window.visualViewport?.addEventListener('scroll', () => redimensionar());
+if (typeof ResizeObserver === 'function') new ResizeObserver(() => redimensionar()).observe(canvas);
 canvas.addEventListener('contextmenu', (e) => e.preventDefault()); // botón derecho = desplazar
 
 /* ── Bus público ── */
@@ -495,6 +531,7 @@ async function centroParcela() {
    que se usará; el vidrio se sustituye por el físico del edificio. */
 function materialEntorno(m) {
   const nombre = m.name || '';
+  limitarMaterial(m, TEXTURA_MAX);
   if (/vidrio|^glass$/i.test(nombre)) {
     // el edificio se carga en paralelo: el entorno lleva su propio vidrio físico
     m.dispose();
@@ -855,7 +892,7 @@ Object.assign(apolo, {
     if (!MOMENTOS[clave]) return Promise.reject(new Error(`apolo: momento desconocido "${clave}"`));
     apolo.momento = clave;
     // las ventanas cambian al arrancar el fundido; el bajón de exposición lo tapa
-    if (edificio) { edificio.setVentanas(MOMENTOS[clave].luces); repintar(); }
+    if (edificio) { edificio.setVentanas(MOMENTOS[clave].luces); edificio.setNoche(clave === 'noche'); repintar(); }
     encenderEntorno(MOMENTOS[clave].noche);
     return luz.setMomento(clave, { duracion });
   },
@@ -1032,7 +1069,7 @@ async function arrancar() {
   avanzar('luz', 1);
 
   const [ed, ent] = await Promise.all([
-    cargarEdificio(ctx, ACTIVE_BUILDING, { luz, onProgreso: (f) => avanzar('edificio', f) }).then((e) => { avanzar('edificio', 1); return e; }),
+    cargarEdificio(ctx, ACTIVE_BUILDING, { luz, texturaMax: TEXTURA_MAX, onProgreso: (f) => avanzar('edificio', f) }).then((e) => { avanzar('edificio', 1); return e; }),
     cargarEntorno((f) => avanzar('entorno', f)).then((e) => { avanzar('entorno', 1); return e; })
       .catch((err) => { console.warn('[apolo] sin entorno:', err); avanzar('entorno', 1); return null; }),
   ]);
@@ -1045,6 +1082,7 @@ async function arrancar() {
   const demo = estadosDemostracion(edificio);
   if (demo) edificio.setEstados(demo);
   edificio.setVentanas(MOMENTOS[apolo.momento].luces);
+  edificio.setNoche(apolo.momento === 'noche');
 
   /* Modelo de SketchUp: sin CSG ni tapas (superficies abiertas), variantes
      precortadas cuando lleguen, caras traseras oscuras y atenuación por cota. */
