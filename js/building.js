@@ -45,7 +45,7 @@ export const ESTADO_COLORS = {
  * estadoDe: (id) => 'disponible'|'reservada'|'vendida'
  * dimmedDe: (id) => boolean (no pasa los filtros)
  */
-export function paintUnits(unitMeshes, estadoDe, dimmedDe, selectedId, hoverId, fadeOf = () => 1, dollOf = () => false) {
+export function paintUnits(unitMeshes, estadoDe, dimmedDe, selectedId, hoverId, fadeOf = () => 1, dollOf = () => false, enPlantaVista = () => true) {
   for (const [id, mesh] of unitMeshes) {
     const estado = estadoDe(id);
     const col = ESTADO_COLORS[estado] || ESTADO_COLORS.disponible;
@@ -54,9 +54,11 @@ export function paintUnits(unitMeshes, estadoDe, dimmedDe, selectedId, hoverId, 
     const vendida = estado === 'vendida';
     const dimmed = dimmedDe(id);
     const fade = fadeOf(mesh.userData.floorKey);
-    /* Vendida y con su planta a la vista: se apaga al 30 % de luz. Fuera de
-       la planta activa (fade 0) no se pinta nada, como el resto. */
-    if (vendida && fade > 0.5) {
+    /* Vendida y con su planta aislada: se apaga. Solo la planta que se está
+       mirando: en cenital, con las cuatro puestas, los prismas de arriba se
+       apilan sobre el de abajo y cada uno vuelve a multiplicar, de modo que
+       la vivienda sale negra. Uno por rayo y ya. */
+    if (vendida && enPlantaVista(mesh.userData.floorKey)) {
       if (!mesh.userData.matApagada) mesh.userData.matApagada = crearMaterialApagado();
       mesh.material = mesh.userData.matApagada;
       mesh.visible = true;

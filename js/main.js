@@ -423,7 +423,8 @@ function repaint() {
     app.selected,
     app.hover,
     fadeOf,
-    () => false
+    () => false,
+    (floorKey) => app.floor === floorKey   // solo la planta aislada lleva prisma apagado
   );
 }
 
