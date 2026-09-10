@@ -13,7 +13,7 @@ export function crearEscena(canvas) {
      activarlo aquí duplicaría el coste sin mejorar nada. */
   const renderer = new THREE.WebGLRenderer({
     canvas, antialias: false, alpha: false, powerPreference: 'high-performance',
-    stencil: true, // las tapas de corte por stencil lo necesitan
+    stencil: false, // main crea los cortes con tapasStencil:false; si se reactivan, volver a true
   });
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   /* AgX en vez de ACES: ACES empasta la parte alta de la curva, y con un

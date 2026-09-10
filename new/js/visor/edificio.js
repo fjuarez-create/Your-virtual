@@ -129,10 +129,12 @@ export const ESTOR = { color: 0.35, reflejo: 0.25, opacidad: 0.3 };
    se lee como "solo entra un tercio de la luz": se ven los muebles, pero la
    vivienda está claramente apagada, y nunca sale negra. */
 export const LUZ_VENDIDA = 0.1;
-/* De noche la escena ya está oscura de por sí: con 0,1 la vendida salía negra
-   plana y artificial. Con 0,55 se sigue leyendo apagada al lado de una
-   encendida, que es todo lo que tiene que hacer. */
-export const LUZ_VENDIDA_NOCHE = 0.55;
+/* De noche la escena ya está oscura de por sí y el factor cae en el pie de la
+   curva de tono, donde resta el doble: con 0,55 la vendida salía negra plana.
+   0,82 con un pelo de tinte frío (a una vivienda apagada solo le entra luna)
+   basta, porque el contraste no lo pone ella sino la encendida de al lado:
+   2,35 contra 0,82 es más de paso y medio, que se lee de inmediato. */
+export const LUZ_VENDIDA_NOCHE = [0.80, 0.84, 0.95];
 /* Y al revés: de noche, la vivienda LIBRE o RESERVADA se enciende. El mismo
    prisma multiplicativo, pero con un factor mayor que uno y cálido, así que
    el interior sube de luz y se tiñe de bombilla. Es un solo dibujo por
@@ -176,7 +178,7 @@ function materialLuz(nombre, r, g, b) {
   return m;
 }
 const matApagada = (noche) => (noche
-  ? materialLuz('vivienda_apagada_noche', LUZ_VENDIDA_NOCHE, LUZ_VENDIDA_NOCHE, LUZ_VENDIDA_NOCHE)
+  ? materialLuz('vivienda_apagada_noche', ...LUZ_VENDIDA_NOCHE)
   : materialLuz('vivienda_apagada', LUZ_VENDIDA, LUZ_VENDIDA, LUZ_VENDIDA));
 const matEncendida = () => materialLuz('vivienda_encendida', ...LUZ_ENCENDIDA);
 const ORDEN_PLANTAS = ['baja', 'p1', 'p2', 'atico'];
@@ -219,9 +221,15 @@ function crearCartela(texto, fondo, capa, fovGrados = 45) {
   /* Píldora con esquinas redondeadas y rabito corto, del tamaño de un botón
      del menú: la cartela de antes (caja recta, 42 px en negrita) pesaba
      demasiado sobre el modelo y tapaba la vivienda de al lado. */
+  /* El lienzo se dibuja a escala reducida pero con las MISMAS coordenadas:
+     `scale` se encarga. Son 332 cartelas (dos por vivienda) y a 224×128 eran
+     38 MB de lienzos retenidos; a 0,7 son 19. En pantalla la cartela mide unos
+     40 px de alto, así que 90 texels siguen sobrando. */
+  const K = 0.7;
   const cv = document.createElement('canvas');
-  cv.width = 224; cv.height = 128;
+  cv.width = Math.round(224 * K); cv.height = Math.round(128 * K);
   const c2 = cv.getContext('2d');
+  c2.scale(K, K);
   const x0 = 56, y0 = 26, x1 = 168, y1 = 88, r = 16, rabo = 10;
   c2.shadowColor = 'rgba(17,17,18,0.28)';
   c2.shadowBlur = 8;
@@ -620,18 +628,31 @@ export async function cargarEdificio(ctx, slot, opciones = {}) {
        vendida baja el estor: su vidrio se oscurece y pierde reflejo, de modo
        que se lee como ocupada y no como un fallo del visor (antes solo se
        distinguía por no tener cartela, y parecía que no se podía pinchar). */
-    setVentanas(encendidas) {
-      edificio.ventanas = !!encendidas;
+    /* `factor` es cuánto se encienden las ventanas: 0 apagadas, 1 la luz de
+       atardecer, 2,4 la de noche. Antes era un booleano y la ventana nocturna
+       se quedaba en 0,43 de luminancia, por debajo del umbral del bloom: un
+       cristal encendido y uno apagado se distinguían apenas. De noche además
+       se CIERRA el cristal (más opaco, más rugoso, menos reflejo) para que se
+       lea como una ventana con luz dentro y no como un agujero. */
+    setVentanas(factor) {
+      const f = factor === true ? 1 : (factor === false ? 0 : (+factor || 0));
+      edificio.ventanas = f;
+      const cerrado = f > 1.5;   // de noche
       for (const v of viviendas.values()) {
         const vendida = edificio.estadoDe(v.id) === 'vendida';
-        const on = edificio.ventanas && !vendida;
+        const on = f > 0 && !vendida;
         for (const m of v.vidrios) {
-          m.emissiveIntensity = on ? INTENSIDAD_VENTANA : 0;
+          m.emissiveIntensity = on ? INTENSIDAD_VENTANA * f : 0;
           const base = m.userData.baseColor;
           if (base) m.color.copy(base).multiplyScalar(vendida ? ESTOR.color : 1);
-          if (m.userData.baseEnv !== undefined) m.envMapIntensity = m.userData.baseEnv * (vendida ? ESTOR.reflejo : 1);
-          if (m.userData.baseOpacity !== undefined) m.opacity = vendida ? Math.min(1, m.userData.baseOpacity + ESTOR.opacidad) : m.userData.baseOpacity;
-          m.roughness = vendida ? 0.35 : 0.05;
+          if (m.userData.baseEnv !== undefined) {
+            m.envMapIntensity = m.userData.baseEnv * (vendida ? ESTOR.reflejo : (on && cerrado ? 0.3 : 1));
+          }
+          if (m.userData.baseOpacity !== undefined) {
+            const extra = vendida ? ESTOR.opacidad : (on && cerrado ? 0.42 : 0);
+            m.opacity = Math.min(1, m.userData.baseOpacity + extra);
+          }
+          m.roughness = vendida ? 0.35 : (on && cerrado ? 0.12 : 0.05);
         }
       }
     },
@@ -662,10 +683,10 @@ export async function cargarEdificio(ctx, slot, opciones = {}) {
           continue;
         }
         /* De noche, la vivienda libre o reservada se enciende: el mismo prisma
-           multiplicativo con un factor mayor que uno y cálido. Se cede el
-           turno al realce cuando el ratón está encima o está seleccionada,
-           porque ese aviso manda sobre la ambientación. */
-        if (noche && enPlanta && v.id !== abierta && !dim && v.id !== hover && v.id !== seleccionada) {
+           multiplicativo con un factor mayor que uno y cálido. El realce del
+           ratón NO la apaga (antes le quitaba el prisma y la vivienda se
+           apagaba justo al señalarla): ese aviso lo da el vidrio teñido. */
+        if (noche && enPlanta && v.id !== abierta && !dim) {
           v.mesh.material = matEncendida();
           v.mesh.visible = true;
           v.mesh.renderOrder = 20;
@@ -763,9 +784,13 @@ export async function cargarEdificio(ctx, slot, opciones = {}) {
       return tarea;
     },
 
-    async cargarSecundarios({ onProgreso: avisar = () => {}, alMobiliario = () => {}, alVariante = () => {}, plantas = null } = {}) {
+    async cargarSecundarios({ onProgreso: avisar = () => {}, alMobiliario = () => {}, alVariante = () => {}, plantas = null, mobiliario = true } = {}) {
       const claves = plantas === null ? Object.keys(rutas.variantes) : plantas.filter((k) => rutas.variantes[k]);
-      const tareas = [{ etapa: 'mobiliario', url: rutas.mobiliario }, ...claves.map((clave) => ({ etapa: `corte_${clave}`, clave, url: rutas.variantes[clave] }))];
+      /* El mobiliario son 1.403 mallas y 16 MB: dentro del edificio cerrado no
+         se ve nada de él, así que en el teléfono no se descarga hasta que se
+         aísla una planta, que es cuando aparece. */
+      edificio._alMobiliario = alMobiliario;
+      const tareas = [...(mobiliario ? [{ etapa: 'mobiliario', url: rutas.mobiliario }] : []), ...claves.map((clave) => ({ etapa: `corte_${clave}`, clave, url: rutas.variantes[clave] }))];
       const tiempos = {};
       edificio._alVariante = alVariante;
       for (const [i, t] of tareas.entries()) {
@@ -797,6 +822,30 @@ export async function cargarEdificio(ctx, slot, opciones = {}) {
         avisar((i + 1) / tareas.length, t.etapa);
       }
       return tiempos;
+    },
+
+    /* Mobiliario a la carta (móvil): se pide la primera vez que hace falta. */
+    async cargarMobiliario() {
+      if (edificio.mobiliario || edificio._mobEnCurso) return edificio.mobiliario;
+      edificio._mobEnCurso = (async () => {
+        try {
+          const g = await cargarGLB(rutas.mobiliario);
+          const objeto = g.scene;
+          objeto.name = 'mobiliario';
+          adoptar(objeto, { mobiliario: true });
+          grupo.add(objeto);
+          edificio.mobiliario = objeto;
+          nivel.mats = matsNivel();
+          edificio._alMobiliario?.(objeto);
+          return objeto;
+        } catch (e) {
+          console.warn('[edificio] no se pudo cargar el mobiliario:', e);
+          return null;
+        } finally {
+          edificio._mobEnCurso = null;
+        }
+      })();
+      return edificio._mobEnCurso;
     },
 
     /* Saca el edificio de la escena y libera lo que creó (geometrías,

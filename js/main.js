@@ -689,6 +689,9 @@ app.setNight = (on) => {
   // vendidas se quedan a oscuras, como en el visor nuevo.
   if (M) M.setNight(on);
   refrescarSombra();
+  /* Sin este repintado los prismas de noche no llegaban a aplicarse: las
+     libres no se encendían y las vendidas seguían con el factor de día. */
+  repaint();
   UI.markDayNight(on);
 };
 

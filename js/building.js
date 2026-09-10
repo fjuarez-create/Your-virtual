@@ -24,7 +24,7 @@ import * as THREE from 'three';
    vivienda está claramente apagada, y nunca sale negra. */
 export const LUZ_VENDIDA = 0.1;
 /* De noche la escena ya está oscura: con 0,1 la vendida salía negra plana. */
-export const LUZ_VENDIDA_NOCHE = 0.55;
+export const LUZ_VENDIDA_NOCHE = [0.80, 0.84, 0.95];
 /* Y al revés: de noche la vivienda libre o reservada se ENCIENDE con el mismo
    prisma, con factor mayor que uno y cálido. Un dibujo por vivienda, sin
    meter cien luces puntuales en la escena. */
@@ -45,7 +45,7 @@ function materialLuz(nombre, r, g, b) {
   return m;
 }
 const matApagada = (noche) => (noche
-  ? materialLuz('vivienda_apagada_noche', LUZ_VENDIDA_NOCHE, LUZ_VENDIDA_NOCHE, LUZ_VENDIDA_NOCHE)
+  ? materialLuz('vivienda_apagada_noche', ...LUZ_VENDIDA_NOCHE)
   : materialLuz('vivienda_apagada', LUZ_VENDIDA, LUZ_VENDIDA, LUZ_VENDIDA));
 const matEncendida = () => materialLuz('vivienda_encendida', ...LUZ_ENCENDIDA);
 
@@ -83,7 +83,7 @@ export function paintUnits(unitMeshes, estadoDe, dimmedDe, selectedId, hoverId, 
     }
     /* De noche, la libre o reservada se enciende, salvo que el ratón esté
        encima o esté seleccionada: ese aviso manda sobre la ambientación. */
-    if (noche && enPlanta && !dimmed && id !== selectedId && id !== hoverId) {
+    if (noche && enPlanta && !dimmed) {
       mesh.material = matEncendida();
       mesh.visible = true;
       mesh.renderOrder = 20;

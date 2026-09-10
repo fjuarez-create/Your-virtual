@@ -93,26 +93,40 @@ export const MOMENTOS = {
     /* Mañana ya entrada, no el amanecer: el sol a 30° no roza la fachada, la
        ilumina. Es el momento que menos riesgo tiene de quemar porque la luz
        no viene de dentro del encuadre. */
-    nombre: 'Mañana', elev: 30, azim: 86, turbidez: 2.6, rayleigh: 1.7,
+    nombre: 'Mañana', elev: 30, azim: 104, turbidez: 2.4, rayleigh: 2.4,
     mie: 0.0022, mieG: 0.78,
-    sol: 0xffe4c6, solInt: 2.35, cielo: 0xcbd9f0, suelo: 0x63665d, hemiInt: 0.30,
-    relleno: 0xa8bcdc, rellenoInt: 0.14, exposicion: 0.90, niebla: 0xccd4de,
-    bloom: 0.10, umbral: 1.05, hdri: false, luces: false,
-    ibl: 0.42, fondo: 0.85, solMax: 90, noche: 0,
-    nubes: 0.32, nubesAlto: 2.4,
+    sol: 0xffe4c6, solInt: 2.9, cielo: 0xcbd9f0, suelo: 0x63665d, hemiInt: 0.36,
+    relleno: 0xbcd0ee, rellenoInt: 0.36, exposicion: 0.95, niebla: 0xc2cdda,
+    /* El umbral del bloom va POR ENCIMA de la superficie difusa más brillante
+       del momento (la fachada al sol, medida en 0,59 de luminancia): con 1,05
+       florecía la fachada entera, no solo el sol. */
+    bloom: 0.10, umbral: 2.0, hdri: false, luces: false, ventana: 0,
+    /* El IBL pesaba más que el sol y por eso calles y campo salían lavados;
+       lo que levanta la fachada norte —la del encuadre, que nunca ve el sol—
+       es el relleno, que viene justo de esa dirección. `fondo` bajo porque
+       si no el cielo se va a blanco. */
+    ibl: 0.13, fondo: 0.34, solMax: 45, noche: 0,
+    nubes: 0.66, nubesAlto: 30, nubesMax: 5,
   },
   dia: {
     /* Mediodía soleado y CON CIELO AZUL: la clave es rayleigh, que es lo que
        tiñe el cielo. Con 1,05 salía casi blanco; con 2,0 y menos turbidez el
        azul vuelve. La exposición baja a 0,86 para que el asfalto, el campo de
        fútbol y el monocapa conserven dibujo en vez de irse a blanco plano. */
-    nombre: 'Mediodía', elev: 56, azim: 32, turbidez: 2.0, rayleigh: 2.0,
+    nombre: 'Mediodía', elev: 56, azim: 26, turbidez: 2.2, rayleigh: 2.2,
     mie: 0.0018, mieG: 0.76,
-    sol: 0xfff4e4, solInt: 2.55, cielo: 0xbdd4f2, suelo: 0x8b9080, hemiInt: 0.28,
-    relleno: 0xa8c4e8, rellenoInt: 0.13, exposicion: 0.86, niebla: 0xcfdbe8,
-    bloom: 0.08, umbral: 1.15, hdri: true, luces: false,
-    ibl: 0.30, fondo: 0.90, solMax: 120, noche: 0,
-    nubes: 0.42, nubesAlto: 2.0,
+    sol: 0xfff4e4, solInt: 3.1, cielo: 0xbdd4f2, suelo: 0x8b9080, hemiInt: 0.38,
+    relleno: 0xbcd6f6, rellenoInt: 0.42, exposicion: 1.0, niebla: 0xc4d2e2,
+    bloom: 0.09, umbral: 2.2, luces: false, ventana: 0,
+    /* `hdri: false` es la clave del CIELO AZUL. Con hdri en true no se usaba
+       el cielo procedural sino assets/sky_day.hdr, que es una foto acromática
+       (relación azul/rojo 1,01): ninguna exposición la iba a poner azul. Con
+       el cielo horneado, turbidez 2,2 y rayleigh 2,2 el cenit sale (129, 170,
+       209) y el horizonte (202, 214, 217): azul de verdad. De paso se ahorran
+       5,3 MB de descarga y un PMREM de 2048×1024. */
+    hdri: false,
+    ibl: 0.11, fondo: 0.30, solMax: 50, noche: 0,
+    nubes: 0.72, nubesAlto: 30, nubesMax: 8,
   },
   atardecer: {
     /* Acimut: 0° es el sur y 270° el oeste (ver direccionDe). A 288 el sol se
@@ -123,11 +137,13 @@ export const MOMENTOS = {
        alrededor del sol y no cubra el cielo entero. */
     nombre: 'Atardecer', elev: 7, azim: 288, turbidez: 4.0, rayleigh: 2.4,
     mie: 0.0026, mieG: 0.80,
-    sol: 0xffa863, solInt: 2.05, cielo: 0xdcae86, suelo: 0x4a3a2c, hemiInt: 0.20,
-    relleno: 0xc98a52, rellenoInt: 0.15, exposicion: 0.88, niebla: 0xd8a878,
-    bloom: 0.14, umbral: 1.00, hdri: false, luces: true,
-    ibl: 0.50, fondo: 0.62, solMax: 70, noche: 0,
-    nubes: 0.38, nubesAlto: 2.6,
+    sol: 0xffa863, solInt: 2.6, cielo: 0xdcae86, suelo: 0x4a3a2c, hemiInt: 0.28,
+    relleno: 0xc99a6a, rellenoInt: 0.26, exposicion: 0.95, niebla: 0xcfa07a,
+    /* Umbral alto: al atardecer el cielo entero está cerca del corte y con 1,0
+       florecía medio fotograma. Con 3,8 solo florece el disco del sol. */
+    bloom: 0.16, umbral: 3.8, hdri: false, luces: true, ventana: 1.0,
+    ibl: 0.30, fondo: 0.55, solMax: 30, noche: 0,
+    nubes: 0.70, nubesAlto: 34, nubesMax: 2.0,
   },
   noche: {
     /* El sol queda bajo el horizonte y la luz direccional pasa a ser la luna.
@@ -140,7 +156,7 @@ export const MOMENTOS = {
     mie: 0.004, mieG: 0.8,
     sol: 0xbfd1ff, solInt: 0.45, cielo: 0x2a3a5e, suelo: 0x0c1016, hemiInt: 0.6,
     relleno: 0x8fa8d8, rellenoInt: 0.45, exposicion: 1.0, niebla: 0x0b111c,
-    bloom: 0.35, umbral: 0.95, hdri: false, luces: true,
+    bloom: 0.35, umbral: 0.90, hdri: false, luces: true, ventana: 2.4,
     ibl: 1.2, fondo: 1.0, solMax: 0, noche: 1,
     luna: { elev: 9, azim: 226, int: 1.0 },
     /* Las estrellas horneadas se dejan tenues: al ampliar la equirect en
@@ -152,7 +168,12 @@ export const MOMENTOS = {
 
 const ANCHO = 1024, ALTO = 512;
 /* Realce de la planta seccionada (ver cabecera). */
-export const REALCE = { elevacion: 62, hemi: 1.45, ibl: 1.25, hemiNoche: 4.2, iblNoche: 1.8, duracion: 1.0 };
+/* El realce multiplica el IBL del momento. Al bajar el IBL de 0,30 a 0,11
+   para que las calles dejaran de salir lavadas, el mismo ×1,25 dejaba la
+   planta seccionada a oscuras: ahora ×4,2 la devuelve donde estaba
+   (0,11 × 4,2 ≈ 0,46, del orden del 0,30 × 1,25 de antes, con margen porque
+   la planta abierta no recibe cielo por los lados). */
+export const REALCE = { elevacion: 62, hemi: 2.4, ibl: 4.2, hemiNoche: 4.2, iblNoche: 1.8, duracion: 1.0 };
 const CLAVES_NUM = ['solInt', 'hemiInt', 'rellenoInt', 'exposicion', 'bloom', 'umbral', 'ibl', 'fondo', 'noche'];
 const CLAVES_COLOR = ['sol', 'cielo', 'suelo', 'relleno', 'niebla'];
 
@@ -183,6 +204,7 @@ const FRAG_HORNEADO = /* glsl */`
   uniform float solMax;
   uniform float nubes;          // cobertura de nubes, 0 despejado, 1 cubierto
   uniform float nubesAlto;      // altura del estrato, en unidades del rayo
+  uniform float nubesMax;       // tope de radiancia de la nube (si no, florece más que el sol)
 
   uniform float noche;          // peso del modelo nocturno (0 de día, 1 de noche)
   uniform vec3 lunaDir;
@@ -248,13 +270,16 @@ const FRAG_HORNEADO = /* glsl */`
      se ve de canto y se acumula, así que la cobertura sube sola, que es como
      se ve un cielo de verdad. */
   float cobertura( vec3 dir ) {
-    if ( nubes <= 0.001 || dir.y <= 0.02 ) return 0.0;
-    vec2 uv = dir.xz / dir.y * nubesAlto;
-    float n = fbm( uv * 0.06 );
-    n = mix( n, fbm( uv * 0.155 + 31.7 ), 0.45 );
-    float horizonte = mix( 1.0, 1.5, 1.0 - smoothstep( 0.02, 0.55, dir.y ) );
-    float umbral = mix( 0.86, 0.30, nubes );
-    return smoothstep( umbral, umbral + 0.30, n * horizonte );
+    if ( nubes <= 0.001 || dir.y <= 0.0 ) return 0.0;
+    /* La altura se acota: sin acotarla, junto al horizonte dir.xz/dir.y se
+       dispara y el ruido se convierte en un moteado. Acotada, el estrato se
+       comprime hacia el horizonte, que es como se ve de verdad. */
+    vec2 uv = dir.xz / max( dir.y, 0.045 ) * nubesAlto;
+    float n = fbm( uv * 0.05 );
+    n = mix( n, fbm( uv * 0.13 + 31.7 ), 0.45 );
+    float umbral = mix( 0.80, 0.34, nubes );
+    float c = smoothstep( umbral, umbral + 0.22, n );
+    return c * smoothstep( 0.0, 0.09, dir.y );   // sin banda dura en el horizonte
   }
   const float ONE_OVER_FOURPI = 0.07957747154594767;
 
@@ -382,8 +407,12 @@ const FRAG_HORNEADO = /* glsl */`
       float sol = clamp( dot( direction, vSunDirection ) * 0.5 + 0.5, 0.0, 1.0 );
       vec3 nube = mix( vec3( 0.62, 0.65, 0.72 ), vec3( 1.25, 1.22, 1.16 ), pow( sol, 3.0 ) );
       nube *= mix( 0.55, 1.0, smoothstep( 0.02, 0.4, direction.y ) );
-      float base = ( color.r + color.g + color.b ) / 3.0;
-      color = mix( color, nube * max( base * 3.2, 0.35 ), cob );
+      /* La base se toma del cielo SIN el disco del sol: si no, una nube que
+         cae delante del disco valía 440 en lineal, más brillante que el propio
+         sol, y florecía como una mancha. Y aun así se acota. */
+      vec3 sinSol = Lin * 0.04;
+      float base = ( sinSol.r + sinSol.g + sinSol.b ) / 3.0;
+      color = mix( color, min( nube * max( base * 3.2, 0.35 ), vec3( nubesMax ) ), cob );
     }
 
     /* Bajo el horizonte el Sky repite el valor del horizonte; para la IBL es
@@ -558,6 +587,7 @@ export function crearLuz(ctx) {
       solMax: { value: 12000 },
       nubes: { value: 0 },
       nubesAlto: { value: 1.0 },
+      nubesMax: { value: 6 },
       noche: { value: 0 },
       lunaDir: { value: lunaDir.clone() },
       lunaInt: { value: 1 },
@@ -586,6 +616,7 @@ export function crearLuz(ctx) {
     u.solMax.value = M.solMax;
     u.nubes.value = M.nubes ?? 0;
     u.nubesAlto.value = M.nubesAlto ?? 1.0;
+    u.nubesMax.value = M.nubesMax ?? 6;
     u.noche.value = M.noche;
     u.lunaInt.value = conSol ? (M.luna?.int ?? 1) : 0.25;
     u.lunaDisco.value = conSol ? 1 : 0; // el disco (×6) solo en el fondo y el trazador: en el PMREM era un punto de 1,5 que el vidrio y el metal de cubierta reflejaban con halo de bloom

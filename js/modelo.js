@@ -140,9 +140,13 @@ function geometriaPrisma(poligono, y0, y1) {
 /* Cartela: caja con rabito y el número, dibujada en la capa 1 (pasada aparte,
    sin bloom y por encima de todo), igual que en el visor de siempre. */
 function crearCartela(texto, fondo) {
+  /* Lienzo a escala reducida con las mismas coordenadas: son 332 cartelas
+     (dos por vivienda) y a 224×128 eran 38 MB retenidos; a 0,7 son 19. */
+  const K = 0.7;
   const cv = document.createElement('canvas');
-  cv.width = 224; cv.height = 128;
+  cv.width = Math.round(224 * K); cv.height = Math.round(128 * K);
   const ctx = cv.getContext('2d');
+  ctx.scale(K, K);
   ctx.shadowColor = 'rgba(17,17,18,0.3)'; ctx.shadowBlur = 10; ctx.shadowOffsetY = 5;
   ctx.fillStyle = fondo;
   const x0 = 42, y0 = 14, x1 = 182, y1 = 92;

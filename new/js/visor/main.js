@@ -151,7 +151,9 @@ const RUTA_MODELO = 'data/serenea_modelo.json';
 const PLANTA_HACIA_NORTE = 22;    // m que se alarga la caja de planta hacia −z (ver cabecera)
 const REPOSO_S = 120;
 const CAMARA_FAR = 9000;          // el entorno llega a 5 km
-const NIEBLA = { near: 1400, far: 5200 };
+/* La bruma empieza más lejos y se cierra más despacio: con 1400/5200 el
+   pueblo del fondo salía casi blanco y toda la imagen se leía lavada. */
+const NIEBLA = { near: 1900, far: 6800 };
 const ESCALA_CIELO_NOCHE = 2.4;   // estrellas y luna detrás del terreno lejano
 const SOMBRAS = { margen: 250, min: 300, max: 1200, paso: 50 };
 const DPR_MAX = { alta: 1.5, media: 1.25, movil: 1 };
@@ -250,11 +252,16 @@ const apolo = {
 window.apolo = apolo;
 
 /* ── Módulos ── */
+/* La calidad se baja ANTES de crear la luz: el CSM lee ctx.calidad en su
+   constructor para decidir cuántas cascadas monta. Estando después, el móvil
+   arrancaba con tres cascadas en vez de dos y se redibujaba toda la geometría
+   que proyecta sombra una vez de más en cada fotograma. */
+if (MOVIL) ctx.setCalidad('media');
 const luz = crearLuz(ctx);
 scene.fog.near = NIEBLA.near;
 scene.fog.far = NIEBLA.far;
 luz.cieloNoche.scale.setScalar(ESCALA_CIELO_NOCHE);
-if (MOVIL) { ctx.setCalidad('media'); aplicarDPR('movil'); } // setCalidad reajusta el DPR: se vuelve a bajar
+if (MOVIL) aplicarDPR('movil'); // setCalidad reajusta el DPR: se vuelve a bajar
 const post = crearPost(ctx, luz, { ligero: MOVIL });
 const camara = crearCamara(ctx);
 const luzTrazado = {
@@ -585,6 +592,11 @@ async function cargarEntorno(onProgreso) {
     materialesEntorno.push(mat);
     // el relieve son 330 k triángulos en tres cascadas por una sombra que no se ve
     const terreno = /^ortho$|^PNOA_|mar_atlantico/.test(material.name);
+    /* La hoja de los árboles son 540 k triángulos que, multiplicados por las
+       cascadas del mapa de sombras, es el bloque más caro del fotograma. En el
+       teléfono no proyectan: a esta distancia la sombra de una copa es ruido.
+       En escritorio se quedan. */
+    const vegetacion = /^EXT_Hoja/.test(material.name);
     const añadir = (geometrias, lejano) => {
       if (!geometrias.length) return;
       const fusionada = geometrias.length === 1 ? geometrias[0] : mergeGeometries(geometrias, false);
@@ -595,7 +607,7 @@ async function cargarEntorno(onProgreso) {
       if (lejano) materialesEntorno.push(suyo);
       const mesh = new THREE.Mesh(fusionada, suyo);
       mesh.name = `entorno_${material.name}${lejano ? '_lejos' : ''}`;
-      mesh.castShadow = !terreno && !lejano;
+      mesh.castShadow = !terreno && !lejano && !(MOVIL && vegetacion);
       mesh.receiveShadow = !lejano;
       mesh.raycast = () => {}; // el picking va solo por las envolventes de vivienda
       grupo.add(mesh);
@@ -713,16 +725,22 @@ function encuadrarVista(vista, { duracion = 1.6 } = {}) {
 
 /* ── Realce de viviendas (ver cabecera) ── */
 const tenidas = new Set();
+/* `edificio.ventanas` es ahora el FACTOR del momento (0 apagadas, 1 tarde,
+   2,4 noche), no un booleano: si aquí se restaurase con 1 fijo, cada vez que
+   el ratón pasara por una vivienda de noche se le apagaría la luz. */
 function restaurarVidrios(v) {
-  const on = edificio.ventanas && edificio.estadoDe(v.id) !== 'vendida';
+  const f = edificio.estadoDe(v.id) === 'vendida' ? 0 : (+edificio.ventanas || 0);
   for (const m of v.vidrios) {
     m.emissive.setHex(EMISIVO_VENTANA);
-    m.emissiveIntensity = on ? INTENSIDAD_VENTANA : 0;
+    m.emissiveIntensity = INTENSIDAD_VENTANA * f;
   }
 }
+/* El realce se suma a la luz del momento en vez de sustituirla: de noche una
+   vivienda señalada tiene que verse encendida Y marcada. */
 function tenirVidrios(v, intensidad) {
   const col = ESTADO_COLORS[edificio.estadoDe(v.id)] || ESTADO_COLORS.disponible;
-  for (const m of v.vidrios) { m.emissive.copy(col); m.emissiveIntensity = intensidad; }
+  const f = Math.max(1, +edificio.ventanas || 0);
+  for (const m of v.vidrios) { m.emissive.copy(col); m.emissiveIntensity = intensidad * f; }
   tenidas.add(v);
 }
 const atenuada = (id) => {
@@ -859,9 +877,13 @@ Object.assign(apolo, {
     if (apolo.selected) apolo.select(null);
     post.setEnfoque(null);
     apolo.floor = clave;
-    /* En el móvil la planta cortada se pide al elegirla (ver cargarSecundarios). */
-    if (MOVIL && clave !== 'all' && !edificio.variantes.has(clave)) {
-      edificio.cargarVariante(clave, (k, objeto) => cortes?.registrarVariante(k, objeto));
+    /* En el móvil la planta cortada y el mobiliario se piden al elegir planta
+       (ver cargarSecundarios): con el edificio cerrado no se ve ni uno ni
+       otro, y son 1.403 mallas y 51 MB que el teléfono se ahorra hasta que
+       hacen falta. */
+    if (MOVIL && clave !== 'all') {
+      if (!edificio.variantes.has(clave)) edificio.cargarVariante(clave, (k, objeto) => cortes?.registrarVariante(k, objeto));
+      if (!edificio.mobiliario) edificio.cargarMobiliario();
     }
     luz.setRealcePlanta(clave !== 'all');
     post.setOclusion(clave === 'all' ? 'exterior' : 'interior');
@@ -892,7 +914,7 @@ Object.assign(apolo, {
     if (!MOMENTOS[clave]) return Promise.reject(new Error(`apolo: momento desconocido "${clave}"`));
     apolo.momento = clave;
     // las ventanas cambian al arrancar el fundido; el bajón de exposición lo tapa
-    if (edificio) { edificio.setVentanas(MOMENTOS[clave].luces); edificio.setNoche(clave === 'noche'); repintar(); }
+    if (edificio) { edificio.setVentanas(MOMENTOS[clave].ventana ?? (MOMENTOS[clave].luces ? 1 : 0)); edificio.setNoche(clave === 'noche'); repintar(); }
     encenderEntorno(MOMENTOS[clave].noche);
     return luz.setMomento(clave, { duracion });
   },
@@ -1081,7 +1103,7 @@ async function arrancar() {
   apolo.estados = edificio.estados;
   const demo = estadosDemostracion(edificio);
   if (demo) edificio.setEstados(demo);
-  edificio.setVentanas(MOMENTOS[apolo.momento].luces);
+  edificio.setVentanas(MOMENTOS[apolo.momento].ventana ?? (MOMENTOS[apolo.momento].luces ? 1 : 0));
   edificio.setNoche(apolo.momento === 'noche');
 
   /* Modelo de SketchUp: sin CSG ni tapas (superficies abiertas), variantes
@@ -1121,6 +1143,7 @@ async function arrancar() {
        descargan de entrada: cada una llega cuando se elige, y mientras tanto
        cortes.js recorta por planos. */
     plantas: MOVIL ? [] : null,
+    mobiliario: !MOVIL,
     onProgreso: (f, etapa) => emitir('carga', { progreso: f, etapa, secundaria: true }),
     alMobiliario: (objeto) => { cortes.registrarMobiliario(objeto); ctx.emit('geometria', { mobiliario: true }); },
     alVariante: (clave, objeto) => cortes.registrarVariante(clave, objeto),
@@ -1129,6 +1152,7 @@ async function arrancar() {
     emitir('carga', { progreso: 1, etapa: 'secundarios', secundaria: true });
   }).catch((e) => console.warn('[apolo] carga secundaria:', e));
   setTimeout(async () => {
+    if (MOVIL) return;   // cuatro horneados de cielo y cuatro PMREM bloquean el hilo del teléfono
     try { await luz.precalentar(); } catch (e) { console.warn('[apolo] precalentar luz:', e); }
   }, 2500);
 }
