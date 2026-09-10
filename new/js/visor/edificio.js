@@ -104,6 +104,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { limitarMaterial } from 'app/visor/texturas.js';
+import { ajustarMaterial } from 'app/visor/materiales.js';
 import { ESTADO_COLORS } from 'app/building.js';
 
 export const DISTANCIA_VIDRIO = 0.45;    // m del centro del vidrio a la huella de la vivienda (ver cabecera)
@@ -474,6 +475,9 @@ export async function cargarEdificio(ctx, slot, opciones = {}) {
       r.side = THREE.FrontSide; // cortes.js lo pasa a doble cara con las traseras oscuras
       r.envMapIntensity = 1;
       r.userData = { baseOpacity: r.opacity, baseEnv: 1, baseColor: r.color.clone() };
+      /* Al final, para que ni el envMapIntensity ni el baseColor de arriba
+         pisen el ajuste (ver materiales.js). */
+      ajustarMaterial(r);
     }
     r.name = nombre;
     if (luz) luz.aplicarMaterial(r);

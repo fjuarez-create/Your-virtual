@@ -369,14 +369,59 @@ export function crearPost(ctx, luz, opciones = {}) {
   }
 
   const smaa = ligero ? null : new SMAAPass();
+  /* ── Grado de color ──
+     Va DESPUÉS de OutputPass, es decir sobre la imagen ya mapeada a pantalla.
+     AgX es una curva deliberadamente plana: protege las luces (por eso no se
+     quema) pero deja la imagen sin negros y sin color. Medido contra los
+     renders del estudio: la fachada del visor recorría 91 niveles de gris y
+     la del render 176, y la saturación era la mitad. Esto pone el punto de
+     negro, el contraste y la saturación que faltan, que es la diferencia
+     entre una imagen técnica y un render. Es un cuadrilátero a pantalla
+     completa con nueve instrucciones: no se nota en el rendimiento. */
+  const grado = new ShaderPass({
+    name: 'grado',
+    uniforms: {
+      tDiffuse: { value: null },
+      contraste: { value: 1.0 },
+      saturacion: { value: 1.0 },
+      negros: { value: 0.0 },
+    },
+    vertexShader: /* glsl */`
+      varying vec2 vUv;
+      void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 ); }
+    `,
+    fragmentShader: /* glsl */`
+      uniform sampler2D tDiffuse;
+      uniform float contraste;
+      uniform float saturacion;
+      uniform float negros;
+      varying vec2 vUv;
+      void main() {
+        vec4 t = texture2D( tDiffuse, vUv );
+        vec3 c = t.rgb;
+        c = max( vec3( 0.0 ), ( c - negros ) / max( 1e-4, 1.0 - negros ) );  // punto de negro
+        c = ( c - 0.5 ) * contraste + 0.5;                                    // contraste sobre el gris medio
+        float l = dot( c, vec3( 0.2126, 0.7152, 0.0722 ) );
+        c = mix( vec3( l ), c, saturacion );
+        gl_FragColor = vec4( clamp( c, 0.0, 1.0 ), t.a );
+      }
+    `,
+  });
   const output = new OutputPass();
   const ocultar = new OcultarInvisiblesPass(scene);
 
-  for (const p of [renderPass, ocultar, gtao, ssr, desenfoque, bloom, bokeh, smaa, output]) if (p) composer.addPass(p);
+  for (const p of [renderPass, ocultar, gtao, ssr, desenfoque, bloom, bokeh, smaa, output, grado]) if (p) composer.addPass(p);
   let activo = true; // false tras dispose: los eventos de ctx no se pueden desregistrar
 
   const post = {
-    composer, gtao, ssr, desenfoque, bloom, bokeh, smaa,
+    composer, gtao, ssr, desenfoque, bloom, bokeh, smaa, grado,
+    /** Grado de color del momento: { contraste, saturacion, negros }. */
+    setGrado(g) {
+      if (!g) return;
+      grado.uniforms.contraste.value = g.contraste ?? 1;
+      grado.uniforms.saturacion.value = g.saturacion ?? 1;
+      grado.uniforms.negros.value = g.negros ?? 0;
+    },
     enfoque: null,
     velocidad: 0,
     /* ¿Hay alguna cartela visible? Lo fija main: con el edificio entero no hay

@@ -95,8 +95,8 @@ export const MOMENTOS = {
        no viene de dentro del encuadre. */
     nombre: 'Mañana', elev: 30, azim: 104, turbidez: 2.4, rayleigh: 2.4,
     mie: 0.0022, mieG: 0.78,
-    sol: 0xffe4c6, solInt: 2.9, cielo: 0xcbd9f0, suelo: 0x63665d, hemiInt: 0.36,
-    relleno: 0xbcd0ee, rellenoInt: 0.36, exposicion: 0.95, niebla: 0xc2cdda,
+    sol: 0xffe8cf, solInt: 2.9, cielo: 0xc8d6e8, suelo: 0x8a7c66, hemiInt: 0.50,
+    relleno: 0xf0e6d6, rellenoInt: 0.46, exposicion: 1.0, niebla: 0xaebac9,
     /* El umbral del bloom va POR ENCIMA de la superficie difusa más brillante
        del momento (la fachada al sol, medida en 0,59 de luminancia): con 1,05
        florecía la fachada entera, no solo el sol. */
@@ -105,18 +105,19 @@ export const MOMENTOS = {
        lo que levanta la fachada norte —la del encuadre, que nunca ve el sol—
        es el relleno, que viene justo de esa dirección. `fondo` bajo porque
        si no el cielo se va a blanco. */
-    ibl: 0.13, fondo: 0.20, solMax: 45, noche: 0,
+    ibl: 0.13, fondo: 0.075, solMax: 45, noche: 0,
     nubes: 0.66, nubesAlto: 30, nubesMax: 5,
+    grado: { contraste: 1.16, saturacion: 1.12, negros: 0.040 },
   },
   dia: {
     /* Mediodía soleado y CON CIELO AZUL: la clave es rayleigh, que es lo que
        tiñe el cielo. Con 1,05 salía casi blanco; con 2,0 y menos turbidez el
        azul vuelve. La exposición baja a 0,86 para que el asfalto, el campo de
        fútbol y el monocapa conserven dibujo en vez de irse a blanco plano. */
-    nombre: 'Mediodía', elev: 56, azim: 26, turbidez: 2.2, rayleigh: 2.2,
+    nombre: 'Mediodía', elev: 56, azim: 26, turbidez: 2.0, rayleigh: 2.6,
     mie: 0.0018, mieG: 0.76,
-    sol: 0xfff4e4, solInt: 3.1, cielo: 0xbdd4f2, suelo: 0x8b9080, hemiInt: 0.38,
-    relleno: 0xbcd6f6, rellenoInt: 0.42, exposicion: 1.0, niebla: 0xc4d2e2,
+    sol: 0xfff6e8, solInt: 3.1, cielo: 0xc2d4ec, suelo: 0x9c8b70, hemiInt: 0.52,
+    relleno: 0xf2e8da, rellenoInt: 0.5, exposicion: 1.06, niebla: 0xafbfd2,
     bloom: 0.09, umbral: 2.2, luces: false, ventana: 0,
     /* `hdri: false` es la clave del CIELO AZUL. Con hdri en true no se usaba
        el cielo procedural sino assets/sky_day.hdr, que es una foto acromática
@@ -125,8 +126,14 @@ export const MOMENTOS = {
        209) y el horizonte (202, 214, 217): azul de verdad. De paso se ahorran
        5,3 MB de descarga y un PMREM de 2048×1024. */
     hdri: false,
-    ibl: 0.11, fondo: 0.16, solMax: 50, noche: 0,
+    /* `fondo` bajísimo a propósito. Medido contra el render del estudio: su
+       cielo es 84,131,188 —azul de verdad— y el del visor salía 203,228,242,
+       o sea un azul lavado casi blanco. La curva AgX comprime tanto las luces
+       que para que el cielo tenga COLOR hay que darle poca luz. Solo afecta
+       al fondo: la iluminación la lleva `ibl`. */
+    ibl: 0.11, fondo: 0.055, solMax: 50, noche: 0,
     nubes: 0.72, nubesAlto: 30, nubesMax: 8,
+    grado: { contraste: 1.18, saturacion: 1.12, negros: 0.042 },
   },
   atardecer: {
     /* Acimut: 0° es el sur y 270° el oeste (ver direccionDe). A 288 el sol se
@@ -138,12 +145,13 @@ export const MOMENTOS = {
     nombre: 'Atardecer', elev: 7, azim: 288, turbidez: 4.0, rayleigh: 2.4,
     mie: 0.0026, mieG: 0.80,
     sol: 0xffa863, solInt: 2.6, cielo: 0xdcae86, suelo: 0x4a3a2c, hemiInt: 0.28,
-    relleno: 0xc99a6a, rellenoInt: 0.26, exposicion: 0.95, niebla: 0xcfa07a,
+    relleno: 0xd9a878, rellenoInt: 0.30, exposicion: 0.95, niebla: 0xb98f6a,
     /* Umbral alto: al atardecer el cielo entero está cerca del corte y con 1,0
        florecía medio fotograma. Con 3,8 solo florece el disco del sol. */
     bloom: 0.16, umbral: 3.8, hdri: false, luces: true, ventana: 1.0,
-    ibl: 0.30, fondo: 0.40, solMax: 30, noche: 0,
+    ibl: 0.30, fondo: 0.32, solMax: 30, noche: 0,
     nubes: 0.70, nubesAlto: 34, nubesMax: 2.0,
+    grado: { contraste: 1.14, saturacion: 1.14, negros: 0.030 },
   },
   noche: {
     /* El sol queda bajo el horizonte y la luz direccional pasa a ser la luna.
@@ -166,6 +174,8 @@ export const MOMENTOS = {
        pantalla (unas 5× a 1080p) cada una se convierte en una mancha; las
        estrellas nítidas del raster son los Points de crearCieloNocturno. */
     resplandor: 0xff9a4a, resplandorInt: 0.14, estrellas: 0.08,
+    /* De noche el contraste se toca poco: subirlo cierra los interiores. */
+    grado: { contraste: 1.08, saturacion: 1.14, negros: 0.015 },
   },
 };
 

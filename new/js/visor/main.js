@@ -109,6 +109,7 @@ import { cargarEdificio, crearVidrioFisico, EMISIVO_VENTANA, INTENSIDAD_VENTANA 
 import { crearCortes } from 'app/visor/cortes.js';
 import { crearCamara } from 'app/visor/camara.js';
 import { limitarMaterial, megapixeles } from 'app/visor/texturas.js';
+import { ajustarMaterial } from 'app/visor/materiales.js';
 import { ACTIVE_BUILDING } from 'app/promotions.js';
 import { FLOOR_DEFS } from 'app/layout.js';
 import { ESTADO_COLORS } from 'app/building.js';
@@ -554,13 +555,17 @@ function materialEntorno(m) {
   m.alphaTest = 0;
   m.transparent = false;
   m.depthWrite = true;
-  m.envMapIntensity = 1;
-  const exportado = Math.abs(m.metalness - 0.5) < 1e-3 && Math.abs(m.roughness - 0.5) < 1e-3; // sin PBR en SketchUp
-  if (nombre === 'mar_atlantico_costa') { m.roughness = 0.18; m.metalness = 0; }
+  /* Reflejo del cielo por tipo de superficie. Todo a 1 teñía de AZUL lo
+     horizontal: una calzada ve el hemisferio entero, y medido salía
+     91,110,130 contra los 60,63,75 neutros del render del estudio. El suelo,
+     el asfalto y la ortofoto reflejan poco; lo vertical, algo más. */
+  m.envMapIntensity = /^ortho|^PNOA_|asphalt|curb|EXT_Tierra|industry/i.test(nombre) ? 0.42 : 0.85;
+  if (nombre === 'mar_atlantico_costa') { m.roughness = 0.18; m.metalness = 0; m.envMapIntensity = 1; }
   else if (nombre === 'metal') { m.roughness = 0.45; m.metalness = 0.7; }
   else if (/^ortho$|^PNOA_/.test(nombre)) { m.roughness = 1; m.metalness = 0; }
-  else if (exportado) { m.roughness = 0.9; m.metalness = 0; }
   m.name = nombre;
+  /* Al final, para que su envMapIntensity no lo pise el 1 de arriba. */
+  ajustarMaterial(m);   // metalness del exportador y color real (ver materiales.js)
   luz.aplicarMaterial(m);
   return m;
 }
@@ -923,6 +928,7 @@ Object.assign(apolo, {
     apolo.momento = clave;
     // las ventanas cambian al arrancar el fundido; el bajón de exposición lo tapa
     ensuciarSombras();
+    post.setGrado(MOMENTOS[clave].grado);
     if (edificio) { edificio.setVentanas(MOMENTOS[clave].ventana ?? (MOMENTOS[clave].luces ? 1 : 0)); edificio.setNoche(clave === 'noche'); repintar(); }
     encenderEntorno(MOMENTOS[clave].noche);
     return luz.setMomento(clave, { duracion });
@@ -1129,6 +1135,7 @@ async function arrancar() {
   apolo.estados = edificio.estados;
   const demo = estadosDemostracion(edificio);
   if (demo) edificio.setEstados(demo);
+  post.setGrado(MOMENTOS[apolo.momento].grado);
   edificio.setVentanas(MOMENTOS[apolo.momento].ventana ?? (MOMENTOS[apolo.momento].luces ? 1 : 0));
   edificio.setNoche(apolo.momento === 'noche');
 

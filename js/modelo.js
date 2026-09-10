@@ -35,6 +35,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { limitarMaterial } from 'app/texturas.js';
+import { ajustarMaterial } from 'app/materiales.js';
 
 export const RUTAS = {
   modelo: 'data/serenea_modelo.json',
@@ -457,7 +458,10 @@ function prepararMaterial(m) {
   if (!m || m.userData.preparado) return m;
   m.userData.preparado = true;
   if (m.alphaTest > 0 && !m.transparent) m.alphaTest = 0;
-  m.envMapIntensity = m.envMapIntensity ?? 1;
+  /* Reflejo del cielo por tipo de superficie: con todo a 1, lo horizontal
+     —calzada, acera, ortofoto del terreno— se teñía de azul, porque ve el
+     hemisferio entero. Ver new/js/visor/main.js, mismo criterio. */
+  m.envMapIntensity = /^ortho|^PNOA_|asphalt|curb|EXT_Tierra|industry/i.test(m.name || '') ? 0.42 : 0.85;
   m.userData.baseEnv = m.envMapIntensity;
   m.userData.baseColor = m.color?.clone();
   m.userData.baseOpacity = m.opacity;
@@ -497,7 +501,7 @@ export async function cargarModelo(scene, unitsById, { estadoDe = () => 'disponi
     raiz.traverse((o) => {
       if (!o.isMesh) return;
       const ms = Array.isArray(o.material) ? o.material : [o.material];
-      for (const m of ms) { limitarMaterial(m, texturaMax); prepararMaterial(m); if (m?.name) materiales.set(m.name, m); }
+      for (const m of ms) { limitarMaterial(m, texturaMax); prepararMaterial(m); ajustarMaterial(m); if (m?.name) materiales.set(m.name, m); }
       // El terreno lejano no proyecta sombra: el mapa de sombras cubre la
       // parcela, y hacerle sitio a 5 km de costa lo dejaría inservible.
       const cerca = !lejos || (o.geometry.boundingSphere ?? (o.geometry.computeBoundingSphere(), o.geometry.boundingSphere)).radius < 400;
