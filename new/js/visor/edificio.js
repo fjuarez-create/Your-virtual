@@ -112,11 +112,22 @@ export const ALTURA_CARTELA = 1.2;       // m sobre y1
 /* Estor bajado de las vendidas (ver setVentanas): cuánto se oscurece el
    vidrio, cuánto reflejo pierde y cuánto se cierra. */
 export const ESTOR = { color: 0.35, reflejo: 0.25, opacidad: 0.3 };
-/* Vendida vista desde arriba (planta seccionada): el vidrio no se ve, así que
-   la vivienda se apaga con su propio prisma, tintado oscuro y translúcido,
-   como si tuviera el techo puesto y las luces apagadas. Con prueba de
-   profundidad, para que solo cubra lo suyo y no se pinte sobre los muros. */
-export const APAGADA = { color: 0x2b3138, opacidad: 0.46 };
+/* Vendida: la vivienda se apaga de verdad. El prisma no pinta un velo gris
+   encima —eso se veía como una caja negra semitransparente en cuanto la
+   cámara bajaba— sino que MULTIPLICA lo que hay detrás por LUZ_VENDIDA, así
+   que a esa vivienda solo le entra ese tanto por uno de la luz que le entra a
+   una disponible: persianas bajadas y luces apagadas, sin caja. Se dibuja
+   solo la cara de entrada (FrontSide), que en un prisma convexo visto desde
+   fuera es una y solo una por píxel: si no, cada cara volvería a multiplicar
+   y la vivienda quedaría negra. El color va en espacio lineal a propósito:
+   es un factor de luz, no un color de pintura. */
+/* Factor LINEAL, antes del mapeo de tonos: no es el tanto por uno que se ve
+   en pantalla. Con 0,3 la vivienda apenas se oscurecía, porque la curva de
+   tono comprime las luces altas y se comía el efecto (medido: la pantalla
+   solo bajaba a un 75 %). Con 0,1 la pantalla baja a un 56 %, que es lo que
+   se lee como "solo entra un tercio de la luz": se ven los muebles, pero la
+   vivienda está claramente apagada, y nunca sale negra. */
+export const LUZ_VENDIDA = 0.1;
 export const CARTELA_PX = 34;            // alto del sprite de la cartela en px para un lienzo de 720 px (ver cabecera)
 export const EMISIVO_VENTANA = 0xffd9a0; // luz cálida de interior
 export const INTENSIDAD_VENTANA = 1.4;   // por encima de 1 para que el bloom lo recoja
@@ -135,6 +146,15 @@ export const RUTAS = {
 };
 
 const COLOR_BASE_VIVIENDA = new THREE.Color(0xe9e7e1);
+function crearMaterialApagado() {
+  const m = new THREE.MeshBasicMaterial({
+    transparent: true, opacity: 1, depthWrite: false, depthTest: true, premultipliedAlpha: true,
+    side: THREE.FrontSide, blending: THREE.MultiplyBlending, toneMapped: false, fog: false,
+  });
+  m.color.setRGB(LUZ_VENDIDA, LUZ_VENDIDA, LUZ_VENDIDA, THREE.LinearSRGBColorSpace);
+  m.name = 'vivienda_apagada';
+  return m;
+}
 const ORDEN_PLANTAS = ['baja', 'p1', 'p2', 'atico'];
 const RE_VIDRIO = /^vidrio__T(\d+)__(\d+)__(-?\d+)_(-?\d+)_(-?\d+)$/;
 const ES_MATERIAL_VIDRIO = /vidrio/i;
@@ -326,7 +346,7 @@ function crearPrismas(grupo, unitsById, capaCartelas, datosViviendas, fovCamara 
     });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.name = `vivienda-${id}`;
-    mesh.userData = { unitId: id, floorKey: d.planta, plataforma };
+    mesh.userData = { unitId: id, floorKey: d.planta, plataforma, matRealce: mat, matApagada: null };
     mesh.renderOrder = 50; // tras el vidrio: el realce se ve a través de la fachada
     P.grupo.add(mesh);
     const { punto: centroide, exterior } = centroideInterior(poligono);
@@ -586,7 +606,7 @@ export async function cargarEdificio(ctx, slot, opciones = {}) {
       for (const v of viviendas.values()) {
         const estado = edificio.estadoDe(v.id);
         const col = ESTADO_COLORS[estado] || ESTADO_COLORS.disponible;
-        const mat = v.mesh.material;
+        const mat = v.mesh.userData.matRealce;
         const vendida = estado === 'vendida';
         const dim = atenuada ? !!atenuada(v.id) : false;
         mat.color.copy(col);
@@ -594,16 +614,20 @@ export async function cargarEdificio(ctx, slot, opciones = {}) {
            que querían señalar. Y la vivienda ya abierta no lleva prisma: se
            ha entrado a verla por dentro. */
         if (vendida && v.id !== abierta) {
-          mat.color.setHex(APAGADA.color);
-          mat.opacity = APAGADA.opacidad;
-          mat.emissive.setHex(0x000000);
-          mat.depthTest = true;              // dentro de la vivienda, no por encima de los muros
-          v.mesh.visible = true;
-          v.mesh.renderOrder = 20;
+          const u = v.mesh.userData;
+          if (!u.matApagada) u.matApagada = crearMaterialApagado();
+          v.mesh.material = u.matApagada;
+          /* Solo la planta que se está mirando. En cenital, con las cuatro
+             plantas puestas, los prismas de las de arriba se apilaban sobre
+             el de abajo y cada uno volvía a multiplicar: la vivienda salía
+             negra. Uno por rayo y ya. */
+          v.mesh.visible = cartelasDe === v.floorKey;
+          v.mesh.renderOrder = 20;           // antes que el realce, después de lo opaco
           v.label.visible = false;
           v.labelR.visible = false;
           continue;
         }
+        v.mesh.material = v.mesh.userData.matRealce;
         mat.depthTest = false;
         v.mesh.renderOrder = 50;
         if (v.id === abierta) {

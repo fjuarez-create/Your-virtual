@@ -726,35 +726,53 @@ function updateCompass() {
   needle.style.transform = `rotate(${(-az * 180) / Math.PI - 45}deg)`;
 }
 
-/* La cámara no baja nunca del suelo del edificio: ni por debajo de los
-   forjados ni bajo la calle. El límite lo da el modelo en cada punto, porque
-   el terreno se escalona casi cinco metros de un testero al otro. */
-const MARGEN_VOLUMEN = 0.6;   // m de holgura fuera de la fachada y sobre el techo
-
+/* La cámara no baja nunca del suelo ni entra en ningún volumen: el límite lo
+   da el mapa de alturas del modelo, punto por punto. */
 function limitarSuelo() {
   if (!M) return;
   const p = camera.position;
+  /* El mapa de alturas del modelo dice lo más alto que hay debajo de cada
+     punto: terreno, calle, vecino o la propia envolvente. La cámara no baja
+     de ahí, así que no se mete bajo tierra ni atraviesa un muro, y en cambio
+     sí puede bajar por un patio interior, donde lo más alto es el pavimento
+     del patio. Como un pájaro. */
   const yMin = M.sueloEn(p.x, p.z);
   if (p.y < yMin) p.y = yMin;
   const yMinObjetivo = M.sueloEn(controls.target.x, controls.target.z) - 2.5;
   if (controls.target.y < yMinObjetivo) controls.target.y = yMinObjetivo;
+  if (!intro) limitarAmbito(); // la entrada cinematográfica llega desde lejos a propósito
+}
 
-  /* Tampoco se atraviesan los muros: si la cámara entra en la huella del
-     edificio por debajo de lo que se está viendo (la cubierta con el edificio
-     completo, la cota de corte con una planta aislada), se la devuelve fuera
-     por el lado más cercano. Como en un videojuego: el que mira no atraviesa
-     paredes ni se mete debajo del proyecto. */
-  const caja = M.caja;
-  const techo = (M.planta === 'all' ? caja.max.y : M.cotasPlanta(M.planta).corte) + MARGEN_VOLUMEN;
-  const minX = caja.min.x + MARGEN_VOLUMEN, maxX = caja.max.x - MARGEN_VOLUMEN;
-  const minZ = caja.min.z + MARGEN_VOLUMEN, maxZ = caja.max.z - MARGEN_VOLUMEN;
-  if (p.x <= minX || p.x >= maxX || p.z <= minZ || p.z >= maxZ || p.y >= techo) return;
-  const salidas = [
-    [p.x - minX, 'x', minX], [maxX - p.x, 'x', maxX],
-    [p.z - minZ, 'z', minZ], [maxZ - p.z, 'z', maxZ],
-    [techo - p.y, 'y', techo],
-  ].sort((a, b) => a[0] - b[0]);
-  p[salidas[0][1]] = salidas[0][2];
+/* Ámbito de visita: alejarse un kilómetro no aporta nada y distrae, así que
+   ni el objetivo ni la cámara salen de un círculo alrededor del centro de la
+   parcela. La distancia máxima se recalcula con la dirección de la vista para
+   que la rueda deje de alejar justo en el borde, sin tirones. */
+function limitarAmbito() {
+  const a = M?.ambito;
+  if (!a) return;
+  const t = controls.target;
+  const dx = t.x - a.x, dz = t.z - a.z;
+  const d = Math.hypot(dx, dz);
+  const maxObjetivo = a.radio * 0.55;
+  if (d > maxObjetivo && d > 1e-6) { const k = maxObjetivo / d; t.x = a.x + dx * k; t.z = a.z + dz * k; }
+  const vx = camera.position.x - t.x, vy = camera.position.y - t.y, vz = camera.position.z - t.z;
+  const dist = Math.hypot(vx, vy, vz);
+  if (dist < 1e-4) return;
+  const ux = vx / dist, uz = vz / dist;
+  const q = ux * ux + uz * uz;
+  let maxDist = 420;
+  if (q > 1e-6) {
+    const ox = t.x - a.x, oz = t.z - a.z;
+    const b = 2 * (ox * ux + oz * uz);
+    const c = ox * ox + oz * oz - a.radio * a.radio;
+    const disc = b * b - 4 * q * c;
+    maxDist = disc > 0 ? Math.max(controls.minDistance, (-b + Math.sqrt(disc)) / (2 * q)) : controls.minDistance;
+  }
+  controls.maxDistance = Math.min(420, maxDist);
+  if (dist > controls.maxDistance) {
+    const k = controls.maxDistance / dist;
+    camera.position.set(t.x + vx * k, t.y + vy * k, t.z + vz * k);
+  }
 }
 
 /* ─────────────────────────── Bucle ─────────────────────────── */

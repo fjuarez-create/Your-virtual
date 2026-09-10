@@ -141,6 +141,9 @@ const MARGEN = { planta: 1.02, plano: 1.03 };
    geométrico de la parcela de Apolo) nada proyecta ni recibe sombra y las
    texturas bajan a TEXTURA_LEJOS. El pueblo entero entraba en las cascadas
    del CSM y se dibujaba dos o tres veces por fotograma sin que se notara. */
+const RADIO_VISION = 200;         // m: círculo de visita, la cámara no sale de ahí
+const REJILLA_PASO = 1.5;         // m de lado de la casilla del mapa de alturas
+const HOLGURA_SUELO = 1.5;        // m que la cámara guarda por encima de lo que tenga debajo
 const RADIO_CERCA = 200;          // m
 const TEXTURA_LEJOS = 512;        // lado máximo de las texturas del entorno lejano
 const RUTA_MODELO = 'data/serenea_modelo.json';
@@ -296,6 +299,77 @@ function geometriaMundo(mesh, { conUV }) {
   return salida;
 }
 
+/* ── Mapa de alturas ──
+   Rejilla en planta con la cota más alta que hay debajo de cada casilla:
+   terreno, calles, edificios vecinos y la envolvente de Apolo. Es el suelo
+   que la cámara no atraviesa. Se comporta como un pájaro: por un patio
+   interior se baja (encima del patio lo más alto es su propio pavimento),
+   pero una pared es una casilla a la altura de la cubierta y no se pasa.
+   Los triángulos se muestrean por su plano en el centro de cada casilla,
+   acotado al alto del propio triángulo: así el terreno queda a su cota real
+   y los paños verticales, a la de su borde superior. */
+const alturas = { x0: 0, z0: 0, paso: REJILLA_PASO, n: 0, datos: null };
+
+function rejillaVacia(centro, radio) {
+  const n = Math.max(8, Math.ceil((radio * 2) / REJILLA_PASO) + 2);
+  alturas.n = n;
+  alturas.x0 = centro.x - (n * REJILLA_PASO) / 2;
+  alturas.z0 = centro.y - (n * REJILLA_PASO) / 2;
+  alturas.datos = new Float32Array(n * n).fill(-Infinity);
+}
+
+function marcarGeometria(g, matriz) {
+  const pos = g.getAttribute('position');
+  if (!pos) return;
+  const idx = g.index;
+  const cuenta = idx ? idx.count : pos.count;
+  const { n, x0, z0, paso, datos } = alturas;
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+  for (let t = 0; t < cuenta; t += 3) {
+    const ia = idx ? idx.getX(t) : t, ib = idx ? idx.getX(t + 1) : t + 1, ic = idx ? idx.getX(t + 2) : t + 2;
+    a.fromBufferAttribute(pos, ia); b.fromBufferAttribute(pos, ib); c.fromBufferAttribute(pos, ic);
+    if (matriz) { a.applyMatrix4(matriz); b.applyMatrix4(matriz); c.applyMatrix4(matriz); }
+    const minX = Math.min(a.x, b.x, c.x), maxX = Math.max(a.x, b.x, c.x);
+    const minZ = Math.min(a.z, b.z, c.z), maxZ = Math.max(a.z, b.z, c.z);
+    let i0 = Math.floor((minX - x0) / paso), i1 = Math.floor((maxX - x0) / paso);
+    let j0 = Math.floor((minZ - z0) / paso), j1 = Math.floor((maxZ - z0) / paso);
+    if (i1 < 0 || j1 < 0 || i0 >= n || j0 >= n) continue;
+    i0 = Math.max(0, i0); j0 = Math.max(0, j0); i1 = Math.min(n - 1, i1); j1 = Math.min(n - 1, j1);
+    if ((i1 - i0 + 1) * (j1 - j0 + 1) > 40000) continue;   // triángulo descomunal: no es geometría de visita
+    const minY = Math.min(a.y, b.y, c.y), maxY = Math.max(a.y, b.y, c.y);
+    // plano del triángulo: ny·y = d − nx·x − nz·z
+    const ux = b.x - a.x, uy = b.y - a.y, uz = b.z - a.z;
+    const vx = c.x - a.x, vy = c.y - a.y, vz = c.z - a.z;
+    const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+    const plano = Math.abs(ny) > 1e-6;
+    const d = nx * a.x + ny * a.y + nz * a.z;
+    for (let j = j0; j <= j1; j++) {
+      const cz = z0 + (j + 0.5) * paso;
+      for (let i = i0; i <= i1; i++) {
+        const cx = x0 + (i + 0.5) * paso;
+        let y = maxY;
+        if (plano) {
+          y = (d - nx * cx - nz * cz) / ny;
+          if (!(y >= minY)) y = minY;
+          else if (y > maxY) y = maxY;
+        }
+        const k = j * n + i;
+        if (y > datos[k]) datos[k] = y;
+      }
+    }
+  }
+}
+
+/* Cota del mapa en un punto (la casilla, sin interpolar: interpolar suavizaría
+   justo los bordes de los muros, que es donde interesa que no ceda). */
+function alturaEn(x, z) {
+  const { n, x0, z0, paso, datos } = alturas;
+  if (!datos) return -Infinity;
+  const i = Math.floor((x - x0) / paso), j = Math.floor((z - z0) / paso);
+  if (i < 0 || j < 0 || i >= n || j >= n) return -Infinity;
+  return datos[j * n + i];
+}
+
 /* ── Entorno lejano ──
    Reparte los triángulos de una geometría en dos según su centroide caiga
    dentro o fuera del radio (medido en planta desde el centro de la parcela).
@@ -400,6 +474,7 @@ function materialLejano(mat) {
 /* Centro geométrico de la parcela (la unión de los ocho cajones), que es lo
    que separa el entorno cercano del lejano. Si el fichero no llega se usa el
    centro del edificio del contrato. */
+let centroParcelaXZ = new THREE.Vector2(66.72, -23.94);
 async function centroParcela() {
   try {
     const r = await fetch(RUTA_MODELO);
@@ -445,6 +520,7 @@ function materialEntorno(m) {
 async function cargarEntorno(onProgreso) {
   const t0 = performance.now();
   const [gltf, centro] = await Promise.all([cargarGLB(RUTA_ENTORNO, onProgreso), centroParcela()]);
+  centroParcelaXZ = centro;
   const tCarga = performance.now();
   gltf.scene.updateMatrixWorld(true);
   const grupo = new THREE.Group();
@@ -521,39 +597,50 @@ function volarAPose(pose, duracion) {
   const polar = THREE.MathUtils.degToRad(90 - pose.elevacion);
   const az = THREE.MathUtils.degToRad(pose.azimut);
   const objetivo = new THREE.Vector3(...pose.objetivo);
-  const posicion = new THREE.Vector3(Math.sin(polar) * Math.sin(az), Math.cos(polar), Math.sin(polar) * Math.cos(az))
-    .multiplyScalar(pose.distancia * retiro).add(objetivo);
+  const dir = new THREE.Vector3(Math.sin(polar) * Math.sin(az), Math.cos(polar), Math.sin(polar) * Math.cos(az));
+  const posicion = dir.clone().multiplyScalar(distanciaDentroDelAmbito(objetivo, dir, pose.distancia * retiro)).add(objetivo);
   return camara.volarA({ posicion, objetivo }, { duracion, arco: 0.3 });
 }
-/* Volumen que la cámara no puede atravesar: la huella del edificio hasta su
-   techo visible (la cubierta con el edificio completo, la cota de corte con
-   una planta aislada). Se comporta como en un videojuego: no se traspasan
-   muros ni se ve el proyecto desde abajo. */
+
+/* La corrección por pantalla estrecha no puede sacar la cámara del ámbito:
+   antes de alejarse se corta la distancia en el borde del círculo. */
+function distanciaDentroDelAmbito(objetivo, dir, distancia) {
+  const a = dir.x * dir.x + dir.z * dir.z;
+  if (a < 1e-6) return distancia;
+  const ox = objetivo.x - centroParcelaXZ.x, oz = objetivo.z - centroParcelaXZ.y;
+  const radio = RADIO_VISION * 0.98;
+  const b = 2 * (ox * dir.x + oz * dir.z);
+  const c = ox * ox + oz * oz - radio * radio;
+  const disc = b * b - 4 * a * c;
+  if (disc <= 0) return distancia;
+  return Math.min(distancia, (-b + Math.sqrt(disc)) / (2 * a));
+}
+/* Con una planta aislada la cámara puede bajar hasta la cota de corte; con
+   el edificio entero, el techo es la cubierta y manda el mapa de alturas. */
 function actualizarVolumen() {
   if (!edificio) return;
-  const caja = edificio.caja;
   const tramos = edificio.definicionCortes?.plantas?.[apolo.floor];
-  const techo = apolo.floor === 'all' || !tramos ? caja.max.y : Math.max(...tramos.map((t) => t.y));
-  camara.setVolumen({ min: { x: caja.min.x, z: caja.min.z }, max: { x: caja.max.x, z: caja.max.z }, techo });
+  corteActual = apolo.floor === 'all' || !tramos ? Infinity : Math.max(...tramos.map((t) => t.y));
 }
 
-/* Cota mínima admitida para la cámara en un punto: el suelo de la planta
-   baja de ese cajón, más un metro de holgura. */
+/* Cota mínima admitida para la cámara en un punto: lo más alto que hay
+   debajo, más la holgura. Con una planta aislada, dentro de la huella de
+   Apolo el techo deja de ser la cubierta y pasa a ser la cota de corte, que
+   es lo que permite bajar a ras del seccionado sin meterse en los muros de
+   debajo. Fuera de la huella manda siempre el mapa. */
+let corteActual = Infinity;
 function sueloTerreno(x, z) {
-  const tramos = edificio?.definicionCortes?.plantas?.baja;
-  const suelos = edificio?.suelos?.baja;
-  if (!tramos || !suelos) return 1.5;
-  let i = tramos.findIndex((t) => x >= t.x0 && x < t.x1 && z >= t.z0 && z < t.z1);
-  if (i < 0) {
-    let mejor = Infinity;
-    tramos.forEach((t, k) => {
-      const dx = Math.max(t.x0 - x, 0, x - t.x1), dz = Math.max(t.z0 - z, 0, z - t.z1);
-      const d = dx * dx + dz * dz;
-      if (d < mejor) { mejor = d; i = k; }
-    });
+  let y = alturaEn(x, z);
+  const caja = edificio?.caja;
+  if (caja && Number.isFinite(corteActual)
+      && x >= caja.min.x && x <= caja.max.x && z >= caja.min.z && z <= caja.max.z) {
+    y = Math.min(y, corteActual);
   }
-  const y = suelos[Math.max(0, i)];
-  return Number.isFinite(y) ? y + 1 : 1.5;
+  if (!Number.isFinite(y)) {
+    const suelos = (edificio?.suelos?.baja || []).filter(Number.isFinite);
+    y = suelos.length ? Math.min(...suelos) : 0;
+  }
+  return y + HOLGURA_SUELO;
 }
 
 function cajaPlanta(clave) {
@@ -580,7 +667,10 @@ function encuadrarVista(vista, { duracion = 1.6 } = {}) {
   if (cambia && edificio) repintar(); // las cartelas vecinas dependen de la vista
   if (vista === 'conjunto') return volarAPose(POSE.conjunto, duracion);
   if (vista === 'planta') return camara.encuadrar(cajaPlanta(apolo.floor), { azimut: AZIMUT.planta, elevacion: ELEVACION.planta, margen: MARGEN.planta, duracion });
-  if (vista === 'plano') return camara.encuadrar(cajaPlano(apolo.floor), { azimut: AZIMUT.plano, elevacion: ELEVACION.plano, margen: MARGEN.plano, duracion });
+  /* En vertical la barra de 111 m no cabe a lo ancho: se gira el plano 90°
+     para que el eje largo caiga en el alto del móvil. Si no, la cámara se iba
+     a 300 m para encajarla y el plano quedaba diminuto (y fuera del ámbito). */
+  if (vista === 'plano') return camara.encuadrar(cajaPlano(apolo.floor), { azimut: camera.aspect < 1.2 ? 90 : AZIMUT.plano, elevacion: ELEVACION.plano, margen: MARGEN.plano, duracion });
   return volarAPose(POSE.edificio, duracion);
 }
 
@@ -720,6 +810,8 @@ function ajustarSombras() {
 
 /* ── API pública ── */
 Object.assign(apolo, {
+  /** Cota mínima admitida para la cámara en un punto (diagnóstico). */
+  sueloDebug: (x, z) => sueloTerreno(x, z),
   /* Cortar NO mueve la cámara: el comercial se coloca donde quiere y va
      pasando plantas desde ahí. Solo el modo plano (el cuarto botón del raíl)
      lleva la cámara al cenital. `encuadrar` fuerza uno u otro si hace falta. */
@@ -900,6 +992,29 @@ function informarTrazado(pintando) {
   emitir('trazado', { ...ultimoTrazado });
 }
 
+/* Levanta el mapa de alturas con lo que hay dentro del ámbito: el entorno
+   cercano (terreno, calles, vecinos) y la envolvente de Apolo. El mobiliario
+   y las cartelas no cuentan: son de dentro. */
+function construirAlturas() {
+  const t0 = performance.now();
+  rejillaVacia(centroParcelaXZ, RADIO_VISION + 20);
+  let mallas = 0;
+  /* Solo el entorno cercano y el edificio: ni el cielo de noche ni ninguna
+     otra malla auxiliar de la escena, que taparían el mapa entero. */
+  for (const raiz of [entorno?.grupo, edificio?.grupo]) {
+    if (!raiz) continue;
+    raiz.updateMatrixWorld(true);
+    raiz.traverse((o) => {
+      if (!o.isMesh || !o.geometry || o.userData?.unitId !== undefined) return;
+      if (/_lejos$/.test(o.name || '')) return;               // fuera del ámbito por definición
+      if (o.userData?.mobiliario) return;                     // muebles: son de dentro, no son muro
+      marcarGeometria(o.geometry, o.matrixWorld);
+      mallas++;
+    });
+  }
+  apolo.tiempos.alturas = { ms: Math.round(performance.now() - t0), mallas, casillas: alturas.n * alturas.n, paso: REJILLA_PASO };
+}
+
 /* ── Carga ── */
 const progreso = { luz: 0, edificio: 0, entorno: 0 };
 const PESOS = { luz: 0.1, edificio: 0.45, entorno: 0.45 };
@@ -936,7 +1051,9 @@ async function arrancar() {
   /* La cámara no baja del suelo del edificio: el terreno se escalona casi
      cinco metros de un testero al otro, así que el límite se toma del cajón
      que le corresponde a cada punto. */
+  construirAlturas();
   camara.setSuelo(sueloTerreno);
+  camara.setAmbito({ x: centroParcelaXZ.x, z: centroParcelaXZ.y, radio: RADIO_VISION });
   actualizarVolumen();
 
   cortes = crearCortes(ctx, edificio, {

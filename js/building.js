@@ -8,6 +8,32 @@
    ═══════════════════════════════════════════════════════════════ */
 import * as THREE from 'three';
 
+/* Vendida: la vivienda se apaga de verdad. El prisma no pinta un velo gris
+   encima (eso se ve como una caja negra semitransparente en cuanto la cámara
+   baja) sino que MULTIPLICA lo que hay detrás por LUZ_VENDIDA: a esa vivienda
+   solo le entra ese tanto por uno de la luz que le entra a una disponible.
+   Se dibuja solo la cara de entrada, que en un prisma convexo visto desde
+   fuera es una y solo una por píxel; con las dos caras multiplicaría dos
+   veces y quedaría negra. El color va en espacio lineal a propósito: es un
+   factor de luz, no un color de pintura. */
+/* Factor LINEAL, antes del mapeo de tonos: no es el tanto por uno que se ve
+   en pantalla. Con 0,3 la vivienda apenas se oscurecía, porque la curva de
+   tono comprime las luces altas y se comía el efecto (medido: la pantalla
+   solo bajaba a un 75 %). Con 0,1 la pantalla baja a un 56 %, que es lo que
+   se lee como "solo entra un tercio de la luz": se ven los muebles, pero la
+   vivienda está claramente apagada, y nunca sale negra. */
+export const LUZ_VENDIDA = 0.1;
+
+function crearMaterialApagado() {
+  const m = new THREE.MeshBasicMaterial({
+    transparent: true, opacity: 1, depthWrite: false, depthTest: true, premultipliedAlpha: true,
+    side: THREE.FrontSide, blending: THREE.MultiplyBlending, toneMapped: false, fog: false,
+  });
+  m.color.setRGB(LUZ_VENDIDA, LUZ_VENDIDA, LUZ_VENDIDA, THREE.LinearSRGBColorSpace);
+  m.name = 'vivienda_apagada';
+  return m;
+}
+
 export const ESTADO_COLORS = {
   disponible: new THREE.Color(0x35d69a),
   reservada:  new THREE.Color(0xf2c04a),
@@ -23,10 +49,24 @@ export function paintUnits(unitMeshes, estadoDe, dimmedDe, selectedId, hoverId, 
   for (const [id, mesh] of unitMeshes) {
     const estado = estadoDe(id);
     const col = ESTADO_COLORS[estado] || ESTADO_COLORS.disponible;
-    const mat = mesh.material;
+    if (!mesh.userData.matRealce) mesh.userData.matRealce = mesh.material;
+    const mat = mesh.userData.matRealce;
     const vendida = estado === 'vendida';
     const dimmed = dimmedDe(id);
     const fade = fadeOf(mesh.userData.floorKey);
+    /* Vendida y con su planta a la vista: se apaga al 30 % de luz. Fuera de
+       la planta activa (fade 0) no se pinta nada, como el resto. */
+    if (vendida && fade > 0.5) {
+      if (!mesh.userData.matApagada) mesh.userData.matApagada = crearMaterialApagado();
+      mesh.material = mesh.userData.matApagada;
+      mesh.visible = true;
+      mesh.renderOrder = 20;
+      if (mesh.userData.label) mesh.userData.label.visible = false;
+      if (mesh.userData.labelR) mesh.userData.labelR.visible = false;
+      continue;
+    }
+    mesh.material = mat;
+    mesh.renderOrder = 50;
     // Envolvente: invisible en reposo (nada de prismas de color);
     // solo aparece como realce al pasar el ratón o al seleccionar
     mat.color.copy(col);

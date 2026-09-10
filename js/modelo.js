@@ -64,6 +64,9 @@ const EPS = 0.001;
    geométrico de la parcela de Apolo) nada recibe sombra y las texturas bajan
    a TEXTURA_LEJOS. El pueblo llega a cinco kilómetros y se estaba dibujando
    con la misma ortofoto que el suelo que se pisa. */
+const RADIO_VISION = 200;        // m: círculo de visita, la cámara no sale de ahí
+const REJILLA_PASO = 1.5;        // m de lado de la casilla del mapa de alturas
+const HOLGURA_SUELO = 1.5;       // m que la cámara guarda por encima de lo que tenga debajo
 const RADIO_CERCA = 200;
 const TEXTURA_LEJOS = 512;
 
@@ -217,6 +220,72 @@ function geometriaEnMundo(mesh, conUV) {
   const indices = idx ? Array.from(idx.array) : Array.from({ length: pos.count }, (_, i) => i);
   salida.setIndex(indices);
   return salida;
+}
+
+/* ── Mapa de alturas ──
+   Rejilla en planta con la cota más alta que hay debajo de cada casilla:
+   terreno, calles, vecinos y la envolvente de Apolo. Es el suelo que la
+   cámara no atraviesa. Como un pájaro: por un patio interior se baja (encima
+   del patio lo más alto es su propio pavimento), pero un muro es una casilla
+   a la altura de la cubierta y no se pasa. Cada triángulo se muestrea por su
+   plano en el centro de la casilla, acotado a su propio alto: el terreno
+   queda a su cota real y los paños verticales, a la de su borde superior. */
+const alturas = { x0: 0, z0: 0, paso: REJILLA_PASO, n: 0, datos: null };
+
+function rejillaVacia(cx, cz, radio) {
+  const n = Math.max(8, Math.ceil((radio * 2) / REJILLA_PASO) + 2);
+  alturas.n = n;
+  alturas.x0 = cx - (n * REJILLA_PASO) / 2;
+  alturas.z0 = cz - (n * REJILLA_PASO) / 2;
+  alturas.datos = new Float32Array(n * n).fill(-Infinity);
+}
+
+function marcarGeometria(g, matriz) {
+  const pos = g.getAttribute('position');
+  if (!pos) return;
+  const idx = g.index;
+  const cuenta = idx ? idx.count : pos.count;
+  const { n, x0, z0, paso, datos } = alturas;
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+  for (let t = 0; t < cuenta; t += 3) {
+    const ia = idx ? idx.getX(t) : t, ib = idx ? idx.getX(t + 1) : t + 1, ic = idx ? idx.getX(t + 2) : t + 2;
+    a.fromBufferAttribute(pos, ia); b.fromBufferAttribute(pos, ib); c.fromBufferAttribute(pos, ic);
+    if (matriz) { a.applyMatrix4(matriz); b.applyMatrix4(matriz); c.applyMatrix4(matriz); }
+    const minX = Math.min(a.x, b.x, c.x), maxX = Math.max(a.x, b.x, c.x);
+    const minZ = Math.min(a.z, b.z, c.z), maxZ = Math.max(a.z, b.z, c.z);
+    let i0 = Math.floor((minX - x0) / paso), i1 = Math.floor((maxX - x0) / paso);
+    let j0 = Math.floor((minZ - z0) / paso), j1 = Math.floor((maxZ - z0) / paso);
+    if (i1 < 0 || j1 < 0 || i0 >= n || j0 >= n) continue;
+    i0 = Math.max(0, i0); j0 = Math.max(0, j0); i1 = Math.min(n - 1, i1); j1 = Math.min(n - 1, j1);
+    if ((i1 - i0 + 1) * (j1 - j0 + 1) > 40000) continue;
+    const minY = Math.min(a.y, b.y, c.y), maxY = Math.max(a.y, b.y, c.y);
+    const ux = b.x - a.x, uy = b.y - a.y, uz = b.z - a.z;
+    const vx = c.x - a.x, vy = c.y - a.y, vz = c.z - a.z;
+    const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+    const plano = Math.abs(ny) > 1e-6;
+    const d = nx * a.x + ny * a.y + nz * a.z;
+    for (let j = j0; j <= j1; j++) {
+      const cz = z0 + (j + 0.5) * paso;
+      for (let i = i0; i <= i1; i++) {
+        const cx = x0 + (i + 0.5) * paso;
+        let y = maxY;
+        if (plano) {
+          y = (d - nx * cx - nz * cz) / ny;
+          if (!(y >= minY)) y = minY; else if (y > maxY) y = maxY;
+        }
+        const k = j * n + i;
+        if (y > datos[k]) datos[k] = y;
+      }
+    }
+  }
+}
+
+function alturaEn(x, z) {
+  const { n, x0, z0, paso, datos } = alturas;
+  if (!datos) return -Infinity;
+  const i = Math.floor((x - x0) / paso), j = Math.floor((z - z0) / paso);
+  if (i < 0 || j < 0 || i >= n || j >= n) return -Infinity;
+  return datos[j * n + i];
 }
 
 /* Reparte los triángulos de una geometría según su centroide caiga dentro o
@@ -593,6 +662,18 @@ export async function cargarModelo(scene, unitsById, { estadoDe = () => 'disponi
     new THREE.Vector3(modelo.apolo.max[0], modelo.apolo.max[1], modelo.apolo.max[2])
   ).translate(grupo.position);
 
+  /* Mapa de alturas en coordenadas de escena (el grupo ya lleva su
+     desplazamiento). Los prismas de vivienda y los muebles no cuentan: no son
+     muro. Se levanta una sola vez, con la envolvente y el entorno ya puestos. */
+  const centroAmbito = { x: centroParcela[0] - centro[0], z: centroParcela[1] - centro[2] };
+  grupo.updateMatrixWorld(true);
+  rejillaVacia(centroAmbito.x, centroAmbito.z, RADIO_VISION + 20);
+  grupo.traverse((o) => {
+    if (!o.isMesh || !o.geometry) return;
+    if (o.userData?.unitId !== undefined || o.userData?.lejos) return;
+    marcarGeometria(o.geometry, o.matrixWorld);
+  });
+
   const M = {
     grupo, entorno, envolvente, variantes, viviendas, unitMeshes, pickables, plantas,
     materiales, vidrio, definicionCortes, suelos, caja, centro,
@@ -634,16 +715,26 @@ export async function cargarModelo(scene, unitsById, { estadoDe = () => 'disponi
     setNight(on) { noche = !!on; aplicarNoche(); },
     refrescarEstados() { aplicarNoche(); },
 
-    /* Cota mínima a la que se admite la cámara en un punto: el suelo de la
-       planta baja de ese cajón más un metro. El terreno se escalona de oeste
-       a este casi cinco metros, así que un número fijo no vale: o dejaba la
-       cámara bajo el edificio en el extremo alto o la levantaba de más en el
-       bajo. */
+    /* Cota mínima a la que se admite la cámara en un punto: lo más alto que
+       hay debajo (terreno, calle, vecino o la propia envolvente), más la
+       holgura. Con una planta aislada, dentro de la huella de Apolo el techo
+       pasa a ser la cota de corte, que es lo que deja bajar a ras del
+       seccionado sin meterse en los muros de abajo. */
     sueloEn(x, z) {
-      const s = suelos.baja;
-      if (!s || !s.length) return caja.min.y + 1;
-      return s[Math.min(plataformaEn(tramos, x - grupo.position.x, z - grupo.position.z), s.length - 1)] + 1;
+      let y = alturaEn(x, z);
+      if (planta !== 'all' && x >= caja.min.x && x <= caja.max.x && z >= caja.min.z && z <= caja.max.z) {
+        const cotas = cotasDe(planta);
+        if (cotas) y = Math.min(y, Math.max(...cotas));
+      }
+      if (!Number.isFinite(y)) {
+        const s = (suelos.baja || []).filter(Number.isFinite);
+        y = s.length ? Math.min(...s) : caja.min.y;
+      }
+      return y + HOLGURA_SUELO;
     },
+
+    /* Círculo de visita, en coordenadas de escena. */
+    ambito: { x: centroAmbito.x, z: centroAmbito.z, radio: RADIO_VISION },
 
     /* Cota del suelo y del corte de una planta, para encuadrar la cámara. */
     cotasPlanta(clave) {

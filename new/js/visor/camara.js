@@ -49,7 +49,7 @@ function instalar() {
 const SUELO = 1.5;                             // altura mínima de la cámara (m) si nadie dice otra cosa
 const POLAR_MAX = THREE.MathUtils.degToRad(88); // no mirar desde debajo del horizonte
 const POLAR_MIN = 0.02;                        // evita la singularidad cenital
-const DIST_MIN = 3, DIST_MAX = 900;
+const DIST_MIN = 3, DIST_MAX = 320;
 const QUIETA_TRAS = 0.3;                       // s sin movimiento para declarar reposo
 const grados = THREE.MathUtils.degToRad;
 
@@ -213,6 +213,14 @@ export function crearCamara(ctx) {
      muros ni se ve el proyecto desde debajo. `setVolumen(null)` lo desactiva. */
   let volumen = null;
   const MARGEN_VOLUMEN = 0.6;   // m de holgura sobre el techo y fuera de la fachada
+  /* Ámbito de visita: un círculo en planta alrededor del centro de la parcela
+     del que la cámara no sale. Alejarse un kilómetro no aporta nada y
+     distrae; el proyecto se ve entero desde 150 m. Se aplica de dos maneras
+     para que no haya forma de escaparse: el objetivo se queda cerca del
+     centro (arrastre lateral) y la distancia máxima se recalcula cada
+     fotograma con la dirección de la vista, de modo que la rueda deja de
+     alejar justo en el borde en vez de dar un tirón. */
+  let ambito = null;
   function sueloEn(x, z) {
     if (!sueloDe) return SUELO;
     const v = sueloDe(x, z);
@@ -306,6 +314,43 @@ export function crearCamara(ctx) {
     controles.setTarget(_t.x, _t.y, _t.z, false);
   }
 
+  /* Distancia máxima admitida en la dirección actual para que la cámara no
+     salga del círculo: |objetivo + d·u − centro|² = radio², con u y el centro
+     leídos en planta. Cenital (u sin componente horizontal) no tiene límite
+     por aquí; de eso se encarga DIST_MAX. */
+  const _dir = new THREE.Vector3();
+  function distanciaMaximaAmbito() {
+    if (!ambito) return DIST_MAX;
+    controles.getTarget(_t, true);
+    controles.getPosition(_p, true);
+    _dir.subVectors(_p, _t);
+    const d = _dir.length();
+    if (d < 1e-4) return DIST_MAX;
+    _dir.divideScalar(d);
+    const a = _dir.x * _dir.x + _dir.z * _dir.z;
+    if (a < 1e-6) return DIST_MAX;
+    const ox = _t.x - ambito.x, oz = _t.z - ambito.z;
+    const b = 2 * (ox * _dir.x + oz * _dir.z);
+    const c = ox * ox + oz * oz - ambito.radio * ambito.radio;
+    const disc = b * b - 4 * a * c;
+    if (disc <= 0) return DIST_MIN;
+    return THREE.MathUtils.clamp((-b + Math.sqrt(disc)) / (2 * a), DIST_MIN, DIST_MAX);
+  }
+
+  /* El objetivo tampoco se va de paseo: el arrastre lateral lo devuelve al
+     círculo interior (algo más pequeño que el ámbito, para que quede sitio
+     para orbitar alrededor de lo que se esté mirando). */
+  function limitarObjetivo() {
+    if (!ambito) return;
+    controles.getTarget(_t, true);
+    const dx = _t.x - ambito.x, dz = _t.z - ambito.z;
+    const d = Math.hypot(dx, dz);
+    const max = ambito.radio * 0.55;
+    if (d <= max || d < 1e-6) return;
+    const k = max / d;
+    controles.setTarget(ambito.x + dx * k, _t.y, ambito.z + dz * k, false);
+  }
+
   function update(dt) {
     if (!(dt > 0)) dt = 0;
     reloj += dt;
@@ -338,6 +383,13 @@ export function crearCamara(ctx) {
     }
 
     limitarSuelo();
+    if (!vuelo && ambito) {
+      limitarObjetivo();
+      const max = distanciaMaximaAmbito();
+      controles.maxDistance = max;
+      // maxDistance solo recorta lo que venga después; si ya está fuera, se entra
+      if (controles.distance > max + 0.01) controles.dollyTo(max, false);
+    }
     if (controles.update(dt)) marcarMovimiento();
     if (!vuelo) limitarVolumen(); // durante un vuelo manda el guion de cámara
     if (usuarioActivo) marcarMovimiento();
@@ -388,6 +440,12 @@ export function crearCamara(ctx) {
 
     /** Cota mínima de la cámara en cada punto: fn(x, z) → y mínima. */
     setSuelo(fn) { sueloDe = typeof fn === 'function' ? fn : null; },
+
+    /** Círculo (en planta) del que la cámara no sale: { x, z, radio } o null. */
+    setAmbito(a) {
+      ambito = a && a.radio > 0 ? { x: a.x, z: a.z, radio: a.radio } : null;
+      controles.maxDistance = ambito ? distanciaMaximaAmbito() : DIST_MAX;
+    },
 
     /** Volumen infranqueable: { min: {x,z}, max: {x,z}, techo } o null. */
     setVolumen(v) {
