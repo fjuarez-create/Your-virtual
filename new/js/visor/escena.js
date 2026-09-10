@@ -22,6 +22,9 @@ export function crearEscena(canvas) {
   renderer.toneMapping = THREE.AgXToneMapping;
   renderer.toneMappingExposure = 1.0;
   renderer.shadowMap.enabled = true;
+  /* Lo decide main fotograma a fotograma (ver `sombrasPendientes`): con la
+     cámara quieta no hace falta volver a dibujar el mapa de sombras. */
+  renderer.shadowMap.autoUpdate = false;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.localClippingEnabled = true;
 

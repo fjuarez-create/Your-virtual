@@ -140,7 +140,7 @@ export const LUZ_VENDIDA_NOCHE = [0.80, 0.84, 0.95];
    el interior sube de luz y se tiñe de bombilla. Es un solo dibujo por
    vivienda y no hace falta ninguna luz de verdad en la escena: cien luces
    puntuales no las mueve ningún teléfono. */
-export const LUZ_ENCENDIDA = [2.35, 1.95, 1.35];
+export const LUZ_ENCENDIDA = [1.75, 1.5, 1.12];
 export const CARTELA_PX = 34;            // alto del sprite de la cartela en px para un lienzo de 720 px (ver cabecera)
 export const EMISIVO_VENTANA = 0xffd9a0; // luz cálida de interior
 export const INTENSIDAD_VENTANA = 1.4;   // por encima de 1 para que el bloom lo recoja

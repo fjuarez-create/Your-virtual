@@ -345,7 +345,19 @@ export function crearPost(ctx, luz, opciones = {}) {
   if (desenfoque) desenfoque.enabled = false;    // se enciende con velocidad > 0
 
   const parametrosIniciales = luz?.parametros || { bloom: 0.14, umbral: 0.92, exposicion: 1.0 };
-  const bloom = new UnrealBloomPass(new THREE.Vector2(w, h), parametrosIniciales.bloom, 0.5, parametrosIniciales.umbral);
+  /* En móvil el bloom va a la mitad de resolución: son trece cuadriláteros a
+     pantalla completa (cinco niveles de ida, cinco de vuelta y la composición)
+     y a mitad de lado cuestan la cuarta parte. El halo queda algo más blando,
+     que en un teléfono no se distingue. */
+  class BloomLigero extends UnrealBloomPass {
+    setSize(anchoP, altoP) { super.setSize(Math.max(1, Math.round(anchoP / 2)), Math.max(1, Math.round(altoP / 2))); }
+  }
+  const ClaseBloom = ligero ? BloomLigero : UnrealBloomPass;
+  const bloom = new ClaseBloom(new THREE.Vector2(w, h), parametrosIniciales.bloom, 0.5, parametrosIniciales.umbral);
+  /* El corte del bloom deja de ser un escalón: con smoothWidth 0,01 una
+     superficie que rozaba el umbral entraba o salía de golpe y se veía el
+     borde. */
+  if (bloom.highPassUniforms?.smoothWidth) bloom.highPassUniforms.smoothWidth.value = 0.25;
 
   /* Bokeh: `focus` en metros; `aperture` es UV por metro fuera de foco
      (0,00025 → a 12 m del foco, 0,003 de UV, ~6 px a 1080p: la vivienda
@@ -367,6 +379,9 @@ export function crearPost(ctx, luz, opciones = {}) {
     composer, gtao, ssr, desenfoque, bloom, bokeh, smaa,
     enfoque: null,
     velocidad: 0,
+    /* ¿Hay alguna cartela visible? Lo fija main: con el edificio entero no hay
+       ninguna y la pasada de capa 1 se salta entera. */
+    cartelas: false,
 
     render(dt) {
       if (!activo) return;
@@ -388,16 +403,26 @@ export function crearPost(ctx, luz, opciones = {}) {
       desenfoque?.actualizarAnterior();
 
       /* Cartelas (capa 1): sin bloom ni tone mapping, siempre por encima. El
-         fondo se anula para no repintar el cielo sobre la escena compuesta. */
+         fondo se anula para no repintar el cielo sobre la escena compuesta.
+         Solo si hay alguna: en la vista de conjunto no hay ninguna cartela y
+         esto recorría el grafo entero y volvía a lanzar el mapa de sombras
+         para no dibujar nada. */
+      if (!post.cartelas) return;
       const bg = scene.background;
-      scene.background = null;
-      renderer.autoClear = false;
-      renderer.clearDepth();
-      camera.layers.set(ctx.capas.cartelas);
-      renderer.render(scene, camera);
-      camera.layers.set(ctx.capas.normal);
-      renderer.autoClear = true;
-      scene.background = bg;
+      const sombrasAuto = renderer.shadowMap.autoUpdate;
+      try {
+        scene.background = null;
+        renderer.shadowMap.autoUpdate = false;  // no repetir la pasada de sombra
+        renderer.autoClear = false;
+        renderer.clearDepth();
+        camera.layers.set(ctx.capas.cartelas);
+        renderer.render(scene, camera);
+      } finally {
+        camera.layers.set(ctx.capas.normal);
+        renderer.autoClear = true;
+        renderer.shadowMap.autoUpdate = sombrasAuto;
+        scene.background = bg;
+      }
     },
 
     setTamano(nw, nh) {

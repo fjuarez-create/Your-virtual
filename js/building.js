@@ -28,7 +28,7 @@ export const LUZ_VENDIDA_NOCHE = [0.80, 0.84, 0.95];
 /* Y al revés: de noche la vivienda libre o reservada se ENCIENDE con el mismo
    prisma, con factor mayor que uno y cálido. Un dibujo por vivienda, sin
    meter cien luces puntuales en la escena. */
-export const LUZ_ENCENDIDA = [2.35, 1.95, 1.35];
+export const LUZ_ENCENDIDA = [1.75, 1.5, 1.12];
 
 /* Un material por estado, compartido por las 166 viviendas. */
 const materialesLuz = new Map();

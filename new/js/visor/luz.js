@@ -105,7 +105,7 @@ export const MOMENTOS = {
        lo que levanta la fachada norte —la del encuadre, que nunca ve el sol—
        es el relleno, que viene justo de esa dirección. `fondo` bajo porque
        si no el cielo se va a blanco. */
-    ibl: 0.13, fondo: 0.34, solMax: 45, noche: 0,
+    ibl: 0.13, fondo: 0.20, solMax: 45, noche: 0,
     nubes: 0.66, nubesAlto: 30, nubesMax: 5,
   },
   dia: {
@@ -125,7 +125,7 @@ export const MOMENTOS = {
        209) y el horizonte (202, 214, 217): azul de verdad. De paso se ahorran
        5,3 MB de descarga y un PMREM de 2048×1024. */
     hdri: false,
-    ibl: 0.11, fondo: 0.30, solMax: 50, noche: 0,
+    ibl: 0.11, fondo: 0.16, solMax: 50, noche: 0,
     nubes: 0.72, nubesAlto: 30, nubesMax: 8,
   },
   atardecer: {
@@ -142,7 +142,7 @@ export const MOMENTOS = {
     /* Umbral alto: al atardecer el cielo entero está cerca del corte y con 1,0
        florecía medio fotograma. Con 3,8 solo florece el disco del sol. */
     bloom: 0.16, umbral: 3.8, hdri: false, luces: true, ventana: 1.0,
-    ibl: 0.30, fondo: 0.55, solMax: 30, noche: 0,
+    ibl: 0.30, fondo: 0.40, solMax: 30, noche: 0,
     nubes: 0.70, nubesAlto: 34, nubesMax: 2.0,
   },
   noche: {
@@ -156,7 +156,10 @@ export const MOMENTOS = {
     mie: 0.004, mieG: 0.8,
     sol: 0xbfd1ff, solInt: 0.45, cielo: 0x2a3a5e, suelo: 0x0c1016, hemiInt: 0.6,
     relleno: 0x8fa8d8, rellenoInt: 0.45, exposicion: 1.0, niebla: 0x0b111c,
-    bloom: 0.35, umbral: 0.90, hdri: false, luces: true, ventana: 2.4,
+    /* Umbral alto también de noche: con 0,90 no florecía solo la ventana, sino
+       todo el interior encendido de la planta seccionada, y la planta salía
+       lavada. 1,25 deja pasar la ventana (1,4 × 1,9 × 0,73 ≈ 1,9) y nada más. */
+    bloom: 0.28, umbral: 1.25, hdri: false, luces: true, ventana: 1.9,
     ibl: 1.2, fondo: 1.0, solMax: 0, noche: 1,
     luna: { elev: 9, azim: 226, int: 1.0 },
     /* Las estrellas horneadas se dejan tenues: al ampliar la equirect en
@@ -173,7 +176,7 @@ const ANCHO = 1024, ALTO = 512;
    planta seccionada a oscuras: ahora ×4,2 la devuelve donde estaba
    (0,11 × 4,2 ≈ 0,46, del orden del 0,30 × 1,25 de antes, con margen porque
    la planta abierta no recibe cielo por los lados). */
-export const REALCE = { elevacion: 62, hemi: 2.4, ibl: 4.2, hemiNoche: 4.2, iblNoche: 1.8, duracion: 1.0 };
+export const REALCE = { elevacion: 62, hemi: 2.4, ibl: 4.2, hemiNoche: 2.8, iblNoche: 1.3, duracion: 1.0 };
 const CLAVES_NUM = ['solInt', 'hemiInt', 'rellenoInt', 'exposicion', 'bloom', 'umbral', 'ibl', 'fondo', 'noche'];
 const CLAVES_COLOR = ['sol', 'cielo', 'suelo', 'relleno', 'niebla'];
 

@@ -293,6 +293,10 @@ function encenderEntorno(fraccionNoche) {
   const f = Math.max(0, Math.min(1, fraccionNoche || 0));
   for (const m of materialesEntorno) {
     if (!m.emissive) continue;
+    /* El terreno NO se enciende: con la ortofoto emisiva, de noche el suelo
+       entero salía naranja, como si el asfalto tuviera luz propia. La luz de
+       ciudad la ponen las fachadas del pueblo, que es de donde sale. */
+    if (/^ortho$|^PNOA_|mar_atlantico|EXT_Tierra|asphalt|curb/i.test(m.name || '')) { m.emissiveIntensity = 0; continue; }
     m.emissive.copy(EMISIVO_PUEBLO);
     m.emissiveIntensity = EMISIVO_PUEBLO_MAX * f;
   }
@@ -750,6 +754,9 @@ const atenuada = (id) => {
 };
 function repintar() {
   if (!edificio) return;
+  /* Las cartelas solo existen con una planta aislada: si no hay ninguna, post
+     se salta la pasada de capa 1 entera. */
+  post.cartelas = apolo.floor !== 'all';
   for (const v of tenidas) restaurarVidrios(v);
   tenidas.clear();
   const hover = edificio.viviendas.get(apolo.hover);
@@ -885,6 +892,7 @@ Object.assign(apolo, {
       if (!edificio.variantes.has(clave)) edificio.cargarVariante(clave, (k, objeto) => cortes?.registrarVariante(k, objeto));
       if (!edificio.mobiliario) edificio.cargarMobiliario();
     }
+    ensuciarSombras();
     luz.setRealcePlanta(clave !== 'all');
     post.setOclusion(clave === 'all' ? 'exterior' : 'interior');
     edificio.setCartelas(clave === 'all' ? null : clave);
@@ -914,6 +922,7 @@ Object.assign(apolo, {
     if (!MOMENTOS[clave]) return Promise.reject(new Error(`apolo: momento desconocido "${clave}"`));
     apolo.momento = clave;
     // las ventanas cambian al arrancar el fundido; el bajón de exposición lo tapa
+    ensuciarSombras();
     if (edificio) { edificio.setVentanas(MOMENTOS[clave].ventana ?? (MOMENTOS[clave].luces ? 1 : 0)); edificio.setNoche(clave === 'noche'); repintar(); }
     encenderEntorno(MOMENTOS[clave].noche);
     return luz.setMomento(clave, { duracion });
@@ -1015,12 +1024,29 @@ const reloj = new THREE.Clock();
 let materialesEnMovimientoHasta = 0;   // hasta cuándo cortes sigue atenuando materiales
 let materialesPendientes = false;
 const ultimoTrazado = { activo: null, progreso: -1, muestras: -1, pintando: null };
+/* ── Sombras solo cuando hacen falta ──
+   El mapa de sombras vuelve a dibujar toda la geometría que proyecta, una vez
+   por cascada: en móvil son dos pasadas de ~1,3 M de triángulos, y hasta ahora
+   se repetían en CADA fotograma aunque la cámara estuviera parada y el sol
+   quieto. Con las cascadas cubriendo el frustum de la cámara, la sombra solo
+   cambia si la cámara se mueve, si cambia la luz o si entra o sale geometría.
+   `pendientes` da un par de fotogramas de margen tras esos cambios, que es
+   cuando three termina de subir lo nuevo. */
+let sombrasPendientes = 3;
+const ensuciarSombras = () => { sombrasPendientes = 3; };
+ctx.on('geometria', ensuciarSombras);
+ctx.on('calidad', ensuciarSombras);
+
 function fotograma() {
   requestAnimationFrame(fotograma);
   const dt = Math.min(reloj.getDelta(), 0.1);
   const t = reloj.elapsedTime;
   camara.update(dt);
   if (edificio) ajustarSombras();
+  const sombraViva = camara.velocidad > 0.01 || !camara.quieta || luz.enTransicion || luz.realce > 0
+    || cortes?.enTransicion || sombrasPendientes > 0;
+  renderer.shadowMap.needsUpdate = sombraViva;
+  if (sombrasPendientes > 0) sombrasPendientes--;
   luz.update(dt);
   cortes?.update(dt);
   actualizarHover();
