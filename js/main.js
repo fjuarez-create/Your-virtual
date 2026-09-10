@@ -72,6 +72,8 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, MOVIL ? 1.5 : 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+/* Los planos de recorte del mobiliario (modelo.js) van por material. */
+renderer.localClippingEnabled = true;
 /* AgX en vez de ACES: ACES empasta la parte alta de la curva, y con un
    edificio blanco monocapa eso significa que toda la fachada iluminada acaba
    en la misma nota. Medido: el rango tonal de la fachada cabía en 14 niveles

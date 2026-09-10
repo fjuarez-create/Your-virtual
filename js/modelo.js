@@ -51,6 +51,7 @@ export const RUTAS = {
 
 const RE_VIDRIO = /^vidrio__T(\d+)__(\d+)__(-?\d+)_(-?\d+)_(-?\d+)$/;
 const RE_MOB = /__y(-?\d+)$/;                 // cota mínima de la pieza, en cm
+const RE_PLATAFORMA = /__T(\d+)__/;           // cajón al que pertenece la pieza
 const ES_VIDRIO = /vidrio/i;
 const EMISIVO_VENTANA = 0xffd9a0;
 const INTENSIDAD_VENTANA = 1.25;
@@ -336,6 +337,31 @@ export async function cargarModelo(scene, unitsById, { estadoDe = () => 'disponi
   asignarVidrios(mallasEnvolvente);
   vidrio.sinVidrio = candidatas.filter((v) => !v.vidrio).map((v) => v.id);
 
+  /* ── Recorte del mobiliario ──
+     La envolvente llega ya cortada del pipeline, pero el mobiliario y las
+     puertas no: son los mismos ficheros para las cuatro plantas, así que
+     cortarlos ahí obligaría a guardar cuatro copias. Se cortan aquí, en la
+     tarjeta: un plano horizontal por cajón, a la cota de corte de la planta
+     activa. Sin él, una puerta de 2,1 m o un armario de 2,2 m asomaban
+     enteros por encima del corte, que es justo lo que no debe pasar.
+     Los planos están siempre puestos (con la cota en el infinito cuando no
+     se corta) para que el programa del material no se recompile al cambiar
+     de planta. */
+  const planosCorte = Array.from({ length: 8 }, () => new THREE.Plane(new THREE.Vector3(0, -1, 0), 1e6));
+  const materialesRecortados = new Map();
+  function materialRecortado(material, plataforma) {
+    if (!material) return material;
+    const clave = material.uuid + '|' + plataforma;
+    let c = materialesRecortados.get(clave);
+    if (!c) {
+      c = material.clone();          // las texturas se comparten: no ocupa más en la tarjeta
+      c.clippingPlanes = [planosCorte[Math.min(plataforma, planosCorte.length - 1)]];
+      c.clipShadows = true;
+      materialesRecortados.set(clave, c);
+    }
+    return c;
+  }
+
   /* ── Estado ── */
   const variantes = new Map();
   const pendientes = new Map();
@@ -348,6 +374,9 @@ export async function cargarModelo(scene, unitsById, { estadoDe = () => 'disponi
 
   function aplicarMobiliario() {
     const cotas = cotasDe(planta);
+    for (let i = 0; i < planosCorte.length; i++) {
+      planosCorte[i].constant = cotas ? cotas[Math.min(i, cotas.length - 1)] : 1e6;
+    }
     for (const p of piezasMob) p.mesh.visible = !cotas || p.ymin < cotas[p.plataforma] - EPS;
   }
 
@@ -447,7 +476,13 @@ export async function cargarModelo(scene, unitsById, { estadoDe = () => 'disponi
         const cajaM = m.geometry.boundingBox ?? (m.geometry.computeBoundingBox(), m.geometry.boundingBox);
         const ymin = r ? +r[1] / 100 : cajaM.min.y;
         const cx = (cajaM.min.x + cajaM.max.x) / 2, cz = (cajaM.min.z + cajaM.max.z) / 2;
-        piezasMob.push({ mesh: m, ymin, plataforma: plataformaEn(tramos, cx, cz) });
+        const rp = RE_PLATAFORMA.exec(m.name);
+        // el cajón viene en el nombre (contrato del pipeline); si no, por posición
+        const plataforma = rp ? Math.min(+rp[1], planosCorte.length - 1) : plataformaEn(tramos, cx, cz);
+        m.material = Array.isArray(m.material)
+          ? m.material.map((x) => materialRecortado(x, plataforma))
+          : materialRecortado(m.material, plataforma);
+        piezasMob.push({ mesh: m, ymin, plataforma });
       }
       grupo.add(mobiliario);
       aplicarMobiliario();
