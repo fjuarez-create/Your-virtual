@@ -10,6 +10,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { FLOOR_DEFS, floorOf } from 'app/layout.js';
 import { paintUnits } from 'app/building.js';
@@ -368,6 +369,47 @@ const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
 
+/* ── Grado de color ──
+   Sobre la imagen ya mapeada a pantalla. AgX es una curva deliberadamente
+   plana: protege las luces pero deja la imagen sin negros y sin color. Medido
+   contra los renders del estudio, la fachada del visor recorría 91 niveles de
+   gris y la del render 176. Un cuadrilátero a pantalla completa con nueve
+   instrucciones: no se nota en el rendimiento. */
+const GRADO = { dia: { contraste: 1.16, saturacion: 1.12, negros: 0.040 },
+                noche: { contraste: 1.08, saturacion: 1.14, negros: 0.015 } };
+const grado = new ShaderPass({
+  name: 'grado',
+  uniforms: { tDiffuse: { value: null }, contraste: { value: GRADO.dia.contraste },
+              saturacion: { value: GRADO.dia.saturacion }, negros: { value: GRADO.dia.negros } },
+  vertexShader: `
+    varying vec2 vUv;
+    void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 ); }
+  `,
+  fragmentShader: `
+    uniform sampler2D tDiffuse;
+    uniform float contraste;
+    uniform float saturacion;
+    uniform float negros;
+    varying vec2 vUv;
+    void main() {
+      vec4 t = texture2D( tDiffuse, vUv );
+      vec3 c = t.rgb;
+      c = max( vec3( 0.0 ), ( c - negros ) / max( 1e-4, 1.0 - negros ) );
+      c = ( c - 0.5 ) * contraste + 0.5;
+      float l = dot( c, vec3( 0.2126, 0.7152, 0.0722 ) );
+      c = mix( vec3( l ), c, saturacion );
+      gl_FragColor = vec4( clamp( c, 0.0, 1.0 ), t.a );
+    }
+  `,
+});
+composer.addPass(grado);
+function aplicarGrado(noche) {
+  const g = noche ? GRADO.noche : GRADO.dia;
+  grado.uniforms.contraste.value = g.contraste;
+  grado.uniforms.saturacion.value = g.saturacion;
+  grado.uniforms.negros.value = g.negros;
+}
+
 /* ── Entorno ──
    El entorno ya no se inventa ni se descarga de Google: viene en el propio
    modelo del cliente (assets/serenea/entorno.glb), con el terreno, la costa,
@@ -688,6 +730,7 @@ app.setNight = (on) => {
   // Ventanas: se encienden las de las viviendas que siguen a la venta; las
   // vendidas se quedan a oscuras, como en el visor nuevo.
   if (M) M.setNight(on);
+  aplicarGrado(on);
   refrescarSombra();
   /* Sin este repintado los prismas de noche no llegaban a aplicarse: las
      libres no se encendían y las vendidas seguían con el factor de día. */

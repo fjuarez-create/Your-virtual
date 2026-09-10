@@ -95,7 +95,7 @@ export const MOMENTOS = {
        no viene de dentro del encuadre. */
     nombre: 'Mañana', elev: 30, azim: 104, turbidez: 2.4, rayleigh: 2.4,
     mie: 0.0022, mieG: 0.78,
-    sol: 0xffe8cf, solInt: 2.9, cielo: 0xc8d6e8, suelo: 0x8a7c66, hemiInt: 0.50,
+    sol: 0xffe8cf, solInt: 2.9, cielo: 0xd6dbe2, suelo: 0x8a7c66, hemiInt: 0.74,
     relleno: 0xf0e6d6, rellenoInt: 0.46, exposicion: 1.0, niebla: 0xaebac9,
     /* El umbral del bloom va POR ENCIMA de la superficie difusa más brillante
        del momento (la fachada al sol, medida en 0,59 de luminancia): con 1,05
@@ -105,7 +105,7 @@ export const MOMENTOS = {
        lo que levanta la fachada norte —la del encuadre, que nunca ve el sol—
        es el relleno, que viene justo de esa dirección. `fondo` bajo porque
        si no el cielo se va a blanco. */
-    ibl: 0.13, fondo: 0.075, solMax: 45, noche: 0,
+    ibl: 0.08, fondo: 0.075, solMax: 45, noche: 0,
     nubes: 0.66, nubesAlto: 30, nubesMax: 5,
     grado: { contraste: 1.16, saturacion: 1.12, negros: 0.040 },
   },
@@ -116,7 +116,14 @@ export const MOMENTOS = {
        fútbol y el monocapa conserven dibujo en vez de irse a blanco plano. */
     nombre: 'Mediodía', elev: 56, azim: 26, turbidez: 2.0, rayleigh: 2.6,
     mie: 0.0018, mieG: 0.76,
-    sol: 0xfff6e8, solInt: 3.1, cielo: 0xc2d4ec, suelo: 0x9c8b70, hemiInt: 0.52,
+    /* El ambiente se reparte al revés que antes: poco IBL (el cielo horneado,
+       que es azul de verdad) y mucha hemisférica con color CASI NEUTRO. Con el
+       reparto anterior, todo lo que estaba en sombra —y la sombra del edificio
+       cae sobre la calzada, que es media imagen— se teñía de azul: medido
+       91,110,130 contra los 60,63,75 neutros del render del estudio. El cielo
+       del fondo sigue siendo igual de azul: esto solo cambia con qué luz se
+       rellenan las sombras. */
+    sol: 0xfff6e8, solInt: 3.1, cielo: 0xd8dde4, suelo: 0x9c8b70, hemiInt: 0.78,
     relleno: 0xf2e8da, rellenoInt: 0.5, exposicion: 1.06, niebla: 0xafbfd2,
     bloom: 0.09, umbral: 2.2, luces: false, ventana: 0,
     /* `hdri: false` es la clave del CIELO AZUL. Con hdri en true no se usaba
@@ -131,7 +138,7 @@ export const MOMENTOS = {
        o sea un azul lavado casi blanco. La curva AgX comprime tanto las luces
        que para que el cielo tenga COLOR hay que darle poca luz. Solo afecta
        al fondo: la iluminación la lleva `ibl`. */
-    ibl: 0.11, fondo: 0.055, solMax: 50, noche: 0,
+    ibl: 0.07, fondo: 0.055, solMax: 50, noche: 0,
     nubes: 0.72, nubesAlto: 30, nubesMax: 8,
     grado: { contraste: 1.18, saturacion: 1.12, negros: 0.042 },
   },
@@ -144,12 +151,12 @@ export const MOMENTOS = {
        alrededor del sol y no cubra el cielo entero. */
     nombre: 'Atardecer', elev: 7, azim: 288, turbidez: 4.0, rayleigh: 2.4,
     mie: 0.0026, mieG: 0.80,
-    sol: 0xffa863, solInt: 2.6, cielo: 0xdcae86, suelo: 0x4a3a2c, hemiInt: 0.28,
+    sol: 0xffa863, solInt: 2.6, cielo: 0xc9ae96, suelo: 0x4a3a2c, hemiInt: 0.5,
     relleno: 0xd9a878, rellenoInt: 0.30, exposicion: 0.95, niebla: 0xb98f6a,
     /* Umbral alto: al atardecer el cielo entero está cerca del corte y con 1,0
        florecía medio fotograma. Con 3,8 solo florece el disco del sol. */
     bloom: 0.16, umbral: 3.8, hdri: false, luces: true, ventana: 1.0,
-    ibl: 0.30, fondo: 0.32, solMax: 30, noche: 0,
+    ibl: 0.20, fondo: 0.32, solMax: 30, noche: 0,
     nubes: 0.70, nubesAlto: 34, nubesMax: 2.0,
     grado: { contraste: 1.14, saturacion: 1.14, negros: 0.030 },
   },
@@ -186,7 +193,13 @@ const ANCHO = 1024, ALTO = 512;
    planta seccionada a oscuras: ahora ×4,2 la devuelve donde estaba
    (0,11 × 4,2 ≈ 0,46, del orden del 0,30 × 1,25 de antes, con margen porque
    la planta abierta no recibe cielo por los lados). */
-export const REALCE = { elevacion: 62, hemi: 2.4, ibl: 4.2, hemiNoche: 2.8, iblNoche: 1.3, duracion: 1.0 };
+/* El realce multiplica el ambiente del momento. Al pasar el relleno de las
+   sombras del IBL azul a una hemisférica neutra, la hemisférica base subió de
+   0,44 a 0,78 y el mismo ×2,4 dejaba la planta seccionada quemada, blanca y
+   sin dibujo. Los factores se recalculan para que el ambiente EFECTIVO de la
+   planta quede donde estaba: 0,78 × 1,35 ≈ 1,05 de hemisférica y
+   0,07 × 6,0 ≈ 0,42 de IBL. */
+export const REALCE = { elevacion: 62, hemi: 1.0, ibl: 3.0, hemiNoche: 2.2, iblNoche: 1.3, duracion: 1.0 };
 const CLAVES_NUM = ['solInt', 'hemiInt', 'rellenoInt', 'exposicion', 'bloom', 'umbral', 'ibl', 'fondo', 'noche'];
 const CLAVES_COLOR = ['sol', 'cielo', 'suelo', 'relleno', 'niebla'];
 
