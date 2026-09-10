@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="es">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Diagnóstico de resolución adaptativa</title>
+<style>body{font:16px system-ui;max-width:60rem;margin:3rem auto;padding:1rem}table{border-collapse:collapse}td,th{padding:.7rem;border-bottom:1px solid #bbb;text-align:left}</style>
+<h1>Resolución adaptativa</h1>
+<p>Simulación determinista de la lógica. Estas cifras no son mediciones del showroom.</p>
+<table><thead><tr><th>Secuencia simulada</th><th>DPR resultante</th></tr></thead><tbody id="casos"></tbody></table>
+<script type="module">
+import { crearControlResolucion } from '../js/visor/rendimiento.js';
+const control = crearControlResolucion();
+const casos = [];
+for (const [nombre, fps, segundos, moviendo] of [
+  ['Movimiento lento: 25 FPS durante 8 s', 25, 8, true],
+  ['Cámara detenida', 60, 1, false],
+  ['Nuevo gesto: mantiene el ajuste aprendido', 60, 0.2, true],
+  ['Movimiento fluido: 60 FPS durante 20 s', 60, 20, true],
+]) {
+  for (let i = 0; i < fps * segundos; i++) control.update(1 / fps, { moviendo });
+  casos.push({ nombre, ...control.estado });
+  const fila = document.createElement('tr');
+  for (const texto of [nombre, control.estado.actual.toFixed(2)]) {
+    const celda = document.createElement('td'); celda.textContent = texto; fila.append(celda);
+  }
+  document.getElementById('casos').append(fila);
+}
+window.__estado = { casos };
+window.__listo = true;
+</script>
+</html>
