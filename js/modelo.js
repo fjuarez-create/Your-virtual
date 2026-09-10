@@ -60,6 +60,12 @@ const DISTANCIA_VIDRIO = 0.45;   // m: hasta dónde se admite un vidrio fuera de
 const RANGO_Y_VIDRIO = [-0.5, 3.2];
 const COLOR_PRISMA = new THREE.Color(0xe9e7e1);
 const EPS = 0.001;
+/* Entorno lejano: más allá de este radio (en planta, desde el centro
+   geométrico de la parcela de Apolo) nada recibe sombra y las texturas bajan
+   a TEXTURA_LEJOS. El pueblo llega a cinco kilómetros y se estaba dibujando
+   con la misma ortofoto que el suelo que se pisa. */
+const RADIO_CERCA = 200;
+const TEXTURA_LEJOS = 512;
 
 /* ── Geometría de apoyo ────────────────────────────────────────────────── */
 
@@ -213,7 +219,100 @@ function geometriaEnMundo(mesh, conUV) {
   return salida;
 }
 
-function fusionarPorMaterial(raiz) {
+/* Reparte los triángulos de una geometría según su centroide caiga dentro o
+   fuera del radio, medido en planta desde (cx, cz). Devuelve [dentro, fuera]
+   con los vértices compactados; cualquiera de los dos puede ser null. */
+function partirPorRadio(g, cx, cz, radio) {
+  const pos = g.getAttribute('position');
+  const idx = g.index;
+  const tri = idx.count / 3;
+  const r2 = radio * radio;
+  const marca = new Uint8Array(tri);
+  const ia = idx.array, pa = pos.array;
+  let dentro = 0;
+  for (let t = 0; t < tri; t++) {
+    const a = ia[t * 3] * 3, b = ia[t * 3 + 1] * 3, c = ia[t * 3 + 2] * 3;
+    const x = (pa[a] + pa[b] + pa[c]) / 3 - cx;
+    const z = (pa[a + 2] + pa[b + 2] + pa[c + 2]) / 3 - cz;
+    if (x * x + z * z <= r2) { marca[t] = 1; dentro++; }
+  }
+  if (dentro === tri) return [g, null];
+  if (dentro === 0) return [null, g];
+  return [extraerTriangulos(g, marca, 1, dentro), extraerTriangulos(g, marca, 0, tri - dentro)];
+}
+
+function extraerTriangulos(g, marca, valor, cuenta) {
+  const idx = g.index.array;
+  const nombres = ['position', 'normal', 'uv'].filter((n) => g.getAttribute(n));
+  const mapa = new Int32Array(g.getAttribute('position').count).fill(-1);
+  const indice = new Uint32Array(cuenta * 3);
+  let v = 0, k = 0;
+  for (let t = 0; t < marca.length; t++) {
+    if (marca[t] !== valor) continue;
+    for (let j = 0; j < 3; j++) {
+      const orig = idx[t * 3 + j];
+      if (mapa[orig] < 0) mapa[orig] = v++;
+      indice[k++] = mapa[orig];
+    }
+  }
+  const salida = new THREE.BufferGeometry();
+  for (const nombre of nombres) {
+    const atr = g.getAttribute(nombre);
+    const n = atr.itemSize;
+    const datos = new Float32Array(v * n);
+    for (let i = 0; i < mapa.length; i++) {
+      const d = mapa[i];
+      if (d < 0) continue;
+      for (let j = 0; j < n; j++) datos[d * n + j] = atr.array[i * n + j];
+    }
+    salida.setAttribute(nombre, new THREE.BufferAttribute(datos, n));
+  }
+  salida.setIndex(new THREE.BufferAttribute(indice, 1));
+  return salida;
+}
+
+/* Copia reducida de una textura en un lienzo. La original no se toca: la
+   sigue usando la mitad cercana del entorno. */
+const reducidas = new Map();
+function reducirTextura(tex, maxLado) {
+  if (!tex || tex.isCompressedTexture) return tex;
+  const img = tex.image;
+  const w = img?.width | 0, h = img?.height | 0;
+  if (!w || !h || Math.max(w, h) <= maxLado) return tex;
+  if (reducidas.has(tex)) return reducidas.get(tex);
+  const k = maxLado / Math.max(w, h);
+  const lienzo = document.createElement('canvas');
+  lienzo.width = Math.max(1, Math.round(w * k));
+  lienzo.height = Math.max(1, Math.round(h * k));
+  const g2d = lienzo.getContext('2d');
+  if (!g2d) return tex;
+  g2d.imageSmoothingEnabled = true;
+  g2d.imageSmoothingQuality = 'high';
+  try { g2d.drawImage(img, 0, 0, lienzo.width, lienzo.height); } catch (e) { return tex; }
+  const t = new THREE.Texture(lienzo);
+  t.wrapS = tex.wrapS; t.wrapT = tex.wrapT;
+  t.colorSpace = tex.colorSpace; t.flipY = tex.flipY;
+  t.premultiplyAlpha = tex.premultiplyAlpha;
+  t.offset.copy(tex.offset); t.repeat.copy(tex.repeat);
+  t.center.copy(tex.center); t.rotation = tex.rotation;
+  t.channel = tex.channel;
+  t.generateMipmaps = true;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.magFilter = THREE.LinearFilter;
+  t.needsUpdate = true;
+  reducidas.set(tex, t);
+  return t;
+}
+
+const MAPAS_LEJOS = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap'];
+function materialLejano(mat) {
+  const m = mat.clone();
+  m.name = `${mat.name || 'entorno'}_lejos`;
+  for (const clave of MAPAS_LEJOS) if (m[clave]) m[clave] = reducirTextura(m[clave], TEXTURA_LEJOS);
+  return m;
+}
+
+function fusionarPorMaterial(raiz, centro) {
   raiz.updateMatrixWorld(true);
   const porMaterial = new Map();
   raiz.traverse((o) => {
@@ -227,15 +326,28 @@ function fusionarPorMaterial(raiz) {
   let mallas = 0;
   for (const [material, lista] of porMaterial) {
     const conUV = !!material.map;
-    const geos = lista.map((o) => geometriaEnMundo(o, conUV));
-    const fusionada = geos.length === 1 ? geos[0] : mergeGeometries(geos, false);
-    if (!fusionada) { for (const g of geos) g.dispose(); continue; }
-    for (const g of geos) if (g !== fusionada) g.dispose();
-    fusionada.computeBoundingBox(); fusionada.computeBoundingSphere();
-    const mesh = new THREE.Mesh(fusionada, material);
-    mesh.name = `entorno_${material.name || mallas}`;
-    grupo.add(mesh);
-    mallas++;
+    const cerca = [], lejos = [];
+    for (const o of lista) {
+      const g = geometriaEnMundo(o, conUV);
+      const [dentro, fuera] = partirPorRadio(g, centro[0], centro[1], RADIO_CERCA);
+      if (dentro) cerca.push(dentro);
+      if (fuera) lejos.push(fuera);
+      if (dentro !== g && fuera !== g) g.dispose();
+    }
+    const añadir = (geos, lejano) => {
+      if (!geos.length) return;
+      const fusionada = geos.length === 1 ? geos[0] : mergeGeometries(geos, false);
+      if (!fusionada) { for (const g of geos) g.dispose(); return; }
+      for (const g of geos) if (g !== fusionada) g.dispose();
+      fusionada.computeBoundingBox(); fusionada.computeBoundingSphere();
+      const mesh = new THREE.Mesh(fusionada, lejano ? materialLejano(material) : material);
+      mesh.name = `entorno_${material.name || mallas}${lejano ? '_lejos' : ''}`;
+      mesh.userData.lejos = lejano;
+      grupo.add(mesh);
+      mallas++;
+    };
+    añadir(cerca, false);
+    añadir(lejos, true);
   }
   raiz.traverse((o) => { if (o.isMesh && o.geometry) o.geometry.dispose(); });
   grupo.userData.mallas = mallas;
@@ -284,6 +396,13 @@ export async function cargarModelo(scene, unitsById, { estadoDe = () => 'disponi
   onProgreso('Montando el edificio…', 0.7);
 
   const centro = modelo.apolo.centro;
+  /* Centro geométrico de la parcela (la unión de los ocho cajones): es la
+     referencia del radio que separa el entorno cercano del lejano. */
+  const cajones = modelo.plataformas || [];
+  const centroParcela = cajones.length
+    ? [(Math.min(...cajones.map((c) => c.x0)) + Math.max(...cajones.map((c) => c.x1))) / 2,
+       (Math.min(...cajones.map((c) => c.z0)) + Math.max(...cajones.map((c) => c.z1))) / 2]
+    : [centro[0], centro[2]];
   const grupo = new THREE.Group();
   grupo.name = 'serenea';
   grupo.position.set(-centro[0], 0, -centro[2]); // el centro de Apolo, en el origen de la escena
@@ -314,8 +433,8 @@ export async function cargarModelo(scene, unitsById, { estadoDe = () => 'disponi
   const bruto = gEntorno.scene;
   bruto.name = 'entorno';
   adoptar(bruto, { sombras: false, lejos: true });
-  const entorno = fusionarPorMaterial(bruto);
-  for (const o of entorno.children) { o.castShadow = false; o.receiveShadow = true; o.raycast = () => {}; }
+  const entorno = fusionarPorMaterial(bruto, [centroParcela[0], centroParcela[1]]);
+  for (const o of entorno.children) { o.castShadow = false; o.receiveShadow = !o.userData.lejos; o.raycast = () => {}; }
   grupo.add(entorno);
 
   const envolvente = gEnvolvente.scene;

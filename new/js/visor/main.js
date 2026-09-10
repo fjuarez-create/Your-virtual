@@ -121,19 +121,33 @@ const PLANTAS = FLOOR_DEFS.filter((f) => f.key !== 'cubierta');
 const CLAVES_PLANTA = new Set(['all', ...PLANTAS.map((f) => f.key)]);
 const NIVEL_DE = new Map(PLANTAS.map((f, i) => [f.key, i]));
 const RUTA_ENTORNO = 'assets/serenea/entorno.glb';
-/* Encuadres calcados de las capturas que marcó el cliente: los dos desde el
-   sureste, uno con el barrio alrededor y otro pegado a la esquina, con la
-   fachada larga fugando hacia el fondo. No se encuadra el edificio entero en
-   'edificio': se encuadra su mitad este, que es lo que hace que la fachada
-   llene el fotograma en vez de quedar pequeña en el centro. */
-const AZIMUT = { conjunto: 56, edificio: 56, planta: 8, plano: 0 };
-const ELEVACION = { conjunto: 22, edificio: 12, planta: 50, plano: 88 };
-const MARGEN = { conjunto: 1.02, edificio: 0.95, planta: 1.02, plano: 1.03 };
-const RECORTE_EDIFICIO = 0.45;    // fracción del edificio que se deja fuera por el oeste
-const LADO_CONJUNTO = 215;        // m del encuadre 'conjunto' en el eje largo (x)
-const FONDO_CONJUNTO = 130;       // m del mismo encuadre en z: la caja no es cuadrada, porque
-                                  // en 16:9 una caja cuadrada se encuadra por el alto y deja
-                                  // el edificio en una décima parte del ancho
+/* Encuadres de conjunto y edificio: el protagonista es la fachada NOROESTE,
+   que es la que enseñan las dos capturas que marcó el cliente (el campo de
+   fútbol abajo a la izquierda, la calle con los coches delante de la fachada
+   larga y el pueblo al fondo). No se calculan encajando una caja: se guardan
+   como POSE exacta —acimut, elevación, distancia y objetivo— porque el
+   cliente los dictó mirando el visor, y una caja los reinventa en cuanto
+   cambia el modelo. `?camara=1` los lee en pantalla: colocar la cámara y
+   pulsar el botón de recentrar imprime estos cuatro números.
+   La distancia sólo se corrige en pantallas más estrechas que 16:9 (móvil en
+   vertical), donde con la distancia dictada el edificio se saldría por los
+   lados; en apaisado y en escritorio es literalmente la del cliente. */
+const POSE = {
+  conjunto: { azimut: 230, elevacion: 10, distancia: 120, objetivo: [66.7, 12, -23.9] },
+  edificio: { azimut: 236, elevacion: 17, distancia: 79, objetivo: [51, 10, -31] },
+};
+const ASPECTO_POSE = 16 / 9;      // por debajo de esto la pose se aleja para no recortar
+const RETIRO_MAX = 2.6;           // tope del alejamiento en vertical
+const AZIMUT = { planta: 8, plano: 0 };
+const ELEVACION = { planta: 50, plano: 88 };
+const MARGEN = { planta: 1.02, plano: 1.03 };
+/* Entorno lejano: más allá de este radio (en planta, desde el centro
+   geométrico de la parcela de Apolo) nada proyecta ni recibe sombra y las
+   texturas bajan a TEXTURA_LEJOS. El pueblo entero entraba en las cascadas
+   del CSM y se dibujaba dos o tres veces por fotograma sin que se notara. */
+const RADIO_CERCA = 200;          // m
+const TEXTURA_LEJOS = 512;        // lado máximo de las texturas del entorno lejano
+const RUTA_MODELO = 'data/serenea_modelo.json';
 const PLANTA_HACIA_NORTE = 22;    // m que se alarga la caja de planta hacia −z (ver cabecera)
 const REPOSO_S = 120;
 const CAMARA_FAR = 9000;          // el entorno llega a 5 km
@@ -286,6 +300,126 @@ function geometriaMundo(mesh, { conUV }) {
   return salida;
 }
 
+/* ── Entorno lejano ──
+   Reparte los triángulos de una geometría en dos según su centroide caiga
+   dentro o fuera del radio (medido en planta desde el centro de la parcela).
+   Los vértices se compactan, así que ninguna de las dos mitades arrastra la
+   otra. Devuelve [dentro, fuera]; cualquiera de los dos puede ser null (y
+   entonces el otro es la geometría original, sin copiar). */
+function partirPorRadio(g, cx, cz, radio) {
+  const pos = g.getAttribute('position');
+  const idx = g.index;
+  const tri = idx.count / 3;
+  const r2 = radio * radio;
+  const marca = new Uint8Array(tri);
+  const ia = idx.array, pa = pos.array;
+  let dentro = 0;
+  for (let t = 0; t < tri; t++) {
+    const a = ia[t * 3] * 3, b = ia[t * 3 + 1] * 3, c = ia[t * 3 + 2] * 3;
+    const x = (pa[a] + pa[b] + pa[c]) / 3 - cx;
+    const z = (pa[a + 2] + pa[b + 2] + pa[c + 2]) / 3 - cz;
+    if (x * x + z * z <= r2) { marca[t] = 1; dentro++; }
+  }
+  if (dentro === tri) return [g, null];
+  if (dentro === 0) return [null, g];
+  return [extraerTriangulos(g, marca, 1, dentro), extraerTriangulos(g, marca, 0, tri - dentro)];
+}
+
+function extraerTriangulos(g, marca, valor, cuenta) {
+  const idx = g.index.array;
+  const nombres = ['position', 'normal', 'uv'].filter((n) => g.getAttribute(n));
+  const mapa = new Int32Array(g.getAttribute('position').count).fill(-1);
+  const indice = new Uint32Array(cuenta * 3);
+  let v = 0, k = 0;
+  for (let t = 0; t < marca.length; t++) {
+    if (marca[t] !== valor) continue;
+    for (let j = 0; j < 3; j++) {
+      const orig = idx[t * 3 + j];
+      if (mapa[orig] < 0) mapa[orig] = v++;
+      indice[k++] = mapa[orig];
+    }
+  }
+  const salida = new THREE.BufferGeometry();
+  for (const nombre of nombres) {
+    const atr = g.getAttribute(nombre);
+    const n = atr.itemSize;
+    const datos = new Float32Array(v * n);
+    for (let i = 0; i < mapa.length; i++) {
+      const d = mapa[i];
+      if (d < 0) continue;
+      for (let j = 0; j < n; j++) datos[d * n + j] = atr.array[i * n + j];
+    }
+    salida.setAttribute(nombre, new THREE.BufferAttribute(datos, n));
+  }
+  salida.setIndex(new THREE.BufferAttribute(indice, 1));
+  return salida;
+}
+
+/* Copia reducida de una textura, dibujándola en un lienzo del tamaño pedido.
+   No se toca la original: la mitad cercana del entorno la sigue usando a
+   plena resolución. Las comprimidas y las que ya son pequeñas se devuelven
+   tal cual. */
+const reducidas = new Map();
+function reducirTextura(tex, maxLado) {
+  if (!tex || tex.isCompressedTexture) return tex;
+  const img = tex.image;
+  const w = img?.width | 0, h = img?.height | 0;
+  if (!w || !h || Math.max(w, h) <= maxLado) return tex;
+  const cacheada = reducidas.get(tex);
+  if (cacheada) return cacheada;
+  const k = maxLado / Math.max(w, h);
+  const lienzo = document.createElement('canvas');
+  lienzo.width = Math.max(1, Math.round(w * k));
+  lienzo.height = Math.max(1, Math.round(h * k));
+  const g2d = lienzo.getContext('2d');
+  if (!g2d) return tex;
+  g2d.imageSmoothingEnabled = true;
+  g2d.imageSmoothingQuality = 'high';
+  try { g2d.drawImage(img, 0, 0, lienzo.width, lienzo.height); } catch (e) { return tex; }
+  const t = new THREE.Texture(lienzo);
+  t.name = `${tex.name || 'tex'}_${lienzo.width}`;
+  t.wrapS = tex.wrapS; t.wrapT = tex.wrapT;
+  t.colorSpace = tex.colorSpace; t.flipY = tex.flipY;
+  t.premultiplyAlpha = tex.premultiplyAlpha;
+  t.offset.copy(tex.offset); t.repeat.copy(tex.repeat);
+  t.center.copy(tex.center); t.rotation = tex.rotation;
+  t.channel = tex.channel;
+  t.generateMipmaps = true;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.magFilter = THREE.LinearFilter;
+  t.needsUpdate = true;
+  reducidas.set(tex, t);
+  return t;
+}
+
+const MAPAS_LEJOS = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap'];
+function materialLejano(mat) {
+  const m = mat.clone();
+  m.name = `${mat.name || 'entorno'}_lejos`;
+  for (const clave of MAPAS_LEJOS) if (m[clave]) m[clave] = reducirTextura(m[clave], TEXTURA_LEJOS);
+  luz.aplicarMaterial(m);
+  return m;
+}
+
+/* Centro geométrico de la parcela (la unión de los ocho cajones), que es lo
+   que separa el entorno cercano del lejano. Si el fichero no llega se usa el
+   centro del edificio del contrato. */
+async function centroParcela() {
+  try {
+    const r = await fetch(RUTA_MODELO);
+    if (!r.ok) throw new Error(`${RUTA_MODELO}: ${r.status}`);
+    const d = await r.json();
+    const p = d.plataformas || [];
+    if (!p.length) return new THREE.Vector2(d.apolo.centro[0], d.apolo.centro[2]);
+    const x0 = Math.min(...p.map((c) => c.x0)), x1 = Math.max(...p.map((c) => c.x1));
+    const z0 = Math.min(...p.map((c) => c.z0)), z1 = Math.max(...p.map((c) => c.z1));
+    return new THREE.Vector2((x0 + x1) / 2, (z0 + z1) / 2);
+  } catch (e) {
+    console.warn('[apolo] sin parcela, se usa el centro del edificio:', e.message);
+    return new THREE.Vector2(66.72, -23.94);
+  }
+}
+
 /* Retoques a los materiales del entorno (ver cabecera). Devuelve el material
    que se usará; el vidrio se sustituye por el físico del edificio. */
 function materialEntorno(m) {
@@ -314,7 +448,7 @@ function materialEntorno(m) {
 
 async function cargarEntorno(onProgreso) {
   const t0 = performance.now();
-  const gltf = await cargarGLB(RUTA_ENTORNO, onProgreso);
+  const [gltf, centro] = await Promise.all([cargarGLB(RUTA_ENTORNO, onProgreso), centroParcela()]);
   const tCarga = performance.now();
   gltf.scene.updateMatrixWorld(true);
   const grupo = new THREE.Group();
@@ -326,31 +460,49 @@ async function cargarEntorno(onProgreso) {
     if (!porMaterial.has(m)) porMaterial.set(m, []);
     porMaterial.get(m).push(o);
   });
-  let mallas = 0, triangulos = 0, normalesNulas = 0;
+  let mallas = 0, triangulos = 0, normalesNulas = 0, trisLejos = 0;
   for (const [material, lista] of porMaterial) {
     const conUV = !!material.map;
-    const geometrias = lista.map((o) => geometriaMundo(o, { conUV }));
-    const fusionada = geometrias.length === 1 ? geometrias[0] : mergeGeometries(geometrias, false);
-    if (!fusionada) { console.warn('[apolo] entorno: no se pudo fusionar', material.name); continue; }
-    for (const g of geometrias) { normalesNulas += g.userData.normalesNulas || 0; if (g !== fusionada) g.dispose(); }
-    fusionada.computeBoundingBox(); fusionada.computeBoundingSphere();
+    const cerca = [], lejos = [];
+    for (const o of lista) {
+      const g = geometriaMundo(o, { conUV });
+      normalesNulas += g.userData.normalesNulas || 0;
+      const [dentro, fuera] = partirPorRadio(g, centro.x, centro.y, RADIO_CERCA);
+      if (dentro) cerca.push(dentro);
+      if (fuera) lejos.push(fuera);
+      if (dentro !== g && fuera !== g) g.dispose();
+    }
     const mat = materialEntorno(material);
     materialesEntorno.push(mat);
-    const mesh = new THREE.Mesh(fusionada, mat);
-    mesh.name = `entorno_${material.name}`;
+    // el relieve son 330 k triángulos en tres cascadas por una sombra que no se ve
     const terreno = /^ortho$|^PNOA_|mar_atlantico/.test(material.name);
-    mesh.castShadow = !terreno; // 330 k triángulos en tres cascadas por un relieve que no hace sombra
-    mesh.receiveShadow = true;
-    mesh.raycast = () => {}; // el picking va solo por las envolventes de vivienda
-    grupo.add(mesh);
-    mallas++;
-    triangulos += fusionada.index.count / 3;
+    const añadir = (geometrias, lejano) => {
+      if (!geometrias.length) return;
+      const fusionada = geometrias.length === 1 ? geometrias[0] : mergeGeometries(geometrias, false);
+      if (!fusionada) { console.warn('[apolo] entorno: no se pudo fusionar', material.name); return; }
+      for (const g of geometrias) if (g !== fusionada) g.dispose();
+      fusionada.computeBoundingBox(); fusionada.computeBoundingSphere();
+      const suyo = lejano ? materialLejano(mat) : mat;
+      if (lejano) materialesEntorno.push(suyo);
+      const mesh = new THREE.Mesh(fusionada, suyo);
+      mesh.name = `entorno_${material.name}${lejano ? '_lejos' : ''}`;
+      mesh.castShadow = !terreno && !lejano;
+      mesh.receiveShadow = !lejano;
+      mesh.raycast = () => {}; // el picking va solo por las envolventes de vivienda
+      grupo.add(mesh);
+      mallas++;
+      const t = fusionada.index.count / 3;
+      triangulos += t;
+      if (lejano) trisLejos += t;
+    };
+    añadir(cerca, false);
+    añadir(lejos, true);
   }
   for (const o of gltf.scene.children) o.traverse((x) => x.geometry?.dispose());
   scene.add(grupo);
   scene.updateMatrixWorld(true);
   const caja = new THREE.Box3().setFromObject(grupo);
-  apolo.tiempos.entorno = { descargaMs: Math.round(tCarga - t0), fusionMs: Math.round(performance.now() - tCarga), mallas, mallasOrigen: [...porMaterial.values()].reduce((s, l) => s + l.length, 0), triangulos: Math.round(triangulos), normalesNulas };
+  apolo.tiempos.entorno = { descargaMs: Math.round(tCarga - t0), fusionMs: Math.round(performance.now() - tCarga), mallas, mallasOrigen: [...porMaterial.values()].reduce((s, l) => s + l.length, 0), triangulos: Math.round(triangulos), trisLejos: Math.round(trisLejos), normalesNulas, centro: [centro.x, centro.y], radioCerca: RADIO_CERCA };
   return { grupo, caja };
 }
 
@@ -367,13 +519,15 @@ function estadosDemostracion(ed) {
 }
 
 /* ── Encuadres ── */
-function cajaConjunto() {
-  const caja = edificio.caja.clone();
-  const centro = caja.getCenter(new THREE.Vector3());
-  caja.min.x = centro.x - LADO_CONJUNTO / 2; caja.max.x = centro.x + LADO_CONJUNTO / 2;
-  caja.min.z = centro.z - FONDO_CONJUNTO / 2; caja.max.z = centro.z + FONDO_CONJUNTO / 2;
-  caja.min.y = Math.min(caja.min.y, entorno ? Math.max(entorno.caja.min.y, caja.min.y - 30) : caja.min.y);
-  return caja;
+function volarAPose(pose, duracion) {
+  const aspecto = camera.aspect || ASPECTO_POSE;
+  const retiro = Math.min(RETIRO_MAX, Math.max(1, ASPECTO_POSE / aspecto));
+  const polar = THREE.MathUtils.degToRad(90 - pose.elevacion);
+  const az = THREE.MathUtils.degToRad(pose.azimut);
+  const objetivo = new THREE.Vector3(...pose.objetivo);
+  const posicion = new THREE.Vector3(Math.sin(polar) * Math.sin(az), Math.cos(polar), Math.sin(polar) * Math.cos(az))
+    .multiplyScalar(pose.distancia * retiro).add(objetivo);
+  return camara.volarA({ posicion, objetivo }, { duracion, arco: 0.3 });
 }
 /* Volumen que la cámara no puede atravesar: la huella del edificio hasta su
    techo visible (la cubierta con el edificio completo, la cota de corte con
@@ -416,14 +570,6 @@ function cajaPlanta(clave) {
   caja.min.z -= PLANTA_HACIA_NORTE; // el bloque vecino del sur fuera del cuarto inferior (ver cabecera)
   return caja;
 }
-/* 'edificio': la mitad este del volumen, hasta la cubierta. Encuadrar la
-   barra entera dejaba la cámara a 190 m y el edificio pequeño. */
-function cajaEdificio() {
-  const caja = edificio.caja.clone();
-  caja.min.x += (caja.max.x - caja.min.x) * RECORTE_EDIFICIO;
-  return caja;
-}
-
 /* Vista cenital de la planta activa: la cámara justo encima, con la fuga que
    ya tiene la cámara (no se toca el fov). Es el cuarto botón del raíl. */
 function cajaPlano(clave) {
@@ -436,10 +582,10 @@ function encuadrarVista(vista, { duracion = 1.6 } = {}) {
   const cambia = apolo.vista !== vista;
   apolo.vista = vista;
   if (cambia && edificio) repintar(); // las cartelas vecinas dependen de la vista
-  if (vista === 'conjunto') return camara.encuadrar(cajaConjunto(), { azimut: AZIMUT.conjunto, elevacion: ELEVACION.conjunto, margen: MARGEN.conjunto, duracion });
+  if (vista === 'conjunto') return volarAPose(POSE.conjunto, duracion);
   if (vista === 'planta') return camara.encuadrar(cajaPlanta(apolo.floor), { azimut: AZIMUT.planta, elevacion: ELEVACION.planta, margen: MARGEN.planta, duracion });
   if (vista === 'plano') return camara.encuadrar(cajaPlano(apolo.floor), { azimut: AZIMUT.plano, elevacion: ELEVACION.plano, margen: MARGEN.plano, duracion });
-  return camara.encuadrar(cajaEdificio(), { azimut: AZIMUT.edificio, elevacion: ELEVACION.edificio, margen: MARGEN.edificio, duracion });
+  return volarAPose(POSE.edificio, duracion);
 }
 
 /* ── Realce de viviendas (ver cabecera) ── */
