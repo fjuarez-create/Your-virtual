@@ -296,7 +296,7 @@ function encenderEntorno(fraccionNoche) {
     /* El terreno NO se enciende: con la ortofoto emisiva, de noche el suelo
        entero salía naranja, como si el asfalto tuviera luz propia. La luz de
        ciudad la ponen las fachadas del pueblo, que es de donde sale. */
-    if (/^ortho$|^PNOA_|mar_atlantico|EXT_Tierra|asphalt|curb/i.test(m.name || '')) { m.emissiveIntensity = 0; continue; }
+    if (/^ortho|^PNOA_|mar_atlantico|EXT_Tierra|asphalt|curb/i.test(m.name || '')) { m.emissiveIntensity = 0; continue; }
     m.emissive.copy(EMISIVO_PUEBLO);
     m.emissiveIntensity = EMISIVO_PUEBLO_MAX * f;
   }
