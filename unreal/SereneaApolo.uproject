@@ -1,0 +1,13 @@
+{
+  "FileVersion": 3,
+  "EngineAssociation": "5.7",
+  "Category": "Architecture",
+  "Description": "Preparación de la prueba de Apolo; importación y render pendientes de ejecutar en Unreal.",
+  "Plugins": [
+    { "Name": "PythonScriptPlugin", "Enabled": true },
+    { "Name": "EditorScriptingUtilities", "Enabled": true },
+    { "Name": "Interchange", "Enabled": true },
+    { "Name": "InterchangeEditor", "Enabled": true },
+    { "Name": "PixelStreaming2", "Enabled": true }
+  ]
+}

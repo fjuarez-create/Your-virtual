@@ -1,0 +1,8 @@
+SourceAssets/
+Content/
+Saved/
+Intermediate/
+DerivedDataCache/
+Binaries/
+node_modules/
+__pycache__/

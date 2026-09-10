@@ -1,0 +1,90 @@
+{
+  "ok": true,
+  "alcance": "Geometría y texturas comparadas en CPU con GLTFLoader. Importación y render en Unreal pendientes.",
+  "modelos": [
+    {
+      "nombre": "apolo_envolvente",
+      "mallas": 1041,
+      "vertices": 902073,
+      "triangulos": 586147,
+      "errorMaximoAtributos": 2.980141289299354e-8,
+      "jerarquiaIntacta": true,
+      "materialesPBRIntactos": true,
+      "pixelesTexturasIntactos": true,
+      "fuenteSha256": "0401894886d1f38b33dbaef27cd3e7c3a04de94a9a5289b9d6ac90ce619c386e",
+      "salidaSha256": "39e4042323d3e29268b886e80515c7b95322d7208374a47a0eaa9cc0f2637226"
+    },
+    {
+      "nombre": "apolo_mobiliario",
+      "mallas": 1403,
+      "vertices": 1272252,
+      "triangulos": 727676,
+      "errorMaximoAtributos": 2.980141289299354e-8,
+      "jerarquiaIntacta": true,
+      "materialesPBRIntactos": true,
+      "pixelesTexturasIntactos": true,
+      "fuenteSha256": "00d0581d4431c24d194985d5e56e3e07c6aaf734de4076ca08e8f199ae4ec59f",
+      "salidaSha256": "8762bfb03fb104e6a4a72c6706bf0bb139b0ce6a46f154373222d501820bf245"
+    },
+    {
+      "nombre": "apolo_corte_baja",
+      "mallas": 303,
+      "vertices": 240876,
+      "triangulos": 156859,
+      "errorMaximoAtributos": 2.980141289299354e-8,
+      "jerarquiaIntacta": true,
+      "materialesPBRIntactos": true,
+      "pixelesTexturasIntactos": true,
+      "fuenteSha256": "061be850d1f93456b868f69146b51e212be077b69c210163e969b244c8398609",
+      "salidaSha256": "73f8ce4bac535556544cca4c862691fe62ef2232b019e6e28320d9508918166b"
+    },
+    {
+      "nombre": "apolo_corte_p1",
+      "mallas": 585,
+      "vertices": 432138,
+      "triangulos": 285540,
+      "errorMaximoAtributos": 2.980141289299354e-8,
+      "jerarquiaIntacta": true,
+      "materialesPBRIntactos": true,
+      "pixelesTexturasIntactos": true,
+      "fuenteSha256": "a5c89bc97b4f4c7302e82c10902be575d975df3758d3f84ed6815338b9793556",
+      "salidaSha256": "9cdb0da6c3dd0c7ab912bc14425ef3e8fea3c849113a863b7fb82c87a0695ba7"
+    },
+    {
+      "nombre": "apolo_corte_p2",
+      "mallas": 866,
+      "vertices": 648679,
+      "triangulos": 430580,
+      "errorMaximoAtributos": 2.980141289299354e-8,
+      "jerarquiaIntacta": true,
+      "materialesPBRIntactos": true,
+      "pixelesTexturasIntactos": true,
+      "fuenteSha256": "126831897a5682d69a0c6040e47f1ea172e639606730f254243fffdd84a112fd",
+      "salidaSha256": "28baf35074d2afd5d0682d51723247ee7741d1cf7f984f83873e9395bacf266e"
+    },
+    {
+      "nombre": "apolo_corte_atico",
+      "mallas": 1024,
+      "vertices": 836482,
+      "triangulos": 555716,
+      "errorMaximoAtributos": 2.980141289299354e-8,
+      "jerarquiaIntacta": true,
+      "materialesPBRIntactos": true,
+      "pixelesTexturasIntactos": true,
+      "fuenteSha256": "062210be71db9456bb2ef2e921211af4a91c03cb7173053271ab4097d33a475b",
+      "salidaSha256": "9b546ff8a1b712d0f7ba1895bb9fc3036154c925d4519a28a8e468a70d5e07cb"
+    },
+    {
+      "nombre": "entorno_200m",
+      "mallas": 4595,
+      "vertices": 1859969,
+      "triangulos": 870467,
+      "errorMaximoAtributos": 2.980141289299354e-8,
+      "jerarquiaIntacta": true,
+      "materialesPBRIntactos": true,
+      "pixelesTexturasIntactos": true,
+      "fuenteSha256": "7cfacd9786ca4c7205bd1b24c4b9ea282b180ff79e7d624900cc0f1ebc11305d",
+      "salidaSha256": "aeccc91c68fcce69817267def69429a8f358eb732703bcf7d2ca3e9c81a6810b"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "name": "serenea-unreal-importacion",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "preparar": "node preparar-modelos.mjs",
+    "validar": "node validar-modelos.mjs"
+  },
+  "engines": { "node": ">=22.15" },
+  "dependencies": { "sharp": "0.34.5" }
+}
