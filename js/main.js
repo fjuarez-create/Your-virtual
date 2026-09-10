@@ -354,16 +354,20 @@ controls.addEventListener('start', () => { camTween = null; });
 
 /* ─────────────────── Intro cinematográfica ─────────────────── */
 const INTRO = {
+  /* La entrada aterriza en el encuadre que marcó el cliente (fachada
+     noroeste), así que llega por el norte en vez de por el sureste: es la
+     misma curva de antes con x y z cambiados de signo y el punto final en la
+     pose del conjunto. */
   curve: new THREE.CatmullRomCurve3([
-    new THREE.Vector3(560, 500, 840),
-    new THREE.Vector3(320, 350, 580),
-    new THREE.Vector3(60, 210, 400),
-    new THREE.Vector3(-150, 110, 240),
-    new THREE.Vector3(-70, 70, 120),
-    new THREE.Vector3(65, 91, 93),
+    new THREE.Vector3(-560, 500, -840),
+    new THREE.Vector3(-320, 350, -580),
+    new THREE.Vector3(-60, 210, -400),
+    new THREE.Vector3(150, 110, -240),
+    new THREE.Vector3(70, 70, -120),
+    new THREE.Vector3(-111.5, 48.3, -93.6),
   ], false, 'centripetal', 0.4),
-  t0: new THREE.Vector3(0, 150, -60),
-  t1: new THREE.Vector3(0, 9, 0),
+  t0: new THREE.Vector3(0, 150, 60),
+  t1: new THREE.Vector3(0, 12, 0),
   dur: 8.5,
 };
 let intro = null;

@@ -37,19 +37,15 @@
      vivienda. Cada fotograma se pide a luz.setAlcanceSombras la distancia
      cámara-edificio + 250 m (redondeada a 50 m, entre 300 y 1.200) para que
      las cascadas cubran Apolo ± 150 m desde cualquier encuadre.
-   · Encuadres (data/serenea_modelo.json vía edificio.caja), medidos con
-     capturas: 'conjunto' = caja de Apolo ampliada a 480 m de lado, desde el
-     suroeste (azimut −60°) y elevación 16°: con 22° el horizonte quedaba en
-     el borde superior sin cielo, y el mar está al este (x ≥ 580 m, cota
-     −71), así que hay que mirar hacia allí (con 600 m de lado Apolo era el
-     7,7 % del ancho y solo se identificaba por el campo de fútbol).
-     'edificio' = caja de Apolo, elevación 32°, azimut 40° (desde el
-     sureste), margen 1,03: Apolo tiene pegado al sur otro volumen de
-     SERENEA tan alto como él (z 40…76) que desde el sur franco tapa la
-     fachada, y con 24°/55° ese bloque seguía en primer plano tapando la
-     esquina suroeste y las plantas bajas de la mitad izquierda (Apolo al
-     50 % del ancho); más alto y más de frente se pasa por encima de él y
-     se ve entera la fachada larga sur con sus ventanas y el testero este.
+   · Encuadres: 'conjunto' y 'edificio' son POSE (ver POSE, más abajo), no
+     cajas encajadas. El protagonista es la FACHADA NOROESTE, que es la de
+     las dos capturas que marcó el cliente: el campo de fútbol abajo a la
+     izquierda, la calle con los coches delante de la fachada larga y el
+     pueblo al fondo. Los ángulos se sacaron midiendo el horizonte de sus
+     capturas (la línea del horizonte cae sobre el centro del fotograma
+     tanto como grados tenga la elevación) y comparando renders contra
+     ellas. Desde el sur no valen: Apolo tiene pegado otro volumen de
+     SERENEA tan alto como él que tapa la fachada.
      'planta' = huella de Apolo limitada en Y a [suelo mínimo de la planta,
      corte máximo de la planta] (edificio.suelos y cortes.json; no la caja
      entera del edificio, que alejaba la cámara), elevación 50°, azimut 8° y
@@ -134,7 +130,7 @@ const RUTA_ENTORNO = 'assets/serenea/entorno.glb';
    lados; en apaisado y en escritorio es literalmente la del cliente. */
 const POSE = {
   conjunto: { azimut: 230, elevacion: 10, distancia: 120, objetivo: [66.7, 12, -23.9] },
-  edificio: { azimut: 236, elevacion: 17, distancia: 79, objetivo: [51, 10, -31] },
+  edificio: { azimut: 236, elevacion: 17, distancia: 75, objetivo: [53, 10, -32] },
 };
 const ASPECTO_POSE = 16 / 9;      // por debajo de esto la pose se aleja para no recortar
 const RETIRO_MAX = 2.6;           // tope del alejamiento en vertical
