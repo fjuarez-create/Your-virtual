@@ -11,13 +11,12 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
-import { FLOOR_DEFS, ROOF_Y, floorOf } from 'app/layout.js';
-import { buildBuilding, paintUnits, loadBIM } from 'app/building.js';
+import { FLOOR_DEFS, floorOf } from 'app/layout.js';
+import { paintUnits } from 'app/building.js';
+import { cargarModelo } from 'app/modelo.js';
 import { fetchUnits, fetchAvailability, pollAvailability, sendLead } from 'app/api.js';
 import * as UI from 'app/ui.js';
 import { ACTIVE_DEV, ACTIVE_BUILDING } from 'app/promotions.js';
-import { createEnvironment, SITE } from 'app/environment.js';
-import { topoPedido, topoCompleto, cargarTopo, aislarTopo } from 'app/topo.js';
 
 const $ = (s) => document.querySelector(s);
 
@@ -235,7 +234,7 @@ controls.panSpeed = 1.15;
 controls.maxPolarAngle = Math.PI / 2 - 0.04;
 controls.minDistance = 18;
 controls.maxDistance = 420;
-controls.target.set(0, 40, 0);
+controls.target.set(0, 9, 0);
 controls.enabled = false; // se habilita al terminar la intro
 
 // Luces
@@ -305,59 +304,19 @@ const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
 
-/* ─────────────────────── Entorno real (teselas de Google) ─────────────────────
-   Capa opcional: sin clave sellada no se crea nada y el botón no aparece. Las
-   teselas llevan la luz del día horneada, así que el entorno real y el modo
-   noche son excluyentes: activar uno apaga el otro. */
-const envBtn = $('#envToggle');
-const envAttr = $('#envAttr');
-const environment = createEnvironment({
-  scene, camera, renderer,
-  apiKey: window.MAPS_API_KEY,
-  onError: (e) => console.warn('Entorno: tesela no cargada', e),
-});
+/* ── Entorno ──
+   El entorno ya no se inventa ni se descarga de Google: viene en el propio
+   modelo del cliente (assets/serenea/entorno.glb), con el terreno, la costa,
+   las calles y los otros cuatro edificios de SERENEA. El botón del globo, que
+   encendía las teselas, deja de tener sentido. */
+$('#envToggle')?.remove();
+$('#envAttr')?.remove();
+$('#attrib')?.remove();
 
-function setEnvironment(on) {
-  if (!environment) return;
-  environment.setEnabled(on);
-  envBtn.setAttribute('aria-pressed', String(on));
-  envAttr.classList.toggle('hidden', !on);
-  // El contexto inventado (manzanas genéricas, suelo llano, mar) sobra en
-  // cuanto está el barrio real: se aparta entero.
-  if (scene.userData.contexto) scene.userData.contexto.visible = !on;
-  if (on && app.night) app.setNight(false); // la fotogrametría es de día
-}
-
-// El botón solo aparece con ?entorno=1 mientras la capa no esté rematada: un
-// comercial enseñando el showroom no debe encontrarse un botón que no hace
-// nada. Al terminarla, se quita esta condición.
-if (environment && new URLSearchParams(location.search).get('entorno') === '1') {
-  envBtn.classList.remove('hidden');
-  envBtn.addEventListener('click', () => setEnvironment(!environment.enabled));
-}
-
-// asas de depuración: permiten reajustar el rumbo sin recompilar nada
+// asas de depuración
 app.THREE = THREE;
-app.env = environment;
 app.cam = camera;
 app.ctl = controls;
-app.setEnvHeading = (deg) => {
-  if (environment) environment.group.rotation.y = (deg - SITE.azimuthDeg) * (Math.PI / 180);
-};
-
-let attrTick = 0;
-function updateEnvironment(dt) {
-  if (!environment) return;
-  environment.update();
-  if (!environment.enabled) return;
-  attrTick += dt;
-  if (attrTick > 1) {
-    attrTick = 0;
-    const credits = environment.tiles.getAttributions?.() || [];
-    const text = credits.map((c) => c.value).filter(Boolean).join(' · ');
-    envAttr.textContent = text ? `Google · ${text}` : 'Google';
-  }
-}
 
 /* ─────────────────────────── Tween de cámara ─────────────────────────── */
 let camTween = null;
@@ -374,15 +333,15 @@ controls.addEventListener('start', () => { camTween = null; });
 /* ─────────────────── Intro cinematográfica ─────────────────── */
 const INTRO = {
   curve: new THREE.CatmullRomCurve3([
-    new THREE.Vector3(540, 480, 820),
-    new THREE.Vector3(300, 330, 560),
-    new THREE.Vector3(40, 190, 380),
-    new THREE.Vector3(-150, 96, 220),
-    new THREE.Vector3(-90, 56, 130),
-    new THREE.Vector3(64, 48, 92),
+    new THREE.Vector3(560, 500, 840),
+    new THREE.Vector3(320, 350, 580),
+    new THREE.Vector3(60, 210, 400),
+    new THREE.Vector3(-150, 110, 240),
+    new THREE.Vector3(-90, 66, 145),
+    new THREE.Vector3(72, 56, 100),
   ], false, 'centripetal', 0.4),
-  t0: new THREE.Vector3(0, 140, -60),
-  t1: new THREE.Vector3(0, 5, 0),
+  t0: new THREE.Vector3(0, 150, -60),
+  t1: new THREE.Vector3(0, 9, 0),
   dur: 8.5,
 };
 let intro = null;
@@ -420,116 +379,17 @@ function updateIntro(dt) {
   camera.updateProjectionMatrix();
 }
 
-/* ─────────────────────────── Construcción ─────────────────────────── */
-let B = null;   // { floorGroups, roofGroup, unitMeshes, pickables, layout }
-let bim = null; // { group, levels } — modelo Revit (carga diferida)
-let bimLoading = null;
-const floorAnim = new Map(); // key → { yTarget, fadeTarget }
+/* ─────────────────────────── Construcción ───────────────────────────
+   El edificio es el modelo del cliente (modelo.js). Aislar una planta ya no
+   eleva las de arriba ni las funde: se cambia la envolvente por la variante
+   que trae el corte del proyecto, que es lo que el cliente valida en obra. */
+let M = null;   // modelo v6: envolvente, entorno, mobiliario, variantes y prismas
+let B = null;   // { unitMeshes, pickables } — lo que consume la interfaz
 
-function allGroups() {
-  const out = [...B.floorGroups.entries()].map(([k, g]) => [k, g]);
-  out.push(['roof', B.roofGroup]);
-  return out;
-}
-
-function levelOf(key) {
-  if (key === 'roof') return 4;
-  return FLOOR_DEFS.find((f) => f.key === key).level;
-}
-
-function updateFloorTargets() {
-  const selLevel = app.floor === 'all' ? Infinity : FLOOR_DEFS.find((f) => f.key === app.floor).level;
-  for (const [key, g] of allGroups()) {
-    const lvl = levelOf(key);
-    const above = lvl > selLevel;
-    const explodeY = lvl * app.explode * 13;
-    floorAnim.set(key, {
-      yTarget: g.userData.baseY + explodeY + (above ? 34 : 0),
-      fadeTarget: above ? 0 : 1,
-    });
-    const labels = g.children.find?.((c) => c.name === 'labels');
-    if (labels) labels.visible = key === app.floor;
-  }
-  // jardines de patios siguen a la planta baja
-}
-
-// Correspondencia niveles BIM ↔ plantas lógicas
-const BIM_KEY = { baja: 'baja', p1: 'p1', p2: 'p2', atico: 'atico', cubierta: 'roof' };
-
-function animateFloors(dt) {
-  /* En la revisión del levantamiento no hay edificio que animar, y esta
-     función reescribe la visibilidad de plantas, jardines y niveles BIM en
-     cada fotograma: si siguiera corriendo, volvería a encender todo lo que
-     aislarTopo acaba de apartar. */
-  if (app.soloTopo) return;
-  const k = Math.min(1, dt * 4.5);
-  let fading = false;
-  for (const [key, g] of allGroups()) {
-    const a = floorAnim.get(key);
-    if (!a) continue;
-    g.position.y += (a.yTarget - g.position.y) * k;
-    if (Math.abs(a.fadeTarget - g.userData.fade) > 0.002) fading = true;
-    const f = g.userData.fade + (a.fadeTarget - g.userData.fade) * k;
-    g.userData.fade = f;
-    const vis = f > 0.02 && !app.bim;
-    g.visible = vis;
-    for (const m of g.userData.fadeMats) m.opacity = m.userData.baseOpacity * f;
-    if (key === 'baja' && g.userData.gardens) g.userData.gardens.visible = vis;
-  }
-  if (fading) repaint(); // los materiales de vivienda heredan el fundido de su planta
-
-  // El BIM (modelo por defecto) sigue la misma coreografía que las plantas
-  if (bim) {
-    for (const [bimKey, animKey] of Object.entries(BIM_KEY)) {
-      const lvl = bim.levels.get(bimKey);
-      const src = animKey === 'roof' ? B.roofGroup : B.floorGroups.get(animKey);
-      if (!lvl || !src) continue;
-      const dy = src.position.y - src.userData.baseY; // desplazamiento (explosión/aislado)
-      const f = src.userData.fade;
-      for (const h of lvl.holders) { h.position.y = dy; h.visible = f > 0.02; }
-      for (const m of lvl.mats) m.opacity = m.userData.baseOpacity * f;
-      // tapas de corte: solo visibles cuando esta planta está aislada
-      const cutTarget = app.floor !== 'all' && animKey === app.floor ? 1 : 0;
-      lvl.cutVal = (lvl.cutVal ?? 0) + (cutTarget - (lvl.cutVal ?? 0)) * k;
-      if (lvl.byCat?.cap) lvl.byCat.cap.opacity = f * lvl.cutVal;
-
-      /* Techo: una planta seccionada tiene que leerse como interior, no como
-         patio. Un mapa de sombras no basta, porque solo detiene el sol directo
-         y la luz que baña estos interiores es la del cielo, que ninguna sombra
-         afecta. Lo que hace un techo real es tapar el cielo, así que es la
-         iluminación de entorno la que hay que retirar. Sigue la misma rampa
-         que las tapas de corte, de modo que entra con la misma animación. */
-      for (const mat of lvl.mats) {
-        mat.envMapIntensity = (mat.userData.baseEnv ?? 1) * (1 - 0.75 * lvl.cutVal);
-        // El grueso de la luz que baña estos interiores viene de la luz
-        // hemisférica del cielo, que es una luz de escena y no se puede
-        // recortar por material. Se compensa oscureciendo el propio material:
-        // medido, retirar solo la iluminación de entorno no movía un píxel.
-        const bc = mat.userData.baseColor;
-        if (bc) mat.color.copy(bc).multiplyScalar(1 - 0.4 * lvl.cutVal);
-      }
-    }
-
-    // Techo fantasma: al aislar una planta, la losa del nivel superior
-    // sigue proyectando sombra (invisible) para que los interiores no
-    // queden bañados por el sol como si no hubiera techo.
-    const ORDER = ['baja', 'p1', 'p2', 'atico', 'cubierta'];
-    const aboveKey = app.floor !== 'all' ? ORDER[ORDER.indexOf(app.floor) + 1] : null;
-    for (const [bKey, lvl] of bim.levels) {
-      const slabM = lvl.byCat?.slab;
-      if (!slabM) continue;
-      const ghost = bKey === aboveKey;
-      slabM.colorWrite = !ghost;
-      if (ghost) {
-        for (const h of lvl.holders) if (h.name.endsWith('__slab')) h.visible = true;
-      }
-    }
-  }
-}
-
-const fadeOf = (floorKey) => B.floorGroups.get(floorKey)?.userData.fade ?? 1;
+const fadeOf = () => 1;
 
 function repaint() {
+  if (!B) return;
   paintUnits(
     B.unitMeshes,
     app.estadoDe,
@@ -537,40 +397,52 @@ function repaint() {
     app.selected,
     app.hover,
     fadeOf,
-    (floorKey) => floorKey === app.floor // dollhouse en la planta aislada
+    () => false
   );
 }
 
-/* ─────────────────────────── Vistas de cámara ─────────────────────────── */
+/* ─────────────────────────── Vistas de cámara ───────────────────────────
+   Las cotas salen del modelo (modelo.js: cotasPlanta), no de una tabla: cada
+   planta se corta a la altura que marca el proyecto y el terreno se escalona,
+   así que el encuadre de la planta 1 no está a la misma cota en los dos
+   extremos del edificio. La distancia se calcula para que la barra de 111 m
+   llene el ancho en 16:9. */
+const LARGO = 111;   // eje X del edificio, en metros
+
+function distanciaParaLargo(margen = 1.06) {
+  const tanV = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
+  const tanH = tanV * Math.max(camera.aspect, 1);
+  return ((LARGO / 2) * margen) / tanH;
+}
+
 function goOverview(dur = 1.6) {
-  // El encuadre crece con la axonometría para abarcar las plantas separadas
-  const e = app.explode;
   const [cx, cy, cz] = app.building.camera;
   const [tx, ty, tz] = app.building.center;
-  tweenCamera(
-    new THREE.Vector3(cx + e * 38, cy + e * 42, cz + e * 48),
-    new THREE.Vector3(tx, ty + e * 26, tz),
-    dur
-  );
+  tweenCamera(new THREE.Vector3(cx, cy, cz), new THREE.Vector3(tx, ty, tz), dur);
 }
 
 function goFloor(key, dur = 1.3) {
-  const F = FLOOR_DEFS.find((f) => f.key === key);
-  const y = F.y + F.level * app.explode * 13;
-  tweenCamera(new THREE.Vector3(20, y + 52, 60), new THREE.Vector3(0, y, 0), dur);
+  const { suelo, corte } = M ? M.cotasPlanta(key) : { suelo: 0, corte: 12 };
+  const y = (suelo + corte) / 2;
+  const d = distanciaParaLargo();
+  // elevación alta (unos 52°) y casi de frente al eje largo: la planta se lee
+  // como un plano habitado, que es de lo que va esta vista
+  tweenCamera(new THREE.Vector3(6, y + d * 0.78, d * 0.62), new THREE.Vector3(0, y, 0), dur);
 }
 
 function goPlano(key, dur = 1.2) {
-  const F = FLOOR_DEFS.find((f) => f.key === key);
-  const y = F.y + F.level * app.explode * 13;
-  tweenCamera(new THREE.Vector3(0, y + 105, 0.5), new THREE.Vector3(0, y, 0), dur);
+  const { corte } = M ? M.cotasPlanta(key) : { corte: 12 };
+  const d = distanciaParaLargo(1.02);
+  tweenCamera(new THREE.Vector3(0, corte + d, 0.5), new THREE.Vector3(0, corte - 1.5, 0), dur);
 }
 
 /* ─────────────────────────── Acciones ─────────────────────────── */
 app.setFloor = (key) => {
   app.floor = key;
   UI.markFloorButtons(key);
-  updateFloorTargets();
+  if (M) M.setFloor(key);
+  if (app.selected && key !== 'all' && app.unitsById.get(app.selected)
+    && floorOf(app.unitsById.get(app.selected)) !== key) app.select(null);
   if (key === 'all') {
     if (app.mode === 'plano') { app.mode = '3d'; UI.markModeButtons('3d'); }
     goOverview(1.4);
@@ -597,18 +469,9 @@ app.setMode = (mode) => {
   }
 };
 
-let explodeCamTimer = null;
-app.setExplode = (v) => {
-  app.explode = v;
-  updateFloorTargets();
-  // Reencuadra suavemente al soltar el deslizador
-  clearTimeout(explodeCamTimer);
-  explodeCamTimer = setTimeout(() => {
-    if (app.floor === 'all') goOverview(1.0);
-    else if (app.mode === 'plano') goPlano(app.floor, 1.0);
-    else goFloor(app.floor, 1.0);
-  }, 260);
-};
+/* La axonometría (plantas separadas en el aire) era propia del volumen
+   esquemático; con el modelo real las plantas se ven por su corte. */
+app.setExplode = () => {};
 
 app.recent = []; // últimas vistas: solo en memoria (un refresco lo deja a cero)
 
@@ -624,10 +487,13 @@ app.select = (id, opts = {}) => {
     const fKey = floorOf(unit);
     if (app.floor !== fKey && app.floor !== 'all') app.setFloor(fKey);
     const mesh = B.unitMeshes.get(id);
-    const wp = new THREE.Vector3();
-    mesh.getWorldPosition(wp);
+    const caja = new THREE.Box3().setFromObject(mesh);
+    const wp = caja.getCenter(new THREE.Vector3());
+    const radio = Math.max(caja.max.x - caja.min.x, caja.max.z - caja.min.z) / 2;
     const dir = camera.position.clone().sub(controls.target).normalize();
-    tweenCamera(wp.clone().add(dir.multiplyScalar(46)), wp, 1.1);
+    // la vivienda llena el encuadre: distancia según su tamaño, no fija
+    const d = Math.max(22, (radio * 2.4) / Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2));
+    tweenCamera(wp.clone().add(dir.multiplyScalar(d)), wp, 1.1);
   }
   repaint();
 };
@@ -737,39 +603,11 @@ app.setNight = (on) => {
       m.color.setHex(on ? 0x55617c : 0xffffff);
     }
   });
-  // las ventanas del BIM se encienden por la noche
-  if (bim) {
-    for (const [, lvl] of bim.levels) {
-      const glass = lvl.byCat?.glass;
-      if (glass) {
-        glass.emissive.setHex(on ? 0xffd9a0 : 0x000000);
-        glass.emissiveIntensity = on ? 0.8 : 0;
-      }
-    }
-  }
+  // Ventanas: se encienden las de las viviendas que siguen a la venta; las
+  // vendidas se quedan a oscuras, como en el visor nuevo.
+  if (M) M.setNight(on);
   UI.markDayNight(on);
 };
-
-/* La noche procedural y la fotogrametría diurna no pueden convivir: encender
-   una apaga la otra. La ida está en setEnvironment; esta es la vuelta. */
-const setNightBase = app.setNight;
-app.setNight = (on) => {
-  if (on && environment?.enabled) setEnvironment(false);
-  setNightBase(on);
-};
-
-/* ──────────── Modelo BIM: siempre cargado, modelo por defecto ──────────── */
-function ensureBIM() {
-  if (bim) return Promise.resolve(bim);
-  if (!bimLoading) {
-    bimLoading = loadBIM(scene).then((b) => {
-      bim = b;
-      b.group.visible = true;
-      return b;
-    }).catch((e) => { console.error('[apolo] BIM no disponible:', e); bimLoading = null; });
-  }
-  return bimLoading;
-}
 
 /* ─────────────────────────── Picking ─────────────────────────── */
 const raycaster = new THREE.Raycaster();
@@ -800,25 +638,31 @@ canvas.addEventListener('pointerup', (e) => {
   app.select(id, { focus: false });
 });
 
+/* Una vivienda es señalable si pasa los filtros, no está vendida y, con una
+   planta aislada, es de esa planta (las demás no se ven). */
+function senalable(id) {
+  if (!id) return false;
+  if (app.floor !== 'all') {
+    const u = app.unitsById.get(id);
+    if (!u || floorOf(u) !== app.floor) return false;
+  }
+  if (!app.passesFilters(app.unitsById.get(id))) return false;
+  return app.estadoDe(id) !== 'vendida';
+}
+
 function pickAt(cx, cy) {
-  // en la revisión del levantamiento el edificio está apartado: no hay
-  // viviendas que señalar aunque sus mallas sigan en la escena
-  if (!B || app.soloTopo) return null;
+  if (!B) return null;
   const p = new THREE.Vector2((cx / innerWidth) * 2 - 1, -(cy / innerHeight) * 2 + 1);
   raycaster.setFromCamera(p, camera);
-  const hits = raycaster.intersectObjects(B.pickables, false);
-  for (const h of hits) {
-    if (h.object.parent.userData.fade < 0.6) continue;
+  for (const h of raycaster.intersectObjects(B.pickables, false)) {
     const hid = h.object.userData.unitId;
-    if (!app.passesFilters(app.unitsById.get(hid))) continue;
-    if (app.estadoDe(hid) === 'vendida') continue;
-    return hid;
+    if (senalable(hid)) return hid;
   }
   return null;
 }
 
 function updateHover() {
-  if (!B || app.soloTopo) return;
+  if (!B) return;
   if (!mouseActive) {
     // sin ratón (táctil o fuera del lienzo): nunca hover ni tooltip
     if (app.hover) { app.hover = null; repaint(); }
@@ -826,16 +670,10 @@ function updateHover() {
     return;
   }
   raycaster.setFromCamera(pointer, camera);
-  const hits = raycaster.intersectObjects(B.pickables, false);
   let id = null;
-  for (const h of hits) {
-    const g = h.object.parent;
-    if (g.userData.fade < 0.6) continue; // planta oculta
+  for (const h of raycaster.intersectObjects(B.pickables, false)) {
     const hid = h.object.userData.unitId;
-    if (!app.passesFilters(app.unitsById.get(hid))) continue; // descartada por filtros
-    if (app.estadoDe(hid) === 'vendida') continue;            // vendida: inerte
-    id = hid;
-    break;
+    if (senalable(hid)) { id = hid; break; }
   }
   if (id !== app.hover) {
     app.hover = id;
@@ -883,8 +721,6 @@ function loop() {
   }
 
   updateIntro(Math.min(rawDt, 0.6)); // tiempo real: la intro dura lo mismo en cualquier dispositivo
-  if (B) animateFloors(dt);
-  updateEnvironment(dt);
   updateHover();
   updateCompass();
   if (!intro) controls.update();
@@ -935,23 +771,6 @@ onResize();
 app.enter = () => {
   $('#hero').classList.add('gone');
   startIntro();
-
-  /* Revisión del levantamiento topográfico: ?topo=1 carga el entorno
-     reconstruido del DWG del topógrafo y aparta el edificio y el contexto
-     inventado. Es una vista de trabajo, no algo que un cliente deba
-     encontrarse: sin el parámetro no existe. */
-  if (topoPedido() && !app.topoActivo) {
-    app.topoActivo = true;
-    app.soloTopo = true;
-    cargarTopo(scene, { todo: topoCompleto() }).then(({ porMaterial, fuera }) => {
-      console.log('levantamiento cargado:', porMaterial.join(' · '));
-      if (fuera.length) console.log('fuera de esta vista:', fuera.join(', '));
-    }).catch((e) => console.warn('no se pudo cargar el levantamiento', e));
-    /* El BIM llega más tarde por su cuenta y los botones de planta vuelven a
-       encender lo que apartamos, así que en esta vista se insiste mientras
-       dure. Son cuatro objetos: no cuesta nada. */
-    setInterval(() => aislarTopo(scene), 400);
-  }
 };
 
 /* Vuelta a la portada (selector de promociones) desde la flecha ← */
@@ -976,10 +795,20 @@ async function boot() {
     app.estados = estados;
     app.unitsById = new Map(units.map((u) => [u.id, u]));
 
-    B = buildBuilding(scene, app.unitsById);
-    ensureBIM(); // el modelo real es el edificio por defecto
-    updateFloorTargets();
+    const paso = $('#loader')?.querySelector('p');
+    M = await cargarModelo(scene, app.unitsById, {
+      estadoDe: app.estadoDe,
+      onProgreso: (texto) => { if (paso) paso.textContent = texto; },
+    });
+    app.modelo = M;
+    B = { unitMeshes: M.unitMeshes, pickables: M.pickables };
+    M.setFloor(app.floor);
+    M.setNight(app.night);
     repaint();
+    /* Mobiliario y plantas cortadas: 40 MB que llegan después de la primera
+       imagen, para que el showroom se pueda enseñar mientras terminan. */
+    M.cargarSecundarios().then(() => { M.setFloor(app.floor); repaint(); })
+      .catch((e) => console.warn('[apolo] secundarios:', e));
 
     UI.initUI(app);
     UI.updateStats(app);
@@ -988,6 +817,7 @@ async function boot() {
     pollAvailability((nuevos) => {
       app.estados = nuevos;
       UI.updateStats(app);
+      M?.refrescarEstados();
       repaint();
       if (app.selected) UI.renderPanel(app, app.unitsById.get(app.selected));
     });

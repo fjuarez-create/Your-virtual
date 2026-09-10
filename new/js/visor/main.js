@@ -124,7 +124,10 @@ const RUTA_ENTORNO = 'assets/serenea/entorno.glb';
 const AZIMUT = { conjunto: -60, edificio: 40, planta: 8 };
 const ELEVACION = { conjunto: 16, edificio: 32, planta: 50 };
 const MARGEN = { conjunto: 1.05, edificio: 1.03, planta: 1.02 };
-const LADO_CONJUNTO = 480;        // m de lado del encuadre 'conjunto'
+const LADO_CONJUNTO = 330;        // m del encuadre 'conjunto' en el eje largo (x)
+const FONDO_CONJUNTO = 190;       // m del mismo encuadre en z: la caja no es cuadrada, porque
+                                  // en 16:9 una caja cuadrada se encuadra por el alto y deja
+                                  // el edificio en una décima parte del ancho
 const PLANTA_HACIA_NORTE = 22;    // m que se alarga la caja de planta hacia −z (ver cabecera)
 const REPOSO_S = 120;
 const CAMARA_FAR = 9000;          // el entorno llega a 5 km
@@ -319,7 +322,7 @@ function cajaConjunto() {
   const caja = edificio.caja.clone();
   const centro = caja.getCenter(new THREE.Vector3());
   caja.min.x = centro.x - LADO_CONJUNTO / 2; caja.max.x = centro.x + LADO_CONJUNTO / 2;
-  caja.min.z = centro.z - LADO_CONJUNTO / 2; caja.max.z = centro.z + LADO_CONJUNTO / 2;
+  caja.min.z = centro.z - FONDO_CONJUNTO / 2; caja.max.z = centro.z + FONDO_CONJUNTO / 2;
   caja.min.y = Math.min(caja.min.y, entorno ? Math.max(entorno.caja.min.y, caja.min.y - 30) : caja.min.y);
   return caja;
 }

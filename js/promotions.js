@@ -21,11 +21,11 @@ export const DEVELOPMENTS = [
         id: 'apolo',
         name: 'Apolo',
         active: true,
-        center: [0, 5, 0],       // objetivo de cámara
-        camera: [64, 48, 92],    // posición de cámara del encuadre general
+        center: [0, 9, 0],        // objetivo de cámara (centro de Apolo, a media altura)
+        camera: [72, 56, 100],    // posición de cámara del encuadre general
         units: 'data/units.json',
         availability: 'data/availability.json',
-        bim: 'assets/apolo_levels.glb',
+        modelo: 'assets/serenea/apolo_envolvente.glb',
       },
       // Próximos edificios de SERENEA (parcelas contiguas):
       // { id: 'artemisa', name: 'Artemisa', active: false, comingSoon: true },
