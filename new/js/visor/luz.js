@@ -434,8 +434,11 @@ export function crearLuz(ctx) {
   const { renderer, scene, camera } = ctx;
 
   /* ── Luces ── */
+  /* Cascadas: tres en el ordenador, dos en calidad media (el móvil). Cada
+     cascada vuelve a dibujar toda la geometría que proyecta sombra, así que
+     quitar una es un tercio menos de trabajo por fotograma. */
   const csm = new CSM({
-    camera, parent: scene, cascades: 3, maxFar: 400, mode: 'practical',
+    camera, parent: scene, cascades: ctx.calidad === 'alta' ? 3 : 2, maxFar: 400, mode: 'practical',
     shadowMapSize: ctx.calidad === 'alta' ? 2048 : 1024,
     lightDirection: direccionDe(MOMENTOS.dia.elev, MOMENTOS.dia.azim).negate(),
     lightIntensity: MOMENTOS.dia.solInt,

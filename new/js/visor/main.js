@@ -121,9 +121,15 @@ const PLANTAS = FLOOR_DEFS.filter((f) => f.key !== 'cubierta');
 const CLAVES_PLANTA = new Set(['all', ...PLANTAS.map((f) => f.key)]);
 const NIVEL_DE = new Map(PLANTAS.map((f, i) => [f.key, i]));
 const RUTA_ENTORNO = 'assets/serenea/entorno.glb';
-const AZIMUT = { conjunto: -52, edificio: 46, planta: 8, plano: 0 };
-const ELEVACION = { conjunto: 21, edificio: 24, planta: 50, plano: 88 };
-const MARGEN = { conjunto: 1.04, edificio: 1.02, planta: 1.02, plano: 1.03 };
+/* Encuadres calcados de las capturas que marcó el cliente: los dos desde el
+   sureste, uno con el barrio alrededor y otro pegado a la esquina, con la
+   fachada larga fugando hacia el fondo. No se encuadra el edificio entero en
+   'edificio': se encuadra su mitad este, que es lo que hace que la fachada
+   llene el fotograma en vez de quedar pequeña en el centro. */
+const AZIMUT = { conjunto: 56, edificio: 56, planta: 8, plano: 0 };
+const ELEVACION = { conjunto: 22, edificio: 12, planta: 50, plano: 88 };
+const MARGEN = { conjunto: 1.02, edificio: 0.95, planta: 1.02, plano: 1.03 };
+const RECORTE_EDIFICIO = 0.45;    // fracción del edificio que se deja fuera por el oeste
 const LADO_CONJUNTO = 215;        // m del encuadre 'conjunto' en el eje largo (x)
 const FONDO_CONJUNTO = 130;       // m del mismo encuadre en z: la caja no es cuadrada, porque
                                   // en 16:9 una caja cuadrada se encuadra por el alto y deja
@@ -410,6 +416,14 @@ function cajaPlanta(clave) {
   caja.min.z -= PLANTA_HACIA_NORTE; // el bloque vecino del sur fuera del cuarto inferior (ver cabecera)
   return caja;
 }
+/* 'edificio': la mitad este del volumen, hasta la cubierta. Encuadrar la
+   barra entera dejaba la cámara a 190 m y el edificio pequeño. */
+function cajaEdificio() {
+  const caja = edificio.caja.clone();
+  caja.min.x += (caja.max.x - caja.min.x) * RECORTE_EDIFICIO;
+  return caja;
+}
+
 /* Vista cenital de la planta activa: la cámara justo encima, con la fuga que
    ya tiene la cámara (no se toca el fov). Es el cuarto botón del raíl. */
 function cajaPlano(clave) {
@@ -425,7 +439,7 @@ function encuadrarVista(vista, { duracion = 1.6 } = {}) {
   if (vista === 'conjunto') return camara.encuadrar(cajaConjunto(), { azimut: AZIMUT.conjunto, elevacion: ELEVACION.conjunto, margen: MARGEN.conjunto, duracion });
   if (vista === 'planta') return camara.encuadrar(cajaPlanta(apolo.floor), { azimut: AZIMUT.planta, elevacion: ELEVACION.planta, margen: MARGEN.planta, duracion });
   if (vista === 'plano') return camara.encuadrar(cajaPlano(apolo.floor), { azimut: AZIMUT.plano, elevacion: ELEVACION.plano, margen: MARGEN.plano, duracion });
-  return camara.encuadrar(edificio.caja, { azimut: AZIMUT.edificio, elevacion: ELEVACION.edificio, margen: MARGEN.edificio, duracion });
+  return camara.encuadrar(cajaEdificio(), { azimut: AZIMUT.edificio, elevacion: ELEVACION.edificio, margen: MARGEN.edificio, duracion });
 }
 
 /* ── Realce de viviendas (ver cabecera) ── */

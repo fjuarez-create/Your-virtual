@@ -33,6 +33,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 export const RUTAS = {
   modelo: 'data/serenea_modelo.json',
@@ -173,6 +174,74 @@ function cargarGLB(url, onProgreso) {
 }
 const leerJSON = (u) => fetch(u).then((r) => { if (!r.ok) throw new Error(u + ': ' + r.status); return r.json(); });
 
+/* ── Fusión del entorno ──────────────────────────────────────────────────
+   El entorno del cliente son más de dos mil mallas (una por trozo de terreno,
+   acera, bordillo, edificio vecino…). Cada una es una llamada de dibujo, y en
+   un teléfono eso pesa más que los triángulos. Se fusionan por material, que
+   deja unas noventa: la imagen es idéntica y el trabajo por fotograma cae a
+   una vigésima parte. Las posiciones se pasan a coordenadas de mundo porque
+   cada malla trae su propia matriz (y el GLB las cuantiza a enteros). */
+function geometriaEnMundo(mesh, conUV) {
+  const g = mesh.geometry;
+  const salida = new THREE.BufferGeometry();
+  const pos = g.attributes.position;
+  const posiciones = new Float32Array(pos.count * 3);
+  const v = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld);
+    posiciones[i * 3] = v.x; posiciones[i * 3 + 1] = v.y; posiciones[i * 3 + 2] = v.z;
+  }
+  salida.setAttribute('position', new THREE.BufferAttribute(posiciones, 3));
+  const normal = g.attributes.normal;
+  const normales = new Float32Array(pos.count * 3);
+  const m3 = new THREE.Matrix3().getNormalMatrix(mesh.matrixWorld);
+  for (let i = 0; i < pos.count; i++) {
+    if (normal) v.fromBufferAttribute(normal, i).applyMatrix3(m3); else v.set(0, 1, 0);
+    if (!Number.isFinite(v.x + v.y + v.z) || v.lengthSq() < 1e-8) v.set(0, 1, 0); else v.normalize();
+    normales[i * 3] = v.x; normales[i * 3 + 1] = v.y; normales[i * 3 + 2] = v.z;
+  }
+  salida.setAttribute('normal', new THREE.BufferAttribute(normales, 3));
+  if (conUV) {
+    const uv = g.attributes.uv;
+    const uvs = new Float32Array(pos.count * 2);
+    if (uv) for (let i = 0; i < pos.count; i++) { uvs[i * 2] = uv.getX(i); uvs[i * 2 + 1] = uv.getY(i); }
+    salida.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+  }
+  const idx = g.index;
+  const indices = idx ? Array.from(idx.array) : Array.from({ length: pos.count }, (_, i) => i);
+  salida.setIndex(indices);
+  return salida;
+}
+
+function fusionarPorMaterial(raiz) {
+  raiz.updateMatrixWorld(true);
+  const porMaterial = new Map();
+  raiz.traverse((o) => {
+    if (!o.isMesh) return;
+    const m = Array.isArray(o.material) ? o.material[0] : o.material;
+    if (!porMaterial.has(m)) porMaterial.set(m, []);
+    porMaterial.get(m).push(o);
+  });
+  const grupo = new THREE.Group();
+  grupo.name = raiz.name;
+  let mallas = 0;
+  for (const [material, lista] of porMaterial) {
+    const conUV = !!material.map;
+    const geos = lista.map((o) => geometriaEnMundo(o, conUV));
+    const fusionada = geos.length === 1 ? geos[0] : mergeGeometries(geos, false);
+    if (!fusionada) { for (const g of geos) g.dispose(); continue; }
+    for (const g of geos) if (g !== fusionada) g.dispose();
+    fusionada.computeBoundingBox(); fusionada.computeBoundingSphere();
+    const mesh = new THREE.Mesh(fusionada, material);
+    mesh.name = `entorno_${material.name || mallas}`;
+    grupo.add(mesh);
+    mallas++;
+  }
+  raiz.traverse((o) => { if (o.isMesh && o.geometry) o.geometry.dispose(); });
+  grupo.userData.mallas = mallas;
+  return grupo;
+}
+
 /* ── Materiales ────────────────────────────────────────────────────────── */
 
 /* Vidrio real: reflejo con Fresnel del HDRI y capa especular encima, con el
@@ -242,9 +311,11 @@ export async function cargarModelo(scene, unitsById, { estadoDe = () => 'disponi
     return mallas;
   };
 
-  const entorno = gEntorno.scene;
-  entorno.name = 'entorno';
-  adoptar(entorno, { sombras: false, lejos: true });
+  const bruto = gEntorno.scene;
+  bruto.name = 'entorno';
+  adoptar(bruto, { sombras: false, lejos: true });
+  const entorno = fusionarPorMaterial(bruto);
+  for (const o of entorno.children) { o.castShadow = false; o.receiveShadow = true; o.raycast = () => {}; }
   grupo.add(entorno);
 
   const envolvente = gEnvolvente.scene;
@@ -485,6 +556,9 @@ export async function cargarModelo(scene, unitsById, { estadoDe = () => 'disponi
           : materialRecortado(m.material, plataforma);
         piezasMob.push({ mesh: m, ymin, plataforma });
       }
+      /* El mobiliario no proyecta sombra (ver la nota del visor nuevo): son
+         1.400 mallas por cascada del mapa de sombras. */
+      mobiliario.traverse((o) => { if (o.isMesh) o.castShadow = false; });
       grupo.add(mobiliario);
       aplicarMobiliario();
       onPaso('mobiliario');

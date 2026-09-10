@@ -112,6 +112,11 @@ export const ALTURA_CARTELA = 1.2;       // m sobre y1
 /* Estor bajado de las vendidas (ver setVentanas): cuánto se oscurece el
    vidrio, cuánto reflejo pierde y cuánto se cierra. */
 export const ESTOR = { color: 0.35, reflejo: 0.25, opacidad: 0.3 };
+/* Vendida vista desde arriba (planta seccionada): el vidrio no se ve, así que
+   la vivienda se apaga con su propio prisma, tintado oscuro y translúcido,
+   como si tuviera el techo puesto y las luces apagadas. Con prueba de
+   profundidad, para que solo cubra lo suyo y no se pinte sobre los muros. */
+export const APAGADA = { color: 0x2b3138, opacidad: 0.46 };
 export const CARTELA_PX = 34;            // alto del sprite de la cartela en px para un lienzo de 720 px (ver cabecera)
 export const EMISIVO_VENTANA = 0xffd9a0; // luz cálida de interior
 export const INTENSIDAD_VENTANA = 1.4;   // por encima de 1 para que el bloom lo recoja
@@ -443,7 +448,11 @@ export async function cargarEdificio(ctx, slot, opciones = {}) {
       else if (Array.isArray(o.material)) o.material = o.material.map(materialDe);
       else o.material = materialDe(o.material);
       const esVidrio = ES_MATERIAL_VIDRIO.test(o.material.name) || !!deVivienda;
-      o.castShadow = !esVidrio;
+      /* El mobiliario no proyecta sombra: son 1.400 mallas que había que
+         volver a dibujar en cada cascada del mapa de sombras, y sus sombras,
+         dentro de una vivienda vista desde arriba, no se distinguen. Es el
+         cambio que más alivia al teléfono sin tocar el aspecto. */
+      o.castShadow = !esVidrio && !mobiliario;
       o.receiveShadow = true;
       o.raycast = () => {}; // el picking va solo por las envolventes de vivienda
       o.userData.mobiliario = mobiliario;
@@ -584,6 +593,19 @@ export async function cargarEdificio(ctx, slot, opciones = {}) {
         /* Más ligeros que antes: el verde y el naranja tapaban la vivienda
            que querían señalar. Y la vivienda ya abierta no lleva prisma: se
            ha entrado a verla por dentro. */
+        if (vendida && v.id !== abierta) {
+          mat.color.setHex(APAGADA.color);
+          mat.opacity = APAGADA.opacidad;
+          mat.emissive.setHex(0x000000);
+          mat.depthTest = true;              // dentro de la vivienda, no por encima de los muros
+          v.mesh.visible = true;
+          v.mesh.renderOrder = 20;
+          v.label.visible = false;
+          v.labelR.visible = false;
+          continue;
+        }
+        mat.depthTest = false;
+        v.mesh.renderOrder = 50;
         if (v.id === abierta) {
           mat.opacity = 0;
           mat.emissive.setHex(0x000000);
@@ -597,7 +619,6 @@ export async function cargarEdificio(ctx, slot, opciones = {}) {
           mat.opacity = 0;
           mat.emissive.setHex(0x000000);
         }
-        mat.depthTest = false; // realce visible a través de los muros
         v.mesh.visible = mat.opacity > 0; // en reposo no se dibuja (ver cabecera: G-buffer del post)
         const marcable = !dim && cartelasDe === v.floorKey && v.id !== abierta;
         v.label.visible = marcable && estado === 'disponible';

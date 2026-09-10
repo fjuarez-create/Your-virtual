@@ -125,6 +125,28 @@ cuandoHayaApp((app) => {
   // ── Recentrar: repite el encuadre del estado actual ──
   $('#bCentrar').addEventListener('click', () => app.recentrar());
 
+  /* Con ?camara=1 el botón de recentrar deja de recentrar y enseña, en un
+     recuadro, el acimut, la elevación y la distancia de la vista actual. Sirve
+     para fijar un encuadre: se coloca uno donde quiere, pulsa, y esos tres
+     números se llevan al código. Sin el parámetro no existe. */
+  if (new URLSearchParams(location.search).get('camara') === '1') {
+    const caja = document.createElement('div');
+    Object.assign(caja.style, {
+      position: 'fixed', left: '50%', bottom: '18px', transform: 'translateX(-50%)',
+      background: 'rgba(17,17,18,0.88)', color: '#fff', font: '600 13px/1.5 monospace',
+      padding: '8px 14px', borderRadius: '10px', zIndex: 90, whiteSpace: 'pre', textAlign: 'center',
+    });
+    caja.textContent = 'pulsa el botón de recentrar';
+    document.body.appendChild(caja);
+    $('#bCentrar').addEventListener('click', (e) => {
+      e.stopImmediatePropagation();
+      const c = app.modulos.camara.parametros?.() || null;
+      caja.textContent = c
+        ? `azimut ${c.azimut}°   elevación ${c.elevacion}°   distancia ${c.distancia} m\nobjetivo ${c.objetivo.join(', ')}`
+        : 'la cámara no está lista';
+    }, true);
+  }
+
   // ── Ficha de vivienda ──
   const ficha = $('#ficha');
   function mostrarFicha({ id, unidad, estado }) {

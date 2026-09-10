@@ -371,6 +371,21 @@ export function crearCamara(ctx) {
   return {
     controles,
     volarA, encuadrar, enfocarVivienda, orbitaAutomatica, reposoTras, update, interrumpir, destruir,
+    /** Acimut, elevación, distancia y objetivo de la vista actual, para poder
+        fijar un encuadre desde la propia pantalla (ver shell.js, ?camara=1). */
+    parametros() {
+      const pos = controles.getPosition(new THREE.Vector3(), true);
+      const obj = controles.getTarget(new THREE.Vector3(), true);
+      const d = pos.distanceTo(obj);
+      const v = pos.clone().sub(obj);
+      const azimut = THREE.MathUtils.radToDeg(Math.atan2(v.x, v.z));
+      const elevacion = THREE.MathUtils.radToDeg(Math.asin(Math.max(-1, Math.min(1, v.y / (d || 1)))));
+      return {
+        azimut: Math.round(azimut), elevacion: Math.round(elevacion), distancia: Math.round(d),
+        objetivo: obj.toArray().map((x) => Math.round(x)),
+      };
+    },
+
     /** Cota mínima de la cámara en cada punto: fn(x, z) → y mínima. */
     setSuelo(fn) { sueloDe = typeof fn === 'function' ? fn : null; },
 
