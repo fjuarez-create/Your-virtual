@@ -100,13 +100,14 @@ export const MOMENTOS = {
     /* El umbral del bloom va POR ENCIMA de la superficie difusa más brillante
        del momento (la fachada al sol, medida en 0,59 de luminancia): con 1,05
        florecía la fachada entera, no solo el sol. */
-    bloom: 0.10, umbral: 2.0, hdri: false, luces: false, ventana: 0,
+    bloom: 0.10, umbral: 2.0, bloomRadio: 0.42, hdri: false, luces: false, ventana: 0,
     /* El IBL pesaba más que el sol y por eso calles y campo salían lavados;
        lo que levanta la fachada norte —la del encuadre, que nunca ve el sol—
        es el relleno, que viene justo de esa dirección. `fondo` bajo porque
        si no el cielo se va a blanco. */
     ibl: 0.08, fondo: 0.075, solMax: 45, noche: 0,
     nubes: 0.66, nubesAlto: 30, nubesMax: 5,
+    interior: { sol: 0.68, luz: 0.12 },
     grado: { contraste: 1.16, saturacion: 1.12, negros: 0.040 },
   },
   dia: {
@@ -125,7 +126,7 @@ export const MOMENTOS = {
        rellenan las sombras. */
     sol: 0xfff6e8, solInt: 3.1, cielo: 0xd8dde4, suelo: 0x9c8b70, hemiInt: 0.78,
     relleno: 0xf2e8da, rellenoInt: 0.58, exposicion: 1.06, niebla: 0xafbfd2,
-    bloom: 0.09, umbral: 2.2, luces: false, ventana: 0,
+    bloom: 0.09, umbral: 2.2, bloomRadio: 0.42, luces: false, ventana: 0,
     /* `hdri: false` es la clave del CIELO AZUL. Con hdri en true no se usaba
        el cielo procedural sino assets/sky_day.hdr, que es una foto acromática
        (relación azul/rojo 1,01): ninguna exposición la iba a poner azul. Con
@@ -140,6 +141,7 @@ export const MOMENTOS = {
        al fondo: la iluminación la lleva `ibl`. */
     ibl: 0.07, fondo: 0.055, solMax: 50, noche: 0,
     nubes: 0.72, nubesAlto: 30, nubesMax: 8,
+    interior: { sol: 0.75, luz: 0.12 },
     grado: { contraste: 1.18, saturacion: 1.12, negros: 0.042 },
   },
   atardecer: {
@@ -154,10 +156,14 @@ export const MOMENTOS = {
     sol: 0xffa863, solInt: 2.6, cielo: 0xc9ae96, suelo: 0x4a3a2c, hemiInt: 0.5,
     relleno: 0xd9a878, rellenoInt: 0.30, exposicion: 0.95, niebla: 0xb98f6a,
     /* Umbral alto: al atardecer el cielo entero está cerca del corte y con 1,0
-       florecía medio fotograma. Con 3,8 solo florece el disco del sol. */
-    bloom: 0.16, umbral: 3.8, hdri: false, luces: true, ventana: 1.0,
+       florecía medio fotograma. Sube de 3,8 a 4,6 porque lo que se ponía
+       blanco en la planta seccionada no era el sol sino el REFLEJO de su halo
+       en los paños de vidrio, que con el realce del IBL se iba a 4,4: por
+       encima de 4,6 ya solo florece el disco. */
+    bloom: 0.14, umbral: 4.6, bloomRadio: 0.32, hdri: false, luces: true, ventana: 1.0,
     ibl: 0.20, fondo: 0.32, solMax: 30, noche: 0,
     nubes: 0.70, nubesAlto: 34, nubesMax: 2.0,
+    interior: { sol: 0.35, luz: 0.30 },
     grado: { contraste: 1.14, saturacion: 1.14, negros: 0.030 },
   },
   noche: {
@@ -171,10 +177,16 @@ export const MOMENTOS = {
     mie: 0.004, mieG: 0.8,
     sol: 0xc3d4ff, solInt: 0.5, cielo: 0x243250, suelo: 0x0b0f15, hemiInt: 0.5,
     relleno: 0x7f97c8, rellenoInt: 0.38, exposicion: 1.05, niebla: 0x0a0f19,
-    /* Umbral alto también de noche: con 0,90 no florecía solo la ventana, sino
-       todo el interior encendido de la planta seccionada, y la planta salía
-       lavada. 1,25 deja pasar la ventana (1,4 × 1,9 × 0,73 ≈ 1,9) y nada más. */
-    bloom: 0.28, umbral: 1.25, hdri: false, luces: true, ventana: 1.9,
+    /* El destello de la ventana que el cliente pidió recortar no estaba en el
+       cristal sino en el HALO: el paso alto del bloom no resta el umbral, deja
+       pasar el píxel entero, y con radio 0,5 los cinco niveles pesaban igual,
+       el de 1/32 incluido —el que reparte luz a trescientos píxeles—. Medido:
+       el núcleo apenas subía (219→227) y el muro de al lado se iba de 55 a
+       114. Ahora la ventana vale 1,4 × 1,55 × 0,84 × 0,73 ≈ 1,34 contra un
+       corte de 1,15 (pasa el 85 %, sigue floreciendo) y el radio 0,20 deja el
+       nivel pegado al cristal casi intacto y el lejano en la tercera parte:
+       destello sí, velo no. */
+    bloom: 0.19, umbral: 1.15, bloomRadio: 0.20, hdri: false, luces: true, ventana: 1.55,
     /* El IBL de noche es el propio cielo horneado, que lleva la banda cálida
        del resplandor urbano en el horizonte. A 1,2 esa banda iluminaba TODA la
        escena desde los lados y dejaba el barrio, los árboles y las palmeras de
@@ -186,6 +198,7 @@ export const MOMENTOS = {
        pantalla (unas 5× a 1080p) cada una se convierte en una mancha; las
        estrellas nítidas del raster son los Points de crearCieloNocturno. */
     resplandor: 0xffa869, resplandorInt: 0.10, estrellas: 0.022,
+    interior: { sol: 0, luz: 0 },
     /* Saturación casi a raya: de noche subirla convierte el resplandor cálido
        del horizonte en un filtro sepia sobre el barrio entero. El contraste
        sube un poco, que es lo que da profundidad sin cerrar los interiores. */
@@ -218,8 +231,15 @@ const ANCHO = 1024, ALTO = 512;
    planta se veía, sí, pero el conjunto salía lavado y sin una sola sombra en
    la calle. Lo que se gana en el interior se paga en el exterior, y el
    exterior es lo que se enseña primero. */
-export const REALCE = { hemi: 1.3, ibl: 3.2, relleno: 1.35, hemiNoche: 2.2, iblNoche: 1.4, rellenoNoche: 1.45, duracion: 1.0 };
-const CLAVES_NUM = ['solInt', 'hemiInt', 'rellenoInt', 'exposicion', 'bloom', 'umbral', 'ibl', 'fondo', 'noche'];
+/* El ×3,2 del IBL era lo que quemaba la planta a mediodía (2,25 de los 5,67
+   de irradiancia que le llegaban al suelo) y lo que al atardecer ponía en
+   blanco el reflejo del halo del sol en los paños de vidrio: el IBL de un
+   material no se puede bajar por separado, porque three pisa
+   `envMapIntensity` con `scene.environmentIntensity` en cuanto el material
+   no lleva su propio envMap. Baja a ×2,4 y el interior lo recupera
+   `cortes.setInterior`, que sí sabe dónde está la vivienda. */
+export const REALCE = { hemi: 1.3, ibl: 2.4, relleno: 1.35, hemiNoche: 2.2, iblNoche: 1.4, rellenoNoche: 1.45, duracion: 1.0 };
+const CLAVES_NUM = ['solInt', 'hemiInt', 'rellenoInt', 'exposicion', 'bloom', 'umbral', 'bloomRadio', 'ibl', 'fondo', 'noche'];
 const CLAVES_COLOR = ['sol', 'cielo', 'suelo', 'relleno', 'niebla'];
 
 function direccionDe(elev, azim) {

@@ -79,6 +79,7 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
 import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
+import { FXAAPass } from 'three/addons/postprocessing/FXAAPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { Pass } from 'three/addons/postprocessing/Pass.js';
 
@@ -349,7 +350,7 @@ export function crearPost(ctx, luz, opciones = {}) {
   const desenfoque = ligero ? null : new DesenfoqueMovimientoPass(camera, { muestras: CALIDADES.alta.desenfoqueMuestras });
   if (desenfoque) desenfoque.enabled = false;    // se enciende con velocidad > 0
 
-  const parametrosIniciales = luz?.parametros || { bloom: 0.14, umbral: 0.92, exposicion: 1.0 };
+  const parametrosIniciales = luz?.parametros || { bloom: 0.14, umbral: 0.92, bloomRadio: 0.42, exposicion: 1.0 };
   /* En móvil el bloom va a la mitad de resolución: son trece cuadriláteros a
      pantalla completa (cinco niveles de ida, cinco de vuelta y la composición)
      y a mitad de lado cuestan la cuarta parte. El halo queda algo más blando,
@@ -358,7 +359,14 @@ export function crearPost(ctx, luz, opciones = {}) {
     setSize(anchoP, altoP) { super.setSize(Math.max(1, Math.round(anchoP / 2)), Math.max(1, Math.round(altoP / 2))); }
   }
   const ClaseBloom = ligero ? BloomLigero : UnrealBloomPass;
-  const bloom = new ClaseBloom(new THREE.Vector2(w, h), parametrosIniciales.bloom, 0.5, parametrosIniciales.umbral);
+  /* El radio NO es el tamaño del halo: `lerpBloomFactor` lo usa para repartir
+     peso entre los cinco niveles, y con 0,5 los cinco quedan clavados en 0,6,
+     el de 1/32 incluido —el que reparte luz a trescientos y pico píxeles—.
+     Eso es lo que convertía una ventana encendida de noche en un velo sobre
+     media fachada: el núcleo apenas subía y el muro de al lado se iba de 55 a
+     114. Ahora el radio va por momento (ver MOMENTOS.bloomRadio): de noche
+     0,20 concentra el destello alrededor del cristal y deja el muro en paz. */
+  const bloom = new ClaseBloom(new THREE.Vector2(w, h), parametrosIniciales.bloom, parametrosIniciales.bloomRadio ?? 0.42, parametrosIniciales.umbral);
   /* El corte del bloom deja de ser un escalón: con smoothWidth 0,01 una
      superficie que rozaba el umbral entraba o salía de golpe y se veía el
      borde. */
@@ -373,7 +381,15 @@ export function crearPost(ctx, luz, opciones = {}) {
     if (bokeh._materialDepth) bokeh._materialDepth.side = THREE.DoubleSide; // misma razón que el G-buffer
   }
 
-  const smaa = ligero ? null : new SMAAPass();
+  /* En el móvil no había NINGÚN antialiasing: el lienzo va a DPR bajo (ver
+     DPR_MAX en main.js), el renderer se crea con antialias:false porque la
+     imagen sale del composer, y SMAA —dos pasadas más con dos texturas de
+     búsqueda— se descartaba por caro. El resultado eran escaleras en cada
+     antepecho, que es lo que el cliente ve como pixelado. FXAA es UNA pasada
+     a pantalla completa sin texturas auxiliares: en un teléfono se paga, y
+     quita el diente de sierra de los bordes con contraste, que son casi
+     todos los del edificio. */
+  const smaa = ligero ? new FXAAPass() : new SMAAPass();
   /* ── Grado de color ──
      Va DESPUÉS de OutputPass, es decir sobre la imagen ya mapeada a pantalla.
      AgX es una curva deliberadamente plana: protege las luces (por eso no se
@@ -515,6 +531,7 @@ export function crearPost(ctx, luz, opciones = {}) {
       if (!parametros) return;
       if (parametros.bloom !== undefined) bloom.strength = parametros.bloom;
       if (parametros.umbral !== undefined) bloom.threshold = parametros.umbral;
+      if (parametros.bloomRadio !== undefined) bloom.radius = parametros.bloomRadio;
       if (parametros.exposicion !== undefined) renderer.toneMappingExposure = parametros.exposicion;
     },
 

@@ -233,17 +233,30 @@ export const AJUSTES = {
   'APOLO | Hormigon gris claro': { color: 0xbfbeb8, metalness: 0, roughness: 0.9, env: 0.4 },
   'APOLO V6 | Gravilla gris claro cubierta': { color: 0xbab5ab, metalness: 0, roughness: 0.95, env: 0.3 },
 
+  /* ── Tarima de las terrazas ──
+     Las dos llegan del exportador con el color en blanco y toda la imagen en
+     la textura, así que este `color` NO es un tono: MULTIPLICA el mapa. Y lo
+     multiplica en LINEAL, que es la trampa: un 0xb2… no es «el 70 %», es el
+     45 %, y además tiñe. Por eso el factor va en GRIS NEUTRO y calculado al
+     revés (0xdd… = 0,72 lineal): oscurece un 28 % justo y el greige lo sigue
+     poniendo la textura.
+     La madera de dentro de las viviendas NO se toca: es la superficie que más
+     luz rebota en la planta seccionada y bajarla pelea con el encargo de
+     verlas mejor iluminadas. */
+  'APOLO | Tarima exterior greige': { color: 0xdddddd, metalness: 0, roughness: 0.74 },
+  'V6_Aticos_Acabado_terraza_existente': { color: 0xdddddd, metalness: 0, roughness: 0.78 },
+
   /* ── Calle ──
      El asfalto es la superficie más grande del encuadre a pie de calle y
      llegaba en 138,144,149, gris claro y AZUL. Un aglomerado envejecido anda
      por 85 y es neutro. `env` bajo porque una calzada es horizontal: ve el
      hemisferio entero y con reflejo pleno se vuelve azul otra vez. */
-  asphalt: { color: 0x5f5d56, metalness: 0, roughness: 0.93, env: 0.10, mapa: 'asfalto', escala: 4.5, relieve: 0.22 },
+  asphalt: { color: 0x4d4b46, metalness: 0, roughness: 0.94, env: 0.08, mapa: 'asfalto', escala: 4.5, relieve: 0.22 },
   /* Marcas viales y paso de peatones: pintura envejecida, nunca blanco puro. */
   white: { color: 0xdcd9d0, metalness: 0, roughness: 0.9, env: 0.22 },
-  sidewalk: { color: 0xc2bdb3, metalness: 0, roughness: 0.9, env: 0.3, mapa: 'acera', escala: 4, relieve: 0.5 },
-  curb: { color: 0xc4bfb5, metalness: 0, roughness: 0.85, env: 0.4 },
-  tactile: { color: 0xb3a897, metalness: 0, roughness: 0.88, env: 0.3 },
+  sidewalk: { color: 0xa8a49b, metalness: 0, roughness: 0.9, env: 0.26, mapa: 'acera', escala: 4, relieve: 0.5 },
+  curb: { color: 0xaeaaa1, metalness: 0, roughness: 0.85, env: 0.35 },
+  tactile: { color: 0x9d9384, metalness: 0, roughness: 0.88, env: 0.28 },
   /* Alcantarillas, registros y rejillas: fundición, que es gris oscuro
      pardo y medio mate, no el gris claro medio metálico del modelo. */
   'SERENEA V3 | Registros y rejillas fundicion': { color: 0x4c4844, metalness: 0.55, roughness: 0.62, env: 0.3 },

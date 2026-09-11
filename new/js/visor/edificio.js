@@ -141,7 +141,18 @@ export const LUZ_VENDIDA_NOCHE = [0.80, 0.84, 0.95];
    el interior sube de luz y se tiñe de bombilla. Es un solo dibujo por
    vivienda y no hace falta ninguna luz de verdad en la escena: cien luces
    puntuales no las mueve ningún teléfono. */
-export const LUZ_ENCENDIDA = [1.75, 1.5, 1.12];
+/* Subido a petición del cliente: en la planta seccionada de noche la vendida
+   estaba bien pero la libre se quedaba corta y no se leía que estuviera
+   habitada. Se sube AQUÍ y no en el ambiente de la escena a propósito: este
+   prisma es por vivienda, así que la vendida —que es la que el cliente da por
+   buena— no se entera, y no hay que compensar nada. El vidrio no entra: se
+   dibuja antes y con profundidad, así que el prisma no lo multiplica y la
+   ventana no gana ni un punto de destello. */
+export const LUZ_ENCENDIDA = [2.35, 2.02, 1.55];
+/* Al atardecer la vivienda libre también se enciende, pero de lejos: fuera
+   todavía hay luz y una bombilla a tope de día se ve falsa. Lo justo para que
+   el interior deje de ser una cueva. */
+export const LUZ_ENCENDIDA_ATARDECER = [1.45, 1.30, 1.14];
 export const CARTELA_PX = 34;            // alto del sprite de la cartela en px para un lienzo de 720 px (ver cabecera)
 export const EMISIVO_VENTANA = 0xffd9a0; // luz cálida de interior
 export const INTENSIDAD_VENTANA = 1.4;   // por encima de 1 para que el bloom lo recoja
@@ -181,7 +192,9 @@ function materialLuz(nombre, r, g, b) {
 const matApagada = (noche) => (noche
   ? materialLuz('vivienda_apagada_noche', ...LUZ_VENDIDA_NOCHE)
   : materialLuz('vivienda_apagada', LUZ_VENDIDA, LUZ_VENDIDA, LUZ_VENDIDA));
-const matEncendida = () => materialLuz('vivienda_encendida', ...LUZ_ENCENDIDA);
+const matEncendida = (nivel) => (nivel >= 2
+  ? materialLuz('vivienda_encendida', ...LUZ_ENCENDIDA)
+  : materialLuz('vivienda_encendida_atardecer', ...LUZ_ENCENDIDA_ATARDECER));
 const ORDEN_PLANTAS = ['baja', 'p1', 'p2', 'atico'];
 const RE_VIDRIO = /^vidrio__T(\d+)__(\d+)__(-?\d+)_(-?\d+)_(-?\d+)$/;
 const ES_MATERIAL_VIDRIO = /vidrio/i;
@@ -592,7 +605,7 @@ export async function cargarEdificio(ctx, slot, opciones = {}) {
   const pickables = [...viviendas.values()].map((v) => v.mesh);
   let ultimo = { hover: null, seleccionada: null, atenuada: null };
   let cartelasDe = null;
-  let noche = false;
+  let luces = 0;                   // 0 de día · 1 al atardecer · 2 de noche
   /* Vivienda "abierta": ya se ha entrado a verla por dentro, así que no lleva
      ni prisma ni cartela; estorbarían justo lo que se ha ido a ver. */
   let abierta = null;
@@ -685,19 +698,20 @@ export async function cargarEdificio(ctx, slot, opciones = {}) {
            vivienda salía negra. Uno por rayo y ya. */
         const enPlanta = cartelasDe === v.floorKey;
         if (vendida && v.id !== abierta) {
-          v.mesh.material = matApagada(noche);
+          v.mesh.material = matApagada(luces >= 2);
           v.mesh.visible = enPlanta;
           v.mesh.renderOrder = 20;           // antes que el realce, después de lo opaco
           v.label.visible = false;
           v.labelR.visible = false;
           continue;
         }
-        /* De noche, la vivienda libre o reservada se enciende: el mismo prisma
-           multiplicativo con un factor mayor que uno y cálido. El realce del
+        /* De noche y al atardecer, la vivienda libre o reservada se enciende: el
+           mismo prisma multiplicativo con un factor mayor que uno y cálido (más
+           corto al atardecer, que fuera aún hay luz). El realce del
            ratón NO la apaga (antes le quitaba el prisma y la vivienda se
            apagaba justo al señalarla): ese aviso lo da el vidrio teñido. */
-        if (noche && enPlanta && v.id !== abierta && !dim) {
-          v.mesh.material = matEncendida();
+        if (luces > 0 && enPlanta && v.id !== abierta && !dim) {
+          v.mesh.material = matEncendida(luces);
           v.mesh.visible = true;
           v.mesh.renderOrder = 20;
           const marcable = !dim && v.id !== abierta;
@@ -728,13 +742,18 @@ export async function cargarEdificio(ctx, slot, opciones = {}) {
       }
     },
 
-    /* Noche: cambia el prisma de luz de cada vivienda (apagada más suave en
-       las vendidas, encendido cálido en las libres y reservadas). */
-    setNoche(activa) {
-      if (noche === !!activa) return;
-      noche = !!activa;
+    /* Nivel de luces de la escena: 0 de día, 1 al atardecer, 2 de noche.
+       Cambia el prisma de luz de cada vivienda —la vendida se apaga (más
+       suave de noche, que ya está oscuro) y la libre o reservada se enciende
+       con una bombilla tenue al atardecer y plena de noche—. `setNoche` se
+       queda como atajo del nivel 2. */
+    setLuces(nivel) {
+      const n = Math.max(0, Math.min(2, Math.round(+nivel || 0)));
+      if (luces === n) return;
+      luces = n;
       edificio.pintar(ultimo);
     },
+    setNoche(activa) { edificio.setLuces(activa ? 2 : 0); },
 
     /* La vivienda que se está visitando por dentro (o null). */
     setViviendaAbierta(id) {

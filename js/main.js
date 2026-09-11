@@ -365,7 +365,11 @@ gtao.updateGtaoMaterial({
 gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3.5, radius: 8, samples: 16 });
 composer.addPass(gtao);
 }
-const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.14, 0.5, 0.92);
+/* El radio no es el tamaño del halo: reparte peso entre los cinco niveles y
+   con 0,5 los cinco quedan en 0,6, el de 1/32 incluido —el que reparte luz a
+   trescientos y pico píxeles—. Eso convertía una ventana encendida en un
+   velo sobre media fachada. Con 0,34 el destello se queda junto al cristal. */
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.14, 0.34, 0.92);
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
 
@@ -715,8 +719,9 @@ app.setNight = (on) => {
   fill.intensity = on ? 0.5 : 0.15;
   renderer.toneMappingExposure = on ? 1.05 : 1.0;
   scene.fog.color.setHex(on ? 0x0b111c : 0xd6dde3);
-  bloom.strength = on ? 0.5 : 0.14;
-  bloom.threshold = on ? 0.72 : 0.92;
+  bloom.strength = on ? 0.30 : 0.14;
+  bloom.threshold = on ? 0.92 : 0.92;
+  bloom.radius = on ? 0.24 : 0.34;
   // cielo nocturno: estrellas + luna, y nubes escasas teñidas de noche
   nightSky.visible = on;
   clouds.children.forEach((cluster, i) => {

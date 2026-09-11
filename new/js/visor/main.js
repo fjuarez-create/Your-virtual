@@ -157,7 +157,17 @@ const CAMARA_FAR = 9000;          // el entorno llega a 5 km
 const NIEBLA = { near: 1900, far: 6800 };
 const ESCALA_CIELO_NOCHE = 2.4;   // estrellas y luna detrás del terreno lejano
 const SOMBRAS = { margen: 250, min: 300, max: 1200, paso: 50 };
-const DPR_MAX = { alta: 1.5, media: 1.25, movil: 1 };
+/* Nivel de luces del momento para edificio.setLuces (0 día · 1 atardecer ·
+   2 noche): al atardecer la vivienda libre también se enciende, pero poco. */
+const NIVEL_LUCES = { manana: 0, dia: 0, atardecer: 1, noche: 2 };
+/* El tope del móvil estaba en 1: en un iPhone con densidad 3 eso es un
+   lienzo a un tercio de lado y un antepecho de un píxel. 1,35 son un 82 %
+   más de píxeles que pintar y, con el FXAA que ahora sí se
+   monta en móvil (ver post.js), el diente de sierra desaparece. El visor
+   clásico lleva 1,5 en el mismo teléfono desde hace meses, así que el margen
+   existe; se deja por debajo porque esta cadena tiene cuatro pasadas más, y
+   quien vigila que no se pase es `vigilarFluidez`. */
+const DPR_MAX = { alta: 1.6, media: 1.3, movil: 1.35 };
 
 /* ── Móvil ──
    El teléfono no puede con esta cadena: el trazador de caminos sube a la
@@ -948,7 +958,11 @@ Object.assign(apolo, {
     // las ventanas cambian al arrancar el fundido; el bajón de exposición lo tapa
     ensuciarSombras();
     post.setGrado(MOMENTOS[clave].grado);
-    if (edificio) { edificio.setVentanas(MOMENTOS[clave].ventana ?? (MOMENTOS[clave].luces ? 1 : 0)); edificio.setNoche(clave === 'noche'); repintar(); }
+    if (edificio) { edificio.setVentanas(MOMENTOS[clave].ventana ?? (MOMENTOS[clave].luces ? 1 : 0)); edificio.setLuces(NIVEL_LUCES[clave] ?? 0); repintar(); }
+    /* El techo que el corte se lleva, devuelto solo en la cuenta de la luz
+       (ver cortes.setInterior): cada momento dice cuánto sol tapa y cuánta luz
+       interior pone. */
+    cortes?.setInterior(MOMENTOS[clave].interior);
     encenderEntorno(MOMENTOS[clave].noche);
     return luz.setMomento(clave, { duracion });
   },
@@ -1059,6 +1073,30 @@ const ultimoTrazado = { activo: null, progreso: -1, muestras: -1, pintando: null
    cuando three termina de subir lo nuevo. */
 let sombrasPendientes = 3;
 const ensuciarSombras = () => { sombrasPendientes = 3; };
+
+/* ── Válvula de seguridad del DPR ──
+   Subir la resolución del móvil quita el pixelado pero cuesta píxeles, y el
+   parque de iPhones no es uno solo. Esto mide el fotograma de verdad y, si en
+   una ventana de 120 se pasa de 38 ms de mediana (por debajo de 26 fps),
+   baja el DPR un escalón. Es de una sola dirección: nunca lo vuelve a subir,
+   para que no oscile entre dos resoluciones a cada giro de cámara. */
+const FLUIDEZ = { tope: 38, ventana: 120, dpr: [1.35, 1.1, 0.9] };
+let fluidezEscalon = 0;
+let fluidezMuestras = [];
+function vigilarFluidez(ms) {
+  if (!MOVIL || fluidezEscalon >= FLUIDEZ.dpr.length - 1) return;
+  if (ms <= 0 || ms > 500) return;             // pestaña oculta o tirón de carga
+  fluidezMuestras.push(ms);
+  if (fluidezMuestras.length < FLUIDEZ.ventana) return;
+  const mediana = fluidezMuestras.slice().sort((a, b) => a - b)[fluidezMuestras.length >> 1];
+  fluidezMuestras = [];
+  if (mediana <= FLUIDEZ.tope) return;
+  fluidezEscalon += 1;
+  DPR_MAX.movil = FLUIDEZ.dpr[fluidezEscalon];
+  aplicarDPR(ctx.calidad);
+  ctx.setTamano(canvas.clientWidth || window.innerWidth, canvas.clientHeight || window.innerHeight);
+  apolo.tiempos.dprMovil = DPR_MAX.movil;
+}
 ctx.on('geometria', ensuciarSombras);
 ctx.on('calidad', ensuciarSombras);
 
@@ -1066,9 +1104,18 @@ function fotograma() {
   requestAnimationFrame(fotograma);
   const dt = Math.min(reloj.getDelta(), 0.1);
   const t = reloj.elapsedTime;
+  vigilarFluidez(dt * 1000);
   camara.update(dt);
   if (edificio) ajustarSombras();
-  const sombraViva = camara.velocidad > 0.01 || !camara.quieta || luz.enTransicion || luz.realce > 0
+  /* `luz.realce > 0` estaba aquí de cuando el realce SUBÍA EL SOL a 62°: con
+     el sol quieto (ver REALCE en luz.js) el realce solo cambia intensidades, y
+     el mapa de sombras es de profundidad, no le afecta ni una. Dejarlo obligaba
+     a redibujar toda la geometría que proyecta, una vez por cascada y en CADA
+     fotograma, durante todo el rato que se está mirando una planta —que es
+     justo cuando ahora el mobiliario también proyecta—. Lo que de verdad
+     ensucia la sombra ya está cubierto: cámara, fundido de luz, transición del
+     corte y el aviso de 'geometria'. */
+  const sombraViva = camara.velocidad > 0.01 || !camara.quieta || luz.enTransicion
     || cortes?.enTransicion || sombrasPendientes > 0;
   renderer.shadowMap.needsUpdate = sombraViva;
   if (sombrasPendientes > 0) sombrasPendientes--;
@@ -1077,7 +1124,7 @@ function fotograma() {
   actualizarHover();
 
   post.setVelocidadCamara(camara.velocidad);
-  if (luz.enTransicion) post.setMomento({ bloom: luz.actual.bloom, umbral: luz.actual.umbral });
+  if (luz.enTransicion) post.setMomento({ bloom: luz.actual.bloom, umbral: luz.actual.umbral, bloomRadio: luz.actual.bloomRadio });
   if (apolo.vista === 'vivienda' && post.enfoque != null) post.setEnfoque(camara.distanciaObjetivo);
 
   /* La atenuación de plantas de cortes cambia los materiales durante ~1,5 s
@@ -1156,7 +1203,7 @@ async function arrancar() {
   if (demo) edificio.setEstados(demo);
   post.setGrado(MOMENTOS[apolo.momento].grado);
   edificio.setVentanas(MOMENTOS[apolo.momento].ventana ?? (MOMENTOS[apolo.momento].luces ? 1 : 0));
-  edificio.setNoche(apolo.momento === 'noche');
+  edificio.setLuces(NIVEL_LUCES[apolo.momento] ?? 0);
 
   /* Modelo de SketchUp: sin CSG ni tapas (superficies abiertas), variantes
      precortadas cuando lleguen, caras traseras oscuras y atenuación por cota. */
@@ -1171,7 +1218,11 @@ async function arrancar() {
   cortes = crearCortes(ctx, edificio, {
     luz, definicion: edificio.definicionCortes, suelos: edificio.suelos,
     csg: false, tapasCSG: false, tapasStencil: false, carasOscuras: true, atenuacionPorCota: true,
+    /* Sombra de mobiliario solo en la planta seccionada, y no en el móvil
+       (ver cortes.proyectaMobiliario). */
+    sombraMobiliario: !MOVIL,
   });
+  cortes.setInterior(MOMENTOS[apolo.momento].interior);
   cortes.preparar(); // los hooks de material se añaden antes del primer fotograma con edificio
   actualizarReflectantes();
   repintar();

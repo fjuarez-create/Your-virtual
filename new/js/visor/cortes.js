@@ -368,25 +368,56 @@ function oscurecerTraseras(material) {
 const GLSL_ATENUACION = /* glsl */`
   varying vec3 vPosMundoCorte;
   uniform float uSuelos[8];
+  uniform float uTechos[8];
   uniform vec3 uBordesX;
   uniform float uBordeZ;
   uniform float uFilasZ;
   uniform float uAtenuacion;
-  float atenuacionCorte(vec3 p) {
+  uniform float uSolInterior;
+  uniform float uLuzInterior;
+  uniform vec4 uHuella;        // x0, z0, x1, z1 de la planta del edificio
+  int celdaCorte(vec3 p) {
     float col = step(uBordesX.x, p.x) + step(uBordesX.y, p.x) + step(uBordesX.z, p.x);
     float fila = uFilasZ > 1.5 ? step(uBordeZ, p.z) : 0.0;
-    float suelo = uSuelos[int(col * uFilasZ + fila)];
+    return int(col * uFilasZ + fila);
+  }
+  float atenuacionCorte(vec3 p) {
+    float suelo = uSuelos[celdaCorte(p)];
     return uAtenuacion * (1.0 - smoothstep(suelo - 0.6, suelo - 0.15, p.y));
+  }
+  /* 1 dentro de la vivienda seccionada: por encima de su suelo y por debajo
+     del plano de corte, que es por donde pasaría el techo que el corte se ha
+     llevado (ver setInterior). Fuera de esa franja vale 0, así que la calle,
+     la fachada y las plantas de abajo no se enteran. */
+  float franjaCorte(float v, float a, float b) {
+    return smoothstep(a - 0.05, a + 0.45, v) * (1.0 - smoothstep(b - 0.45, b + 0.05, v));
+  }
+  float interiorCorte(vec3 p) {
+    /* La rejilla de celdas cubre el mundo entero, así que sin esto la calle
+       que pasa a la altura de la planta se llevaría el mismo trato que el
+       salón. La huella acota en planta y el suelo y el corte en altura. */
+    float dentro = franjaCorte(p.x, uHuella.x, uHuella.z) * franjaCorte(p.z, uHuella.y, uHuella.w);
+    if (dentro <= 0.0) return 0.0;
+    int c = celdaCorte(p);
+    float suelo = uSuelos[c];
+    float techo = uTechos[c];
+    return dentro
+         * smoothstep(suelo - 0.55, suelo - 0.10, p.y)   // el solado ENTRA entero
+         * (1.0 - smoothstep(techo - 0.35, techo + 0.05, p.y));
   }`;
 const SUELO_BAJO_CORTE = 1.5;        // m; respaldo sin datos de vivienda (p1/p2/ático)
 const SUELO_BAJO_CORTE_BAJA = 2.2;   // m; respaldo en la planta más baja
 function crearUniformesAtenuacion() {
   return {
     uSuelos: { value: new Float32Array(8).fill(-1e6) },
+    uTechos: { value: new Float32Array(8).fill(1e6) },
     uBordesX: { value: new THREE.Vector3(1e9, 1e9, 1e9) },
     uBordeZ: { value: 1e9 },
     uFilasZ: { value: 1 },
     uAtenuacion: { value: 0 },
+    uSolInterior: { value: 0 },
+    uLuzInterior: { value: 0 },
+    uHuella: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) },
   };
 }
 function atenuarPorCota(material, uniformes) {
@@ -406,7 +437,13 @@ function atenuarPorCota(material, uniformes) {
       .replace('#include <color_fragment>',
         '#include <color_fragment>\n  float atCorte = atenuacionCorte(vPosMundoCorte);\n  diffuseColor.rgb *= 1.0 - 0.4 * atCorte;')
       .replace('#include <lights_fragment_end>',
-        '#include <lights_fragment_end>\n  reflectedLight.indirectSpecular *= 1.0 - 0.75 * atCorte;\n  reflectedLight.indirectDiffuse *= 1.0 - 0.25 * atCorte;');
+        '#include <lights_fragment_end>'
+        + '\n  reflectedLight.indirectSpecular *= 1.0 - 0.75 * atCorte;'
+        + '\n  reflectedLight.indirectDiffuse *= 1.0 - 0.25 * atCorte;'
+        + '\n  float enCorte = interiorCorte(vPosMundoCorte);'
+        + '\n  reflectedLight.directDiffuse *= 1.0 - uSolInterior * enCorte;'
+        + '\n  reflectedLight.directSpecular *= 1.0 - uSolInterior * enCorte;'
+        + '\n  reflectedLight.indirectDiffuse *= 1.0 + uLuzInterior * enCorte;');
   };
   material.customProgramCacheKey = () => `${clavePrevia ? clavePrevia() : ''}|${textoPrevio}|atenuacion`;
   material.needsUpdate = true;
@@ -416,7 +453,7 @@ const aMapa = (v) => (v instanceof Map ? new Map(v) : new Map(Object.entries(v |
 
 export function crearCortes(ctx, edificio, opciones = {}) {
   const { url = 'data/cortes.json', luz = null, tapasCSG = true, tapasStencil = true, carasOscuras = false,
-    csg = true, atenuacionPorCota = false, sombraFantasma = false } = opciones;
+    csg = true, atenuacionPorCota = false, sombraFantasma = false, sombraMobiliario = false } = opciones;
   let suelos = aMapa(opciones.suelos); // clave de planta → [cota del suelo por tramo]
   const { scene } = ctx;
   const uniformesAtenuacion = crearUniformesAtenuacion();
@@ -511,6 +548,10 @@ export function crearCortes(ctx, edificio, opciones = {}) {
     /* Rejilla de la atenuación por cota: columnas por los x0 distintos y
        filas por los z0 distintos de las huellas (hasta 4 × 2; si hay más,
        todas las celdas llevan la media). */
+    /* Huella del edificio en planta: la unión de las de los tramos. */
+    uniformesAtenuacion.uHuella.value.set(
+      Math.min(...cortes.tramos.map((t) => t.x0)), Math.min(...cortes.tramos.map((t) => t.z0)),
+      Math.max(...cortes.tramos.map((t) => t.x1)), Math.max(...cortes.tramos.map((t) => t.z1)));
     const bordes = (clave) => [...new Set(cortes.tramos.map((t) => t[clave]))].sort((a, b) => a - b);
     const xs = bordes('x0'), zs = bordes('z0');
     const cabe = xs.length <= 4 && zs.length <= 2;
@@ -542,13 +583,39 @@ export function crearCortes(ctx, edificio, opciones = {}) {
   function actualizarUniformesCorte(clave = cortes.planta) {
     const S = suelosDe(clave);
     if (!S) return;
+    const T = cotasDe(clave);
     const v = uniformesAtenuacion.uSuelos.value;
+    const w = uniformesAtenuacion.uTechos.value;
+    const media = (a, x) => a.reduce((s, h) => s + h, 0) / Math.max(1, a.length) || x;
     if (celdas.length && celdas[0].media) {
-      v.fill(S.reduce((s, h) => s + h, 0) / Math.max(1, S.length));
+      v.fill(media(S, -1e6));
+      w.fill(T ? media(T, 1e6) : 1e6);
       return;
     }
-    for (const c of celdas) v[c.indice] = S[c.tramo] ?? -1e6;
+    for (const c of celdas) {
+      v[c.indice] = S[c.tramo] ?? -1e6;
+      w[c.indice] = T?.[c.tramo] ?? 1e6;
+    }
   }
+  /* ── Interior de la planta seccionada ──────────────────────────────────────
+     Al cortar no queda NADA por encima del plano: la variante precortada es un
+     GLB sin cubierta, así que la vivienda se queda a cielo abierto de verdad y
+     el sol le entra desde arriba. De mediodía eso son 2,4 de 5,7 de toda la
+     luz que recibe el suelo, y con el realce del IBL encima la planta salía
+     quemada y sin dibujo; de noche y al atardecer pasa lo contrario.
+     `setInterior({ sol, luz })` devuelve el techo SOLO en la cuenta de la luz,
+     dentro de la franja de la vivienda: `sol` es cuánto del sol directo tapa
+     ese techo (0 nada, 1 todo) y `luz` cuánta luz indirecta extra se le da al
+     interior, que es la "muy buena iluminación interior" de una vivienda que
+     sí tiene techo. No hay geometría nueva ni una sola sombra más que
+     calcular, y fuera de la franja no cambia ni un píxel. */
+  const interior = { sol: 0, luz: 0 };
+  function aplicarInterior() {
+    const f = atenuacionPorCota ? atenCota.valor : (cortes.planta !== 'all' ? 1 : 0);
+    uniformesAtenuacion.uSolInterior.value = interior.sol * f;
+    uniformesAtenuacion.uLuzInterior.value = interior.luz * f;
+  }
+
   if (cortes.definicion) {
     fijarDefinicion(cortes.definicion);
     cortes.listo = Promise.resolve(cortes.definicion);
@@ -561,6 +628,15 @@ export function crearCortes(ctx, edificio, opciones = {}) {
 
   // declaración (no const): fijarDefinicion la usa antes de llegar aquí
   function cotasDe(clave) { return clave === 'all' ? null : cortes.definicion?.plantas?.[clave]?.map((t) => t.y) ?? null; }
+
+  /* Cotas de corte de la planta INMEDIATAMENTE inferior, que son el suelo de
+     la franja de la planta pedida. `null` en la más baja: todo lo que hay por
+     debajo de su corte es suyo. */
+  function cotasDebajo(clave) {
+    const claves = Object.keys(cortes.definicion?.plantas || {});
+    const k = claves.indexOf(clave);
+    return k > 0 ? cotasDe(claves[k - 1]) : null;
+  }
 
   function tramoEn(x, z) {
     const T = cortes.tramos;
@@ -710,6 +786,24 @@ export function crearCortes(ctx, edificio, opciones = {}) {
     if (o.emissiveIntensity != null && m.emissiveIntensity != null) m.emissiveIntensity = o.emissiveIntensity;
   }
 
+  /* ── Sombra del mobiliario ────────────────────────────────────────────────
+     Las 1.403 mallas del mobiliario entran en la escena sin proyectar sombra:
+     volver a dibujarlas en cada cascada del CSM no lo mueve ningún teléfono.
+     Pero en la planta seccionada —que es justo donde el techo ya no está y la
+     sombra es la única pista de volumen— los muebles salían flotando. El
+     equilibrio es proyectar SOLO los de la planta que se está mirando: son
+     entre 323 y 424 mallas, de 110.000 a 237.000 triángulos, contra las 1.395
+     y 727.000 que habría si proyectaran todas. La franja de una planta es la
+     misma cuenta que su visibilidad (`ymin` por debajo de la cota de SU tramo,
+     que el edificio está escalonado) acotada por abajo con la cota de la
+     planta de debajo. */
+  let sueloFranja = null;          // cotas de la planta inferior, por tramo
+  function proyectaMobiliario(p) {
+    if (!sombraMobiliario || cortes.planta === 'all') return false;
+    const base = sueloFranja ? sueloFranja[p.principal] : null;
+    return base == null || p.ymin >= base - EPS;
+  }
+
   /* Mobiliario frente a la cota de su cajón: oculto si nace por encima,
      intacto si queda entero por debajo y, si cruza el plano, el clon
      recortado en su lugar (ver cabecera). */
@@ -718,8 +812,14 @@ export function crearCortes(ctx, edificio, opciones = {}) {
     const debajo = p.ymin < cota - EPS;
     const cruza = debajo && p.caja.max.y > cota + EPS && cota < cortes.techo - EPS;
     p.mesh.visible = p.visibleBase && debajo && !cruza;
+    const proyecta = proyectaMobiliario(p);
+    p.mesh.castShadow = proyecta;
     const clon = cruza ? clonDe(p, p.principal) : p.clones.get(p.principal);
-    if (clon) { clon.visible = p.visibleBase && cruza; if (clon.visible) sincronizarClon(clon, p); }
+    if (clon) {
+      clon.castShadow = proyecta;   // clonDe solo lo copia al crearlo
+      clon.visible = p.visibleBase && cruza;
+      if (clon.visible) sincronizarClon(clon, p);
+    }
   }
 
   function aplicarRecorte() {
@@ -943,6 +1043,7 @@ export function crearCortes(ctx, edificio, opciones = {}) {
       preparar();
       const anterior = cortes.planta;
       cortes.planta = clave;
+      sueloFranja = cotasDebajo(clave);   // franja del mobiliario que proyecta sombra
       fijarObjetivosAtenuacion(clave);
       actualizarUniformesCorte(clave);
       // una transición nueva interrumpe la anterior: se parte de lo que se ve ahora
@@ -1031,6 +1132,13 @@ export function crearCortes(ctx, edificio, opciones = {}) {
     },
     suelosDe,
 
+    /* Techo devuelto solo en la cuenta de la luz (ver arriba). */
+    setInterior({ sol = 0, luz = 0 } = {}) {
+      interior.sol = THREE.MathUtils.clamp(sol, 0, 1);
+      interior.luz = Math.max(0, luz);
+      aplicarInterior();
+    },
+
     preparar,
 
     update(dt) {
@@ -1041,6 +1149,7 @@ export function crearCortes(ctx, edificio, opciones = {}) {
         if (atenCota.valor !== atenCota.objetivo) {
           atenCota.valor = Math.abs(atenCota.objetivo - atenCota.valor) < 0.002 ? atenCota.objetivo : atenCota.valor + (atenCota.objetivo - atenCota.valor) * k;
           uniformesAtenuacion.uAtenuacion.value = atenCota.valor;
+          aplicarInterior();
         }
       }
       for (const [clave, a] of atenuacion) {
