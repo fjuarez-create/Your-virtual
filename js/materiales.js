@@ -82,13 +82,18 @@ const RECETAS = {
   /* Aglomerado asfáltico: parcheado de riegos + grano de árido + algún
      canto claro suelto. */
   asfalto(u, v, x, y) {
-    const manchas = fbm(u * 8, v * 8, 8, 3, 11);
-    const arido = fbm(u * 96, v * 96, 96, 2, 23);
-    let k = 0.95 + 0.065 * (manchas * 2 - 1) + 0.05 * (arido * 2 - 1);
+    /* El grano tiene que ser GRANO, no manchas. Con las manchas a 8 por
+       baldosa y la baldosa a 7 m, cada mancha medía casi un metro: de cerca
+       el asfalto parecía moqueta. Ahora la baldosa mide 4,5 m, el parcheado va
+       a 16 (unos 28 cm) y con un tercio de fuerza, y lo que se ve de cerca es
+       el árido, a 4 cm. */
+    const manchas = fbm(u * 16, v * 16, 16, 2, 11);
+    const arido = fbm(u * 128, v * 128, 128, 2, 23);
+    let k = 0.955 + 0.026 * (manchas * 2 - 1) + 0.055 * (arido * 2 - 1);
     const canto = azar(x, y, 7);
-    if (canto > 0.995) k += 0.07;   // algún canto claro suelto, contado: más, y es sal y pimienta
+    if (canto > 0.997) k += 0.05;   // algún canto claro suelto, contado: más, y es sal y pimienta
     const c = 255 * k;
-    return [c, c, c * 0.995, arido * 0.6 + manchas * 0.4];
+    return [c, c, c * 0.995, arido * 0.85 + manchas * 0.15];
   },
   /* Césped de campo de fútbol: franjas de corte (dos por baldosa, y con la
      baldosa a 12 m eso son siegas de 6 m), mata irregular y grano de hoja.
@@ -189,22 +194,25 @@ function texturasDe(clave) {
      · `escala`  metros que ocupa una baldosa de esa textura;
      · `relieve` fuerza del mapa de normales. */
 export const AJUSTES = {
-  /* ── Carpintería: ALUMINIO GRIS (RAL 9007) ──
-     En el modelo viene en 227 (plata casi blanca), igual de claro que el
-     monocapa: hueco y muro se leían con el mismo valor y el edificio salía
-     como un bloque liso. En gris aluminio la fachada coge ritmo sin irse al
-     antracita, que no es lo que lleva el proyecto. */
-  'APOLO V6 | Aluminio plata grata': { color: 0x8e908f, metalness: 0.8, roughness: 0.33 },
-  'V6_FV_Marco_aluminio': { color: 0x8e908f, metalness: 0.78, roughness: 0.36 },
-  'APOLO | Juntas y herrajes': { color: 0x7e8081, metalness: 0.45, roughness: 0.5 },
+  /* ── Carpintería: PLATA GRATA, y tratada como PLÁSTICO GRIS ──
+     El `metalness` es lo que la ponía negra. Un metal no tiene color difuso:
+     solo devuelve lo que refleja. Una carpintería vive metida en el jambaje,
+     donde no ve cielo, así que no tenía nada que reflejar y salía negra en
+     cuanto el hueco estaba en sombra —daba igual el color que se le pusiera—.
+     Como dieléctrico (metalness casi cero) el color SE VE siempre: gris plata
+     al sol, gris plata en sombra. Que es lo que es. */
+  'APOLO V6 | Aluminio plata grata': { color: 0x9fa2a1, metalness: 0.06, roughness: 0.42, env: 0.45 },
+  'V6_FV_Marco_aluminio': { color: 0x9fa2a1, metalness: 0.08, roughness: 0.44, env: 0.45 },
+  'APOLO | Juntas y herrajes': { color: 0x8e908f, metalness: 0.15, roughness: 0.5, env: 0.45 },
   'V6_Cromado': { color: 0xdcdfe0, metalness: 0.95, roughness: 0.14 },
 
-  /* ── Lo que se ve a través del vidrio ──
-     Es el fondo de los 267 huecos: uno por ventana. En el 176 gris claro del
-     modelo el hueco parecía tapado con un cartón; en antracita se quedaba
-     NEGRO en todas las ventanas de la misma tipología. Gris medio: se lee
-     como una habitación en penumbra, que es lo que es. */
-  'APOLO | Interior en sombra': { color: 0x5c6165, metalness: 0, roughness: 0.95, env: 0.2 },
+  /* ── El paño que se ve tras el vidrio ──
+     Es el fondo de los 267 huecos, uno por ventana, y es LO QUE MÁS PESA en
+     cómo se lee un paño de vidrio: el vidrio deja pasar más de la mitad de lo
+     que hay detrás. Con este plano oscuro, el paño entero salía negro en toda
+     la tipología. Gris medio y con algo de reflejo: penumbra de habitación,
+     no un agujero. */
+  'APOLO | Interior en sombra': { color: 0x7d8288, metalness: 0, roughness: 0.92, env: 0.35 },
 
   /* ── Fachada: mortero monocapa blanco ──
      Se queda blanco. Lo único que se toca es el reflejo: un paño blanco con
@@ -230,7 +238,7 @@ export const AJUSTES = {
      llegaba en 138,144,149, gris claro y AZUL. Un aglomerado envejecido anda
      por 85 y es neutro. `env` bajo porque una calzada es horizontal: ve el
      hemisferio entero y con reflejo pleno se vuelve azul otra vez. */
-  asphalt: { color: 0x5d5c58, metalness: 0, roughness: 0.93, env: 0.18, mapa: 'asfalto', escala: 7, relieve: 0.45 },
+  asphalt: { color: 0x5f5d56, metalness: 0, roughness: 0.93, env: 0.10, mapa: 'asfalto', escala: 4.5, relieve: 0.22 },
   /* Marcas viales y paso de peatones: pintura envejecida, nunca blanco puro. */
   white: { color: 0xdcd9d0, metalness: 0, roughness: 0.9, env: 0.22 },
   sidewalk: { color: 0xc2bdb3, metalness: 0, roughness: 0.9, env: 0.3, mapa: 'acera', escala: 4, relieve: 0.5 },
@@ -285,8 +293,8 @@ export const AJUSTES = {
   ortho: { metalness: 0, roughness: 1, env: 0.35, color: 0xe8f0ea },
 
   /* ── Fotovoltaica y juntas ── */
-  'V6 | Junta grafito': { color: 0x444746, metalness: 0, roughness: 0.8 },
-  V6_FV_Celulas_antracita: { color: 0x22262b, metalness: 0.25, roughness: 0.25 },
+  'V6 | Junta grafito': { color: 0x707372, metalness: 0, roughness: 0.8 },
+  V6_FV_Celulas_antracita: { color: 0x2c323a, metalness: 0.25, roughness: 0.28 },
   V6_FV_Junta_celulas: { color: 0x60666b, metalness: 0.3, roughness: 0.45 },
   V6_FV_Lastres_gris: { color: 0xa9a8a3, metalness: 0, roughness: 0.85, env: 0.4 },
 };

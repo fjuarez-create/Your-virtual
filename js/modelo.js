@@ -447,9 +447,15 @@ function fusionarPorMaterial(raiz, centro) {
    clásico con el BIM; lo que cambia es que ahora hay uno por vivienda para
    poder encender sus ventanas por la noche. */
 function crearVidrio() {
+  /* El tinte del vidrio sube de 0x2c3b3e a 0x3f5054 y la opacidad de 0,42 a
+     0,52: en un material transparente three multiplica TODO el sombreado por el
+     alfa, reflejo incluido, así que un vidrio muy transparente y muy oscuro no
+     refleja el cielo, solo deja ver lo que tiene detrás. Con el paño de fondo
+     en penumbra, el resultado era un paño NEGRO. Más cuerpo y más reflejo: el
+     vidrio se lee como vidrio. */
   const m = new THREE.MeshPhysicalMaterial({
-    color: 0x2c3b3e, roughness: 0.05, metalness: 0, transparent: true, opacity: 0.42,
-    envMapIntensity: 2.4, side: THREE.DoubleSide, clearcoat: 1, clearcoatRoughness: 0.02,
+    color: 0x3f5054, roughness: 0.05, metalness: 0, transparent: true, opacity: 0.52,
+    envMapIntensity: 2.9, side: THREE.DoubleSide, clearcoat: 1, clearcoatRoughness: 0.02,
     ior: 1.52, reflectivity: 0.62, emissive: EMISIVO_VENTANA, emissiveIntensity: 0,
   });
   m.userData.baseOpacity = m.opacity;

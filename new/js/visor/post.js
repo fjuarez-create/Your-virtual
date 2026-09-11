@@ -284,7 +284,12 @@ class SSRPassCompuesto extends SSRPass {
 
 /* Perfiles de oclusión (ver cabecera). */
 export const PERFILES_AO = {
-  exterior: { mezcla: 1.3, gtao: { radius: 2.0, thickness: 4.0, scale: 2.0 } },
+  /* La mezcla estaba en 1,3, o sea, MÁS oclusión de la que da la fórmula.
+     En una fachada con los huecos retranqueados eso cierra a negro el jambaje
+     y el dintel de cada ventana: un hueco deja de ser un hueco y pasa a ser
+     una mancha. A 1,0 la oclusión sigue asentando el edificio en el suelo,
+     que es para lo que está. */
+  exterior: { mezcla: 1.0, gtao: { radius: 2.0, thickness: 4.0, scale: 2.0 } },
   interior: { mezcla: 0.9, gtao: { radius: 0.7, thickness: 1.5, scale: 1.0 } },
 };
 

@@ -124,7 +124,7 @@ export const MOMENTOS = {
        del fondo sigue siendo igual de azul: esto solo cambia con qué luz se
        rellenan las sombras. */
     sol: 0xfff6e8, solInt: 3.1, cielo: 0xd8dde4, suelo: 0x9c8b70, hemiInt: 0.78,
-    relleno: 0xf2e8da, rellenoInt: 0.5, exposicion: 1.06, niebla: 0xafbfd2,
+    relleno: 0xf2e8da, rellenoInt: 0.58, exposicion: 1.06, niebla: 0xafbfd2,
     bloom: 0.09, umbral: 2.2, luces: false, ventana: 0,
     /* `hdri: false` es la clave del CIELO AZUL. Con hdri en true no se usaba
        el cielo procedural sino assets/sky_day.hdr, que es una foto acromática
@@ -169,20 +169,27 @@ export const MOMENTOS = {
        0,8 se convertían en manchas. */
     nombre: 'Noche', elev: -12, azim: 42, turbidez: 8, rayleigh: 0.6,
     mie: 0.004, mieG: 0.8,
-    sol: 0xbfd1ff, solInt: 0.45, cielo: 0x2a3a5e, suelo: 0x0c1016, hemiInt: 0.6,
-    relleno: 0x8fa8d8, rellenoInt: 0.45, exposicion: 1.0, niebla: 0x0b111c,
+    sol: 0xc3d4ff, solInt: 0.5, cielo: 0x243250, suelo: 0x0b0f15, hemiInt: 0.5,
+    relleno: 0x7f97c8, rellenoInt: 0.38, exposicion: 1.05, niebla: 0x0a0f19,
     /* Umbral alto también de noche: con 0,90 no florecía solo la ventana, sino
        todo el interior encendido de la planta seccionada, y la planta salía
        lavada. 1,25 deja pasar la ventana (1,4 × 1,9 × 0,73 ≈ 1,9) y nada más. */
     bloom: 0.28, umbral: 1.25, hdri: false, luces: true, ventana: 1.9,
-    ibl: 1.2, fondo: 1.0, solMax: 0, noche: 1,
+    /* El IBL de noche es el propio cielo horneado, que lleva la banda cálida
+       del resplandor urbano en el horizonte. A 1,2 esa banda iluminaba TODA la
+       escena desde los lados y dejaba el barrio, los árboles y las palmeras de
+       color cobre. A 0,7 sigue habiendo rebote de ciudad, pero la noche vuelve
+       a ser azul. */
+    ibl: 0.7, fondo: 1.0, solMax: 0, noche: 1,
     luna: { elev: 9, azim: 226, int: 1.0 },
     /* Las estrellas horneadas se dejan tenues: al ampliar la equirect en
        pantalla (unas 5× a 1080p) cada una se convierte en una mancha; las
        estrellas nítidas del raster son los Points de crearCieloNocturno. */
-    resplandor: 0xff9a4a, resplandorInt: 0.14, estrellas: 0.08,
-    /* De noche el contraste se toca poco: subirlo cierra los interiores. */
-    grado: { contraste: 1.08, saturacion: 1.14, negros: 0.015 },
+    resplandor: 0xffa869, resplandorInt: 0.10, estrellas: 0.022,
+    /* Saturación casi a raya: de noche subirla convierte el resplandor cálido
+       del horizonte en un filtro sepia sobre el barrio entero. El contraste
+       sube un poco, que es lo que da profundidad sin cerrar los interiores. */
+    grado: { contraste: 1.12, saturacion: 1.02, negros: 0.020 },
   },
 };
 
@@ -199,7 +206,19 @@ const ANCHO = 1024, ALTO = 512;
    sin dibujo. Los factores se recalculan para que el ambiente EFECTIVO de la
    planta quede donde estaba: 0,78 × 1,35 ≈ 1,05 de hemisférica y
    0,07 × 6,0 ≈ 0,42 de IBL. */
-export const REALCE = { elevacion: 62, hemi: 1.0, ibl: 3.0, hemiNoche: 2.2, iblNoche: 1.3, duracion: 1.0 };
+/* El realce NO mueve el sol. Antes subía la elevación a 62° conservando el
+   acimut, y eso dejaba las sombras del edificio apuntando a un sitio y el sol
+   del cielo a otro: en cuanto se elegía planta, la imagen dejaba de cuadrar.
+   Ahora la planta seccionada se levanta solo con luz SIN DIRECCIÓN
+   —hemisférica, relleno e IBL—, que además es la que de verdad mete luz en un
+   interior; el sol se queda donde dice el momento y la sombra, con él.
+
+   Los factores son CORTOS a propósito. Estas tres luces son globales: suben en
+   toda la escena, no solo en la planta abierta. Con ×1,75 / ×4,2 / ×2,2 la
+   planta se veía, sí, pero el conjunto salía lavado y sin una sola sombra en
+   la calle. Lo que se gana en el interior se paga en el exterior, y el
+   exterior es lo que se enseña primero. */
+export const REALCE = { hemi: 1.3, ibl: 3.2, relleno: 1.35, hemiNoche: 2.2, iblNoche: 1.4, rellenoNoche: 1.45, duracion: 1.0 };
 const CLAVES_NUM = ['solInt', 'hemiInt', 'rellenoInt', 'exposicion', 'bloom', 'umbral', 'ibl', 'fondo', 'noche'];
 const CLAVES_COLOR = ['sol', 'cielo', 'suelo', 'relleno', 'niebla'];
 
@@ -510,8 +529,8 @@ function crearCieloNocturno(lunaDir) {
     pts.frustumCulled = false;
     return pts;
   };
-  grupo.add(capa(2100, 2.6, 0.8));
-  grupo.add(capa(320, 4.2, 1.0));
+  grupo.add(capa(2400, 1.7, 0.75));
+  grupo.add(capa(280, 2.7, 1.0));
 
   // luna: disco con limbo, mares tenues y halo, dibujada a mano en un canvas
   const lc = document.createElement('canvas');
@@ -743,7 +762,6 @@ export function crearLuz(ctx) {
   let factorActual = 1;
   for (const k of CLAVES_COLOR) { trans.origenColores[k] = new THREE.Color(); trans.destinoColores[k] = new THREE.Color(); }
   const realce = { valor: 0, objetivo: 0, duracion: REALCE.duracion };
-  const dirRealce = new THREE.Vector3();
   const dirEfectiva = new THREE.Vector3();
 
   const luz = {
@@ -986,15 +1004,10 @@ export function crearLuz(ctx) {
     const noche = THREE.MathUtils.clamp(actual.noche ?? 0, 0, 1);
     const fHemi = THREE.MathUtils.lerp(1, THREE.MathUtils.lerp(REALCE.hemi, REALCE.hemiNoche, noche), r);
     const fIbl = THREE.MathUtils.lerp(1, THREE.MathUtils.lerp(REALCE.ibl, REALCE.iblNoche, noche), r);
+    const fRelleno = THREE.MathUtils.lerp(1, THREE.MathUtils.lerp(REALCE.relleno, REALCE.rellenoNoche, noche), r);
+    /* El sol de la escena es SIEMPRE el del momento: lo que proyecta la sombra
+       y lo que se ve en el cielo son la misma dirección (ver REALCE). */
     dirEfectiva.copy(dirSol);
-    const pesoDir = r * (1 - noche);
-    if (pesoDir > 0) {
-      const M = luz.parametros;
-      dirRealce.copy(direccionDe(Math.max(M.elev, REALCE.elevacion), M.azim));
-      dirEfectiva.lerp(dirRealce, pesoDir);
-      if (dirEfectiva.lengthSq() < 1e-6) dirEfectiva.set(0, 1, 0);
-      dirEfectiva.normalize();
-    }
     for (const l of csm.lights) {
       l.color.copy(colores.sol);
       l.intensity = actual.solInt;
@@ -1004,7 +1017,7 @@ export function crearLuz(ctx) {
     hemi.groundColor.copy(colores.suelo);
     hemi.intensity = actual.hemiInt * fHemi;
     relleno.color.copy(colores.relleno);
-    relleno.intensity = actual.rellenoInt;
+    relleno.intensity = actual.rellenoInt * fRelleno;
     scene.fog.color.copy(colores.niebla);
     scene.environmentIntensity = actual.ibl * fIbl;
     scene.backgroundIntensity = actual.fondo * factorExposicion;

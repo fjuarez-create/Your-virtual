@@ -353,7 +353,7 @@ gtao.output = GTAOPass.OUTPUT.Default;
    era de 1,5 sobre 255 —invisible—, y con 2,4 aparecían halos oscuros rodeando
    cada ventana, que leen como contorno sucio y no como sombra. Este es el
    punto intermedio. */
-gtao.blendIntensity = 1.2;
+gtao.blendIntensity = 1.0;   // 1,2 cerraba a negro el jambaje de los huecos
 gtao.updateGtaoMaterial({
   radius: 2.0,
   distanceExponent: 1.5,

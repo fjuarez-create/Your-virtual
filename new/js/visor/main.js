@@ -285,19 +285,22 @@ apolo.modulos = { ctx, luz, post, camara, trazador, get edificio() { return edif
 /* ── Entorno ── */
 /* De noche el barrio se enciende un poco: sin esto el pueblo y la costa
    quedaban como un decorado apagado. No son farolas de verdad, es un emisivo
-   cálido muy bajo sobre los materiales del entorno; por debajo del umbral del
-   bloom, para que no florezca. */
+   cálido muy bajo; por debajo del umbral del bloom, para que no florezca.
+
+   Se enciende SOLO LA FACHADA DE LOS EDIFICIOS VECINOS, que es de donde sale
+   la luz de una ciudad. Antes se encendía todo el entorno menos el terreno, y
+   eso ponía emisivo naranja sobre la hoja de las palmeras, el arbolado, el
+   césped, los coches y las aceras: de noche el barrio entero parecía de
+   cobre, con las palmeras doradas. Una hoja no emite luz. */
 const materialesEntorno = [];
-const EMISIVO_PUEBLO = new THREE.Color(0xffb46a);
-const EMISIVO_PUEBLO_MAX = 0.09;
+const SE_ENCIENDE = /^edificacion|^industry$|^V6_Monocapa_contexto$/i;
+const EMISIVO_PUEBLO = new THREE.Color(0xffc08a);
+const EMISIVO_PUEBLO_MAX = 0.075;
 function encenderEntorno(fraccionNoche) {
   const f = Math.max(0, Math.min(1, fraccionNoche || 0));
   for (const m of materialesEntorno) {
     if (!m.emissive) continue;
-    /* El terreno NO se enciende: con la ortofoto emisiva, de noche el suelo
-       entero salía naranja, como si el asfalto tuviera luz propia. La luz de
-       ciudad la ponen las fachadas del pueblo, que es de donde sale. */
-    if (/^ortho|^PNOA_|mar_atlantico|EXT_Tierra|asphalt|curb/i.test(m.name || '')) { m.emissiveIntensity = 0; continue; }
+    if (!SE_ENCIENDE.test(m.name || '')) { m.emissiveIntensity = 0; continue; }
     m.emissive.copy(EMISIVO_PUEBLO);
     m.emissiveIntensity = EMISIVO_PUEBLO_MAX * f;
   }

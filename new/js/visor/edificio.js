@@ -202,14 +202,20 @@ function cargarGLB(url, onProgreso) {
 /* Vidrio de verdad (app/building.js): reflejo con Fresnel del entorno y una
    capa especular encima; el tinte verdoso es el del vidrio flotado real. */
 export function crearVidrioFisico() {
+  /* El tinte del vidrio sube de 0x2c3b3e a 0x3f5054 y la opacidad de 0,42 a
+     0,52: en un material transparente three multiplica TODO el sombreado por el
+     alfa, reflejo incluido, así que un vidrio muy transparente y muy oscuro no
+     refleja el cielo, solo deja ver lo que tiene detrás. Con el paño de fondo
+     en penumbra, el resultado era un paño NEGRO. Más cuerpo y más reflejo: el
+     vidrio se lee como vidrio. */
   const m = new THREE.MeshPhysicalMaterial({
-    color: 0x2c3b3e, roughness: 0.045, metalness: 0, transparent: true,
-    opacity: 0.42, envMapIntensity: 2.6, side: THREE.DoubleSide,
+    color: 0x3f5054, roughness: 0.045, metalness: 0, transparent: true,
+    opacity: 0.52, envMapIntensity: 3.0, side: THREE.DoubleSide,
     clearcoat: 1, clearcoatRoughness: 0.02,
     ior: 1.52, reflectivity: 0.62, specularIntensity: 1,
     emissive: EMISIVO_VENTANA, emissiveIntensity: 0,
   });
-  m.userData = { baseOpacity: 0.42, baseEnv: 2.6, baseColor: m.color.clone(), sinTraseras: true };
+  m.userData = { baseOpacity: m.opacity, baseEnv: m.envMapIntensity, baseColor: m.color.clone(), sinTraseras: true };
   return m;
 }
 
@@ -653,7 +659,7 @@ export async function cargarEdificio(ctx, slot, opciones = {}) {
             m.envMapIntensity = m.userData.baseEnv * (vendida ? ESTOR.reflejo : (on && cerrado ? 0.3 : 1));
           }
           if (m.userData.baseOpacity !== undefined) {
-            const extra = vendida ? ESTOR.opacidad : (on && cerrado ? 0.42 : 0);
+            const extra = vendida ? ESTOR.opacidad : (on && cerrado ? 0.32 : 0);
             m.opacity = Math.min(1, m.userData.baseOpacity + extra);
           }
           m.roughness = vendida ? 0.35 : (on && cerrado ? 0.12 : 0.05);
