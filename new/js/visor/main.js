@@ -109,7 +109,7 @@ import { cargarEdificio, crearVidrioFisico, EMISIVO_VENTANA, INTENSIDAD_VENTANA 
 import { crearCortes } from 'app/visor/cortes.js';
 import { crearCamara } from 'app/visor/camara.js';
 import { limitarMaterial, megapixeles } from 'app/visor/texturas.js';
-import { ajustarMaterial } from 'app/visor/materiales.js';
+import { ajustarMaterial, asignarMapa } from 'app/visor/materiales.js';
 import { ACTIVE_BUILDING } from 'app/promotions.js';
 import { FLOOR_DEFS } from 'app/layout.js';
 import { ESTADO_COLORS } from 'app/building.js';
@@ -314,7 +314,7 @@ function cargarGLB(url, onProgreso) {
    cuantizadas a Int16 con la escala en el nodo) con las normales saneadas:
    ver cabecera. Sin índice se genera uno, porque mergeGeometries exige que
    todas lo tengan o ninguna. */
-function geometriaMundo(mesh, { conUV }) {
+function geometriaMundo(mesh, { conUV, uvMundo }) {
   const g = mesh.geometry;
   const salida = new THREE.BufferGeometry();
   for (const nombre of ['position', 'normal', 'uv']) {
@@ -336,6 +336,16 @@ function geometriaMundo(mesh, { conUV }) {
   for (let i = 0; i < ind.length; i++) ind[i] = idx ? idx.getX(i) : i;
   salida.setIndex(new THREE.BufferAttribute(ind, 1));
   salida.applyMatrix4(mesh.matrixWorld);
+  /* Proyección en planta para las texturas procedurales: la UV es la posición
+     en el mundo en metros, y el `repeat` de la textura dice cuánto mide la
+     baldosa. Así la calzada y el césped se texturizan igual sin depender de
+     cómo despiezara el SketchUp (que no trae UV en esas mallas). */
+  if (uvMundo) {
+    const pos = salida.getAttribute('position');
+    const uv = salida.getAttribute('uv');
+    for (let i = 0; i < pos.count; i++) uv.setXY(i, pos.getX(i), pos.getZ(i));
+    uv.needsUpdate = true;
+  }
   if (!g.getAttribute('normal')) salida.computeVertexNormals();
   const nor = salida.getAttribute('normal');
   let nulas = 0;
@@ -586,11 +596,17 @@ async function cargarEntorno(onProgreso) {
     porMaterial.get(m).push(o);
   });
   let mallas = 0, triangulos = 0, normalesNulas = 0, trisLejos = 0;
+  /* Antes de fusionar: el asfalto, la acera, la tierra y el césped llevan
+     textura procedural, y `conUV` se decide mirando `material.map`. Si la
+     textura se asignara después (en `materialEntorno`), la malla fusionada se
+     habría quedado sin UV. Ver materiales.js. */
+  for (const material of porMaterial.keys()) asignarMapa(material);
   for (const [material, lista] of porMaterial) {
     const conUV = !!material.map;
+    const uvMundo = !!material.userData?.uvMundo;
     const cerca = [], lejos = [];
     for (const o of lista) {
-      const g = geometriaMundo(o, { conUV });
+      const g = geometriaMundo(o, { conUV, uvMundo });
       normalesNulas += g.userData.normalesNulas || 0;
       const [dentro, fuera] = partirPorRadio(g, centro.x, centro.y, RADIO_CERCA);
       if (dentro) cerca.push(dentro);

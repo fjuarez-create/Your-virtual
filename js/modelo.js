@@ -35,7 +35,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { limitarMaterial } from 'app/texturas.js';
-import { ajustarMaterial } from 'app/materiales.js';
+import { ajustarMaterial, asignarMapa } from 'app/materiales.js';
 
 export const RUTAS = {
   modelo: 'data/serenea_modelo.json',
@@ -201,7 +201,7 @@ const leerJSON = (u) => fetch(u).then((r) => { if (!r.ok) throw new Error(u + ':
    deja unas noventa: la imagen es idéntica y el trabajo por fotograma cae a
    una vigésima parte. Las posiciones se pasan a coordenadas de mundo porque
    cada malla trae su propia matriz (y el GLB las cuantiza a enteros). */
-function geometriaEnMundo(mesh, conUV) {
+function geometriaEnMundo(mesh, conUV, uvMundo) {
   const g = mesh.geometry;
   const salida = new THREE.BufferGeometry();
   const pos = g.attributes.position;
@@ -224,7 +224,12 @@ function geometriaEnMundo(mesh, conUV) {
   if (conUV) {
     const uv = g.attributes.uv;
     const uvs = new Float32Array(pos.count * 2);
-    if (uv) for (let i = 0; i < pos.count; i++) { uvs[i * 2] = uv.getX(i); uvs[i * 2 + 1] = uv.getY(i); }
+    /* Proyección en planta para las texturas procedurales (asfalto, acera,
+       tierra, césped): la UV es la posición en el mundo en metros y el
+       `repeat` de la textura dice cuánto mide la baldosa. Esas mallas no
+       traen UV del SketchUp. Ver app/materiales.js. */
+    if (uvMundo) for (let i = 0; i < pos.count; i++) { uvs[i * 2] = posiciones[i * 3]; uvs[i * 2 + 1] = posiciones[i * 3 + 2]; }
+    else if (uv) for (let i = 0; i < pos.count; i++) { uvs[i * 2] = uv.getX(i); uvs[i * 2 + 1] = uv.getY(i); }
     salida.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
   }
   const idx = g.index;
@@ -406,9 +411,10 @@ function fusionarPorMaterial(raiz, centro) {
   let mallas = 0;
   for (const [material, lista] of porMaterial) {
     const conUV = !!material.map;
+    const uvMundo = !!material.userData?.uvMundo;
     const cerca = [], lejos = [];
     for (const o of lista) {
-      const g = geometriaEnMundo(o, conUV);
+      const g = geometriaEnMundo(o, conUV, uvMundo);
       const [dentro, fuera] = partirPorRadio(g, centro[0], centro[1], RADIO_CERCA);
       if (dentro) cerca.push(dentro);
       if (fuera) lejos.push(fuera);
@@ -501,7 +507,7 @@ export async function cargarModelo(scene, unitsById, { estadoDe = () => 'disponi
     raiz.traverse((o) => {
       if (!o.isMesh) return;
       const ms = Array.isArray(o.material) ? o.material : [o.material];
-      for (const m of ms) { limitarMaterial(m, texturaMax); prepararMaterial(m); ajustarMaterial(m); if (m?.name) materiales.set(m.name, m); }
+      for (const m of ms) { limitarMaterial(m, texturaMax); asignarMapa(m); prepararMaterial(m); ajustarMaterial(m); if (m?.name) materiales.set(m.name, m); }
       // El terreno lejano no proyecta sombra: el mapa de sombras cubre la
       // parcela, y hacerle sitio a 5 km de costa lo dejaría inservible.
       const cerca = !lejos || (o.geometry.boundingSphere ?? (o.geometry.computeBoundingSphere(), o.geometry.boundingSphere)).radius < 400;

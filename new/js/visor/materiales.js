@@ -1,7 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    materiales.js — Ajuste de los materiales del SketchUp al render del estudio.
 
-   Dos cosas, y las dos cambian mucho la imagen.
+   Tres cosas, y las tres cambian mucho la imagen.
 
    1) METALNESS. El exportador escribe 0,5 en todo material al que nadie le
       puso valor: madera, tierra, hoja de olivo, alicatado, rodapié, asfalto,
@@ -11,50 +11,327 @@
       aspecto apagado y grisáceo que se veía: nada tiene color propio y todo
       refleja el mismo cielo. Se corrige poniendo 0 en todo lo que valga
       exactamente 0,5 y no traiga mapa de metalness. Los metales de verdad
-      llevan su valor puesto a mano (aluminio 0,8, cromado, bronce 0,65) y no
-      se tocan.
+      llevan su valor puesto a mano (aluminio, cromado, bronce) y no se tocan.
 
-   2) COLOR. El modelo entregado trae TODO por encima de 200 sobre 255:
-      carpintería 227, vidrio 229, bordillo 236, hormigón 214, "interior en
-      sombra" 176. No hay un solo valor oscuro en toda la escena, y sin
-      oscuros no hay contraste: medido contra el render del estudio, la
-      fachada del visor recorría 91 niveles de gris y la del render 176. Aquí
-      se devuelven a su color real los pocos materiales que marcan la
-      diferencia, tomados de los renders de Memorable (CAM_02, CAM_08,
-      CAM_09): la carpintería es ANTRACITA, no plata; el interior tras el
-      vidrio es oscuro; el asfalto es gris medio oscuro y neutro, no azulado.
+   2) COLOR Y ACABADO. El modelo entregado trae CASI TODO por encima de 200
+      sobre 255: carpintería 227, vidrio 229, bordillo 236, hormigón 214,
+      "interior en sombra" 176, asfalto 138 azulado, hoja de olivo 172. No hay
+      un solo valor oscuro ni una sola saturación en toda la escena, y sin
+      oscuros no hay contraste. Aquí se devuelve a su color real lo que marca
+      la diferencia, con los acabados de la memoria de calidades:
+
+        · carpintería y aluminio → ALUMINIO GRIS (RAL 9007), no plata ni
+          antracita: es lo que le da ritmo a la fachada;
+        · fachada → monocapa blanco (se respeta, solo se matiza el reflejo);
+        · primera planta → travertino marfil SOFT TOUCH: mate, reflejo mínimo;
+        · pavimento de zonas comunes → PAMESA WELLS Sand mate;
+        · lo que se ve tras el vidrio → gris medio, ni cartón claro ni negro.
+
+   3) TEXTURA. Asfalto, acera, tierra y el césped del campo de fútbol llegan
+      como un color plano: una calzada de un solo gris a cincuenta metros es
+      lo que más delata que esto es un modelo y no una foto. Se les pone una
+      textura procedural generada en un lienzo de 256 px (ver `RECETAS`), con
+      su mapa de normales, proyectada en planta sobre las coordenadas del
+      mundo. Son cuatro texturas de 256×256: menos de 2 MB de vídeo en total,
+      cero descargas y cero ficheros nuevos en el repositorio.
 
    Si algún día el cliente entrega el modelo con estos materiales bien
-   puestos, basta con vaciar AJUSTES y quitar la llamada.
+   puestos, basta con vaciar AJUSTES y quitar las llamadas.
    ═══════════════════════════════════════════════════════════════════════════ */
+import * as THREE from 'three';
 
 /* Materiales que SÍ son metal y traen su valor puesto a conciencia. */
 const METALES = /aluminio|cromado|bronce|acero|inox|metal_|_metal|FV_Marco/i;
 
-/* nombre exacto → color en sRGB y acabado. Solo lo que se aparta de verdad
-   del render entregado. */
-export const AJUSTES = {
-  /* Las carpinterías son antracita en los tres renders del estudio, y en el
-     modelo vienen en 227 (plata casi blanca). Es EL cambio que le da ritmo a
-     la fachada: sin él, hueco y muro tienen el mismo valor y el edificio se
-     lee como un bloque liso. */
-  'APOLO V6 | Aluminio plata grata': { color: 0x34383c, metalness: 0.85, roughness: 0.38 },
-  'V6_FV_Marco_aluminio': { color: 0x3d4145, metalness: 0.8, roughness: 0.4 },
-  /* Lo que se ve a través del vidrio. En 176 gris claro el hueco parecía
-     tapado con un cartón; oscuro se lee como una habitación. */
-  'APOLO | Interior en sombra': { color: 0x24272b, metalness: 0, roughness: 0.95 },
-  /* Asfalto: 138,144,149 con tinte azul contra los 60,63,75 neutros del
-     render. Es la superficie más grande del encuadre a pie de calle. */
-  /* `env` baja el reflejo del cielo. Una calzada es horizontal: ve el
-     hemisferio entero, así que con reflejo pleno se volvía AZUL (medido
-     76,103,129 contra los 60,63,75 neutros del render). */
-  asphalt: { color: 0x5e6164, metalness: 0, roughness: 0.95, env: 0.35 },
-  curb: { color: 0xbfbdb7, metalness: 0, roughness: 0.9, env: 0.5 },
-  metal: { color: 0x6e6f6c, metalness: 0.6, roughness: 0.45 },
-  'V6 | Junta grafito': { color: 0x3a3d3c, metalness: 0, roughness: 0.8 },
-  'V6_FV_Celulas_antracita': { color: 0x22262b, metalness: 0.25, roughness: 0.25 },
-  'EXT_Neumatico': { color: 0x2e3032, metalness: 0, roughness: 0.9 },
+/* ── Texturas procedurales ────────────────────────────────────────────────
+   Ruido de valor periódico (se repite exactamente cada `per` celdas, así la
+   baldosa casa consigo misma y no se ve la costura) con varias octavas. */
+const LADO = 256;
+
+function azar(x, y, semilla) {
+  let h = (x * 374761393 + y * 668265263 + semilla * 2246822519) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177) | 0;
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+
+function valor(x, y, per, s) {
+  const x0 = Math.floor(x), y0 = Math.floor(y);
+  const fx = x - x0, fy = y - y0;
+  const ux = fx * fx * (3 - 2 * fx), uy = fy * fy * (3 - 2 * fy);
+  const en = (i, j) => azar(((x0 + i) % per + per) % per, ((y0 + j) % per + per) % per, s);
+  const a = en(0, 0), b = en(1, 0), c = en(0, 1), d = en(1, 1);
+  const arriba = a + (b - a) * ux, abajo = c + (d - c) * ux;
+  return arriba + (abajo - arriba) * uy;
+}
+
+function fbm(x, y, per, octavas, s) {
+  let amp = 1, f = 1, suma = 0, norma = 0;
+  for (let i = 0; i < octavas; i++) {
+    suma += amp * valor(x * f, y * f, per * f, s + i * 977);
+    norma += amp; amp *= 0.5; f *= 2;
+  }
+  return suma / norma;
+}
+
+const frac = (v) => v - Math.floor(v);
+
+/* Cada receta devuelve [r, g, b, altura]. El color va al `map` (multiplica al
+   color base, así que se mueve en torno a 1) y la altura, al mapa de normales.
+   Todas están pensadas para verse a 10-80 m, que es la distancia de trabajo. */
+const RECETAS = {
+  /* Aglomerado asfáltico: parcheado de riegos + grano de árido + algún
+     canto claro suelto. */
+  asfalto(u, v, x, y) {
+    const manchas = fbm(u * 8, v * 8, 8, 3, 11);
+    const arido = fbm(u * 96, v * 96, 96, 2, 23);
+    let k = 0.95 + 0.065 * (manchas * 2 - 1) + 0.05 * (arido * 2 - 1);
+    const canto = azar(x, y, 7);
+    if (canto > 0.995) k += 0.07;   // algún canto claro suelto, contado: más, y es sal y pimienta
+    const c = 255 * k;
+    return [c, c, c * 0.995, arido * 0.6 + manchas * 0.4];
+  },
+  /* Césped de campo de fútbol: franjas de corte (dos por baldosa, y con la
+     baldosa a 12 m eso son siegas de 6 m), mata irregular y grano de hoja.
+     Las franjas claras tiran a amarillo y las oscuras a azul, que es lo que
+     hace la hoja según se tumbe hacia el sol o en contra. */
+  cesped(u, v) {
+    const franja = Math.sin(v * Math.PI * 4);
+    const mata = fbm(u * 6, v * 6, 6, 3, 31);
+    const hoja = fbm(u * 80, v * 80, 80, 2, 47);
+    const k = 0.955 + 0.042 * franja + 0.07 * (mata * 2 - 1) + 0.055 * (hoja * 2 - 1);
+    return [255 * k * (1 + 0.055 * franja), 255 * k, 255 * k * (1 - 0.05 * franja), hoja * 0.7 + mata * 0.3];
+  },
+  /* Acera de loseta: junta cada cuarto de baldosa (con la baldosa a 4 m, una
+     loseta de 1 m) y hormigón moteado. */
+  acera(u, v) {
+    const n = fbm(u * 40, v * 40, 40, 3, 53);
+    const grano = fbm(u * 110, v * 110, 110, 2, 67);
+    let k = 0.97 + 0.045 * (n * 2 - 1) + 0.03 * (grano * 2 - 1);
+    let h = n * 0.7 + grano * 0.3;
+    const du = frac(u * 4), dv = frac(v * 4);
+    if (du < 0.018 || dv < 0.018) { k *= 0.90; h -= 0.5; }
+    const c = 255 * k;
+    return [c, c * 0.998, c * 0.99, h];
+  },
+  /* Tierra de alcorque y jardinera: terrones grandes y grano fino; lo claro,
+     más cálido (está más seco). */
+  tierra(u, v) {
+    const terron = fbm(u * 10, v * 10, 10, 4, 71);
+    const grano = fbm(u * 64, v * 64, 64, 2, 83);
+    const k = 0.94 + 0.13 * (terron * 2 - 1) + 0.06 * (grano * 2 - 1);
+    return [255 * k * 1.03, 255 * k, 255 * k * 0.93, terron * 0.8 + grano * 0.2];
+  },
 };
+
+const cache = new Map();
+
+/* Construye (una sola vez) el par color + normales de una receta. */
+function texturasDe(clave) {
+  if (cache.has(clave)) return cache.get(clave);
+  const receta = RECETAS[clave];
+  let par = { map: null, normalMap: null };
+  try {
+    const n = LADO;
+    const color = document.createElement('canvas');
+    color.width = color.height = n;
+    const gc = color.getContext('2d');
+    const img = gc.createImageData(n, n);
+    const alturas = new Float32Array(n * n);
+    for (let y = 0; y < n; y++) {
+      for (let x = 0; x < n; x++) {
+        const i = y * n + x;
+        const [r, g, b, h] = receta(x / n, y / n, x, y);
+        img.data[i * 4] = r; img.data[i * 4 + 1] = g; img.data[i * 4 + 2] = b; img.data[i * 4 + 3] = 255;
+        alturas[i] = h;
+      }
+    }
+    gc.putImageData(img, 0, 0);
+
+    const normales = document.createElement('canvas');
+    normales.width = normales.height = n;
+    const gn = normales.getContext('2d');
+    const imgN = gn.createImageData(n, n);
+    const fuerza = n * 0.06;   // pendiente en unidades de textura
+    for (let y = 0; y < n; y++) {
+      for (let x = 0; x < n; x++) {
+        const i = y * n + x;
+        const dx = (alturas[y * n + (x + 1) % n] - alturas[y * n + (x - 1 + n) % n]) * fuerza;
+        const dy = (alturas[((y + 1) % n) * n + x] - alturas[((y - 1 + n) % n) * n + x]) * fuerza;
+        const l = Math.sqrt(dx * dx + dy * dy + 1);
+        imgN.data[i * 4] = 255 * ((-dx / l) * 0.5 + 0.5);
+        imgN.data[i * 4 + 1] = 255 * ((dy / l) * 0.5 + 0.5);
+        imgN.data[i * 4 + 2] = 255 * ((1 / l) * 0.5 + 0.5);
+        imgN.data[i * 4 + 3] = 255;
+      }
+    }
+    gn.putImageData(imgN, 0, 0);
+
+    const mapa = new THREE.CanvasTexture(color);
+    mapa.colorSpace = THREE.SRGBColorSpace;
+    const normal = new THREE.CanvasTexture(normales);
+    for (const t of [mapa, normal]) {
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      t.anisotropy = 4;   // la calzada se ve casi siempre a contrapicado
+      t.name = `proc_${clave}`;
+    }
+    par = { map: mapa, normalMap: normal };
+  } catch (e) {
+    console.warn('[materiales] no se pudo generar la textura', clave, e.message);
+  }
+  cache.set(clave, par);
+  return par;
+}
+
+/* nombre exacto → color en sRGB, acabado y textura. Solo lo que se aparta de
+   verdad del modelo entregado.
+     · `env`     intensidad del reflejo del entorno (1 = pleno);
+     · `mapa`    receta procedural;
+     · `escala`  metros que ocupa una baldosa de esa textura;
+     · `relieve` fuerza del mapa de normales. */
+export const AJUSTES = {
+  /* ── Carpintería: ALUMINIO GRIS (RAL 9007) ──
+     En el modelo viene en 227 (plata casi blanca), igual de claro que el
+     monocapa: hueco y muro se leían con el mismo valor y el edificio salía
+     como un bloque liso. En gris aluminio la fachada coge ritmo sin irse al
+     antracita, que no es lo que lleva el proyecto. */
+  'APOLO V6 | Aluminio plata grata': { color: 0x8e908f, metalness: 0.8, roughness: 0.33 },
+  'V6_FV_Marco_aluminio': { color: 0x8e908f, metalness: 0.78, roughness: 0.36 },
+  'APOLO | Juntas y herrajes': { color: 0x7e8081, metalness: 0.45, roughness: 0.5 },
+  'V6_Cromado': { color: 0xdcdfe0, metalness: 0.95, roughness: 0.14 },
+
+  /* ── Lo que se ve a través del vidrio ──
+     Es el fondo de los 267 huecos: uno por ventana. En el 176 gris claro del
+     modelo el hueco parecía tapado con un cartón; en antracita se quedaba
+     NEGRO en todas las ventanas de la misma tipología. Gris medio: se lee
+     como una habitación en penumbra, que es lo que es. */
+  'APOLO | Interior en sombra': { color: 0x5c6165, metalness: 0, roughness: 0.95, env: 0.2 },
+
+  /* ── Fachada: mortero monocapa blanco ──
+     Se queda blanco. Lo único que se toca es el reflejo: un paño blanco con
+     reflejo pleno recoge el azul del hemisferio entero y deja de ser blanco. */
+  'APOLO V6 | Monocapa blanco roto 5pct calido': { color: 0xf7f3ec, metalness: 0, roughness: 0.94, env: 0.5 },
+  'V6_Monocapa_contexto': { color: 0xe9e5dc, metalness: 0, roughness: 0.92, env: 0.5 },
+
+  /* ── Primera planta: travertino marfil, efecto soft touch ──
+     Mate al tacto y con un brillo mínimo: rugosidad alta y reflejo del
+     entorno casi a cero. El tono sale de la foto del baño. */
+  'APOLO V6 | Travertino marfil veta vertical': { color: 0xc9c1b3, metalness: 0, roughness: 0.82, env: 0.16 },
+
+  /* ── Pavimento de zonas comunes: PAMESA WELLS Sand mate ── */
+  'APOLO V6 | PAMESA WELLS Ivory 120x60': { color: 0xcbc4ba, metalness: 0, roughness: 0.68, env: 0.24 },
+  'APOLO V6 | Junta Ivory 2mm': { color: 0xb5aea4, metalness: 0, roughness: 0.85, env: 0.15 },
+  'SERENEA V3 | Loseta neutra 60 cm': { color: 0xcbc4ba, metalness: 0, roughness: 0.74, env: 0.26 },
+  'SERENEA V3 | Bordillo claro textura': { color: 0xc6c1b7, metalness: 0, roughness: 0.85, env: 0.35 },
+  'APOLO | Hormigon gris claro': { color: 0xbfbeb8, metalness: 0, roughness: 0.9, env: 0.4 },
+  'APOLO V6 | Gravilla gris claro cubierta': { color: 0xbab5ab, metalness: 0, roughness: 0.95, env: 0.3 },
+
+  /* ── Calle ──
+     El asfalto es la superficie más grande del encuadre a pie de calle y
+     llegaba en 138,144,149, gris claro y AZUL. Un aglomerado envejecido anda
+     por 85 y es neutro. `env` bajo porque una calzada es horizontal: ve el
+     hemisferio entero y con reflejo pleno se vuelve azul otra vez. */
+  asphalt: { color: 0x5d5c58, metalness: 0, roughness: 0.93, env: 0.18, mapa: 'asfalto', escala: 7, relieve: 0.45 },
+  /* Marcas viales y paso de peatones: pintura envejecida, nunca blanco puro. */
+  white: { color: 0xdcd9d0, metalness: 0, roughness: 0.9, env: 0.22 },
+  sidewalk: { color: 0xc2bdb3, metalness: 0, roughness: 0.9, env: 0.3, mapa: 'acera', escala: 4, relieve: 0.5 },
+  curb: { color: 0xc4bfb5, metalness: 0, roughness: 0.85, env: 0.4 },
+  tactile: { color: 0xb3a897, metalness: 0, roughness: 0.88, env: 0.3 },
+  /* Alcantarillas, registros y rejillas: fundición, que es gris oscuro
+     pardo y medio mate, no el gris claro medio metálico del modelo. */
+  'SERENEA V3 | Registros y rejillas fundicion': { color: 0x4c4844, metalness: 0.55, roughness: 0.62, env: 0.3 },
+  metal: { color: 0x6e6f6c, metalness: 0.6, roughness: 0.45 },
+  EXT_Neumatico: { color: 0x2e3032, metalness: 0, roughness: 0.9, env: 0.3 },
+  EXT_Coche_plata: { color: 0xb9bcbd, metalness: 0.65, roughness: 0.28 },
+  EXT_Faro: { color: 0xe8ebe6, metalness: 0.1, roughness: 0.12 },
+
+  /* ── Verdes ──
+     Todo el verde del modelo está en torno a 170 y sin saturar, que es el
+     verde de un plano, no el de una hoja. El olivo es gris-verde; el arbolado
+     de calle, verde profundo. `env` a la mitad: una copa no refleja el cielo,
+     lo filtra, y con reflejo pleno el arbolado se volvía gris azulado. */
+  EXT_Hoja_oliva: { color: 0x828c66, metalness: 0, roughness: 0.88, env: 0.45 },
+  EXT_Hoja_oliva_clara: { color: 0x9aa37e, metalness: 0, roughness: 0.88, env: 0.45 },
+  EXT_Hoja_verde: { color: 0x5e7b50, metalness: 0, roughness: 0.85, env: 0.45 },
+  EXT_Hoja_verde_clara: { color: 0x77935c, metalness: 0, roughness: 0.85, env: 0.45 },
+  EXT_Tronco: { color: 0x6f6557, metalness: 0, roughness: 0.95, env: 0.35 },
+  V6_Verde_profundo: { color: 0x4f6b44, metalness: 0, roughness: 0.88, env: 0.45 },
+  V6_Verde_medio: { color: 0x63814f, metalness: 0, roughness: 0.88, env: 0.45 },
+  V6_Verde_luz: { color: 0x7e9661, metalness: 0, roughness: 0.88, env: 0.45 },
+  V6_Hoja_palmera: { color: 0x62804b, metalness: 0, roughness: 0.88, env: 0.45 },
+  V6_Hoja_palmera_luz: { color: 0x7f975f, metalness: 0, roughness: 0.88, env: 0.45 },
+  'V6 | Hoja olivo verde gris': { color: 0x818c68, metalness: 0, roughness: 0.88, env: 0.45 },
+  'V6 | Hoja olivo clara': { color: 0x99a385, metalness: 0, roughness: 0.88, env: 0.45 },
+  'V6 | Sotobosque verde': { color: 0x7c8a64, metalness: 0, roughness: 0.9, env: 0.45 },
+  'V6 | Sotobosque salvia': { color: 0x9aa188, metalness: 0, roughness: 0.9, env: 0.45 },
+  'V6 | Tronco olivo': { color: 0x7b7364, metalness: 0, roughness: 0.95, env: 0.35 },
+  /* Césped del campo de fútbol: verde de juego, con siegas. */
+  grass: { color: 0x527f43, metalness: 0, roughness: 0.9, env: 0.35, mapa: 'cesped', escala: 12, relieve: 0.35 },
+  EXT_Tierra: { color: 0x73695b, metalness: 0, roughness: 0.95, env: 0.3, mapa: 'tierra', escala: 5, relieve: 0.6 },
+  'SERENEA V3 | Tierra y acolchado de jardineras': { color: 0x5d5246, metalness: 0, roughness: 0.96, env: 0.25 },
+  'V6 | Tierra vegetal portales': { color: 0x594e42, metalness: 0, roughness: 0.96, env: 0.25 },
+
+  /* ── Contexto urbano ──
+     Los vecinos y las cubiertas también venían todos por encima de 210: el
+     pueblo entero se leía como una maqueta de escayola. */
+  EXT_Terracota: { color: 0xb07c5c, metalness: 0, roughness: 0.9, env: 0.4 },
+  roof: { color: 0xa79d8f, metalness: 0, roughness: 0.9, env: 0.4 },
+  EXT_Ceramica_grafito: { color: 0x5c5e5c, metalness: 0, roughness: 0.75, env: 0.5 },
+  EXT_Ceramica_arena: { color: 0xcfc6b4, metalness: 0, roughness: 0.85, env: 0.45 },
+  edificacion_costera_clara: { color: 0xdbd6cb, metalness: 0, roughness: 0.9, env: 0.55 },
+  industry: { color: 0xbcbfbd, metalness: 0, roughness: 0.8, env: 0.5 },
+  /* La ortofoto del terreno (lo que se ve donde no hay pavimento modelado)
+     llega clara y con dominante magenta, que a pie de calle canta. Se le
+     quita el rosa y se baja un punto: es fondo, no protagonista. */
+  ortho: { metalness: 0, roughness: 1, env: 0.35, color: 0xe8f0ea },
+
+  /* ── Fotovoltaica y juntas ── */
+  'V6 | Junta grafito': { color: 0x444746, metalness: 0, roughness: 0.8 },
+  V6_FV_Celulas_antracita: { color: 0x22262b, metalness: 0.25, roughness: 0.25 },
+  V6_FV_Junta_celulas: { color: 0x60666b, metalness: 0.3, roughness: 0.45 },
+  V6_FV_Lastres_gris: { color: 0xa9a8a3, metalness: 0, roughness: 0.85, env: 0.4 },
+};
+
+/* Lo mismo para las nueve teselas de la ortofoto de la costa, que comparten
+   nombre con un índice detrás. */
+const AJUSTES_PATRON = [
+  [/^PNOA_costa_/, { metalness: 0, roughness: 1, env: 0.35, color: 0xe8f0ea }],
+];
+
+const ajusteDe = (nombre) => AJUSTES[nombre] || AJUSTES_PATRON.find(([re]) => re.test(nombre))?.[1];
+
+/**
+ * Asigna la textura procedural que le toque al material, si la tiene.
+ *
+ * SE LLAMA ANTES DE FUSIONAR LA GEOMETRÍA, a propósito: los dos visores
+ * deciden si conservan las UV mirando `material.map`, y la fusión descarta el
+ * atributo `uv` cuando el material no lleva mapa. Si esto se hiciera dentro de
+ * `ajustarMaterial` (que corre después), la malla fusionada se quedaría sin
+ * UV y la textura no se vería. Marca `userData.uvMundo` para que quien fusiona
+ * genere las UV proyectando en planta: la baldosa mide `escala` metros de
+ * mundo, así que la calzada no depende de cómo despiezara el SketchUp.
+ */
+export function asignarMapa(m) {
+  if (!m || m.userData?.mapaProcedural || m.map) return m;
+  const a = AJUSTES[m.name || ''];
+  if (!a || !a.mapa || !RECETAS[a.mapa]) return m;
+  const { map, normalMap } = texturasDe(a.mapa);
+  if (!map) return m;
+  m.userData = m.userData || {};
+  m.userData.mapaProcedural = true;
+  m.userData.uvMundo = true;
+  const k = 1 / (a.escala || 8);
+  m.map = map.clone();
+  m.map.repeat.set(k, k);
+  m.map.needsUpdate = true;
+  if (normalMap && a.relieve > 0) {
+    m.normalMap = normalMap.clone();
+    m.normalMap.repeat.set(k, k);
+    m.normalMap.needsUpdate = true;
+    m.normalScale = new THREE.Vector2(a.relieve, a.relieve);
+  }
+  m.needsUpdate = true;
+  return m;
+}
 
 /**
  * Corrige el metalness heredado del exportador y aplica el ajuste de color si
@@ -75,13 +352,12 @@ export function ajustarMaterial(m) {
   }
 
   // 2) color y acabado
-  const a = AJUSTES[nombre];
+  const a = ajusteDe(nombre);
   if (a) {
     if (a.color !== undefined) m.color.setHex(a.color);
-    if (a.env !== undefined && m.userData) m.userData.baseEnv = a.env;
     if (a.metalness !== undefined) m.metalness = a.metalness;
     if (a.roughness !== undefined) m.roughness = a.roughness;
-    if (a.env !== undefined) m.envMapIntensity = a.env;
+    if (a.env !== undefined) { m.envMapIntensity = a.env; m.userData.baseEnv = a.env; }
     if (m.userData.baseColor) m.userData.baseColor.copy(m.color);
   }
   return m;
