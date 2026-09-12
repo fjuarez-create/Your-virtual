@@ -1,4 +1,10 @@
-Require all denied
+# Nadie tiene por qué leer esta carpeta por URL. La directiva de Apache 2.4 va
+# dentro de su IfModule: suelta, en un Apache 2.2 provoca un error 500 y
+# tumbaría toda la carpeta en vez de protegerla.
+<IfModule mod_authz_core.c>
+  Require all denied
+</IfModule>
 <IfModule !mod_authz_core.c>
+  Order allow,deny
   Deny from all
 </IfModule>

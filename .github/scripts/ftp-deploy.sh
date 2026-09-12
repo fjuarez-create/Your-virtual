@@ -107,7 +107,7 @@ if [ "$WHAT" = check ]; then
     [ "$remote_n" -ge "$local_n" ] || fallos=$((fallos + 1))
   done
   for f in index.html js/main.js js/modelo.js css/style.css \
-           gestion/index.php gestion/lib.php gestion/api/estado.php \
+           gestion/index.php gestion/lib.php gestion/comprobar.php gestion/api/estado.php \
            assets/serenea/entorno.glb assets/serenea/apolo_envolvente.glb \
            assets/serenea/apolo_corte_baja.glb assets/serenea/apolo_mobiliario.glb \
            data/viviendas_serenea.json data/cortes.json \

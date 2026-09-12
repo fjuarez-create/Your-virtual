@@ -1,0 +1,3 @@
+# Algunos hostings no listan index.php entre los índices del directorio, y
+# entonces /gestion/ contesta 403 en vez de abrir el panel. Esto lo arregla.
+DirectoryIndex index.php index.html

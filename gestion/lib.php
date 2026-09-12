@@ -15,6 +15,11 @@ declare(strict_types=1);
    Por el mismo motivo gestion/datos/ está excluido del deploy (ver
    .github/scripts/ftp-deploy.sh: la carpeta gestion se sube sin --delete). */
 
+/* El código de aquí se mantiene compatible con PHP 7.0 a propósito: el panel
+   de un hosting compartido puede tener el dominio fijado a una versión vieja, y
+   un error de sintaxis en este fichero deja /gestion en blanco entero, sin
+   mensaje. Nada de funciones flecha ni de `match`. */
+
 const ESTADOS = ['disponible', 'reservada', 'vendida'];
 const ESTADO_POR_DEFECTO = 'disponible';
 
@@ -35,7 +40,11 @@ function asegurar_datos(): bool {
   if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) return false;
   $guardia = $dir . '/.htaccess';
   if (!is_file($guardia)) {
-    @file_put_contents($guardia, "Require all denied\n<IfModule !mod_authz_core.c>\n  Deny from all\n</IfModule>\n");
+    /* Cada directiva dentro de su IfModule: la de Apache 2.4 suelta provoca un
+       error 500 en un Apache 2.2, que es peor que no proteger nada. */
+    @file_put_contents($guardia,
+      "<IfModule mod_authz_core.c>\n  Require all denied\n</IfModule>\n"
+      . "<IfModule !mod_authz_core.c>\n  Order allow,deny\n  Deny from all\n</IfModule>\n");
   }
   return is_writable($dir);
 }
@@ -153,7 +162,9 @@ function registrar_equipo(string $nombre, string $version, string $sello): void 
   /* Un tope por si alguien juega con el parámetro: nos quedamos con los 20
      equipos vistos más recientemente. */
   if (count($equipos) > 20) {
-    uasort($equipos, static fn($a, $b) => strcmp((string) $b['visto'], (string) $a['visto']));
+    uasort($equipos, function ($a, $b) {
+      return strcmp((string) $b['visto'], (string) $a['visto']);
+    });
     $equipos = array_slice($equipos, 0, 20, true);
   }
   escribir_json(ruta_equipos(), $equipos);
@@ -161,6 +172,10 @@ function registrar_equipo(string $nombre, string $version, string $sello): void 
 
 function equipos(): array {
   $lista = leer_json(ruta_equipos()) ?: [];
-  uasort($lista, static fn($a, $b) => strcmp((string) ($b['visto'] ?? ''), (string) ($a['visto'] ?? '')));
+  uasort($lista, function ($a, $b) {
+    $va = isset($b['visto']) ? $b['visto'] : '';
+    $vb = isset($a['visto']) ? $a['visto'] : '';
+    return strcmp((string) $va, (string) $vb);
+  });
   return $lista;
 }

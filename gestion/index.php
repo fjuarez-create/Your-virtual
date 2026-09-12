@@ -14,12 +14,22 @@ declare(strict_types=1);
 
 require __DIR__ . '/lib.php';
 
-session_set_cookie_params([
-  'httponly' => true,
-  'samesite' => 'Lax',
-  'secure'   => (($_SERVER['HTTPS'] ?? '') !== '' && ($_SERVER['HTTPS'] ?? '') !== 'off')
-                 || ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https',
-]);
+$https = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== '' && $_SERVER['HTTPS'] !== 'off')
+  || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https');
+
+/* La forma con array —la única que admite SameSite— es de PHP 7.3 en adelante.
+   En una versión anterior hay que pasar los parámetros sueltos, y SameSite se
+   queda fuera; la cookie sigue siendo httponly y secure, que es lo que de
+   verdad la protege. */
+if (PHP_VERSION_ID >= 70300) {
+  session_set_cookie_params([
+    'httponly' => true,
+    'samesite' => 'Lax',
+    'secure'   => $https,
+  ]);
+} else {
+  session_set_cookie_params(0, '/', '', $https, true);
+}
 session_name('unikgestion');
 session_start();
 
