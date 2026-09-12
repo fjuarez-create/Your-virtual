@@ -12,6 +12,15 @@ name: Diagnóstico del panel
 #   restaurar    deshace lo anterior.
 
 on:
+  # GitHub no acepta lanzar por API un workflow que no esté en la rama
+  # principal, así que además se dispara al tocar sus propios ficheros: para
+  # repetir el diagnóstico basta con volver a subir este script.
+  push:
+    branches:
+      - claude/hopeful-faraday-7y80bt
+    paths:
+      - .github/workflows/diagnostico-panel.yml
+      - .github/scripts/ftp-diagnostico.sh
   workflow_dispatch:
     inputs:
       accion:
