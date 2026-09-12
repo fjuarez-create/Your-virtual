@@ -59,6 +59,15 @@ jobs:
             echo
           done
 
+      # comprobar.php es la única página del panel que contesta, y dentro lleva
+      # la versión de PHP del dominio. Es el dato que decide qué sintaxis puede
+      # usar el resto del código.
+      - name: Leer la comprobación entera
+        run: |
+          set -u
+          curl -sS -m 25 https://showroom.unikdi.com/gestion/comprobar.php \
+            | sed -e 's/<[^>]*>/ /g' -e 's/  */ /g' | grep -v '^ *$' | sed 's/^/  /'
+
       - name: Mirar el servidor por FTP
         env:
           FTP_SERVER: ${{ secrets.FTP_SERVER }}
