@@ -6,6 +6,7 @@
 #   ftp-deploy.sh assets   planos, fichas, HDRI y modelo (lo pesado)
 #   ftp-deploy.sh new      la versión nueva del visor, en /new
 #   ftp-deploy.sh code     css, js, data y vendor
+#   ftp-deploy.sh gestion  el panel comercial, en /gestion
 #   ftp-deploy.sh index    index.html, siempre el último
 #   ftp-deploy.sh check    cuenta lo que hay arriba y falla si no cuadra
 #
@@ -18,7 +19,7 @@
 
 set -eu
 
-WHAT="${1:?uso: ftp-deploy.sh assets|code|new|index|check}"
+WHAT="${1:?uso: ftp-deploy.sh assets|code|new|gestion|index|check}"
 
 for name in FTP_SERVER FTP_USERNAME FTP_PASSWORD; do
   eval "value=\${$name:-}"
@@ -106,6 +107,7 @@ if [ "$WHAT" = check ]; then
     [ "$remote_n" -ge "$local_n" ] || fallos=$((fallos + 1))
   done
   for f in index.html js/main.js js/modelo.js css/style.css \
+           gestion/index.php gestion/lib.php gestion/api/estado.php \
            assets/serenea/entorno.glb assets/serenea/apolo_envolvente.glb \
            assets/serenea/apolo_corte_baja.glb assets/serenea/apolo_mobiliario.glb \
            data/viviendas_serenea.json data/cortes.json \
@@ -158,6 +160,15 @@ case "$WHAT" in
     ;;
   index)
     CMDS="cd \"$DIR\"; put publish/index.html -o index.html;"
+    ;;
+  # El panel es la única carpeta que se sube SIN --delete, y es a propósito:
+  # gestion/datos/ guarda en el servidor el estado vivo de las viviendas, la
+  # contraseña del panel y el registro de la oficina de ventas. Nada de eso
+  # está en el repositorio, así que un mirror con --delete se lo llevaría por
+  # delante en cada push y el comercial perdería las ventas apuntadas.
+  gestion)
+    CMDS="cd \"$DIR\";
+      mirror -R --transfer-all --no-perms -v publish/gestion gestion;"
     ;;
   # La versión nueva vive en /new y comparte assets, data y vendor con la
   # raíz: no se duplican los 73 MB de planos, fichas y modelos.

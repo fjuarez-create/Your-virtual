@@ -111,6 +111,7 @@ import { crearCamara } from 'app/visor/camara.js';
 import { limitarMaterial, megapixeles } from 'app/visor/texturas.js';
 import { ajustarMaterial, asignarMapa } from 'app/visor/materiales.js';
 import { ACTIVE_BUILDING } from 'app/promotions.js';
+import { fetchAvailability } from 'app/api.js';
 import { FLOOR_DEFS } from 'app/layout.js';
 import { ESTADO_COLORS } from 'app/building.js';
 
@@ -687,6 +688,27 @@ function estadosDemostracion(ed) {
   return mapa;
 }
 
+/* Refresco del estado comercial. El comercial marca una venta en /gestion
+   desde el móvil y la pantalla de la oficina se entera sin recargar. Se
+   compara antes de repintar: si nada ha cambiado, la escena no se toca. */
+const REFRESCO_ESTADOS_MS = 60_000;
+
+function vigilarEstados() {
+  let firma = JSON.stringify(apolo.estados);
+  setInterval(async () => {
+    if (document.hidden || !edificio) return;
+    let nuevos = null;
+    try { nuevos = await fetchAvailability(ACTIVE_BUILDING.availability); } catch { return; }
+    if (!nuevos || !Object.keys(nuevos).length) return;
+    const ahora = JSON.stringify(nuevos);
+    if (ahora === firma) return;
+    firma = ahora;
+    edificio.setEstados(nuevos);
+    apolo.estados = edificio.estados;
+    repintar();
+  }, REFRESCO_ESTADOS_MS);
+}
+
 /* ── Encuadres ── */
 function volarAPose(pose, duracion) {
   const aspecto = camera.aspect || ASPECTO_POSE;
@@ -1211,6 +1233,7 @@ async function arrancar() {
   apolo.estados = edificio.estados;
   const demo = estadosDemostracion(edificio);
   if (demo) edificio.setEstados(demo);
+  else vigilarEstados();   // el estado real se refresca solo; el de demo, no
   post.setGrado(MOMENTOS[apolo.momento].grado);
   edificio.setVentanas(MOMENTOS[apolo.momento].ventana ?? (MOMENTOS[apolo.momento].luces ? 1 : 0));
   edificio.setLuces(NIVEL_LUCES[apolo.momento] ?? 0);

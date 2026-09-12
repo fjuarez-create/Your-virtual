@@ -55,10 +55,30 @@ python3 -m http.server 8080
 
 O `npx serve`, nginx, GitHub Pages, Netlify, Vercel… cualquier hosting estático.
 
-## 🔌 Conexión con el backend (disponibilidad en tiempo real)
+## 🗂️ Panel de gestión (`/gestion`)
 
-La app funciona hoy con JSON estático (`data/units.json` y `data/availability.json`)
-y refresca la disponibilidad cada 60 s. Para conectar un backend real solo hay que
+El comercial marca cada vivienda como disponible, reservada o vendida en
+`showroom.unikdi.com/gestion` y los dos visores lo enseñan en el siguiente
+refresco, sin tocar el repositorio ni esperar a un deploy. Lo lee también el
+ejecutable de la oficina de ventas al arrancar.
+
+- **Estado vivo**: `gestion/datos/estado.json`, solo en el servidor.
+  `data/availability.json` queda como semilla y como plan B si el endpoint no
+  contesta.
+- **Endpoint público**: `GET /gestion/api/estado.php` →
+  `{ actualizado, sello, total, viviendas: { "101": "vendida", … } }`.
+- **Contraseña**: no hay ninguna en el repositorio ni ningún secreto nuevo en
+  GitHub. Se crea desde el propio panel la primera vez que se entra, y se
+  guarda cifrada en el servidor. **Hay que entrar a crearla en cuanto se
+  publique.**
+
+Los detalles, incluido lo que tiene que hacer el ejecutable de Unreal para
+trabajar sin internet, están en [`docs/PANEL_Y_EJECUTABLE.md`](docs/PANEL_Y_EJECUTABLE.md).
+
+## 🔌 Conexión con otro backend
+
+Los visores piden primero `/gestion/api/estado.php` y, si falla, el JSON
+estático `data/availability.json`. Para apuntar a un backend distinto basta con
 definir las URLs antes de cargar la app (p. ej. en `index.html`):
 
 ```html
@@ -73,7 +93,8 @@ definir las URLs antes de cargar la app (p. ej. en `index.html`):
 
 ### Contratos de la API
 
-**GET `availabilityUrl`** — estado comercial por vivienda:
+**GET `availabilityUrl`** — estado comercial por vivienda, en cualquiera de
+las dos formas (el mapa pelado, o dentro de `viviendas`):
 
 ```json
 { "101": "disponible", "102": "reservada", "103": "vendida" }

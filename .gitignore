@@ -3,3 +3,7 @@ node_modules/
 publish/
 index.local.html
 tools/node_modules
+
+# Estado vivo del panel: lo escribe el servidor, no el repositorio.
+gestion/datos/*
+!gestion/datos/.htaccess

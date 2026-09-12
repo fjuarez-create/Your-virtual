@@ -1,8 +1,18 @@
 /* ═══════════════════════════════════════════════════════════════
    api.js — Capa de datos.
 
-   Hoy sirve JSON estático; mañana, un backend real. Para conectar
-   el backend basta con definir antes de cargar la app:
+   La disponibilidad la manda el panel de gestión
+   (showroom.unikdi.com/gestion): el comercial marca una vivienda como
+   vendida y el visor lo enseña en el siguiente refresco, sin deploy.
+   El endpoint es /gestion/api/estado.php y devuelve
+
+     { actualizado, sello, total, viviendas: { "101": "vendida", ... } }
+
+   Si el endpoint no contesta —hosting sin PHP, panel todavía sin
+   publicar, un corte— se cae a data/availability.json, que viaja en el
+   repositorio. El visor nunca se queda sin datos por esto.
+
+   Para apuntar a otro backend basta con definir, antes de cargar la app:
 
      window.APOLO_API = {
        unitsUrl:        'https://api.midominio.com/api/units',
@@ -14,10 +24,15 @@
    - GET unitsUrl        → [{ id, planta, dorm, orientacion, supViv,
                               terraza, supTotal, precio }, ...]
    - GET availabilityUrl → { "101": "disponible|reservada|vendida", ... }
+                           o { viviendas: { "101": ... } }
    - POST leadUrl        → { unitId, nombre, email, telefono }
    ═══════════════════════════════════════════════════════════════ */
 
 const cfg = () => window.APOLO_API || {};
+
+/* Fuente viva y copia de seguridad, en ese orden. */
+const ESTADO_VIVO = 'gestion/api/estado.php';
+const ESTADO_FIJO = 'data/availability.json';
 
 export async function fetchUnits() {
   const url = cfg().unitsUrl || 'data/units.json';
@@ -26,16 +41,40 @@ export async function fetchUnits() {
   return res.json();
 }
 
-export async function fetchAvailability() {
-  const url = cfg().availabilityUrl || 'data/availability.json';
-  try {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(String(res.status));
-    return await res.json();
-  } catch (e) {
-    console.warn('[apolo] Disponibilidad no disponible, se asume todo "disponible":', e.message);
-    return {};
+/* El panel devuelve el mapa dentro de `viviendas`; el JSON estático es el
+   mapa pelado. Se aceptan los dos para que la misma función sirva a ambos. */
+const mapaDeEstados = (dato) => {
+  if (!dato || typeof dato !== 'object') return {};
+  const mapa = dato.viviendas && typeof dato.viviendas === 'object' ? dato.viviendas : dato;
+  return typeof mapa === 'object' ? mapa : {};
+};
+
+async function pedirEstados(url) {
+  const res = await fetch(url, { cache: 'no-store' });
+  if (!res.ok) throw new Error(String(res.status));
+  return mapaDeEstados(await res.json());
+}
+
+/* `respaldo` es el JSON estático al que caer si el panel no contesta. Cada
+   edificio del catálogo puede traer el suyo (ver promotions.js); si no, el de
+   Apolo. Un `window.APOLO_API.availabilityUrl` explícito manda sobre todo. */
+export async function fetchAvailability(respaldo) {
+  const fijado = cfg().availabilityUrl;
+  const intentos = fijado ? [fijado] : [ESTADO_VIVO, respaldo || ESTADO_FIJO];
+  let ultimo = null;
+  for (const url of intentos) {
+    try {
+      const estados = await pedirEstados(url);
+      /* Un endpoint que contesta con el mapa vacío no es una respuesta útil:
+         se sigue probando con el siguiente antes de darlo por bueno. */
+      if (Object.keys(estados).length) return estados;
+      ultimo = new Error('respuesta vacía');
+    } catch (e) {
+      ultimo = e;
+    }
   }
+  console.warn('[apolo] Disponibilidad no disponible, se asume todo "disponible":', ultimo && ultimo.message);
+  return {};
 }
 
 /** Refresco periódico de disponibilidad (polling sencillo, backend-ready). */

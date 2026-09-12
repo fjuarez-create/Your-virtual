@@ -106,6 +106,7 @@ import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { limitarMaterial } from 'app/visor/texturas.js';
 import { ajustarMaterial } from 'app/visor/materiales.js';
 import { ESTADO_COLORS } from 'app/building.js';
+import { fetchAvailability } from 'app/api.js';
 
 export const DISTANCIA_VIDRIO = 0.45;    // m del centro del vidrio a la huella de la vivienda (ver cabecera)
 export const RANGO_Y_VIDRIO = [-0.5, 3.2]; // y del vidrio respecto al suelo de la vivienda
@@ -475,7 +476,9 @@ export async function cargarEdificio(ctx, slot, opciones = {}) {
   };
   const [units, disponibilidad, definicionCortes, datosViviendas, gltf] = await Promise.all([
     opciones.unitsById ? null : cargarJSON(slot.units || 'data/units.json', false),
-    opciones.estados ? null : cargarJSON(slot.availability || 'data/availability.json', true),
+    /* El estado comercial lo manda el panel (/gestion); el JSON del catálogo
+       queda de respaldo. Ver js/api.js. */
+    opciones.estados ? null : fetchAvailability(slot.availability),
     opciones.definicionCortes || cargarJSON(rutas.cortes, false),
     opciones.viviendas || cargarJSON(rutas.viviendas, false),
     cargarGLB(rutas.envolvente, onProgreso),

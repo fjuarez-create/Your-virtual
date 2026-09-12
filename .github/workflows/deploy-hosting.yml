@@ -61,7 +61,7 @@ jobs:
           set -eu
           rm -rf publish && mkdir publish
           cp index.html publish/
-          cp -r assets css data js vendor new publish/
+          cp -r assets css data js vendor new gestion publish/
           du -sh publish
 
       - name: Instalar lftp
@@ -94,6 +94,17 @@ jobs:
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
           FTP_SERVER_DIR: ${{ secrets.FTP_SERVER_DIR }}
         run: bash .github/scripts/ftp-deploy.sh code
+
+      # El panel de gestión. Va antes que index.html por lo mismo que el resto:
+      # cuando el HTML nuevo llegue, lo que referencia ya tiene que estar.
+      - name: Subir el panel de gestión
+        timeout-minutes: 10
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_SERVER_DIR: ${{ secrets.FTP_SERVER_DIR }}
+        run: bash .github/scripts/ftp-deploy.sh gestion
 
       - name: Subir index.html
         timeout-minutes: 5
