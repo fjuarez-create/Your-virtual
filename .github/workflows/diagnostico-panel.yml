@@ -45,13 +45,13 @@ jobs:
       - name: Pedir cada URL
         run: |
           set -u
-          for ruta in / /gestion/ /gestion/index.php /gestion/comprobar.php \
-                      /gestion/api/estado.php /gestion/estilo.css \
-                      /gestion/datos/estado.json /gestion/datos/clave.php \
-                      /data/availability.json; do
+          for ruta in / /gestion/ /gestion/comprobar.php /gestion/api/estado.php \
+                      /unreal/ /unreal/apolo_envolvente.glb \
+                      /unreal/apolo_mobiliario.glb /unreal/entorno.glb; do
             printf '\n────────── %s\n' "$ruta"
-            curl -sS -o /tmp/cuerpo -D /tmp/cab -m 25 \
+            curl -sS -I -o /dev/null -D /tmp/cab -m 25 \
               "https://showroom.unikdi.com${ruta}" || echo "  (curl falló)"
+            : > /tmp/cuerpo
             head -1 /tmp/cab 2>/dev/null || true
             grep -iE '^(content-type|content-length|server|x-powered-by|location)' /tmp/cab 2>/dev/null || true
             echo "  ── primeros 400 bytes del cuerpo:"
