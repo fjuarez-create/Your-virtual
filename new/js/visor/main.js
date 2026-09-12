@@ -1291,6 +1291,22 @@ async function arrancar() {
     if (MOVIL) return;   // cuatro horneados de cielo y cuatro PMREM bloquean el hilo del teléfono
     try { await luz.precalentar(); } catch (e) { console.warn('[apolo] precalentar luz:', e); }
   }, 2500);
+
+  /* El mobiliario en el móvil: 1.403 mallas y 16 MB que con el edificio
+     cerrado no se ven, así que no entran en la carga secundaria. Pero
+     esperar a que alguien elija planta convierte esos 16 MB en varios
+     segundos de espera JUSTO en el momento de enseñárselo a un cliente, que
+     es el peor momento posible.
+
+     Se piden en cuanto la escena lleva un rato quieta: para cuando pulse una
+     planta ya suele estar dentro, y si no, el camino a la carta de
+     `apolo.setFloor` sigue ahí y no se duplica la descarga (cargarMobiliario
+     devuelve la que ya está en curso). El registro en cortes lo hace el
+     callback que dejó puesto cargarSecundarios. */
+  setTimeout(() => {
+    if (!MOVIL || edificio?.mobiliario) return;
+    edificio.cargarMobiliario().catch((e) => console.warn('[apolo] mobiliario en segundo plano:', e));
+  }, 6000);
 }
 
 arrancar().catch((err) => {
