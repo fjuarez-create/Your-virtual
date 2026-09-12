@@ -1,0 +1,60 @@
+name: Diagnóstico del panel
+
+# Desde el entorno donde se desarrolla no hay salida a showroom.unikdi.com, así
+# que las comprobaciones contra el hosting se hacen aquí: el runner sí llega al
+# dominio y además tiene los secretos de FTP. Se lanza a mano.
+#
+#   mirar        solo lee: pide cada URL, lista lo que hay en el servidor y
+#                descarga la última parte del log de errores.
+#   sin-htaccess renombra gestion/.htaccess y vuelve a pedir la página, para
+#                saber si el 500 lo provoca ese fichero (algunos hostings no
+#                permiten DirectoryIndex en un .htaccess y responden 500).
+#   restaurar    deshace lo anterior.
+
+on:
+  workflow_dispatch:
+    inputs:
+      accion:
+        description: Qué hacer
+        type: choice
+        default: mirar
+        options: [mirar, sin-htaccess, restaurar]
+
+jobs:
+  diagnostico:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar lftp
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq lftp
+
+      # El discriminante importante: comprobar.php no carga lib.php. Si esa
+      # contesta y index.php no, el problema está en lib.php. Si no contesta
+      # ninguna, es del servidor (PHP apagado, .htaccess, permisos).
+      - name: Pedir cada URL
+        run: |
+          set -u
+          for ruta in / /gestion/ /gestion/index.php /gestion/comprobar.php \
+                      /gestion/api/estado.php /gestion/estilo.css \
+                      /gestion/datos/estado.json /gestion/datos/clave.php \
+                      /data/availability.json; do
+            printf '\n────────── %s\n' "$ruta"
+            curl -sS -o /tmp/cuerpo -D /tmp/cab -m 25 \
+              "https://showroom.unikdi.com${ruta}" || echo "  (curl falló)"
+            head -1 /tmp/cab 2>/dev/null || true
+            grep -iE '^(content-type|content-length|server|x-powered-by|location)' /tmp/cab 2>/dev/null || true
+            echo "  ── primeros 400 bytes del cuerpo:"
+            head -c 400 /tmp/cuerpo 2>/dev/null | sed 's/^/  /'
+            echo
+          done
+
+      - name: Mirar el servidor por FTP
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_SERVER_DIR: ${{ secrets.FTP_SERVER_DIR }}
+          ACCION: ${{ inputs.accion }}
+        run: bash .github/scripts/ftp-diagnostico.sh
