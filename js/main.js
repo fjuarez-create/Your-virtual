@@ -365,12 +365,34 @@ gtao.updateGtaoMaterial({
 gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3.5, radius: 8, samples: 16 });
 composer.addPass(gtao);
 }
-/* El radio no es el tamaño del halo: reparte peso entre los cinco niveles y
+/* ── Por qué en el móvil no hay bloom ────────────────────────────────────────
+   Este es el "se ve negro y va a saltos" del teléfono, y costó encontrarlo
+   porque el tamaño, el viewport, el scissor, los destinos y el contexto WebGL
+   estaban todos correctos y la consola limpia. Probando la cadena pasada a
+   pasada en un iPhone emulado, con la vista de edificio completo:
+
+     cadena entera .............. negro
+     SIN bloom .................. correcta
+     sin grado .................. negro
+     sin OutputPass ............. negro
+     solo RenderPass ............ correcta
+
+   Es decir: en cuanto UnrealBloomPass escribe en el búfer del compositor y
+   otra pasada lo lee, la imagen se pierde. Cuando el bloom es la última
+   pasada no se nota, porque entonces copia él mismo la entrada a la pantalla
+   antes de sumar el halo. En escritorio no salta: los destinos van a cuatro
+   muestras y el camino de resolución es otro; en móvil `samples` es cero.
+   El bloom es además la pasada más cara de todas —trece cuadriláteros a
+   pantalla completa— y este visor es justo el que tiene que ir ligero, así
+   que en el teléfono se queda fuera. Se pierde el halo de las ventanas
+   encendidas de noche, que es precisamente lo que el cliente pidió recortar.
+
+   El radio no es el tamaño del halo: reparte peso entre los cinco niveles y
    con 0,5 los cinco quedan en 0,6, el de 1/32 incluido —el que reparte luz a
-   trescientos y pico píxeles—. Eso convertía una ventana encendida en un
-   velo sobre media fachada. Con 0,34 el destello se queda junto al cristal. */
-const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.14, 0.34, 0.92);
-composer.addPass(bloom);
+   trescientos y pico píxeles—. Con 0,34 el destello se queda junto al
+   cristal. */
+const bloom = MOVIL ? null : new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.14, 0.34, 0.92);
+if (bloom) composer.addPass(bloom);
 /* ── Por qué esto lleva `sinProfundidad` ─────────────────────────────────────
    `OutputPass` y `ShaderPass` de three crean su material SIN desactivar el
    test de profundidad. El compositor va y viene entre dos destinos que
@@ -735,9 +757,11 @@ app.setNight = (on) => {
   fill.intensity = on ? 0.5 : 0.15;
   renderer.toneMappingExposure = on ? 1.05 : 1.0;
   scene.fog.color.setHex(on ? 0x0b111c : 0xd6dde3);
-  bloom.strength = on ? 0.30 : 0.14;
-  bloom.threshold = on ? 0.92 : 0.92;
-  bloom.radius = on ? 0.24 : 0.34;
+  if (bloom) {
+    bloom.strength = on ? 0.30 : 0.14;
+    bloom.threshold = 0.92;
+    bloom.radius = on ? 0.24 : 0.34;
+  }
   // cielo nocturno: estrellas + luna, y nubes escasas teñidas de noche
   nightSky.visible = on;
   clouds.children.forEach((cluster, i) => {
