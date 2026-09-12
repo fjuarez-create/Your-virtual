@@ -397,6 +397,58 @@ function materialLejano(mat) {
   return m;
 }
 
+/* ── Fusión del edificio ─────────────────────────────────────────────────────
+   El entorno ya se fusionaba (mil y pico mallas → 98), pero la envolvente de
+   Apolo NO, y son 3.819 mallas sueltas. Medido en la vista de conjunto: 6.000
+   llamadas de dibujo y 4,3 millones de triángulos POR FOTOGRAMA, cuando un
+   teléfono aguanta unos cientos. Eso es lo que hacía que el visor fuera a
+   saltos y, cuando el navegador no llega a pintar, que enseñe teselas sin
+   pintar: los trozos negros del móvil y el rectángulo negro del PC.
+
+   Se fusiona DESPUÉS de asignar los vidrios a propósito: `asignarVidrios` da
+   un material por vivienda a cada paño, así que al agrupar por material los
+   vidrios se juntan solos por vivienda y `aplicarNoche`, que enciende el
+   MATERIAL y no la malla, sigue funcionando igual. La lista `mallasVidrio` no
+   la lee nadie. Y hay que sacar la raíz de su padre antes de hornear las
+   matrices, o la transformada del grupo se aplicaría dos veces. */
+function fusionarEdificio(raiz) {
+  const padre = raiz.parent;
+  if (padre) raiz.removeFromParent();
+  raiz.updateMatrixWorld(true);
+  const porMaterial = new Map();
+  const originales = [];
+  raiz.traverse((o) => {
+    if (!o.isMesh) return;
+    originales.push(o);
+    const m = Array.isArray(o.material) ? o.material[0] : o.material;
+    if (!porMaterial.has(m)) porMaterial.set(m, []);
+    porMaterial.get(m).push(o);
+  });
+  const nuevas = [];
+  for (const [material, lista] of porMaterial) {
+    const conUV = !!material.map;
+    const uvMundo = !!material.userData?.uvMundo;
+    const geos = [];
+    for (const o of lista) { const g = geometriaEnMundo(o, conUV, uvMundo); if (g) geos.push(g); }
+    if (!geos.length) continue;
+    const fusionada = geos.length === 1 ? geos[0] : mergeGeometries(geos, false);
+    if (!fusionada) { for (const g of geos) g.dispose(); continue; }
+    for (const g of geos) if (g !== fusionada) g.dispose();
+    fusionada.computeBoundingBox(); fusionada.computeBoundingSphere();
+    const mesh = new THREE.Mesh(fusionada, material);
+    mesh.name = `${raiz.name}__${material.name || nuevas.length}`;
+    mesh.castShadow = lista.some((o) => o.castShadow);
+    mesh.receiveShadow = true;
+    mesh.raycast = () => {};
+    nuevas.push(mesh);
+  }
+  for (const o of originales) o.geometry?.dispose();
+  raiz.clear();
+  for (const m of nuevas) raiz.add(m);
+  if (padre) padre.add(raiz);
+  return nuevas.length;
+}
+
 function fusionarPorMaterial(raiz, centro) {
   raiz.updateMatrixWorld(true);
   const porMaterial = new Map();
@@ -622,6 +674,7 @@ export async function cargarModelo(scene, unitsById, { estadoDe = () => 'disponi
   };
   asignarVidrios(mallasEnvolvente);
   vidrio.sinVidrio = candidatas.filter((v) => !v.vidrio).map((v) => v.id);
+  fusionarEdificio(envolvente);
 
   /* ── Recorte del mobiliario ──
      La envolvente llega ya cortada del pipeline, pero el mobiliario y las
@@ -663,7 +716,11 @@ export async function cargarModelo(scene, unitsById, { estadoDe = () => 'disponi
     for (let i = 0; i < planosCorte.length; i++) {
       planosCorte[i].constant = cotas ? cotas[Math.min(i, cotas.length - 1)] : 1e6;
     }
-    for (const p of piezasMob) p.mesh.visible = !cotas || p.ymin < cotas[p.plataforma] - EPS;
+    /* Sin planta cortada el edificio está CERRADO: las 1.403 mallas de
+       mobiliario no se ven por ninguna parte y sin embargo se dibujaban
+       todas, una por una, en cada fotograma. Es la mitad del coste de la
+       vista de conjunto, que es justo donde peor iba. */
+    for (const p of piezasMob) p.mesh.visible = !!cotas && p.ymin < cotas[p.plataforma] - EPS;
   }
 
   function aplicarPlanta() {
@@ -727,6 +784,7 @@ export async function cargarModelo(scene, unitsById, { estadoDe = () => 'disponi
         obj.name = 'corte-' + clave;
         obj.visible = false;
         asignarVidrios(adoptar(obj));
+        fusionarEdificio(obj);   // misma razón que la envolvente
         variantes.set(clave, obj);
         grupo.add(obj);
         aplicarPlanta();
