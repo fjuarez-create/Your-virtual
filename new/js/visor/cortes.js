@@ -373,9 +373,13 @@ const GLSL_ATENUACION = /* glsl */`
   uniform float uBordeZ;
   uniform float uFilasZ;
   uniform float uAtenuacion;
-  uniform float uSolInterior;
-  uniform float uLuzInterior;
-  uniform vec4 uHuella;        // x0, z0, x1, z1 de la planta del edificio
+  uniform float uSolInterior;    // cuánto del sol directo tapa el techo devuelto
+  uniform float uCieloInterior;  // cuánto del cielo tapa ese mismo techo
+  uniform vec3 uLampara;         // luz cenital de dentro de la vivienda
+  uniform vec3 uVentana;         // la que entra por el hueco
+  uniform vec3 uRebote;          // rebote del suelo, que abre los bajos
+  uniform vec3 uVentanaDir;      // hacia dónde cae el hueco (acimut del sol)
+  uniform vec4 uHuella;          // x0, z0, x1, z1 de la planta del edificio
   int celdaCorte(vec3 p) {
     float col = step(uBordesX.x, p.x) + step(uBordesX.y, p.x) + step(uBordesX.z, p.x);
     float fila = uFilasZ > 1.5 ? step(uBordeZ, p.z) : 0.0;
@@ -404,7 +408,42 @@ const GLSL_ATENUACION = /* glsl */`
     return dentro
          * smoothstep(suelo - 0.55, suelo - 0.10, p.y)   // el solado ENTRA entero
          * (1.0 - smoothstep(techo - 0.35, techo + 0.05, p.y));
+  }
+  /* Encuentro de paramento con solado. En el móvil no hay oclusión ambiental
+     —GTAO se queda fuera de la cadena ligera— y sin ella un interior iluminado
+     solo por ambiente sale plano y blanco, que es exactamente lo que se veía.
+     Esto pone a mano la única sombra que de verdad se echa en falta: la del
+     rodapié. Solo en superficies verticales; el suelo no se toca. */
+  float zocaloCorte(vec3 p, vec3 n) {
+    float pegado = 1.0 - smoothstep(0.0, 0.45, p.y - uSuelos[celdaCorte(p)]);
+    return 1.0 - 0.42 * pegado * (1.0 - abs(n.y));
   }`;
+/* Lo que se inyecta DENTRO de la franja de la vivienda seccionada: se le
+   devuelve el techo (fuera el sol y buena parte del cielo) y, en su lugar, se
+   encienden las luces de dentro. Tres términos, que es lo que hace que el
+   interior tenga modelado en vez de un baño plano: la lámpara del techo (la
+   recibe entera el solado y a medias los paramentos), la luz que entra por el
+   hueco (solo los paños que miran a la fachada soleada) y el rebote del suelo
+   (que es lo único que abre los bajos de los muebles). Ninguno necesita una
+   luz de verdad en la escena ni una sombra más que calcular, así que en el
+   teléfono cuesta lo mismo que antes. */
+const GLSL_INTERIOR = [
+  '',
+  'float enCorte = interiorCorte(vPosMundoCorte);',
+  'if (enCorte > 0.0) {',
+  '  reflectedLight.directDiffuse *= 1.0 - uSolInterior * enCorte;',
+  '  reflectedLight.directSpecular *= 1.0 - uSolInterior * enCorte;',
+  '  reflectedLight.indirectDiffuse *= 1.0 - uCieloInterior * enCorte;',
+  '  reflectedLight.indirectSpecular *= 1.0 - uCieloInterior * enCorte;',
+  '  vec3 nCorte = inverseTransformDirection(normal, viewMatrix);',
+  '  float arribaCorte = nCorte.y * 0.5 + 0.5;',
+  '  vec3 luzCorte = uLampara * arribaCorte',
+  '               + uVentana * max(dot(nCorte, uVentanaDir), 0.0)',
+  '               + uRebote * (1.0 - arribaCorte);',
+  '  luzCorte *= zocaloCorte(vPosMundoCorte, nCorte);',
+  '  reflectedLight.indirectDiffuse += luzCorte * BRDF_Lambert(material.diffuseColor) * enCorte;',
+  '}',
+].join('\n  ');
 const SUELO_BAJO_CORTE = 1.5;        // m; respaldo sin datos de vivienda (p1/p2/ático)
 const SUELO_BAJO_CORTE_BAJA = 2.2;   // m; respaldo en la planta más baja
 function crearUniformesAtenuacion() {
@@ -416,7 +455,11 @@ function crearUniformesAtenuacion() {
     uFilasZ: { value: 1 },
     uAtenuacion: { value: 0 },
     uSolInterior: { value: 0 },
-    uLuzInterior: { value: 0 },
+    uCieloInterior: { value: 0 },
+    uLampara: { value: new THREE.Color(0, 0, 0) },
+    uVentana: { value: new THREE.Color(0, 0, 0) },
+    uRebote: { value: new THREE.Color(0, 0, 0) },
+    uVentanaDir: { value: new THREE.Vector3(0, 0, 1) },
     uHuella: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) },
   };
 }
@@ -440,12 +483,9 @@ function atenuarPorCota(material, uniformes) {
         '#include <lights_fragment_end>'
         + '\n  reflectedLight.indirectSpecular *= 1.0 - 0.75 * atCorte;'
         + '\n  reflectedLight.indirectDiffuse *= 1.0 - 0.25 * atCorte;'
-        + '\n  float enCorte = interiorCorte(vPosMundoCorte);'
-        + '\n  reflectedLight.directDiffuse *= 1.0 - uSolInterior * enCorte;'
-        + '\n  reflectedLight.directSpecular *= 1.0 - uSolInterior * enCorte;'
-        + '\n  reflectedLight.indirectDiffuse *= 1.0 + uLuzInterior * enCorte;');
+        + (material.userData.sinInterior ? '' : GLSL_INTERIOR));
   };
-  material.customProgramCacheKey = () => `${clavePrevia ? clavePrevia() : ''}|${textoPrevio}|atenuacion`;
+  material.customProgramCacheKey = () => `${clavePrevia ? clavePrevia() : ''}|${textoPrevio}|atenuacion${material.userData.sinInterior ? '|sinint' : ''}`;
   material.needsUpdate = true;
 }
 
@@ -609,11 +649,18 @@ export function crearCortes(ctx, edificio, opciones = {}) {
      interior, que es la "muy buena iluminación interior" de una vivienda que
      sí tiene techo. No hay geometría nueva ni una sola sombra más que
      calcular, y fuera de la franja no cambia ni un píxel. */
-  const interior = { sol: 0, luz: 0 };
+  const interior = { sol: 0, cielo: 0, lampara: 0, ventana: 0, rebote: 0 };
+  const COLOR_INTERIOR = { lampara: new THREE.Color(), ventana: new THREE.Color(), rebote: new THREE.Color() };
   function aplicarInterior() {
     const f = atenuacionPorCota ? atenCota.valor : (cortes.planta !== 'all' ? 1 : 0);
-    uniformesAtenuacion.uSolInterior.value = interior.sol * f;
-    uniformesAtenuacion.uLuzInterior.value = interior.luz * f;
+    const u = uniformesAtenuacion;
+    u.uSolInterior.value = interior.sol * f;
+    u.uCieloInterior.value = interior.cielo * f;
+    /* Las luces de dentro entran con la misma rampa que el corte: en 'all' se
+       apagan solas y el edificio cerrado se ve como siempre. */
+    u.uLampara.value.copy(COLOR_INTERIOR.lampara).multiplyScalar(interior.lampara * f);
+    u.uVentana.value.copy(COLOR_INTERIOR.ventana).multiplyScalar(interior.ventana * f);
+    u.uRebote.value.copy(COLOR_INTERIOR.rebote).multiplyScalar(interior.rebote * f);
   }
 
   if (cortes.definicion) {
@@ -1132,10 +1179,21 @@ export function crearCortes(ctx, edificio, opciones = {}) {
     },
     suelosDe,
 
-    /* Techo devuelto solo en la cuenta de la luz (ver arriba). */
-    setInterior({ sol = 0, luz = 0 } = {}) {
+    /* Techo devuelto y luces encendidas dentro de la vivienda (ver arriba).
+       Los colores van en espacio LINEAL: son irradiancia, no pintura. */
+    setInterior(cfg = {}) {
+      const { sol = 0, cielo = 0, lampara = 0, ventana = 0, rebote = 0,
+        colorLampara = 0xffe6c8, colorVentana = 0xffffff, colorRebote = 0xd8d2c6,
+        dir = null } = cfg;
       interior.sol = THREE.MathUtils.clamp(sol, 0, 1);
-      interior.luz = Math.max(0, luz);
+      interior.cielo = THREE.MathUtils.clamp(cielo, 0, 1);
+      interior.lampara = Math.max(0, lampara);
+      interior.ventana = Math.max(0, ventana);
+      interior.rebote = Math.max(0, rebote);
+      COLOR_INTERIOR.lampara.setHex(colorLampara);
+      COLOR_INTERIOR.ventana.setHex(colorVentana);
+      COLOR_INTERIOR.rebote.setHex(colorRebote);
+      if (dir) uniformesAtenuacion.uVentanaDir.value.set(dir.x, 0, dir.z).normalize();
       aplicarInterior();
     },
 

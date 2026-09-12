@@ -243,8 +243,13 @@ export const AJUSTES = {
      La madera de dentro de las viviendas NO se toca: es la superficie que más
      luz rebota en la planta seccionada y bajarla pelea con el encargo de
      verlas mejor iluminadas. */
-  'APOLO | Tarima exterior greige': { color: 0xdddddd, metalness: 0, roughness: 0.74 },
-  'V6_Aticos_Acabado_terraza_existente': { color: 0xdddddd, metalness: 0, roughness: 0.78 },
+  'APOLO | Tarima exterior greige': { color: 0xdddddd, metalness: 0, roughness: 0.74, exterior: true },
+  'V6_Aticos_Acabado_terraza_existente': { color: 0xdddddd, metalness: 0, roughness: 0.78, exterior: true },
+  /* `exterior` marca lo que está a la intemperie AUNQUE caiga dentro de la
+     franja de la planta seccionada: una terraza sí tiene cielo encima, así que
+     no se le devuelve el techo ni se le encienden las luces de dentro (ver
+     cortes.setInterior). Sin esto, la tarima de la terraza salía en penumbra
+     al lado de una calle a pleno sol. */
 
   /* ── Calle ──
      El asfalto es la superficie más grande del encuadre a pie de calle y
@@ -379,6 +384,7 @@ export function ajustarMaterial(m) {
     if (a.metalness !== undefined) m.metalness = a.metalness;
     if (a.roughness !== undefined) m.roughness = a.roughness;
     if (a.env !== undefined) { m.envMapIntensity = a.env; m.userData.baseEnv = a.env; }
+    if (a.exterior) m.userData.sinInterior = true;
     if (m.userData.baseColor) m.userData.baseColor.copy(m.color);
   }
   return m;

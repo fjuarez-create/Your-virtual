@@ -22,7 +22,9 @@ import * as THREE from 'three';
    solo bajaba a un 75 %). Con 0,1 la pantalla baja a un 56 %, que es lo que
    se lee como "solo entra un tercio de la luz": se ven los muebles, pero la
    vivienda está claramente apagada, y nunca sale negra. */
-export const LUZ_VENDIDA = 0.1;
+/* Subido de 0,1 a 0,30 con el visor nuevo: la vendida no es un agujero negro,
+   es una vivienda con el estor bajado, y un estor deja pasar algo. */
+export const LUZ_VENDIDA = 0.30;
 /* De noche la escena ya está oscura: con 0,1 la vendida salía negra plana. */
 export const LUZ_VENDIDA_NOCHE = [0.80, 0.84, 0.95];
 /* Y al revés: de noche la vivienda libre o reservada se ENCIENDE con el mismo

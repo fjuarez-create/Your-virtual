@@ -358,6 +358,11 @@ export function crearPost(ctx, luz, opciones = {}) {
   class BloomLigero extends UnrealBloomPass {
     setSize(anchoP, altoP) { super.setSize(Math.max(1, Math.round(anchoP / 2)), Math.max(1, Math.round(altoP / 2))); }
   }
+  /* A media resolución cada nivel del bloom cubre el DOBLE de pantalla, así que
+     el mismo radio reparte el destello el doble de lejos: el teléfono veía más
+     velo alrededor de las ventanas que el escritorio, justo al revés de lo que
+     hace falta. Se compensa a la mitad. */
+  const ESCALA_RADIO = ligero ? 0.5 : 1;
   const ClaseBloom = ligero ? BloomLigero : UnrealBloomPass;
   /* El radio NO es el tamaño del halo: `lerpBloomFactor` lo usa para repartir
      peso entre los cinco niveles, y con 0,5 los cinco quedan clavados en 0,6,
@@ -366,7 +371,7 @@ export function crearPost(ctx, luz, opciones = {}) {
      media fachada: el núcleo apenas subía y el muro de al lado se iba de 55 a
      114. Ahora el radio va por momento (ver MOMENTOS.bloomRadio): de noche
      0,20 concentra el destello alrededor del cristal y deja el muro en paz. */
-  const bloom = new ClaseBloom(new THREE.Vector2(w, h), parametrosIniciales.bloom, parametrosIniciales.bloomRadio ?? 0.42, parametrosIniciales.umbral);
+  const bloom = new ClaseBloom(new THREE.Vector2(w, h), parametrosIniciales.bloom, (parametrosIniciales.bloomRadio ?? 0.42) * ESCALA_RADIO, parametrosIniciales.umbral);
   /* El corte del bloom deja de ser un escalón: con smoothWidth 0,01 una
      superficie que rozaba el umbral entraba o salía de golpe y se veía el
      borde. */
@@ -531,7 +536,7 @@ export function crearPost(ctx, luz, opciones = {}) {
       if (!parametros) return;
       if (parametros.bloom !== undefined) bloom.strength = parametros.bloom;
       if (parametros.umbral !== undefined) bloom.threshold = parametros.umbral;
-      if (parametros.bloomRadio !== undefined) bloom.radius = parametros.bloomRadio;
+      if (parametros.bloomRadio !== undefined) bloom.radius = parametros.bloomRadio * ESCALA_RADIO;
       if (parametros.exposicion !== undefined) renderer.toneMappingExposure = parametros.exposicion;
     },
 

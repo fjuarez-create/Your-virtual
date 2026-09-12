@@ -129,30 +129,43 @@ export const ESTOR = { color: 0.35, reflejo: 0.25, opacidad: 0.3 };
    solo bajaba a un 75 %). Con 0,1 la pantalla baja a un 56 %, que es lo que
    se lee como "solo entra un tercio de la luz": se ven los muebles, pero la
    vivienda está claramente apagada, y nunca sale negra. */
-export const LUZ_VENDIDA = 0.1;
+/* Subido de 0,1 a 0,30 a petición del cliente: con 0,1 la vendida no era una
+   vivienda con los estores bajados, era un agujero negro al lado de una libre
+   blanca. Lo que pide es un estor CON algo de transparencia: la casa se ve
+   oscura, pero se ve. Y como ahora el interior de la planta seccionada lleva
+   sus propias luces (cortes.setInterior), la vendida conserva el mismo
+   modelado que la libre y solo baja de nivel, que es justo como se lee un
+   estor bajado. */
+export const LUZ_VENDIDA = 0.30;
 /* De noche la escena ya está oscura de por sí y el factor cae en el pie de la
    curva de tono, donde resta el doble: con 0,55 la vendida salía negra plana.
    0,82 con un pelo de tinte frío (a una vivienda apagada solo le entra luna)
    basta, porque el contraste no lo pone ella sino la encendida de al lado:
    2,35 contra 0,82 es más de paso y medio, que se lee de inmediato. */
-export const LUZ_VENDIDA_NOCHE = [0.80, 0.84, 0.95];
+/* De noche la vendida estaba PERFECTA y no debe moverse ni un punto. Pero el
+   prisma multiplica, y la lámpara de interior nueva sube la base del suelo de
+   0,25 a 0,65 de irradiancia: para que el producto no cambie hay que dividir
+   el factor por esos 2,59. 0,80/2,59 = 0,309, y así con los tres canales. No
+   es que la vendida se oscurezca: es que se queda donde estaba. */
+export const LUZ_VENDIDA_NOCHE = [0.31, 0.325, 0.37];
 /* Y al revés: de noche, la vivienda LIBRE o RESERVADA se enciende. El mismo
    prisma multiplicativo, pero con un factor mayor que uno y cálido, así que
    el interior sube de luz y se tiñe de bombilla. Es un solo dibujo por
    vivienda y no hace falta ninguna luz de verdad en la escena: cien luces
    puntuales no las mueve ningún teléfono. */
-/* Subido a petición del cliente: en la planta seccionada de noche la vendida
-   estaba bien pero la libre se quedaba corta y no se leía que estuviera
-   habitada. Se sube AQUÍ y no en el ambiente de la escena a propósito: este
-   prisma es por vivienda, así que la vendida —que es la que el cliente da por
-   buena— no se entera, y no hay que compensar nada. El vidrio no entra: se
-   dibuja antes y con profundidad, así que el prisma no lo multiplica y la
-   ventana no gana ni un punto de destello. */
-export const LUZ_ENCENDIDA = [2.35, 2.02, 1.55];
+/* Ojo al número: BAJA de 2,35 a 1,62 y aun así la libre queda casi al doble de
+   luz que antes. El prisma multiplica, y la lámpara de interior nueva ya ha
+   subido la base de 0,25 a 0,65: 0,65 × 1,62 = 1,05 contra los 0,25 × 1,75 =
+   0,44 de partida. La diferencia es que ese 1,05 llega con MODELADO —suelo,
+   paramentos y bajos de mueble en niveles distintos— en vez de ser un baño
+   plano multiplicado, que es lo que el cliente veía como "muy apagadas y muy
+   planas". El vidrio no entra: se dibuja antes y con profundidad, así que el
+   prisma no lo multiplica y la ventana no gana ni un punto de destello. */
+export const LUZ_ENCENDIDA = [1.62, 1.39, 1.07];
 /* Al atardecer la vivienda libre también se enciende, pero de lejos: fuera
    todavía hay luz y una bombilla a tope de día se ve falsa. Lo justo para que
    el interior deje de ser una cueva. */
-export const LUZ_ENCENDIDA_ATARDECER = [1.45, 1.30, 1.14];
+export const LUZ_ENCENDIDA_ATARDECER = [1.22, 1.12, 1.02];
 export const CARTELA_PX = 34;            // alto del sprite de la cartela en px para un lienzo de 720 px (ver cabecera)
 export const EMISIVO_VENTANA = 0xffd9a0; // luz cálida de interior
 export const INTENSIDAD_VENTANA = 1.4;   // por encima de 1 para que el bloom lo recoja

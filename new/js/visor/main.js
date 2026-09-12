@@ -160,6 +160,16 @@ const SOMBRAS = { margen: 250, min: 300, max: 1200, paso: 50 };
 /* Nivel de luces del momento para edificio.setLuces (0 día · 1 atardecer ·
    2 noche): al atardecer la vivienda libre también se enciende, pero poco. */
 const NIVEL_LUCES = { manana: 0, dia: 0, atardecer: 1, noche: 2 };
+/* Ajuste de la vivienda seccionada para cortes.setInterior: el techo que el
+   corte se llevó y las luces de dentro. La dirección del hueco es el acimut
+   del sol del momento (la luna de noche), que es lo que hace que los paños que
+   miran a la fachada soleada reciban más luz y el interior tenga un lado
+   claro y otro en penumbra en vez de un baño plano. */
+function interiorDe(clave) {
+  const M = MOMENTOS[clave];
+  const azim = THREE.MathUtils.degToRad(M.luna?.azim ?? M.azim ?? 0);
+  return { ...M.interior, dir: { x: Math.sin(azim), z: Math.cos(azim) } };
+}
 /* El tope del móvil estaba en 1: en un iPhone con densidad 3 eso es un
    lienzo a un tercio de lado y un antepecho de un píxel. 1,35 son un 82 %
    más de píxeles que pintar y, con el FXAA que ahora sí se
@@ -962,7 +972,7 @@ Object.assign(apolo, {
     /* El techo que el corte se lleva, devuelto solo en la cuenta de la luz
        (ver cortes.setInterior): cada momento dice cuánto sol tapa y cuánta luz
        interior pone. */
-    cortes?.setInterior(MOMENTOS[clave].interior);
+    cortes?.setInterior(interiorDe(clave));
     encenderEntorno(MOMENTOS[clave].noche);
     return luz.setMomento(clave, { duracion });
   },
@@ -1222,7 +1232,7 @@ async function arrancar() {
        (ver cortes.proyectaMobiliario). */
     sombraMobiliario: !MOVIL,
   });
-  cortes.setInterior(MOMENTOS[apolo.momento].interior);
+  cortes.setInterior(interiorDe(apolo.momento));
   cortes.preparar(); // los hooks de material se añaden antes del primer fotograma con edificio
   actualizarReflectantes();
   repintar();

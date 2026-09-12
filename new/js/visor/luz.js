@@ -107,7 +107,7 @@ export const MOMENTOS = {
        si no el cielo se va a blanco. */
     ibl: 0.08, fondo: 0.075, solMax: 45, noche: 0,
     nubes: 0.66, nubesAlto: 30, nubesMax: 5,
-    interior: { sol: 0.68, luz: 0.12 },
+    interior: { sol: 0.90, cielo: 0.50, lampara: 0.52, ventana: 0.44, rebote: 0.15, colorVentana: 0xffe8cf },
     grado: { contraste: 1.16, saturacion: 1.12, negros: 0.040 },
   },
   dia: {
@@ -141,7 +141,7 @@ export const MOMENTOS = {
        al fondo: la iluminación la lleva `ibl`. */
     ibl: 0.07, fondo: 0.055, solMax: 50, noche: 0,
     nubes: 0.72, nubesAlto: 30, nubesMax: 8,
-    interior: { sol: 0.75, luz: 0.12 },
+    interior: { sol: 0.92, cielo: 0.55, lampara: 0.54, ventana: 0.50, rebote: 0.16, colorVentana: 0xfff6e8 },
     grado: { contraste: 1.18, saturacion: 1.12, negros: 0.042 },
   },
   atardecer: {
@@ -163,7 +163,7 @@ export const MOMENTOS = {
     bloom: 0.14, umbral: 4.6, bloomRadio: 0.32, hdri: false, luces: true, ventana: 1.0,
     ibl: 0.20, fondo: 0.32, solMax: 30, noche: 0,
     nubes: 0.70, nubesAlto: 34, nubesMax: 2.0,
-    interior: { sol: 0.35, luz: 0.30 },
+    interior: { sol: 0.80, cielo: 0.38, lampara: 0.60, ventana: 0.40, rebote: 0.18, colorVentana: 0xffa863 },
     grado: { contraste: 1.14, saturacion: 1.14, negros: 0.030 },
   },
   noche: {
@@ -182,11 +182,13 @@ export const MOMENTOS = {
        pasar el píxel entero, y con radio 0,5 los cinco niveles pesaban igual,
        el de 1/32 incluido —el que reparte luz a trescientos píxeles—. Medido:
        el núcleo apenas subía (219→227) y el muro de al lado se iba de 55 a
-       114. Ahora la ventana vale 1,4 × 1,55 × 0,84 × 0,73 ≈ 1,34 contra un
-       corte de 1,15 (pasa el 85 %, sigue floreciendo) y el radio 0,20 deja el
-       nivel pegado al cristal casi intacto y el lejano en la tercera parte:
-       destello sí, velo no. */
-    bloom: 0.19, umbral: 1.15, bloomRadio: 0.20, hdri: false, luces: true, ventana: 1.55,
+       114. Segunda pasada, porque en el teléfono seguía brillando demasiado:
+       el cristal encendido vale ahora 1,4 × 1,0 × 0,84 × 0,73 ≈ 0,86 —lee como
+       ventana con luz, no como foco— y del bloom solo pasa un 20 % (corte
+       0,80, rodilla 0,25) con radio 0,14. Ojo con el corte: el interior más
+       claro de la planta encendida anda por 0,17 de radiancia, así que 0,80
+       deja fuera todo menos el propio cristal. */
+    bloom: 0.13, umbral: 0.80, bloomRadio: 0.14, hdri: false, luces: true, ventana: 1.0,
     /* El IBL de noche es el propio cielo horneado, que lleva la banda cálida
        del resplandor urbano en el horizonte. A 1,2 esa banda iluminaba TODA la
        escena desde los lados y dejaba el barrio, los árboles y las palmeras de
@@ -198,7 +200,7 @@ export const MOMENTOS = {
        pantalla (unas 5× a 1080p) cada una se convierte en una mancha; las
        estrellas nítidas del raster son los Points de crearCieloNocturno. */
     resplandor: 0xffa869, resplandorInt: 0.10, estrellas: 0.022,
-    interior: { sol: 0, luz: 0 },
+    interior: { sol: 0, cielo: 0, lampara: 0.40, ventana: 0.08, rebote: 0.12, colorVentana: 0xc3d4ff },
     /* Saturación casi a raya: de noche subirla convierte el resplandor cálido
        del horizonte en un filtro sepia sobre el barrio entero. El contraste
        sube un poco, que es lo que da profundidad sin cerrar los interiores. */
