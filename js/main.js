@@ -371,7 +371,23 @@ composer.addPass(gtao);
    velo sobre media fachada. Con 0,34 el destello se queda junto al cristal. */
 const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.14, 0.34, 0.92);
 composer.addPass(bloom);
-composer.addPass(new OutputPass());
+/* ── Por qué esto lleva `sinProfundidad` ─────────────────────────────────────
+   `OutputPass` y `ShaderPass` de three crean su material SIN desactivar el
+   test de profundidad. El compositor va y viene entre dos destinos que
+   CONSERVAN el búfer de profundidad que escribió la escena en RenderPass, así
+   que el triángulo a pantalla completa de la pasada se prueba contra esa
+   profundidad y se descarta casi entero: el lienzo salía negro con una franja
+   de imagen abajo. En escritorio no se veía porque los destinos van a cuatro
+   muestras y ahí el camino de resolución es otro; en el móvil, con `samples`
+   a cero, salta siempre. Es exactamente el "se ve negro y va a saltos" del
+   teléfono. UnrealBloomPass no lo sufre porque sus materiales sí lo apagan.
+   Un cuadrilátero de pantalla completa nunca debe mirar la profundidad. */
+function sinProfundidad(pase) {
+  const m = pase?.material;
+  if (m) { m.depthTest = false; m.depthWrite = false; m.needsUpdate = true; }
+  return pase;
+}
+composer.addPass(sinProfundidad(new OutputPass()));
 
 /* ── Grado de color ──
    Sobre la imagen ya mapeada a pantalla. AgX es una curva deliberadamente
@@ -406,7 +422,7 @@ const grado = new ShaderPass({
     }
   `,
 });
-composer.addPass(grado);
+composer.addPass(sinProfundidad(grado));
 function aplicarGrado(noche) {
   const g = noche ? GRADO.noche : GRADO.dia;
   grado.uniforms.contraste.value = g.contraste;

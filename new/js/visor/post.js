@@ -436,6 +436,18 @@ export function crearPost(ctx, luz, opciones = {}) {
   const output = new OutputPass();
   const ocultar = new OcultarInvisiblesPass(scene);
 
+  /* Un cuadrilátero a pantalla completa NUNCA debe mirar la profundidad, y
+     OutputPass y ShaderPass de three crean su material sin desactivarla. Los
+     destinos del compositor conservan el búfer de profundidad que escribió la
+     escena, así que la pasada se prueba contra él y se descarta casi entera:
+     en el visor clásico eso era el lienzo en negro del móvil. Aquí no llegó a
+     verse, pero el fallo estaba puesto igual. */
+  for (const p of [smaa, output, grado]) {
+    if (!p?.material) continue;
+    p.material.depthTest = false;
+    p.material.depthWrite = false;
+    p.material.needsUpdate = true;
+  }
   for (const p of [renderPass, ocultar, gtao, ssr, desenfoque, bloom, bokeh, smaa, output, grado]) if (p) composer.addPass(p);
   let activo = true; // false tras dispose: los eventos de ctx no se pueden desregistrar
 
