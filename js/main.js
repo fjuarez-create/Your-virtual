@@ -158,7 +158,10 @@ clouds.name = 'nubes';
   const tex = new THREE.CanvasTexture(cv);
   let cseed = 77;
   const crnd = () => { cseed = (cseed * 1664525 + 1013904223) % 4294967296; return cseed / 4294967296; };
-  for (let i = 0; i < 16; i++) {
+  /* Cada nube es un sprite y cada sprite una llamada de dibujo: dieciséis
+     grupos son 172 sprites, que con la envolvente ya fusionada pasaban a ser
+     casi una cuarta parte de todo lo que se dibuja. En el teléfono, seis. */
+  for (let i = 0; i < (MOVIL ? 6 : 16); i++) {
     const cluster = new THREE.Group();
     const n = 3 + Math.floor(crnd() * 3);
     for (let j = 0; j < n; j++) {
@@ -366,25 +369,15 @@ gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3.5, radius: 8, sam
 composer.addPass(gtao);
 }
 /* ── Por qué en el móvil no hay bloom ────────────────────────────────────────
-   Este es el "se ve negro y va a saltos" del teléfono, y costó encontrarlo
-   porque el tamaño, el viewport, el scissor, los destinos y el contexto WebGL
-   estaban todos correctos y la consola limpia. Probando la cadena pasada a
-   pasada en un iPhone emulado, con la vista de edificio completo:
-
-     cadena entera .............. negro
-     SIN bloom .................. correcta
-     sin grado .................. negro
-     sin OutputPass ............. negro
-     solo RenderPass ............ correcta
-
-   Es decir: en cuanto UnrealBloomPass escribe en el búfer del compositor y
-   otra pasada lo lee, la imagen se pierde. Cuando el bloom es la última
-   pasada no se nota, porque entonces copia él mismo la entrada a la pantalla
-   antes de sumar el halo. En escritorio no salta: los destinos van a cuatro
-   muestras y el camino de resolución es otro; en móvil `samples` es cero.
-   El bloom es además la pasada más cara de todas —trece cuadriláteros a
-   pantalla completa— y este visor es justo el que tiene que ir ligero, así
-   que en el teléfono se queda fuera. Se pierde el halo de las ventanas
+   OJO, para que nadie repita el camino: el bloom NO era la causa de que el
+   lienzo saliera negro en el teléfono. Eso era el coste por fotograma (ver la
+   fusión de la envolvente en modelo.js): con seis mil llamadas de dibujo el
+   navegador no llega a pintar y enseña teselas sin pintar, que es como se ven
+   esos trozos negros. Aislar la cadena pasada a pasada apuntó al bloom porque
+   con fotogramas de segundos cada captura es una moneda al aire.
+   Se queda fuera del móvil por lo que sí es cierto: es la pasada más cara de
+   todas —trece cuadriláteros a pantalla completa— y este visor es justo el
+   que tiene que ir ligero. Lo único que se pierde es el halo de las ventanas
    encendidas de noche, que es precisamente lo que el cliente pidió recortar.
 
    El radio no es el tamaño del halo: reparte peso entre los cinco niveles y
