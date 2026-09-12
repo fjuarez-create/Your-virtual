@@ -858,13 +858,18 @@ export function crearCortes(ctx, edificio, opciones = {}) {
     const cota = h[p.principal];
     const debajo = p.ymin < cota - EPS;
     const cruza = debajo && p.caja.max.y > cota + EPS && cota < cortes.techo - EPS;
-    p.mesh.visible = p.visibleBase && debajo && !cruza;
+    /* Solo el mobiliario de la planta que se está mirando. Sin corte el
+       edificio está cerrado y no se ve ninguno; con corte, el de las plantas
+       de abajo lo tapa su propio forjado. Antes se dibujaban las 1.403 mallas
+       en conjunto y todas las plantas por debajo del corte en el ático. */
+    const enFranja = cortes.planta !== 'all' && (!sueloFranja || p.ymin >= sueloFranja[p.principal] - EPS);
+    p.mesh.visible = p.visibleBase && debajo && !cruza && enFranja;
     const proyecta = proyectaMobiliario(p);
     p.mesh.castShadow = proyecta;
     const clon = cruza ? clonDe(p, p.principal) : p.clones.get(p.principal);
     if (clon) {
       clon.castShadow = proyecta;   // clonDe solo lo copia al crearlo
-      clon.visible = p.visibleBase && cruza;
+      clon.visible = p.visibleBase && cruza && enFranja;
       if (clon.visible) sincronizarClon(clon, p);
     }
   }

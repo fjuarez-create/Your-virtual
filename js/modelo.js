@@ -710,6 +710,14 @@ export async function cargarModelo(scene, unitsById, { estadoDe = () => 'disponi
   let noche = false;
 
   const cotasDe = (clave) => (clave === 'all' ? null : definicionCortes.plantas[clave]?.map((t) => t.y) || null);
+  /* Cotas de corte de la planta INMEDIATAMENTE inferior, que son el suelo de
+     la franja de la que se está mirando. En la más baja no hay: todo lo que
+     queda por debajo de su corte es suyo. */
+  const cotasDebajo = (clave) => {
+    const claves = Object.keys(definicionCortes.plantas || {});
+    const k = claves.indexOf(clave);
+    return k > 0 ? cotasDe(claves[k - 1]) : null;
+  };
 
   function aplicarMobiliario() {
     const cotas = cotasDe(planta);
@@ -719,8 +727,17 @@ export async function cargarModelo(scene, unitsById, { estadoDe = () => 'disponi
     /* Sin planta cortada el edificio está CERRADO: las 1.403 mallas de
        mobiliario no se ven por ninguna parte y sin embargo se dibujaban
        todas, una por una, en cada fotograma. Es la mitad del coste de la
-       vista de conjunto, que es justo donde peor iba. */
-    for (const p of piezasMob) p.mesh.visible = !!cotas && p.ymin < cotas[p.plataforma] - EPS;
+       vista de conjunto, que es justo donde peor iba.
+       Y con planta cortada solo se ve el mobiliario de ESA planta: el de las
+       de abajo lo tapa su propio forjado. Antes se dibujaban todas las
+       plantas por debajo del corte, así que en el ático se dibujaba el
+       edificio entero amueblado para enseñar una sola planta. */
+    const suelo = cotasDebajo(planta);
+    for (const p of piezasMob) {
+      const i = Math.min(p.plataforma, cotas ? cotas.length - 1 : 0);
+      p.mesh.visible = !!cotas && p.ymin < cotas[i] - EPS
+        && (!suelo || p.ymin >= suelo[Math.min(p.plataforma, suelo.length - 1)] - EPS);
+    }
   }
 
   function aplicarPlanta() {
