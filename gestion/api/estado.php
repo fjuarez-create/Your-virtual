@@ -1,5 +1,4 @@
 <?php
-declare(strict_types=1);
 
 /* ── GET /gestion/api/estado.php ──────────────────────────────────────────────
    La única fuente de verdad sobre qué viviendas están disponibles, reservadas
@@ -36,11 +35,11 @@ declare(strict_types=1);
 require dirname(__DIR__) . '/lib.php';
 
 $doc = leer_estado();
-$sello = (string) ($doc['sello'] ?? '');
+$sello = (string) dato($doc, 'sello', '');
 
 registrar_equipo(
-  isset($_GET['equipo']) ? (string) $_GET['equipo'] : '',
-  isset($_GET['version']) ? (string) $_GET['version'] : '',
+  (string) dato($_GET, 'equipo', ''),
+  (string) dato($_GET, 'version', ''),
   $sello
 );
 
@@ -51,11 +50,15 @@ header('Cache-Control: no-cache, must-revalidate');
 header('Access-Control-Allow-Origin: *');
 header('ETag: "' . $sello . '"');
 
-$previo = trim((string) ($_SERVER['HTTP_IF_NONE_MATCH'] ?? ''), '"');
+$previo = trim((string) dato($_SERVER, 'HTTP_IF_NONE_MATCH', ''), '"');
 if ($previo !== '' && $previo === $sello) {
   http_response_code(304);
   exit;
 }
 
 unset($doc['origen']);
-echo json_encode($doc, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), "\n";
+$opciones = 0;
+if (defined('JSON_PRETTY_PRINT'))      $opciones |= JSON_PRETTY_PRINT;
+if (defined('JSON_UNESCAPED_UNICODE')) $opciones |= JSON_UNESCAPED_UNICODE;
+if (defined('JSON_UNESCAPED_SLASHES')) $opciones |= JSON_UNESCAPED_SLASHES;
+echo json_encode($doc, $opciones), "\n";

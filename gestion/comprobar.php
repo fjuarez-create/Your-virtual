@@ -21,12 +21,12 @@ $hayClave  = is_file($dirDatos . '/clave.php');
 $hayEstado = is_file($dirDatos . '/estado.json');
 $haySem    = is_readable($semilla);
 $hayUni    = is_readable($unidades);
-$versionOk = PHP_VERSION_ID >= 70000;
+$versionOk = PHP_VERSION_ID >= 50600;
 $hayJson   = function_exists('json_encode');
 $hayHash   = function_exists('password_hash');
 
 $filas = array(
-  array('Versión de PHP', PHP_VERSION, $versionOk, 'El panel necesita PHP 7.0 o más nuevo. En Plesk: PHP Settings del dominio.'),
+  array('Versión de PHP', PHP_VERSION, $versionOk, 'El panel está escrito para PHP 5.6 en adelante. En Plesk: PHP Settings del dominio.'),
   array('json_encode disponible', $hayJson ? 'sí' : 'no', $hayJson, 'Sin la extensión JSON el panel no puede guardar nada.'),
   array('password_hash disponible', $hayHash ? 'sí' : 'no', $hayHash, 'Es lo que cifra la contraseña del panel.'),
   array('Carpeta gestion/datos', $hayDir ? 'existe' : 'todavía no existe', true, $hayDir ? '' : 'Se crea sola en la primera visita al panel, si hay permiso de escritura.'),

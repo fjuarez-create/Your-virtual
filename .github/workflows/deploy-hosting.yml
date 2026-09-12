@@ -56,6 +56,12 @@ jobs:
             echo "Sin secreto MAPS_API_KEY: el entorno real queda desactivado."
           fi
 
+      # El hosting corre PHP 7.0.33 y el panel se escribe para 5.6. Una sola
+      # construcción más moderna deja /gestion con un 500 en blanco, así que
+      # esto para el deploy antes de subirla.
+      - name: Comprobar el panel contra PHP 5.6
+        run: bash .github/scripts/comprobar-php56.sh
+
       - name: Preparar carpeta de publicación
         run: |
           set -eu
