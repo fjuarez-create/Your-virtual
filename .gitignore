@@ -7,3 +7,6 @@ tools/node_modules
 # Estado vivo del panel: lo escribe el servidor, no el repositorio.
 gestion/datos/*
 !gestion/datos/.htaccess
+
+# Salida del conversor para Unreal: 224 MB que se regeneran con un comando.
+unreal/

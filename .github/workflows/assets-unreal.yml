@@ -1,0 +1,46 @@
+name: Publicar los assets para Unreal
+
+# Convierte los tres GLB del visor a glTF que Unreal sepa leer y los deja
+# colgados en el hosting, para poder descargarlos desde el navegador de la
+# máquina de Vagon sin instalar Node ni Git allí.
+#
+# La salida son ~224 MB y NO se versiona: se genera aquí cada vez.
+#
+# Se dispara al tocar este fichero, porque GitHub no deja lanzar por API un
+# workflow que no esté en la rama principal y aquí no hay rama principal.
+
+on:
+  push:
+    branches:
+      - claude/hopeful-faraday-7y80bt
+    paths:
+      - .github/workflows/assets-unreal.yml
+  workflow_dispatch:
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Instalar dependencias del conversor
+        run: npm install --prefix tools --no-audit --no-fund
+
+      - name: Convertir
+        run: node tools/para_unreal.mjs unreal
+
+      - name: Instalar lftp
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq lftp
+
+      - name: Subir al hosting
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_SERVER_DIR: ${{ secrets.FTP_SERVER_DIR }}
+        run: bash .github/scripts/ftp-unreal.sh
