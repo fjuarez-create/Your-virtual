@@ -59,6 +59,27 @@ jobs:
             echo
           done
 
+      # Veredicto de una línea: lo que de verdad hay que saber es si las tres
+      # páginas contestan y si el panel enseña el formulario de la contraseña.
+      - name: Veredicto
+        run: |
+          set -u
+          fallos=0
+          for ruta in /gestion/ /gestion/index.php /gestion/comprobar.php /gestion/api/estado.php; do
+            c=$(curl -sS -o /dev/null -w '%{http_code}' -m 25 "https://showroom.unikdi.com${ruta}" || echo 000)
+            if [ "$c" = 200 ]; then echo "  ok   $ruta"; else echo "  MAL  $ruta → $c"; fallos=$((fallos+1)); fi
+          done
+          if curl -sS -m 25 https://showroom.unikdi.com/gestion/ | grep -q 'accion" value="crear"'; then
+            echo "  ok   el panel pide crear la contraseña (todavía sin crear)"
+          elif curl -sS -m 25 https://showroom.unikdi.com/gestion/ | grep -q 'accion" value="entrar"'; then
+            echo "  ok   el panel pide la contraseña (ya está creada)"
+          else
+            echo "  MAL  el panel no enseña ni el formulario de crear ni el de entrar"; fallos=$((fallos+1))
+          fi
+          n=$(curl -sS -m 25 https://showroom.unikdi.com/gestion/api/estado.php | grep -o '"total": *[0-9]*' || true)
+          echo "  endpoint: ${n:-sin respuesta}"
+          [ "$fallos" = 0 ] && echo "TODO CORRECTO" || { echo "QUEDAN $fallos FALLOS" >&2; exit 1; }
+
       # comprobar.php es la única página del panel que contesta, y dentro lleva
       # la versión de PHP del dominio. Es el dato que decide qué sintaxis puede
       # usar el resto del código.
