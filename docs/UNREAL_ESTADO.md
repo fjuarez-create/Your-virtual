@@ -5,7 +5,7 @@ corra **en el PC de Fran, con el editor de Unreal abierto y el MCP oficial
 conectado**, pueda ponerse a trabajar sin tener que releer nada más. Todo lo
 que aquí se afirma está verificado salvo donde pone «sin confirmar».
 
-Fecha de este estado: 15 de septiembre de 2026.
+Fecha de este estado: 15 de septiembre de 2026, tarde (proyecto nuevo ya importado por Direct Link).
 
 ## Qué es esto
 
@@ -25,11 +25,11 @@ El móvil ya está resuelto por la web; no se hace versión Android por ahora.
 
 | Cosa | Dónde |
 |---|---|
-| Proyecto de Unreal (5.8) | `D:\Serenea\SereneaV6\SereneaV6.uproject` |
+| Proyecto de Unreal (5.8.2) | `D:\Serenea\SERENEA_150926\SERENEA_150926.uproject` — **confirmar la ruta exacta con Fran**; proyecto nuevo del 15-sep, plantilla Architecture → Blank |
 | Este repositorio, clonado en el PC | `D:\Serenea\web` (rama `claude/hopeful-faraday-7y80bt`) |
-| Copia de seguridad del proyecto | ZIP en Google Drive, `09 Digital twint - TESTING` |
-| Modelo fuente | SketchUp 2026 en el PC de Fran, con el exportador Datasmith 5.8 instalado |
-| Exportación usada | `SERENEA_Apolo_v6_Entrega.udatasmith` (75,7 MB) + carpeta `_Assets` |
+| Copia de seguridad | El proyecto de Vagon (`SereneaV6.zip` en Drive, `09 Digital twint - TESTING`) queda como archivo muerto: no se reutiliza. El proyecto nuevo se regenera desde SketchUp por Direct Link, pero en cuanto tenga trabajo encima (materiales, Blueprints) hay que hacerle copia igual. |
+| Modelo fuente | SketchUp 2026 en el sobremesa de Fran, con el exportador Datasmith **5.8** (`5_8_200`) instalado. El `.skp` se llama `SERENEA_Apolo_v7` |
+| Cómo entra en Unreal | **Datasmith Direct Link**, no por archivo. En SketchUp: barra Datasmith → *Synchronize*. En Unreal: botón **Añadir (+)** → *Datasmith* → *Direct Link Import*. Importador Datasmith clásico; *Interchange Datasmith* (experimental) **desactivado** a propósito. |
 | Panel y endpoint | `showroom.unikdi.com/gestion` · `/gestion/api/estado.php` |
 | Catálogo de viviendas | `data/units.json` (166 entradas: id, planta, dorm, orientacion, supViv, terraza, supTotal, precio) |
 | Semilla de estados | `data/availability.json` |
@@ -53,34 +53,58 @@ OneDrive). El ZIP en Drive es copia; se trabaja en `D:\Serenea`.
 
 ## Estado del proyecto de Unreal
 
-Plantilla Architecture → Blank, que trae SunSky, ExponentialHeightFog,
-PostProcessVolume, CineCameraActor, PlayerStart, InstancedFoliageActor.
+Proyecto **nuevo**, creado el 15-sep en el sobremesa de Fran (i9, 64 GB,
+gráfica de 12 GB) con Unreal 5.8.2 y la plantilla Architecture → Blank
+(SunSky, ExponentialHeightFog, PostProcessVolume, CineCameraActor,
+PlayerStart, InstancedFoliageActor, Floor). El proyecto de Vagon del sábado
+no se reutiliza: al abrirlo en otro PC perdió los materiales y se decidió
+empezar de cero.
 
-Hecho el 13-sep:
+Hecho el 15-sep:
 
-- Importado por Datasmith (Interchange) en el nivel `Main`. **69.288 actores.**
-- Los prismas de corte que Fran modeló en SketchUp han entrado con su
-  jerarquía: `SERENEA_Apolo_v6_Entrega → APOLO_CORTES → CORTE_P3 → Componente_9…`.
-  Están **ocultos en el editor** (ojo del Outliner). Son la capa de interacción
-  completa (ver más abajo).
-- SunSky con las coordenadas de la parcela.
-- El actor `Floor` de la plantilla, borrado.
-- Materiales de SketchUp importados con sus nombres (`APOL…alido`, `APOL…claro`,
-  `APOLO…tical`, `APOL…mate`…). Fran empezó a afinarlos a mano.
+- Importado por **Direct Link** desde SketchUp (`SERENEA_Apolo_v7`).
+  **126.386 actores** — casi el doble que la importación del sábado (69.288).
+  Pendiente entender por qué: modelo v7 más detallado, o el importador
+  clásico no agrupa igual que Interchange. Toca mirarlo antes de optimizar.
+- El contenido vive en `Content/SERENEA_Apolo_v7/` (`Geometries`,
+  `Materials`, `Textures`) más el asset *DatasmithScene* al lado. Ese asset
+  es el que se re-sincroniza; no borrarlo.
+- Los prismas `APOLO_CORTES` han entrado (se ven como un bloque rosa
+  translúcido tapando el edificio). Hay que ocultarlos en el editor.
+- **Fab está disponible en este editor** (botón *Fab* en el Content Browser;
+  en el Unreal de Vagon no estaba). Megascans entra directo.
 
-**Sin confirmar** (preguntar o mirar antes de dar por hecho):
+Sin hacer todavía (nada de lo del sábado se conserva):
 
-- Exposición: se dio un `Exposure Compensation = 10` erróneo que quemaba la
-  imagen. El arreglo es `Min EV100 = Max EV100 = 14` (receta abajo). No se
-  sabe si quedó aplicado.
-- `North Offset` del SunSky: no se sabe si se calibró. Si está mal, todas las
-  sombras mienten.
-- Si se borró el grupo `SERENEA_APOLO_Central_V4_-_Vista_3D_-_3D_dwg`
-  (pilotes y cimentación de un DWG: miles de actores que nunca se ven).
-- Si el vidrio y la fachada llegaron a cambiarse.
+- Guardar (había 5.214 assets sin guardar), borrar `Floor`, ocultar
+  `APOLO_CORTES`.
+- Exposición, `North Offset`, Lumen (recetas abajo).
+- Materiales: ver «Direct Link y los materiales» antes de tocar ninguno.
+- Vegetación, coches, entorno, lógica de viviendas, interfaz, empaquetado.
 
-Pendiente de todo: vegetación, coches, entorno, lógica de viviendas,
-interfaz, empaquetado.
+Ojo: la web (`/new`) sigue con el modelo **v6**. Si el v7 cambia geometría
+o ids, en algún momento habrá que reexportar los `.glb` del visor. No es
+urgente; apuntado.
+
+## Direct Link y los materiales
+
+Cada *Synchronize* desde SketchUp vuelve a generar los materiales que creó
+Datasmith. Por tanto:
+
+- **Los materiales de Datasmith no se editan nunca.** Se sustituyen.
+- Se construyen materiales **propios**: maestros (`M_Apolo_Opaco`,
+  `M_Apolo_Vidrio`, `M_Apolo_Suelo`…) con parámetros expuestos, e
+  instancias para los seis que importan, con texturas Megascans a 2K.
+- Una herramienta **«Aplicar materiales Apolo»** (Editor Utility Blueprint,
+  script de Python del editor, o directamente por el MCP) recorre la escena y
+  asigna cada material nuestro **por el nombre del material de SketchUp**
+  (`APOL…claro` → `MI_Apolo_Monocapa`, etc.), como *override* en el
+  componente. Se ejecuta en segundos después de cada sincronización.
+- El mapa nombre-SketchUp → material-nuestro vive en un sitio visible (un
+  DataTable o el propio script) para poder ampliarlo sin tocar Blueprints.
+
+Es la **primera tarea** de la sesión local con el MCP, antes que cualquier
+afinado a mano.
 
 ## La parcela y el sol
 
@@ -250,17 +274,21 @@ Puntos clave:
 
 ## Orden de trabajo propuesto
 
-1. Confirmar exposición y norte. Guardar.
-2. Borrar el DWG de estructura si sigue ahí. Guardar.
-3. Vidrio y fachada (receta). Luego suelos con texturas.
-4. `MPC_Apolo` + máscara de corte en los maestros. Probar con `AlturaDeCorte`.
-5. Emparejar prismas ↔ ids; material de estado con parámetros.
-6. Instalar Web UI; widget con una página de prueba; los 14 manejadores en
-   Blueprint contra el protocolo.
-7. Cámaras, sol enlazado a `hora`/`fecha`, escaparate.
-8. Vegetación canaria, coches, entorno. Fusionar lo que no necesite ser
-   independiente (calles, vecinos) para bajar de 69.000 actores.
-9. Empaquetar, probar en un PC que no sea el de desarrollo.
+1. Guardar. Borrar `Floor`. Ocultar `APOLO_CORTES`. Guardar.
+2. Exposición (`Min EV100 = Max EV100 = 14`) y `North Offset` calibrado.
+3. Averiguar de dónde salen los 126.386 actores (¿v7? ¿DWG de estructura?)
+   y borrar lo que nunca se ve.
+4. Juego de materiales propios + herramienta «Aplicar materiales Apolo» por
+   nombre. Probarla haciendo un *Synchronize* y viendo que sobrevive.
+5. `MPC_Apolo` + máscara de corte en **nuestros** maestros (no en los de
+   Datasmith). Probar con `AlturaDeCorte`.
+6. Emparejar prismas ↔ ids; material de estado con parámetros.
+7. Web UI; widget con una página de prueba; los 14 manejadores en Blueprint
+   contra el protocolo.
+8. Cámaras, sol enlazado a `hora`/`fecha`, escaparate.
+9. Vegetación canaria, coches, entorno. Fusionar lo que no necesite ser
+   independiente para bajar el número de actores.
+10. Empaquetar, probar en un PC que no sea el de desarrollo.
 
 ## Historia útil (para no repetir errores)
 
@@ -276,3 +304,13 @@ Puntos clave:
   `-Encoding Unicode`.
 - Vagon (Cloud Computer) cobra mientras la máquina está encendida aunque te
   desconectes. Ya no se usa; la cuenta se cancela.
+- Mover un proyecto de Unreal entre PCs borrando `Saved`, `Intermediate` y
+  `DerivedDataCache` es correcto, pero al abrirlo hay que esperar a que
+  recompile **todos** los shaders (mientras tanto todo sale gris) y la cámara
+  del editor arranca en el origen. El 15-sep se interpretó como «se han
+  perdido los materiales» y se optó por empezar de cero.
+- En 5.8, el botón de Datasmith no está en la barra: está dentro de
+  **Añadir (+)** → *Datasmith* → *Direct Link Import* / *File Import*.
+- Con el exportador 5.8 y SketchUp 2026, el triángulo de versiones es:
+  SketchUp 2026 ↔ exportador 5.8 ↔ Unreal 5.8. Un exportador de otra versión
+  no hace Direct Link con este motor.
