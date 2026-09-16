@@ -25,8 +25,8 @@ El móvil ya está resuelto por la web; no se hace versión Android por ahora.
 
 | Cosa | Dónde |
 |---|---|
-| Proyecto de Unreal (5.8.2) | `D:\Serenea\SERENEA_160926\Serenea_160926.uproject` — proyecto del 16-sep, plantilla Architecture → Blank. Los del 15-sep (`SERENEA_150926`, `SereneaV6`) son ensayos: no usarlos. |
-| Este repositorio, clonado en el PC | `D:\Serenea\web` (rama `claude/hopeful-faraday-7y80bt`) |
+| Proyecto de Unreal (5.8.2) | `C:\Serenea\Serenea_160926\Serenea_160926.uproject` (confirmado por el log del editor) — proyecto del 16-sep, plantilla Architecture → Blank. En `C:\Serenea\` y en `Documents\Unreal Projects\` hay varios ensayos anteriores (`serenea`, `SereneaV6`, `SereneaV6 5.8`, `SERENEA_150926`, `Serenea75`, `Serenea_75`): **no usarlos**. |
+| Este repositorio, clonado en el PC | `D:\Serenea\web` (rama `claude/hopeful-faraday-7y80bt`). Ojo: el proyecto de Unreal está en **C:**, el repositorio en **D:**. |
 | Copia de seguridad | El proyecto de Vagon (`SereneaV6.zip` en Drive, `09 Digital twint - TESTING`) queda como archivo muerto: no se reutiliza. El proyecto nuevo se regenera desde SketchUp por Direct Link, pero en cuanto tenga trabajo encima (materiales, Blueprints) hay que hacerle copia igual. |
 | Modelo fuente | SketchUp 2026 en el sobremesa de Fran, con el exportador Datasmith **5.8** (`5_8_200`) instalado. El `.skp` se llama `SERENEA_Apolo_v7` |
 | Cómo entra en Unreal | **Datasmith Direct Link**, no por archivo. En SketchUp: barra Datasmith → *Synchronize*. En Unreal: botón **Añadir (+)** → *Datasmith* → *Direct Link Import*. Importador Datasmith clásico; *Interchange Datasmith* (experimental) **desactivado** a propósito. |
@@ -73,6 +73,12 @@ Hecho el 15-sep:
   translúcido tapando el edificio). Hay que ocultarlos en el editor.
 - **Fab está disponible en este editor** (botón *Fab* en el Content Browser;
   en el Unreal de Vagon no estaba). Megascans entra directo.
+- Máquina: i9-14900KF, 64 GB, **RTX 5070 (12 GB)**, Windows 11, dos monitores.
+- MCP oficial arrancado el 16-sep con `ModelContextProtocol.StartServer`:
+  escucha en `127.0.0.1:8000`; expone 3 meta-herramientas y ~52 toolsets
+  descubribles con `list_toolsets` (actores, assets, Blueprints, materiales,
+  instancias, escena, mallas, texturas, UMG, logs, Python…). Python 3.11 del
+  editor activo: plan B para lo que el MCP no cubra.
 
 Sin hacer todavía (nada de lo del sábado se conserva):
 
