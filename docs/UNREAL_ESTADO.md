@@ -5,7 +5,7 @@ corra **en el PC de Fran, con el editor de Unreal abierto y el MCP oficial
 conectado**, pueda ponerse a trabajar sin tener que releer nada más. Todo lo
 que aquí se afirma está verificado salvo donde pone «sin confirmar».
 
-Fecha de este estado: 15 de septiembre de 2026, tarde (proyecto nuevo ya importado por Direct Link).
+Fecha de este estado: 16 de septiembre de 2026 (proyecto `Serenea_160926`, importado por Direct Link y guardado).
 
 ## Qué es esto
 
@@ -25,7 +25,7 @@ El móvil ya está resuelto por la web; no se hace versión Android por ahora.
 
 | Cosa | Dónde |
 |---|---|
-| Proyecto de Unreal (5.8.2) | `D:\Serenea\SERENEA_150926\SERENEA_150926.uproject` — **confirmar la ruta exacta con Fran**; proyecto nuevo del 15-sep, plantilla Architecture → Blank |
+| Proyecto de Unreal (5.8.2) | `D:\Serenea\SERENEA_160926\Serenea_160926.uproject` — proyecto del 16-sep, plantilla Architecture → Blank. Los del 15-sep (`SERENEA_150926`, `SereneaV6`) son ensayos: no usarlos. |
 | Este repositorio, clonado en el PC | `D:\Serenea\web` (rama `claude/hopeful-faraday-7y80bt`) |
 | Copia de seguridad | El proyecto de Vagon (`SereneaV6.zip` en Drive, `09 Digital twint - TESTING`) queda como archivo muerto: no se reutiliza. El proyecto nuevo se regenera desde SketchUp por Direct Link, pero en cuanto tenga trabajo encima (materiales, Blueprints) hay que hacerle copia igual. |
 | Modelo fuente | SketchUp 2026 en el sobremesa de Fran, con el exportador Datasmith **5.8** (`5_8_200`) instalado. El `.skp` se llama `SERENEA_Apolo_v7` |
@@ -53,7 +53,7 @@ OneDrive). El ZIP en Drive es copia; se trabaja en `D:\Serenea`.
 
 ## Estado del proyecto de Unreal
 
-Proyecto **nuevo**, creado el 15-sep en el sobremesa de Fran (i9, 64 GB,
+Proyecto **nuevo**, creado el 16-sep en el sobremesa de Fran (i9, 64 GB,
 gráfica de 12 GB) con Unreal 5.8.2 y la plantilla Architecture → Blank
 (SunSky, ExponentialHeightFog, PostProcessVolume, CineCameraActor,
 PlayerStart, InstancedFoliageActor, Floor). El proyecto de Vagon del sábado
@@ -62,7 +62,7 @@ empezar de cero.
 
 Hecho el 15-sep:
 
-- Importado por **Direct Link** desde SketchUp (`SERENEA_Apolo_v7`).
+- Importado por **Direct Link** desde SketchUp (`SERENEA_Apolo_v75`; Fran confirma que el v7 es el mismo modelo que el v6 de la web, sin cambios de geometría ni de ids).
   **126.386 actores** — casi el doble que la importación del sábado (69.288).
   Pendiente entender por qué: modelo v7 más detallado, o el importador
   clásico no agrupa igual que Interchange. Toca mirarlo antes de optimizar.
@@ -82,9 +82,8 @@ Sin hacer todavía (nada de lo del sábado se conserva):
 - Materiales: ver «Direct Link y los materiales» antes de tocar ninguno.
 - Vegetación, coches, entorno, lógica de viviendas, interfaz, empaquetado.
 
-Ojo: la web (`/new`) sigue con el modelo **v6**. Si el v7 cambia geometría
-o ids, en algún momento habrá que reexportar los `.glb` del visor. No es
-urgente; apuntado.
+La web (`/new`) usa el v6 y, según Fran, el v7 es idéntico: los ids de
+`data/units.json` valen tal cual para emparejar prismas.
 
 ## Direct Link y los materiales
 
