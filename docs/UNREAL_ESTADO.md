@@ -295,29 +295,56 @@ escalonado en el terreno: la baja va de 6,75 a 11,85 m y el ático de 15,75 a
 `new/js/visor/cortes.js` con su rejilla de hasta 4 cajones. Decidir esto
 antes de montar el paso 5.
 
-### Los prismas
+### Los prismas: dos familias distintas
 
-Uno por vivienda, agrupados por planta bajo `APOLO_CORTES`. Hacen cuatro
-cosas, las mismas que en la web:
+**1. Los de SketchUp (`APOLO_CORTES`) son las plataformas de corte, no las
+viviendas.** Son 4 grupos × 8 prismas = 32 (`CORTE_P1…P4`, cada uno con ocho
+`Componente_9_n`), más seis `Componente_3…8` sueltos bajo `APOLO_CORTES`.
+Corresponden uno a uno con los «cajones» de `data/cortes.json`: cuatro
+plantas (`baja`, `p1`, `p2`, `atico`) × ocho plataformas, cada cajón con su
+`x0,x1,z0,z1` en planta y su `y` = altura de corte. Sirven para el corte de
+planta (la altura `y` de cada cajón es `AlturaDeCorte` para esa plataforma).
+Confirmar por el MCP qué `CORTE_Pn` es qué planta (lo esperable: P1 = baja,
+P2 = p1, P3 = p2, P4 = ático) comparando alturas.
 
-- **Clic**: reciben el trazado del ratón (colisión activada, canal Visibility).
-- **Color de estado**: material translúcido con color y opacidad como
-  parámetros; opacidad 0 cuando no toca verse.
-- **Cartela**: punto de anclaje de la etiqueta.
-- **Corte**: su altura es la de la planta.
+**2. Las 166 viviendas NO están en el modelo de SketchUp** (el modelo no trae
+grupos por vivienda). Se dedujeron de tabiques, puertas y pavimentos con
+`tools/viviendas_serenea.mjs` y están en **`data/viviendas_serenea.json`**:
+166 entradas por id (`"101"`…), cada una con `planta`, `plataforma` (1–8),
+`poligono` = `[[x, z], …]` en planta, `y0`/`y1` = suelo y techo del prisma,
+más `entrada`, `vidrios`, áreas. Es la misma fuente que usa el visor web
+para el clic, el color de estado y la cartela.
 
-Falta emparejar cada prisma con su id de `data/units.json`. Los ids son
-cadenas (`"214"`). Mirar el nombre o los metadatos Datasmith de cada
-componente.
+**Por tanto, en Unreal las 166 viviendas se generan**, no se importan: un
+prisma por vivienda extruyendo `poligono` de `y0` a `y1` (Geometry Script:
+`append_simple_extrude_polygon` sobre un DynamicMesh → StaticMesh
+`SM_VIV_<id>`; simplificar antes el polígono a ~10 cm, que trae escalones de
+5 cm de la rasterización), actor `VIV_<id>` con tag `vivienda:<id>`, colisión
+en canal Visibility, material translúcido con color y opacidad como
+parámetros (opacidad 0 en reposo). Igual que en la web: clic, estado,
+cartela.
+
+**El marco de coordenadas.** Los dos JSON están en el marco del GLB de la
+web: metros, Y arriba, `poligono`/cajones en el plano (x, z). El proyecto de
+Unreal viene de SketchUp por Datasmith: centímetros, Z arriba, Y invertida.
+La transformación exacta (permutación de ejes, signos y posible
+desplazamiento) **se calibra, no se supone**: para cada prisma de
+`APOLO_CORTES` se leen sus límites en mundo por el MCP y se buscan la
+permutación/signos/escala 100 que los hacen coincidir con los 32 cajones de
+`data/cortes.json`. Con 32 cajas es inequívoco. Esa misma transformación se
+aplica a los 166 polígonos. Apuntarla aquí cuando esté.
+
+Referencia del visor: el centro de la parcela en ese marco es
+(x = 66,72, z = −23,94), `new/js/visor/main.js`.
 
 ## Plantas: tres nombres para lo mismo
 
 | `data/units.json` (`planta`) | Protocolo (`orden: planta`) | SketchUp / Outliner |
 |---|---|---|
-| `Baja` (38) | `baja` | `CORTE_P0` (sin confirmar) |
-| `1ª` (46) | `p1` | `CORTE_P1` |
-| `2ª` (46) | `p2` | `CORTE_P2` |
-| `Ático` (36) | `atico` | `CORTE_P3` (visto) |
+| `Baja` (38) | `baja` | `CORTE_P1` (sin confirmar; en `cortes.json`: `baja`) |
+| `1ª` (46) | `p1` | `CORTE_P2` (sin confirmar) |
+| `2ª` (46) | `p2` | `CORTE_P3` (sin confirmar) |
+| `Ático` (36) | `atico` | `CORTE_P4` (sin confirmar) |
 | — | `all` | edificio cerrado |
 
 ## Arquitectura del ejecutable
@@ -386,7 +413,9 @@ Puntos clave:
    nombre. Probarla haciendo un *Synchronize* y viendo que sobrevive.
 5. `MPC_Apolo` + máscara de corte en **nuestros** maestros (no en los de
    Datasmith). Probar con `AlturaDeCorte`.
-6. Emparejar prismas ↔ ids; material de estado con parámetros.
+6. Calibrar el marco con los 32 cajones; generar los 166 prismas de
+   vivienda desde `data/viviendas_serenea.json`; material de estado con
+   parámetros.
 7. Web UI; widget con una página de prueba; los 14 manejadores en Blueprint
    contra el protocolo.
 8. Cámaras, sol enlazado a `hora`/`fecha`, escaparate.
