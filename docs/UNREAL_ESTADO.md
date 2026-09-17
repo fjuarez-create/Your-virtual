@@ -172,19 +172,51 @@ de anclaje colgando del `DatasmithSceneActor`, que tiene 43 hijos directos:
 | 26 `CineCameraActor` = las escenas de SketchUp (`01___Apolo_y_cuatro_edificios` … `27___Palmeras_canarias`, más `viewport_camera`) | 1 cada una |
 | 8 `StaticMeshActor` sueltos: `Componente_3`…`_8`, `Sree`, `Sree_2` | 1 cada uno |
 
-El **DWG de estructura sí está**, y es el grueso de la escena: esa rama de
-5.757 hijos es el primer sitio donde mirar para bajar el número de actores.
+**Corrección importante (17-sep, noche): la rama del DWG NO es «estructura
+que no se ve». Es el edificio.** Antes en este documento decía «el DWG de
+estructura, confirmado en la escena»; eso era heredar una suposición. Lo
+confirmado era que la rama existe y que es la mayor, no qué contiene.
 
-Candidatos a borrar que salieron en el barrido:
+Inspeccionada con una muestra repartida por los 5.757 hijos,
+`SERENEA_APOLO_Central_V4_-_Vista_3D_-_3D_dwg` contiene:
 
-- **534 módulos fotovoltaicos** (`Modulo_FV_1722x1134_inclinado_12_grados_hacia_fachada_oeste`,
-  agrupados como `APOLO_18_142_FV_nnn` y tres cotas más: 19_542, 20_942,
-  22_342). Son placas de cubierta, no prismas: los nombres se parecen y
-  confunden.
-- **`Sree`**: un maniquí de 3D Warehouse, con 20 materiales propios
-  (`Sree_Dress`, `Sree_Hair`, `Sree_Pearls`, `Sree_Watch`…).
-- 583 `Pata_corta` y 32 `Neumatico_de_N_segmentos`: mobiliario y coches
-  modelados pata a pata y neumático a neumático.
+- **Carpintería y vidrio**: `VEN-X_Acristalamiento_-_…BAJA_EMISIVIDAD…`,
+  `UNIK_VEN_Val-N…`, y las puertas `UNIK_PUE_Pm-N_NHAbatible`,
+  `UNIK_PUE_Pm-N_EntradaVivienda` (las 166), `UNIK_PUE_Pet-N_Trastero`.
+- **Estructura vista**: `PIE-X_Hormigon_Rectangular_-_NxN_cm`,
+  `PIE-X_NxN_-_Cuadrado`.
+- **Mobiliario de las viviendas**: sillas, camas, sofás, armarios, neveras,
+  lavadoras, muebles de TV, despensas, mesas.
+
+Y las cotas de una muestra los sitúan **dentro del edificio**: x 17–104,
+y −40…−19, z 11,6–20,2. O sea que es el modelo BIM del edificio con su
+amueblado. **Borrar esa rama dejaría el edificio sin vidrios, sin puertas,
+sin pilares y sin muebles**, y es justo lo que se ve al cortar una planta.
+
+Lo mismo con la fotovoltaica: los **534 módulos**
+(`Modulo_FV_1722x1134_inclinado_12_grados_hacia_fachada_oeste`, en 267 nodos
+`P#_FV_#` y `APOLO_#_#_FV_#`) son placas de cubierta **visibles**, y el
+modelo trae una escena de SketchUp dedicada,
+`23___Cubiertas_gravilla_y_fotovoltaica`. Es un argumento de venta, no
+sobra.
+
+**Lo que de verdad sobra es poquísimo:**
+
+- **`Sree`**: un maniquí de 3D Warehouse de 1,6 m con 20 materiales propios
+  (`Sree_Dress`, `Sree_Hair`, `Sree_Pearls`…), en x −0,7…−0,3: **fuera de la
+  parcela**, que empieza en x 9,33. Resto claro.
+- **`Brush1`**: caja de 20×20×2 m de la plantilla, centrada en el origen y
+  también fuera de la parcela.
+- `Sree_2`, el segundo maniquí, sí está **dentro** del edificio (x 119,4,
+  planta baja). Decidir: puede ser figura de escala a propósito.
+
+**Por tanto, el número de actores no baja borrando, baja fusionando**, y eso
+es el paso 9, después de los materiales (fusionar cambia las ranuras de
+material, así que antes hay que aplicarlos). Buenos candidatos, porque son
+repetidos idénticos y nadie los necesita por separado: los 534 módulos
+fotovoltaicos, los ~79 `APA-X_Plazas_Coche`, los 235 `Armario___N`, y los
+583 `Pata_corta` y 32 `Neumatico_de_N_segmentos` de muebles y coches.
+**No** fusionar lo que tenga que encenderse por vivienda.
 
 **Ancla para emparejar viviendas:** 166 puertas
 `UNIK_PUE_Pm-N_EntradaVivienda_-_NxNmm-N-ND`. Es el único elemento de la
@@ -553,12 +585,13 @@ Todo referido a `Serenea_170926`.
    17-sep** (fase 1 completa).
 2. ~~Exposición, `SunSky` y `North Offset`.~~ **Hecho el 17-sep**, y Lumen ya
    venía activo. Falta solo que Fran valide la sombra a ojo.
-3. ← **Aquí.** Borrar lo que nunca se ve: la rama
-   `SERENEA_APOLO_Central_V4_-_Vista_3D_-_3D_dwg` (5.757 hijos directos, el
-   DWG de estructura), los 534 módulos fotovoltaicos, `Sree` y sus 20
-   materiales. **Por el editor, no por el MCP**, por lo del borrado que no
-   cascadea.
-4. Juego de materiales propios + herramienta «Aplicar materiales Apolo» por
+3. ~~Borrar lo que nunca se ve.~~ **Se cae: no hay casi nada que borrar.**
+   Inspeccionado el 17-sep, la rama del DWG es el edificio (vidrios, puertas,
+   pilares y muebles) y la fotovoltaica se ve y es argumento de venta. Solo
+   sobran `Sree` y `Brush1`, los dos fuera de la parcela: dos actores de
+   69.296. La bajada de actores se hace **fusionando** en el paso 9, que va
+   después de los materiales. Ver «Inventario de la escena».
+4. ← **Aquí.** Juego de materiales propios + herramienta «Aplicar materiales Apolo» por
    nombre. Que reaplique también la ocultación de los prismas. Probarla
    haciendo un *Reimport* y viendo que sobrevive.
 5. `MPC_Apolo` + máscara de corte en **nuestros** maestros (no en los de
@@ -578,7 +611,10 @@ Todo referido a `Serenea_170926`.
    confirmar» de `docs/PROTOCOLO_STREAMING.md` (nombres del plugin y la
    petición al panel desde disco).
 8. Cámaras, sol enlazado a `hora`/`fecha`, escaparate.
-9. Vegetación canaria, coches, entorno. Fusionar lo que no necesite ser
+9. Vegetación canaria, coches, entorno. **Fusionar los repetidos** (534
+   módulos fotovoltaicos, ~79 coches, 235 armarios, patas y neumáticos) para
+   bajar el número de actores; ver «Inventario de la escena». Lo que no
+   necesite ser
    independiente para bajar el número de actores.
 10. Empaquetar, probar en un PC que no sea el de desarrollo.
 
