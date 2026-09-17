@@ -5,7 +5,8 @@ corra **en el PC de Fran, con el editor de Unreal abierto y el MCP oficial
 conectado**, pueda ponerse a trabajar sin tener que releer nada más. Todo lo
 que aquí se afirma está verificado salvo donde pone «sin confirmar».
 
-Fecha de este estado: 16 de septiembre de 2026 (proyecto `Serenea_160926`, importado por Direct Link y guardado).
+Fecha de este estado: 17 de septiembre de 2026 (proyecto `Serenea_160926`,
+importado por Direct Link y guardado; escena inventariada por el MCP).
 
 ## Qué es esto
 
@@ -28,7 +29,7 @@ El móvil ya está resuelto por la web; no se hace versión Android por ahora.
 | Proyecto de Unreal (5.8.2) | `C:\Serenea\Serenea_160926\Serenea_160926.uproject` (confirmado por el log del editor) — proyecto del 16-sep, plantilla Architecture → Blank. En `C:\Serenea\` y en `Documents\Unreal Projects\` hay varios ensayos anteriores (`serenea`, `SereneaV6`, `SereneaV6 5.8`, `SERENEA_150926`, `Serenea75`, `Serenea_75`): **no usarlos**. |
 | Este repositorio, clonado en el PC | `D:\Serenea\web` (rama `claude/hopeful-faraday-7y80bt`). Ojo: el proyecto de Unreal está en **C:**, el repositorio en **D:**. |
 | Copia de seguridad | El proyecto de Vagon (`SereneaV6.zip` en Drive, `09 Digital twint - TESTING`) queda como archivo muerto: no se reutiliza. El proyecto nuevo se regenera desde SketchUp por Direct Link, pero en cuanto tenga trabajo encima (materiales, Blueprints) hay que hacerle copia igual. |
-| Modelo fuente | SketchUp 2026 en el sobremesa de Fran, con el exportador Datasmith **5.8** (`5_8_200`) instalado. El `.skp` se llama `SERENEA_Apolo_v7` |
+| Modelo fuente | SketchUp 2026 en el sobremesa de Fran, con el exportador Datasmith **5.8** (`5_8_200`) instalado. El `.skp` se llama `SERENEA_Apolo_v7`, y probablemente `SERENEA_Apolo_v75`: Datasmith bautiza la escena con el nombre del fichero de SketchUp y en Unreal entró como `SERENEA_Apolo_v75`. **Sin confirmar**: el `.skp` no está en este PC, hay que mirarlo en SketchUp. |
 | Cómo entra en Unreal | **Datasmith Direct Link**, no por archivo. En SketchUp: barra Datasmith → *Synchronize*. En Unreal: botón **Añadir (+)** → *Datasmith* → *Direct Link Import*. Importador Datasmith clásico; *Interchange Datasmith* (experimental) **desactivado** a propósito. |
 | Panel y endpoint | `showroom.unikdi.com/gestion` · `/gestion/api/estado.php` |
 | Catálogo de viviendas | `data/units.json` (166 entradas: id, planta, dorm, orientacion, supViv, terraza, supTotal, precio) |
@@ -60,14 +61,19 @@ PlayerStart, InstancedFoliageActor, Floor). El proyecto de Vagon del sábado
 no se reutiliza: al abrirlo en otro PC perdió los materiales y se decidió
 empezar de cero.
 
-Hecho el 15-sep:
+Hecho el 16-sep (el log del editor fecha el import:
+`Imported SERENEA_Apolo_v75 in 36.9 s`, 16-sep 18:09):
 
 - Importado por **Direct Link** desde SketchUp (`SERENEA_Apolo_v75`; Fran confirma que el v7 es el mismo modelo que el v6 de la web, sin cambios de geometría ni de ids).
   **69.260 actores**, medidos por el MCP el 17-sep. (Los 126.386 que se
   anotaron el 16-sep eran del proyecto de ensayo anterior; en este no.)
-- El contenido vive en `Content/SERENEA_Apolo_v7/` (`Geometries`,
-  `Materials`, `Textures`) más el asset *DatasmithScene* al lado. Ese asset
-  es el que se re-sincroniza; no borrarlo.
+- El contenido vive en `Content/SERENEA_Apolo_v75/` — **con el 5 final**, no
+  `v7` — en `Geometries` (6.721 assets), `Materials` (163) y `Textures` (19),
+  más el asset *DatasmithScene* `SERENEA_Apolo_v75.uasset` (80 MB) al lado.
+  Ese asset es el que se re-sincroniza; no borrarlo. 6.904 uassets en total.
+- **El nivel está guardado**: `Content/Main.umap` (210 MB) del 16-sep 19:10,
+  y el MCP da `is_dirty(/Game/Main) = false`. Los 5.214 assets que había sin
+  guardar ya se guardaron.
 - **Los prismas `APOLO_CORTES` NO han entrado en este proyecto** (el MCP
   no encuentra ni actores ni assets con «cort» o «prisma»). En el proyecto
   de ensayo del 15-sep sí entraron, así que el modelo los tiene: lo más
@@ -88,14 +94,80 @@ Hecho el 15-sep:
 
 Sin hacer todavía (nada de lo del sábado se conserva):
 
-- Guardar (había 5.214 assets sin guardar), borrar `Floor`, ocultar
-  `APOLO_CORTES`.
+- Borrar `Floor` (la losa de plantilla de 10×10 m en el origen; sigue ahí).
 - Exposición, `North Offset`, Lumen (recetas abajo).
 - Materiales: ver «Direct Link y los materiales» antes de tocar ninguno.
 - Vegetación, coches, entorno, lógica de viviendas, interfaz, empaquetado.
 
 La web (`/new`) usa el v6 y, según Fran, el v7 es idéntico: los ids de
 `data/units.json` valen tal cual para emparejar prismas.
+
+## Inventario de la escena (fase 0, medido por el MCP el 17-sep)
+
+Nivel `/Game/Main`, **69.260 actores**. Por clase: 57.079 `StaticMeshActor`,
+12.138 `Actor` (los nodos de grupo que crea Datasmith), 29 `CineCameraActor`,
+y uno de cada: `SunSky_C`, `DatasmithSceneActor`, `PostProcessVolume`,
+`ExponentialHeightFog`, `PlayerStart`, `Floor`, `Brush`,
+`InstancedFoliageActor`, `WorldSettings`, más 5 actores de sistema.
+
+**No hay ni una carpeta de Outliner** (`get_folders` → 0): todo es jerarquía
+de anclaje colgando del `DatasmithSceneActor`, que tiene 43 hijos directos:
+
+| Rama de primer nivel | Hijos directos |
+|---|---|
+| `SERENEA_APOLO_Central_V4_-_Vista_3D_-_3D_dwg` | **5.757** |
+| `SERENEA_V6___Fotovoltaica_orientada_a_fachada_oeste` | 267 |
+| `SERENEA_-_terreno_adaptado_al_edificio__sin_escala_` | 231 |
+| `SERENEA_V6___Terrazas_plantas_y_muebles_V6` | 160 |
+| `SERENEA_V6___Aticos_interiores_V6` | 121 |
+| `SERENEA_V6___Cocinas_y_armarios_adicionales_en_aticos` | 56 |
+| `SERENEA_V6___Acabados_de_apoyo_en_aticos` | 25 |
+| 26 `CineCameraActor` = las escenas de SketchUp (`01___Apolo_y_cuatro_edificios` … `27___Palmeras_canarias`, más `viewport_camera`) | 1 cada una |
+| 8 `StaticMeshActor` sueltos: `Componente_3`…`_8`, `Sree`, `Sree_2` | 1 cada uno |
+
+El **DWG de estructura sí está**, y es el grueso de la escena: esa rama de
+5.757 hijos es el primer sitio donde mirar para bajar el número de actores.
+
+Candidatos a borrar que salieron en el barrido:
+
+- **534 módulos fotovoltaicos** (`Modulo_FV_1722x1134_inclinado_12_grados_hacia_fachada_oeste`,
+  agrupados como `APOLO_18_142_FV_nnn` y tres cotas más: 19_542, 20_942,
+  22_342). Son placas de cubierta, no prismas: los nombres se parecen y
+  confunden.
+- **`Sree`**: un maniquí de 3D Warehouse, con 20 materiales propios
+  (`Sree_Dress`, `Sree_Hair`, `Sree_Pearls`, `Sree_Watch`…).
+- 583 `Pata_corta` y 32 `Neumatico_de_N_segmentos`: mobiliario y coches
+  modelados pata a pata y neumático a neumático.
+
+**Ancla para emparejar viviendas:** 166 puertas
+`UNIK_PUE_Pm-N_EntradaVivienda_-_NxNmm-N-ND`. Es el único elemento de la
+escena con cardinalidad exacta 166, así que es el mejor candidato para
+emparejar con los ids de `data/units.json` mientras los prismas no estén.
+
+### Lo que ya está bien y lo que no, en números
+
+`SunSky` está **en valores de plantilla, y son de Montreal**: latitud 45,
+longitud −73, `Time Zone` −5, *Use Daylight Saving Time* **marcado**,
+21-sep-2019, `Solar Time` 13, `North Offset` 0. Todo por poner (ver «La
+parcela y el sol»).
+
+`PostProcessVolume`: *Infinite Extent (Unbound)* ya está marcado y el
+*Metering Mode* ya es `Auto Exposure Histogram` con su casilla marcada. Pero
+`Exposure Compensation` está en **1,263** (la receta pide 0) y Min/Max EV100
+están en −10/20 **con las casillas sin marcar**, así que la exposición no
+está congelada.
+
+Los 163 materiales son los que generó Datasmith, pero sus nombres ya cubren
+casi todo el mapa de «Direct Link y los materiales»:
+`APOLO_V6___Monocapa_blanco_roto_5pct_calido`,
+`APOLO_V6___Vidrio_claro_transparente`,
+`APOLO_V6___Travertino_marfil_veta_vertical`,
+`APOLO_V6___PAMESA_WELLS_Ivory_120x60`, `APOLO_V6___Aluminio_plata_grata`,
+`V6_Monocapa_contexto` para los edificios vecinos, más `asphalt`,
+`sidewalk`, `curb`, `grass`, `glass`, `roof`. Y de las 19 texturas ya
+importadas, hay travertino, PAMESA, monocapa, gravilla y tarima, más 9
+teselas de ortofoto PNOA de la costa: **para los seis que importan puede que
+Megascans no haga falta**.
 
 ## Direct Link y los materiales
 
@@ -207,6 +279,16 @@ Las alturas de corte salen de los prismas: la cara superior de cada
 `CORTE_Pn`. Lumen ilumina el interior cortado por sí solo; no hacen falta
 luces dentro de las viviendas.
 
+**Ojo: un escalar único no vale.** `data/cortes.json` (lo que hace el visor
+web de verdad) no tiene una cota por planta, sino **8 cajones por planta ×
+4 plantas = 32 cajas**, cada una con su `y`, porque el edificio está
+escalonado en el terreno: la baja va de 6,75 a 11,85 m y el ático de 15,75 a
+20,85 m. Cada cajón es un rectángulo en `x`/`z` con su propia cota. Así que
+`MPC_Apolo` necesita **una rejilla de cajones con su cota**, no un
+`AlturaDeCorte` suelto — que es justo lo que resuelve el shader de
+`new/js/visor/cortes.js` con su rejilla de hasta 4 cajones. Decidir esto
+antes de montar el paso 5.
+
 ### Los prismas
 
 Uno por vivienda, agrupados por planta bajo `APOLO_CORTES`. Hacen cuatro
@@ -285,10 +367,15 @@ Puntos clave:
 
 ## Orden de trabajo propuesto
 
-1. Guardar. Borrar `Floor`. Ocultar `APOLO_CORTES`. Guardar.
-2. Exposición (`Min EV100 = Max EV100 = 14`) y `North Offset` calibrado.
-3. Traer los prismas (ver arriba) y borrar lo que nunca se ve (DWG de
-   estructura, si está).
+1. ~~Guardar~~ (hecho: el nivel estaba limpio). Borrar `Floor` ← **aquí**.
+   Ocultar `APOLO_CORTES` no procede: no está en la escena.
+2. Exposición (`Min EV100 = Max EV100 = 14`, y `Exposure Compensation` de
+   1,263 a 0) y `North Offset` calibrado. `SunSky` entero, que sigue en
+   Montreal.
+3. Traer los prismas (ver arriba) y borrar lo que nunca se ve: la rama
+   `SERENEA_APOLO_Central_V4_-_Vista_3D_-_3D_dwg` (5.757 hijos, el DWG de
+   estructura, confirmado en la escena), los 534 módulos fotovoltaicos y
+   `Sree`.
 4. Juego de materiales propios + herramienta «Aplicar materiales Apolo» por
    nombre. Probarla haciendo un *Synchronize* y viendo que sobrevive.
 5. `MPC_Apolo` + máscara de corte en **nuestros** maestros (no en los de
@@ -325,3 +412,33 @@ Puntos clave:
 - Con el exportador 5.8 y SketchUp 2026, el triángulo de versiones es:
   SketchUp 2026 ↔ exportador 5.8 ↔ Unreal 5.8. Un exportador de otra versión
   no hace Direct Link con este motor.
+
+## Cómo se maneja el MCP del editor (aprendido a base de intentos)
+
+- `call_tool` necesita **los dos** argumentos: `toolset_name` *y* `tool_name`,
+  y `tool_name` va **corto** (`get_current_level`, no la ruta completa).
+  Pasar solo el nombre largo da «Tool not found».
+- `describe_toolset` quiere el parámetro `toolset_name` (no `toolset`).
+- **Nunca pedir los 69.260 actores y tirar de ellos uno a uno.** Cada llamada
+  suelta cuesta ~0,2 s: mil `get_label` son cuatro minutos y el MCP se va a
+  segundo plano. Todo lo que sea recorrer la escena va en un script de
+  `ProgrammaticToolset.execute_tool_script`, que agrega en el editor y
+  devuelve solo el resumen. Dentro del script, `execute_tool()` sí usa el
+  nombre largo del tool.
+- `find_actors` filtra `name` por **subcadena de la etiqueta, sin distinguir
+  mayúsculas**. Cuidado con los falsos positivos: buscar `cort` devuelve 587
+  `Pata_corta`, y `VIV` devuelve las 166 puertas `EntradaVivienda`.
+- `find_actors(root=X)` **no es recursivo**: devuelve `X` más sus hijos
+  directos. Para contar un subárbol hay que bajar a mano, nivel a nivel.
+- `AttachChildren` no se puede leer con `ObjectTools.get_properties`. Para la
+  jerarquía, usar `find_actors(root=…)`.
+- Los nombres de propiedad de `ObjectTools` van en **camelCase**
+  (`northOffset`, `solarTime`, `useDaylightSavingTime`) y no siempre coinciden
+  con la etiqueta del editor; sacarlos primero con `list_properties`, porque
+  pedir uno que no existe aborta la llamada entera.
+- La exposición del `PostProcessVolume` vive en la struct `Settings` (463
+  claves). Las casillas del editor son los `bOverride_*`: sin marcarlos, el
+  valor no hace nada.
+- Para saber qué proyecto hay abierto de verdad, la línea de comandos del
+  proceso es lo más fiable:
+  `Get-CimInstance Win32_Process -Filter "Name like 'UnrealEditor%'"`.
