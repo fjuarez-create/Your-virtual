@@ -145,6 +145,41 @@ Para traer una versión nueva del modelo:
    hace con los materiales. Debería ir todo en la misma herramienta del
    paso 4 del orden de trabajo.
 
+### Reimport del 17-sep por la noche (fachada corregida): qué reponer
+
+Fran corrigió dos fallos de modelado de la fachada en SketchUp y volvió a
+pasar el modelo por Datasmith hasta Unreal. La geometría ya se ve bien; lo
+que un *Reimport* deshace y hay que comprobar y reponer, en este orden:
+
+1. **Que sigue habiendo una sola escena**: un único `DatasmithSceneActor`
+   (`SERENEA_Apolo_17_09_26`) y un recuento del orden de 69.300 actores, no
+   el doble. Si entró por *Añadir → Datasmith → Import* en vez de por
+   *Reimport*, hay dos escenas: borrar la vieja entera (ver «El día de los
+   dos proyectos»).
+2. **Reaplicar el mapa de materiales** (`docs/mapa_materiales_apolo.json`):
+   el *Reimport* devuelve los 29 materiales reapadrinados a sus padres de
+   `Materials/References/`. Mismo procedimiento que en la fase 4, en tandas.
+3. **Volver a ocultar los 32 prismas** (`bVisible = false` por componente)
+   si han reaparecido, y comprobar que la colisión sigue en `BlockAll`.
+4. Exposición, `SunSky`, `North Offset`, Lumen y el `Floor` borrado no se
+   tocan: son actores de la plantilla, no de Datasmith. La calibración del
+   marco sigue valiendo mientras el modelo no se haya movido en SketchUp.
+5. Si en la fase 3 se borraron `Sree` y `Brush1`, habrán vuelto: borrarlos
+   otra vez o dejarlos, están fuera de la parcela.
+
+Esto es exactamente lo que tiene que hacer la herramienta pendiente de la
+fase 4 (script de Python del editor): este reimport es la prueba real.
+
+**Aviso de Unreal «Se ha detectado un cambio en un archivo de contenido de
+origen. ¿Deseas importarlo?»**: lo provoca la copia
+`Content/Apolo/mapa_materiales.json`. Unreal vigila la carpeta `Content` y
+un `.json` le parece una tabla de datos importable (el registro dice
+«'…/Content/Apolo/mapa_materiales.json' Se ha creado»). Respuesta: **No
+importar**, sin marcar «No preguntar de nuevo» (ese aviso también sirve para
+el `.udatasmith`). Y **sacar la copia de `Content/`**: la buena es la del
+repositorio; si hace falta una en el proyecto, dejarla en
+`C:\Serenea\Serenea_170926\Apolo\`, fuera de `Content`.
+
 ## Inventario de la escena (fase 0, medido por el MCP el 17-sep)
 
 Medido sobre `Serenea_160926`, pero **vale igual para `Serenea_170926`**: el
