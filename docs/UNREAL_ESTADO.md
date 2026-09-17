@@ -170,6 +170,43 @@ que un *Reimport* deshace y hay que comprobar y reponer, en este orden:
 Esto es exactamente lo que tiene que hacer la herramienta pendiente de la
 fase 4 (script de Python del editor): este reimport es la prueba real.
 
+### Lo que pasó de verdad (comprobado por el MCP tras el reimport)
+
+**1. Una sola escena. Correcto.** `SERENEA_Apolo_17_09_26`, ahora con 41
+hijos directos. **69.256 actores.**
+
+**2. Los materiales NO se revirtieron.** Esto contradice lo que este
+documento daba por hecho: los **29 materiales siguen apadrinados por nuestras
+instancias**, cero revertidos. Un *Reimport* del asset DatasmithScene
+**conserva el padre** de los `MaterialInstanceConstant` que ya existían. Así
+que reaplicar el mapa después de cada reimport **no hace falta** — pero sí
+hay que comprobarlo, porque una importación nueva (no un reimport) sí los
+regeneraría.
+
+**3. Los 32 prismas han desaparecido, y esto sí es un problema.**
+`APOLO_CORTES`, sus cuatro `CORTE_Pn` y los 32 prismas ya no están en la
+escena: son exactamente los **37 actores** que faltan (69.293 → 69.256), y
+los hijos del Datasmith bajan de 42 a 41 al perder `APOLO_CORTES`. No es que
+estén ocultos: no existen. La malla `Geometries/Componente_9` sigue en el
+proyecto, huérfana, así que volverán a usarla cuando reaparezcan.
+
+La causa más probable es la misma de la primera vez: **la etiqueta de los
+prismas se quedó oculta en SketchUp** al corregir la fachada, y Datasmith no
+exporta lo oculto. **Arreglo: en SketchUp, hacer visible la etiqueta de
+`APOLO_CORTES`, exportar otra vez al mismo `.udatasmith` y *Reimportar*.**
+Ocultarlos siempre en Unreal, nunca en SketchUp.
+
+**Sin los prismas están bloqueados los pasos 5 y 6**: no hay de dónde sacar
+las cotas de corte ni con qué calibrar el marco de coordenadas.
+
+**4. Lo borrado sigue borrado.** `Floor`, `Sree`, `Sree_2` y `Brush1` no han
+vuelto, así que el reimport no repone los actores que se quitaron a mano.
+
+**5. El `mapa_materiales.json` ya está fuera de `Content`**, en
+`C:\Serenea\Serenea_170926\Apolo\mapa_materiales.json`. No queda ningún
+`.json` suelto dentro de `Content`, así que el aviso de importación no
+debería volver a salir.
+
 **Aviso de Unreal «Se ha detectado un cambio en un archivo de contenido de
 origen. ¿Deseas importarlo?»**: lo provoca la copia
 `Content/Apolo/mapa_materiales.json`. Unreal vigila la carpeta `Content` y
@@ -331,12 +368,16 @@ sigue apuntando al mismo asset.
   está en el mapa se queda con su material de Datasmith, que es el
   comportamiento seguro.
 - **El mapa está en `docs/mapa_materiales_apolo.json`** del repositorio, que
-  es la copia versionable, y una copia dentro del proyecto en
-  `Content/Apolo/mapa_materiales.json`. Ampliarlo es añadir nombres a las
-  listas.
-- **Hay que reaplicarlo tras cada *Reimport***, que devuelve los materiales a
-  sus padres originales. En la misma pasada debe ir la ocultación de los 32
-  prismas, por lo mismo.
+  es la copia buena y versionable. La copia de trabajo dentro del proyecto va
+  en `C:\Serenea\Serenea_170926\Apolo\mapa_materiales.json`, **fuera de
+  `Content`**: un `.json` dentro de `Content` hace que Unreal lo tome por una
+  tabla de datos y pregunte si quiere importarlo en cada arranque. Ampliarlo
+  es añadir nombres a las listas.
+- **Un *Reimport* no lo deshace.** Comprobado el 17-sep por la noche: los 29
+  siguieron apadrinados por nuestras instancias. Lo que sí hay que comprobar
+  tras cada reimport es que siguen (una llamada) y, sobre todo, **el estado de
+  los prismas**, que esa vez sí desaparecieron. Una importación nueva, en
+  cambio, regenera los materiales desde cero y sí obligaría a reaplicar.
 
 Pendiente de la fase 4: dejar la herramienta como script de Python del editor
 para que se pueda ejecutar sin el MCP, y decidir si se amplía el mapa a los
