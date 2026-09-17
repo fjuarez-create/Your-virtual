@@ -26,11 +26,11 @@ El móvil ya está resuelto por la web; no se hace versión Android por ahora.
 
 | Cosa | Dónde |
 |---|---|
-| Proyecto de Unreal (5.8.2) | `C:\Serenea\Serenea_160926\Serenea_160926.uproject` (confirmado por el log del editor) — proyecto del 16-sep, plantilla Architecture → Blank. En `C:\Serenea\` y en `Documents\Unreal Projects\` hay varios ensayos anteriores (`serenea`, `SereneaV6`, `SereneaV6 5.8`, `SERENEA_150926`, `Serenea75`, `Serenea_75`): **no usarlos**. |
+| Proyecto de Unreal (5.8.2) | `C:\Serenea\Serenea_170926\Serenea_170926.uproject` — **el definitivo, creado el 17-sep. No crear más proyectos.** En `C:\Serenea\` y en `Documents\Unreal Projects\` quedan ensayos anteriores (`serenea`, `SereneaV6`, `SereneaV6 5.8`, `SERENEA_150926`, `Serenea_160926`, `Serenea75`, `Serenea_75`): no usarlos. |
 | Este repositorio, clonado en el PC | `D:\Serenea\web` (rama `claude/hopeful-faraday-7y80bt`). Ojo: el proyecto de Unreal está en **C:**, el repositorio en **D:**. |
 | Copia de seguridad | El proyecto de Vagon (`SereneaV6.zip` en Drive, `09 Digital twint - TESTING`) queda como archivo muerto: no se reutiliza. El proyecto nuevo se regenera desde SketchUp por Direct Link, pero en cuanto tenga trabajo encima (materiales, Blueprints) hay que hacerle copia igual. |
 | Modelo fuente | SketchUp 2026 en el sobremesa de Fran, con el exportador Datasmith **5.8** (`5_8_200`) instalado. El `.skp` se llama `SERENEA_Apolo_v7`, y probablemente `SERENEA_Apolo_v75`: Datasmith bautiza la escena con el nombre del fichero de SketchUp y en Unreal entró como `SERENEA_Apolo_v75`. **Sin confirmar**: el `.skp` no está en este PC, hay que mirarlo en SketchUp. |
-| Cómo entra en Unreal | **Datasmith Direct Link**, no por archivo. En SketchUp: barra Datasmith → *Synchronize*. En Unreal: botón **Añadir (+)** → *Datasmith* → *Direct Link Import*. Importador Datasmith clásico; *Interchange Datasmith* (experimental) **desactivado** a propósito. |
+| Cómo entra en Unreal | **Por archivo**: en SketchUp, barra Datasmith → *Export* a un `.udatasmith`; en Unreal, **Añadir (+)** → *Datasmith* → *File Import*. Importador Datasmith clásico; *Interchange Datasmith* (experimental) desactivado a propósito. **Para actualizar**: exportar otra vez **al mismo archivo** y en el Content Browser, clic derecho en el asset DatasmithScene → *Reimportar*. Direct Link se descartó el 17-sep: al reimportar duplicó la escena (138.535 actores). |
 | Panel y endpoint | `showroom.unikdi.com/gestion` · `/gestion/api/estado.php` |
 | Catálogo de viviendas | `data/units.json` (166 entradas: id, planta, dorm, orientacion, supViv, terraza, supTotal, precio) |
 | Semilla de estados | `data/availability.json` |
@@ -54,7 +54,7 @@ OneDrive). El ZIP en Drive es copia; se trabaja en `D:\Serenea`.
 
 ## Estado del proyecto de Unreal
 
-Proyecto **nuevo**, creado el 16-sep en el sobremesa de Fran (i9, 64 GB,
+Proyecto **definitivo**, creado el 17-sep en el sobremesa de Fran (i9, 64 GB,
 gráfica de 12 GB) con Unreal 5.8.2 y la plantilla Architecture → Blank
 (SunSky, ExponentialHeightFog, PostProcessVolume, CineCameraActor,
 PlayerStart, InstancedFoliageActor, Floor). El proyecto de Vagon del sábado
@@ -177,8 +177,8 @@ Megascans no haga falta**.
 
 ## Direct Link y los materiales
 
-Cada *Synchronize* desde SketchUp vuelve a generar los materiales que creó
-Datasmith. Por tanto:
+Cada reimportación desde SketchUp (por archivo o por Direct Link) vuelve a
+generar los materiales que creó Datasmith. Por tanto:
 
 - **Los materiales de Datasmith no se editan nunca.** Se sustituyen.
 - Se construyen materiales **propios**: maestros (`M_Apolo_Opaco`,
