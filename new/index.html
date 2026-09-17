@@ -60,6 +60,8 @@
     "app/visor/camara.js": "/new/js/visor/camara.js?v=__BUILD__",
     "app/visor/texturas.js": "/new/js/visor/texturas.js?v=__BUILD__",
     "app/visor/materiales.js": "/new/js/visor/materiales.js?v=__BUILD__",
+    "app/motor/puente.js": "/new/js/motor/puente.js?v=__BUILD__",
+    "app/motor/transporte.js": "/new/js/motor/transporte.js?v=__BUILD__",
     "app/shell.js": "/new/js/shell.js?v=__BUILD__",
     "app/building.js": "/new/js/building.js?v=__BUILD__",
     "app/layout.js": "/new/js/layout.js?v=__BUILD__",
@@ -211,6 +213,24 @@
   </div>
 </section>
 
-<script type="module">import 'app/visor/main.js'; import 'app/shell.js';</script>
+<!-- Qué hay debajo de la interfaz. En el navegador, three.js (visor/main.js).
+     Dentro del ejecutable de Unreal, el puente (motor/puente.js): misma API
+     window.apolo, pero cada llamada viaja como orden del protocolo y Unreal
+     pinta. Se elige por ?motor=unreal, o solo porque Web UI ya ha inyectado
+     sus globales. Con &simulador=1 el puente contesta solo, para probar la
+     interfaz sin Unreal (ver docs/PROTOCOLO_STREAMING.md). -->
+<script type="module">
+  const p = new URLSearchParams(location.search);
+  const html = document.documentElement;
+  const enUnreal = p.get('motor') === 'unreal'
+    || typeof window.ue4 === 'function'
+    || !!(window.ue && window.ue.interface);
+  if (enUnreal) {
+    html.classList.add('motor-unreal');
+    if (p.get('simulador') === '1') html.classList.add('simulador');
+  }
+  (enUnreal ? import('app/motor/puente.js') : import('app/visor/main.js'))
+    .then(() => import('app/shell.js'));
+</script>
 </body>
 </html>

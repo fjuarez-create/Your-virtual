@@ -34,6 +34,14 @@ html, body {
 
 #app { position: fixed; inset: 0; }
 
+/* Dentro del ejecutable de Unreal (html.motor-unreal) el 3D lo pinta el motor
+   debajo de la página: esta se vuelve transparente y el lienzo de three.js
+   se retira. El simulador (?motor=unreal&simulador=1) es la misma interfaz
+   sin nadie debajo; se le deja un fondo neutro para poder verla. */
+html.motor-unreal, html.motor-unreal body { background: transparent; }
+html.motor-unreal #app { display: none; }
+html.motor-unreal.simulador body { background: radial-gradient(ellipse at 60% 40%, #4a5866 0%, #1c232b 70%); }
+
 #scene { display: block; width: 100%; height: 100%; }
 
 /* ─────────────────────────── Barra lateral ─────────────────────────── */

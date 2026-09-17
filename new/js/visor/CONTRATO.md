@@ -270,6 +270,21 @@ Estado de demostración: 70 % disponibles y 30 % vendidas, determinista (cada
 tercera vivienda por orden de id, empezando por la segunda, es vendida) salvo
 que `data/availability.json` traiga otra cosa.
 
+## Dos motores, una interfaz (añadido el 17-sep-2026)
+
+`window.apolo` lo puede dar `visor/main.js` (three.js, lo de arriba) o
+`motor/puente.js` (el ejecutable de Unreal: la misma API sin dibujar nada;
+cada llamada sale como orden de `docs/PROTOCOLO_STREAMING.md` por
+`motor/transporte.js`). La interfaz (`shell.js`) es la misma y no distingue.
+Regla: **todo lo que `shell.js` necesite de `apolo` tiene que existir en los
+dos motores**; si se añade algo a `main.js` que use el shell, se añade también
+al puente (o se deja inerte, pero presente). `apolo.motor === 'unreal'`
+identifica al puente. Se elige en `index.html` con `?motor=unreal`; con
+`&simulador=1` el puente contesta solo y se puede probar la interfaz sin
+Unreal (`window.__mensajes`, `window.__simularEvento`). `new/unreal.html` es
+la copia para el ejecutable y la genera `node tools/unreal_html.mjs`: no se
+edita a mano.
+
 ## Cómo probar
 
 - Servidor: `python3 -m http.server 8765` desde la raíz del repositorio

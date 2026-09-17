@@ -1,30 +1,27 @@
-# Protocolo entre la interfaz web y la aplicación de Unreal
+# Protocolo entre la interfaz y la aplicación de Unreal
 
-Especificación de los mensajes que cruzan entre `showroom.unikdi.com` y el
-Apolo que corre en el servidor de Vagon. Los dos lados se construyen contra
-este documento.
+Especificación de los mensajes que cruzan entre la interfaz HTML de
+`showroom.unikdi.com/new` y el Apolo de Unreal. Los dos lados se construyen
+contra este documento. Los mensajes no dependen de por dónde viajen: nacieron
+para un stream (Vagon) y valen igual dentro del ejecutable de la oficina de
+ventas, que es donde se usan ahora.
 
 ## La arquitectura, en una imagen
 
 ```
-   showroom.unikdi.com
-   ├── nuestra interfaz HTML          raíl de plantas, ficha, filtros,
-   │   (nítida, la de siempre)        listado, planos, galería
-   │        │
-   │        │  sendApplicationMessage(JSON)      ← SDK JS de Vagon
+   Apolo.exe (Windows)
+   ├── la interfaz de /new, la de siempre         new/unreal.html
+   │   dibujada encima del 3D por el plugin Web UI
+   │        │  ue.interface.broadcast('apolo', JSON)   página → Blueprint
+   │        │  ue.interface.apolo(JSON)                Blueprint → página
    │        ▼
-   └── <iframe id="vagonFrame">       solo el vídeo del 3D
-              │
-              ▼
-        Apolo.exe en el servidor
-              │  WebSocket ws://127.0.0.1:7788  ← ya viene montado en la build
-              ▼
-        Blueprint que interpreta el JSON
+   ├── Blueprint que interpreta el JSON (8 órdenes, 6 eventos)
+   └── la escena de Unreal: corte, prismas, cámara, sol
 ```
 
 Lo importante de este reparto: **la lógica comercial no entra en Unreal**. La
-página sigue leyendo `/gestion/api/estado.php` como hace hoy y le manda a la
-aplicación el mapa ya resuelto. La aplicación solo pinta.
+página sigue leyendo `/gestion/api/estado.php` como hace en la web y le manda
+a la aplicación el mapa ya resuelto. La aplicación solo pinta.
 
 ## Reglas comunes
 
@@ -90,20 +87,105 @@ El deslizador solar se mueve a las 18:45:
 
 ## Notas de implementación
 
-**En la página.** El SDK de JavaScript de Vagon se carga entre las etiquetas
-`<head>` y el stream va en un `<iframe id="vagonFrame">`. Los mensajes salen
-con `sendApplicationMessage`. El SDK avisa además de cuándo se inicializa el
-stream, cuándo se conecta o desconecta el visitante y **cuándo lleva rato
-inactivo**, que es justo lo que hace falta para el escaparate y el corte de
-sesión.
+### En la página (hecho el 17-sep-2026)
 
-**En Unreal.** La build que corre en Vagon ya trae el servidor WebSocket en
-`ws://127.0.0.1:7788`: no hay que montar ninguno. Desde Blueprint hay que
-conectarse con el nodo **«Create WebSocket with Headers connection»**, no con
-el normal, porque necesita una cabecera concreta. Vagon publica una plantilla
-de Blueprint de la que partir.
+La interfaz de `/new` ya está separada del motor. `new/js/shell.js` habla con
+`window.apolo` y no sabe quién hay debajo:
 
-**Antes de dar nada por bueno**, conviene abrir la documentación de Vagon y
-confirmar los nombres exactos: esta especificación se escribió con la
-documentación bloqueada desde el entorno de desarrollo y los datos vienen de
-búsquedas coincidentes, no de la página leída directamente.
+- `new/js/visor/main.js` — three.js, en el navegador (lo de siempre).
+- `new/js/motor/puente.js` — la misma API `window.apolo`, pero cada llamada
+  se convierte en una orden de este protocolo y cada evento que vuelve
+  actualiza el estado y se reemite a la interfaz. No dibuja nada.
+- `new/js/motor/transporte.js` — el cable: Web UI dentro del `.exe`, o un
+  simulador en un navegador normal.
+
+Se elige en `new/index.html`: `?motor=unreal` (o que Web UI ya haya
+inyectado sus globales) carga el puente; si no, three.js. Con
+`&simulador=1` el puente contesta solo: `listo` a los 300 ms, lo enviado se
+apunta en `window.__mensajes` y `window.__simularEvento(evento, valor)` mete
+un evento como si viniera de Unreal. Sirve para probar la interfaz sin
+Unreal, también en el hosting:
+`https://showroom.unikdi.com/new/?motor=unreal&simulador=1`.
+
+**`new/unreal.html` es la página que va dentro del ejecutable.** La genera
+`node tools/unreal_html.mjs` desde `index.html` y se commitea generada:
+
+- un solo archivo de JavaScript clásico (esbuild junta el puente, la interfaz
+  y lo que importan): desde disco (`file://`) el navegador bloquea los
+  módulos ES y el `fetch` de archivos locales, así que no usa ninguno;
+- el catálogo (`data/units.json`) y la copia de estados
+  (`data/availability.json`) van incrustados en la página;
+- los estados vivos se piden a
+  `https://showroom.unikdi.com/gestion/api/estado.php` (el endpoint ya manda
+  `Access-Control-Allow-Origin: *`); sin internet, vale la copia incrustada;
+- `<base href="../">`: hoja de estilos, logos e iconos relativos a la carpeta
+  de arriba. En el paquete van juntos `new/` y `assets/` (`logo_unik.png`,
+  `logo_gilmar.png`, `icono/`; `assets/plans/` si se quiere el plano en la
+  ficha).
+
+Probado abriéndola desde disco en Chromium (`file:///…/new/unreal.html?simulador=1`):
+carga, pinta la interfaz y manda las 166 viviendas sin servidor. Cuando
+cambie la interfaz, el puente o los datos: volver a generar y commitear.
+
+Lo que hace el puente por su cuenta:
+
+- Retiene las órdenes hasta recibir `listo`. Entonces manda, en este orden,
+  `fecha` (hoy), `hora` (la del momento activo) y `estados` (el mapa completo
+  de las 166 viviendas, todas con valor: las que el panel no nombra van como
+  `disponible`), y después lo retenido.
+- Los cuatro botones de momento de la web se traducen a `hora`: mañana 9,5;
+  mediodía 13,95; atardecer 19,25; noche 22,5. Provisional hasta que haya
+  deslizador solar.
+- Vuelve a pedir los estados cada 60 s y solo manda `estados` si han cambiado.
+- Cualquier pulsación, rueda, tecla o toque corta el escaparate: manda
+  `escaparate: false` una vez y no vuelve a mandarlo hasta que la aplicación
+  avise de que ha entrado otra vez (`evento escaparate: true`).
+- Al recibir `escaparate: true` recoge ficha y panel de plantas y marca el
+  conjunto, como hace la web en reposo.
+- Una vivienda vendida es inerte: ni la selecciona la interfaz ni acepta el
+  evento `vivienda` con su id.
+- Lo que la aplicación cuenta (evento `vivienda`, `hover`, `planta`) no se
+  le devuelve como orden.
+
+### En Unreal (por hacer; fase 7 de docs/UNREAL_ESTADO.md)
+
+Plugin **Web UI** (Tracer Interactive, en Fab, versión 5.8). Un widget con la
+página `new/unreal.html`, a pantalla completa, fondo transparente y con la
+transparencia de ratón activada para que los clics sobre el 3D no se queden en
+la página.
+
+- **Página → Blueprint.** La página llama a
+  `ue.interface.broadcast('apolo', '<JSON>')`. En el widget, el evento *On
+  Interface Event* llega con `Name = "apolo"` y `Data` con el JSON en texto:
+  se parsea y se reparte por `orden`. Las versiones antiguas del plugin
+  exponen una función global `ue4(nombre, datos)`; la página la usa si es lo
+  que encuentra.
+- **Blueprint → página.** La página define `ue.interface.apolo`. Desde
+  Blueprint, nodo *Call* del widget con `Function = "apolo"` y `Data` = el
+  JSON del evento (`{"evento":"vivienda","valor":"214"}`), como texto o como
+  objeto: la página acepta los dos.
+- Un solo nombre de canal (`apolo`) en los dos sentidos: un manejador por
+  lado y el resto se decide por `orden` / `evento`.
+- Copiar `new/` y `assets/` juntos a la carpeta de interfaz del proyecto y
+  cargar `new/unreal.html` con *Load File*. Para desarrollar también vale
+  *Load URL* contra `https://showroom.unikdi.com/new/unreal.html`.
+
+**Por confirmar en el .exe** (esto se escribió sin poder abrir la
+documentación del plugin ni probar dentro de Unreal):
+
+1. Los nombres exactos `ue.interface.broadcast` / `ue4` y del evento *On
+   Interface Event* en la versión 5.8 del plugin. Si difieren, se cambia solo
+   `new/js/motor/transporte.js` y se vuelve a generar `unreal.html`.
+2. Que la petición a `showroom.unikdi.com` salga desde una página cargada de
+   disco (origen `null`; el endpoint ya permite cualquier origen). Si el
+   navegador del plugin la bloqueara, la interfaz enseña la copia incrustada
+   y hay que mirar los ajustes de seguridad web del plugin.
+
+### Antes: Vagon
+
+La primera versión de este documento describía el transporte por streaming:
+SDK de JavaScript de Vagon en la página, `sendApplicationMessage` para
+mandar y, en Unreal, un WebSocket a `ws://127.0.0.1:7788`. Vagon se
+descartó (el `.exe` corre en la pantalla de la oficina de ventas); si algún
+día volviera a hacer falta, los mensajes son los mismos y solo cambiaría
+`transporte.js`.

@@ -8,7 +8,9 @@ que aquí se afirma está verificado salvo donde pone «sin confirmar».
 Fecha de este estado: 17 de septiembre de 2026, tarde. **Proyecto vigente:
 `Serenea_170926`**, importado desde **fichero `.udatasmith`** (no por Direct
 Link), verificado por el MCP, con los prismas dentro y la fase 1 hecha.
-`Serenea_160926` queda muerto: ver «El día de los dos proyectos».
+`Serenea_160926` queda muerto: ver «El día de los dos proyectos». La interfaz
+web ya está separada del motor y lista para el ejecutable
+(`new/unreal.html`; ver «Arquitectura del ejecutable»).
 
 ## Qué es esto
 
@@ -456,10 +458,13 @@ Puntos clave:
   último recurso, y Blueprint guarda el último mapa recibido (SaveGame) para
   arrancar con él si la petición falla. Timeout corto: nunca colgar el
   arranque delante de un cliente.
-- La sesión en la nube separa la interfaz del motor three.js en `new/` para
-  que la misma interfaz corra en el navegador (con three.js debajo) y dentro
-  del `.exe` (con Unreal debajo). Hasta que eso esté, el lado Unreal puede
-  construir los manejadores contra el protocolo con una página de prueba.
+- **La interfaz ya está separada del motor (hecho el 17-sep).**
+  `new/unreal.html` es la página que va dentro del `.exe`;
+  `new/js/motor/puente.js` traduce la interfaz al protocolo y
+  `new/js/motor/transporte.js` habla con Web UI. Cómo se conecta, qué manda
+  al arrancar y qué queda por confirmar dentro del plugin: sección «Notas de
+  implementación» de `docs/PROTOCOLO_STREAMING.md`. Para ver la interfaz sin
+  Unreal: `showroom.unikdi.com/new/?motor=unreal&simulador=1`.
 - Si Web UI diera problemas, se sustituye por UMG **sin tocar los
   Blueprints**: reciben los mismos mensajes venga quien venga.
 - Encuadres de cámara (`vista`: conjunto, edificio, planta, plano): los
@@ -505,8 +510,15 @@ Todo referido a `Serenea_170926`.
    con la transformación ya calibrada (ver «Los prismas»); material de
    estado con parámetros. Confirmar de paso que la colisión responde al
    trazado, que las mallas vienen sin colisión simple.
-7. Web UI; widget con una página de prueba; los 14 manejadores en Blueprint
-   contra el protocolo.
+7. Web UI: widget a pantalla completa con `new/unreal.html` (copiar `new/`
+   y `assets/` juntos a la carpeta de interfaz del proyecto y cargarla con
+   *Load File*; es un solo archivo clásico con los datos dentro, así que
+   funciona desde disco), transparencia de ratón, y los 14 manejadores en
+   Blueprint: 8 órdenes que entran por *On Interface Event* con
+   `Name = "apolo"` y el JSON en `Data`, 6 eventos que salen con *Call*
+   (`Function = "apolo"`). Antes de nada, confirmar los dos puntos «por
+   confirmar» de `docs/PROTOCOLO_STREAMING.md` (nombres del plugin y la
+   petición al panel desde disco).
 8. Cámaras, sol enlazado a `hora`/`fecha`, escaparate.
 9. Vegetación canaria, coches, entorno. Fusionar lo que no necesite ser
    independiente para bajar el número de actores.
