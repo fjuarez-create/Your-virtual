@@ -310,7 +310,7 @@ P2 = p1, P3 = p2, P4 = ático) comparando alturas.
 **2. Las 166 viviendas NO están en el modelo de SketchUp** (el modelo no trae
 grupos por vivienda). Se dedujeron de tabiques, puertas y pavimentos con
 `tools/viviendas_serenea.mjs` y están en **`data/viviendas_serenea.json`**:
-166 entradas por id (`"101"`…), cada una con `planta`, `plataforma` (1–8),
+166 entradas por id (`"101"`…), cada una con `planta`, `plataforma` (0–7, la misma numeración que el orden de los cajones de `cortes.json`),
 `poligono` = `[[x, z], …]` en planta, `y0`/`y1` = suelo y techo del prisma,
 más `entrada`, `vidrios`, áreas. Es la misma fuente que usa el visor web
 para el clic, el color de estado y la cartela.
