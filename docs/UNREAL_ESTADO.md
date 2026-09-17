@@ -63,14 +63,20 @@ empezar de cero.
 Hecho el 15-sep:
 
 - Importado por **Direct Link** desde SketchUp (`SERENEA_Apolo_v75`; Fran confirma que el v7 es el mismo modelo que el v6 de la web, sin cambios de geometría ni de ids).
-  **126.386 actores** — casi el doble que la importación del sábado (69.288).
-  Pendiente entender por qué: modelo v7 más detallado, o el importador
-  clásico no agrupa igual que Interchange. Toca mirarlo antes de optimizar.
+  **69.260 actores**, medidos por el MCP el 17-sep. (Los 126.386 que se
+  anotaron el 16-sep eran del proyecto de ensayo anterior; en este no.)
 - El contenido vive en `Content/SERENEA_Apolo_v7/` (`Geometries`,
   `Materials`, `Textures`) más el asset *DatasmithScene* al lado. Ese asset
   es el que se re-sincroniza; no borrarlo.
-- Los prismas `APOLO_CORTES` han entrado (se ven como un bloque rosa
-  translúcido tapando el edificio). Hay que ocultarlos en el editor.
+- **Los prismas `APOLO_CORTES` NO han entrado en este proyecto** (el MCP
+  no encuentra ni actores ni assets con «cort» o «prisma»). En el proyecto
+  de ensayo del 15-sep sí entraron, así que el modelo los tiene: lo más
+  probable es que la etiqueta estuviera **oculta en SketchUp** al sincronizar,
+  y Direct Link no exporta lo oculto. Arreglo: en SketchUp, etiqueta de los
+  prismas visible → *Synchronize* → en Unreal, reimportar el asset
+  DatasmithScene → ocultarlos **en Unreal** (ojo del Outliner), nunca en
+  SketchUp. Sin los prismas no hay clic, ni estados, ni corte: bloquea las
+  fases 3 en adelante.
 - **Fab está disponible en este editor** (botón *Fab* en el Content Browser;
   en el Unreal de Vagon no estaba). Megascans entra directo.
 - Máquina: i9-14900KF, 64 GB, **RTX 5070 (12 GB)**, Windows 11, dos monitores.
@@ -281,8 +287,8 @@ Puntos clave:
 
 1. Guardar. Borrar `Floor`. Ocultar `APOLO_CORTES`. Guardar.
 2. Exposición (`Min EV100 = Max EV100 = 14`) y `North Offset` calibrado.
-3. Averiguar de dónde salen los 126.386 actores (¿v7? ¿DWG de estructura?)
-   y borrar lo que nunca se ve.
+3. Traer los prismas (ver arriba) y borrar lo que nunca se ve (DWG de
+   estructura, si está).
 4. Juego de materiales propios + herramienta «Aplicar materiales Apolo» por
    nombre. Probarla haciendo un *Synchronize* y viendo que sobrevive.
 5. `MPC_Apolo` + máscara de corte en **nuestros** maestros (no en los de
