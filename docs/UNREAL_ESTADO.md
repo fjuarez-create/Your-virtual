@@ -5,8 +5,10 @@ corra **en el PC de Fran, con el editor de Unreal abierto y el MCP oficial
 conectado**, pueda ponerse a trabajar sin tener que releer nada más. Todo lo
 que aquí se afirma está verificado salvo donde pone «sin confirmar».
 
-Fecha de este estado: 17 de septiembre de 2026 (proyecto `Serenea_160926`,
-importado por Direct Link y guardado; escena inventariada por el MCP).
+Fecha de este estado: 17 de septiembre de 2026, tarde. **Proyecto vigente:
+`Serenea_170926`**, importado desde **fichero `.udatasmith`** (no por Direct
+Link), verificado por el MCP, con los prismas dentro y la fase 1 hecha.
+`Serenea_160926` queda muerto: ver «El día de los dos proyectos».
 
 ## Qué es esto
 
@@ -26,17 +28,18 @@ El móvil ya está resuelto por la web; no se hace versión Android por ahora.
 
 | Cosa | Dónde |
 |---|---|
-| Proyecto de Unreal (5.8.2) | `C:\Serenea\Serenea_170926\Serenea_170926.uproject` — **el definitivo, creado el 17-sep. No crear más proyectos.** En `C:\Serenea\` y en `Documents\Unreal Projects\` quedan ensayos anteriores (`serenea`, `SereneaV6`, `SereneaV6 5.8`, `SERENEA_150926`, `Serenea_160926`, `Serenea75`, `Serenea_75`): no usarlos. |
+| Proyecto de Unreal (5.8.2) | `C:\Serenea\Serenea_170926\Serenea_170926.uproject` — **el definitivo, creado el 17-sep. No crear más proyectos.** Contenido importado en `Content/SERENEA_Apolo_17_09_26/`. **Ensayos anteriores, no usar**: `Serenea_160926` (el del duplicado), y en `C:\Serenea\` y `Documents\Unreal Projects\` también `serenea`, `SereneaV6`, `SereneaV6 5.8`, `SERENEA_150926`, `Serenea75`, `Serenea_75`. |
 | Este repositorio, clonado en el PC | `D:\Serenea\web` (rama `claude/hopeful-faraday-7y80bt`). Ojo: el proyecto de Unreal está en **C:**, el repositorio en **D:**. |
-| Copia de seguridad | El proyecto de Vagon (`SereneaV6.zip` en Drive, `09 Digital twint - TESTING`) queda como archivo muerto: no se reutiliza. El proyecto nuevo se regenera desde SketchUp por Direct Link, pero en cuanto tenga trabajo encima (materiales, Blueprints) hay que hacerle copia igual. |
-| Modelo fuente | SketchUp 2026 en el sobremesa de Fran, con el exportador Datasmith **5.8** (`5_8_200`) instalado. El `.skp` se llama `SERENEA_Apolo_v7`, y probablemente `SERENEA_Apolo_v75`: Datasmith bautiza la escena con el nombre del fichero de SketchUp y en Unreal entró como `SERENEA_Apolo_v75`. **Sin confirmar**: el `.skp` no está en este PC, hay que mirarlo en SketchUp. |
-| Cómo entra en Unreal | **Por archivo**: en SketchUp, barra Datasmith → *Export* a un `.udatasmith`; en Unreal, **Añadir (+)** → *Datasmith* → *File Import*. Importador Datasmith clásico; *Interchange Datasmith* (experimental) desactivado a propósito. **Para actualizar**: exportar otra vez **al mismo archivo** y en el Content Browser, clic derecho en el asset DatasmithScene → *Reimportar*. Direct Link se descartó el 17-sep: al reimportar duplicó la escena (138.535 actores). |
+| Copia de seguridad del modelo | `G:\Unidades compartidas\01 SERENEA BU\04 COMERCIAL_Serenea BU\09 Digital twint - TESTING\Serenea_twin_17.09.26` — **270,8 MB en 6.743 ficheros**: `SERENEA_Apolo_17.09.26.skp` (111 MB), `SERENEA_Apolo_17.09.26.udatasmith` (79 MB) y la carpeta `SERENEA_Apolo_17.09.26_Assets`. Con esos tres se regenera el proyecto entero sin abrir SketchUp. El ZIP de Vagon (`SereneaV6.zip`) queda como archivo muerto. |
+| Modelo fuente | SketchUp 2026 en el sobremesa de Fran, con el exportador Datasmith **5.8** (`5_8_200`) instalado. El `.skp` del 17-sep es `SERENEA_Apolo_17.09.26.skp`, y está en la carpeta de copia de arriba. |
+| Cómo entra en Unreal | **Por archivo**: en SketchUp, barra Datasmith → *Export* a un `.udatasmith`; en Unreal, **Añadir (+)** → *Datasmith* → *File Import*. Importador Datasmith clásico; *Interchange Datasmith* (experimental) desactivado a propósito. **Para actualizar**: exportar otra vez **al mismo archivo** y clic derecho en el asset DatasmithScene → *Reimportar*; nunca volver a importar. Ver «Actualizar el modelo sin duplicar la escena». |
 | Panel y endpoint | `showroom.unikdi.com/gestion` · `/gestion/api/estado.php` |
 | Catálogo de viviendas | `data/units.json` (166 entradas: id, planta, dorm, orientacion, supViv, terraza, supTotal, precio) |
 | Semilla de estados | `data/availability.json` |
 
 **Nunca** trabajar con el proyecto dentro de una carpeta sincronizada (Drive,
-OneDrive). El ZIP en Drive es copia; se trabaja en `D:\Serenea`.
+OneDrive). Lo que vive en `G:\Unidades compartidas` es **copia**; el proyecto
+se trabaja en `C:\Serenea` y el repositorio en `D:\Serenea\web`.
 
 ## Reglas fijas
 
@@ -54,61 +57,79 @@ OneDrive). El ZIP en Drive es copia; se trabaja en `D:\Serenea`.
 
 ## Estado del proyecto de Unreal
 
-Proyecto **definitivo**, creado el 17-sep en el sobremesa de Fran (i9, 64 GB,
-gráfica de 12 GB) con Unreal 5.8.2 y la plantilla Architecture → Blank
-(SunSky, ExponentialHeightFog, PostProcessVolume, CineCameraActor,
-PlayerStart, InstancedFoliageActor, Floor). El proyecto de Vagon del sábado
-no se reutiliza: al abrirlo en otro PC perdió los materiales y se decidió
-empezar de cero.
+Proyecto **definitivo**, `Serenea_170926`, creado el **17-sep por la tarde**
+en el sobremesa de Fran (i9, 64 GB, gráfica de 12 GB) con Unreal 5.8.2 y la
+plantilla Architecture → Blank (SunSky, ExponentialHeightFog,
+PostProcessVolume, CineCameraActor, PlayerStart, InstancedFoliageActor,
+Floor). Es el tercer intento: el de Vagon perdió los materiales al abrirlo en
+otro PC, y el `Serenea_160926` se quedó con la escena duplicada.
 
-Hecho el 16-sep (el log del editor fecha el import:
-`Imported SERENEA_Apolo_v75 in 36.9 s`, 16-sep 18:09):
+Importado el 17-sep por la tarde desde el fichero
+`SERENEA_Apolo_17.09.26.udatasmith`. Verificado por el MCP:
 
-- Importado por **Direct Link** desde SketchUp (`SERENEA_Apolo_v75`; Fran confirma que el v7 es el mismo modelo que el v6 de la web, sin cambios de geometría ni de ids).
-  **69.260 actores**, medidos por el MCP el 17-sep. (Los 126.386 que se
-  anotaron el 16-sep eran del proyecto de ensayo anterior; en este no.)
-- El contenido vive en `Content/SERENEA_Apolo_v75/` — **con el 5 final**, no
-  `v7` — en `Geometries` (6.721 assets), `Materials` (163) y `Textures` (19),
-  más el asset *DatasmithScene* `SERENEA_Apolo_v75.uasset` (80 MB) al lado.
-  Ese asset es el que se re-sincroniza; no borrarlo. 6.904 uassets en total.
-- **El nivel está guardado**: `Content/Main.umap` (210 MB) del 16-sep 19:10,
-  y el MCP da `is_dirty(/Game/Main) = false`. Los 5.214 assets que había sin
-  guardar ya se guardaron.
-- **Los prismas `APOLO_CORTES` NO han entrado en este proyecto** (el MCP
-  no encuentra ni actores ni assets con «cort» o «prisma»). En el proyecto
-  de ensayo del 15-sep sí entraron, así que el modelo los tiene: lo más
-  probable es que la etiqueta estuviera **oculta en SketchUp** al sincronizar,
-  y Direct Link no exporta lo oculto. Arreglo: en SketchUp, etiqueta de los
-  prismas visible → *Synchronize* → en Unreal, reimportar el asset
-  DatasmithScene → ocultarlos **en Unreal** (ojo del Outliner), nunca en
-  SketchUp. Sin los prismas no hay clic, ni estados, ni corte: bloquea las
-  fases 3 en adelante.
+- **Una sola escena Datasmith**, `SERENEA_Apolo_17_09_26`, con 44 hijos
+  directos. Que sea una y no dos es lo primero que hay que comprobar tras
+  cualquier importación: ver «El día de los dos proyectos».
+- **69.296 actores** tras la fase 1. El desglose cuadra al actor con la
+  importación del 16-sep más los cortes: 57.111 `StaticMeshActor` (= 57.079
+  + los 32 prismas) y 12.143 `Actor` de grupo (= 12.138 + `APOLO_CORTES` y
+  sus 4 `CORTE_Pn`). Nada sobra y nada falta.
+- El contenido vive en `Content/SERENEA_Apolo_17_09_26/`: `Geometries`
+  (6.722), `Materials` (164) y `Textures` (19), más el asset *DatasmithScene*
+  `SERENEA_Apolo_17_09_26.uasset` al lado. **No borrarlo**: es el que se
+  reimporta. Son 6.906 uassets, uno más de geometría y uno más de material
+  que el 16-sep: la caja del prisma y su material.
+- **Los prismas `APOLO_CORTES` han entrado**: 32, en cuatro plantas. Ver
+  «Los prismas».
 - **Fab está disponible en este editor** (botón *Fab* en el Content Browser;
   en el Unreal de Vagon no estaba). Megascans entra directo.
 - Máquina: i9-14900KF, 64 GB, **RTX 5070 (12 GB)**, Windows 11, dos monitores.
-- MCP oficial arrancado el 16-sep con `ModelContextProtocol.StartServer`:
-  escucha en `127.0.0.1:8000`; expone 3 meta-herramientas y ~52 toolsets
-  descubribles con `list_toolsets` (actores, assets, Blueprints, materiales,
-  instancias, escena, mallas, texturas, UMG, logs, Python…). Python 3.11 del
-  editor activo: plan B para lo que el MCP no cubra.
+- MCP oficial: escucha en `127.0.0.1:8000` tras lanzar
+  `ModelContextProtocol.StartServer` en la consola del editor. Expone 3
+  meta-herramientas y ~52 toolsets descubribles con `list_toolsets`. Python
+  3.11 del editor activo: plan B para lo que el MCP no cubra. **Los plugins
+  van por proyecto**: ver «Historia útil».
 
-Hecho el 17-sep, fase 1 completa:
+Hecho el 17-sep, **fase 1 completa** (`Main.umap` del 17-sep 20:41):
 
-- Guardado: no había nada sucio, el nivel ya estaba en disco.
-- **`Floor` borrado** (la losa de plantilla de 10×10 m en el origen) y el
-  nivel guardado: 69.260 → **69.259 actores**, `Main.umap` del 17-sep 14:14.
-- Ocultar `APOLO_CORTES` no procede: no está en la escena.
+- **`Floor` borrado**, la losa de plantilla de 10×10 m en el origen.
+  69.297 → **69.296 actores**.
+- **Los 32 prismas ocultos** con `bVisible = false` en su componente de
+  malla, verificado uno a uno, 8 por planta. **La colisión sigue intacta en
+  los 32** (`QueryAndPhysics`, perfil `BlockAll`), así que el clic de la
+  fase 6 no se rompe.
+- Nivel guardado y limpio (`is_dirty = false`).
 
-Sin hacer todavía (nada de lo del sábado se conserva):
+Sin hacer todavía:
 
 - Exposición, `North Offset`, Lumen (recetas abajo).
-- Materiales: ver «Direct Link y los materiales» antes de tocar ninguno.
+- Materiales: ver «Datasmith y los materiales» antes de tocar ninguno.
 - Vegetación, coches, entorno, lógica de viviendas, interfaz, empaquetado.
 
-La web (`/new`) usa el v6 y, según Fran, el v7 es idéntico: los ids de
-`data/units.json` valen tal cual para emparejar prismas.
+## Actualizar el modelo sin duplicar la escena
+
+**`Añadir (+)` → `Datasmith` → `Import` siempre AÑADE una escena nueva, no
+actualiza nunca.** Usarlo sobre un proyecto que ya tiene el modelo deja dos
+escenas completas y el doble de actores. Pasó el 17-sep y costó el proyecto
+entero.
+
+Para traer una versión nueva del modelo:
+
+1. En SketchUp, barra Datasmith → *Export*, sobre el mismo `.udatasmith`.
+2. En Unreal, **botón derecho sobre el asset `SERENEA_Apolo_17_09_26`** en el
+   Content Browser → **Reimport**. Eso sustituye en sitio.
+3. Comprobar por el MCP que sigue habiendo **un solo** `DatasmithSceneActor`
+   y que el recuento no se ha duplicado. Es una llamada y evita el desastre.
+4. Reaplicar nuestros overrides: materiales y la ocultación de los prismas.
+   Un *Reimport* puede resetear las propiedades por componente, igual que
+   hace con los materiales. Debería ir todo en la misma herramienta del
+   paso 4 del orden de trabajo.
 
 ## Inventario de la escena (fase 0, medido por el MCP el 17-sep)
+
+Medido sobre `Serenea_160926`, pero **vale igual para `Serenea_170926`**: el
+desglose por clase del proyecto nuevo cuadra al actor con este más los 37
+actores de los cortes. Lo de abajo son, por tanto, las cifras sin prismas.
 
 Nivel `/Game/Main`, **69.260 actores**. Por clase: 57.079 `StaticMeshActor`,
 12.138 `Actor` (los nodos de grupo que crea Datasmith), 29 `CineCameraActor`,
@@ -164,7 +185,7 @@ están en −10/20 **con las casillas sin marcar**, así que la exposición no
 está congelada.
 
 Los 163 materiales son los que generó Datasmith, pero sus nombres ya cubren
-casi todo el mapa de «Direct Link y los materiales»:
+casi todo el mapa de «Datasmith y los materiales»:
 `APOLO_V6___Monocapa_blanco_roto_5pct_calido`,
 `APOLO_V6___Vidrio_claro_transparente`,
 `APOLO_V6___Travertino_marfil_veta_vertical`,
@@ -175,7 +196,7 @@ importadas, hay travertino, PAMESA, monocapa, gravilla y tarima, más 9
 teselas de ortofoto PNOA de la costa: **para los seis que importan puede que
 Megascans no haga falta**.
 
-## Direct Link y los materiales
+## Datasmith y los materiales
 
 Cada reimportación desde SketchUp (por archivo o por Direct Link) vuelve a
 generar los materiales que creó Datasmith. Por tanto:
@@ -298,22 +319,34 @@ antes de montar el paso 5.
 ### Los prismas: dos familias distintas
 
 **1. Los de SketchUp (`APOLO_CORTES`) son las plataformas de corte, no las
-viviendas.** Son 4 grupos × 8 prismas = 32 (`CORTE_P1…P4`, cada uno con ocho
-`Componente_9_n`), más seis `Componente_3…8` sueltos bajo `APOLO_CORTES`.
+viviendas.** Son 4 grupos × 8 prismas = **32**, verificado por el MCP el
+17-sep: `APOLO_CORTES` tiene exactamente cuatro hijos (`CORTE_P1…P4`) y cada
+uno ocho `Componente_9_n`. Todos son `StaticMeshActor` independientes («Do
+Not Combine» respetado) y comparten la misma malla,
+`Geometries/Componente_9`. Los nombres son genéricos de SketchUp, **sin
+ningún id de vivienda dentro**.
+
 Corresponden uno a uno con los «cajones» de `data/cortes.json`: cuatro
-plantas (`baja`, `p1`, `p2`, `atico`) × ocho plataformas, cada cajón con su
-`x0,x1,z0,z1` en planta y su `y` = altura de corte. Sirven para el corte de
-planta (la altura `y` de cada cajón es `AlturaDeCorte` para esa plataforma).
-Confirmar por el MCP qué `CORTE_Pn` es qué planta (lo esperable: P1 = baja,
-P2 = p1, P3 = p2, P4 = ático) comparando alturas.
+plantas × ocho plataformas, cada cajón con su `x0,x1,z0,z1` en planta y su
+`y` = altura de corte. Sus huellas medidas coinciden **exactamente** — x:
+9,33–36,85 / 36,85–68,02 / 68,02–99,44 / 99,44–124,89; y: −42,97–−18,81 /
+−18,81–−6,79. Sirven para el corte de planta (la `y` de cada cajón es la
+`AlturaDeCorte` de esa plataforma).
+
+(Ojo: los seis `Componente_3…8` sueltos **no** cuelgan de `APOLO_CORTES`,
+sino del `DatasmithSceneActor` en el primer nivel. No son prismas.)
+
+**Numeración confirmada: `CORTE_P1` es la baja, no `CORTE_P0`.** Antes se
+suponía `P0` = baja y era una planta de desfase.
 
 **2. Las 166 viviendas NO están en el modelo de SketchUp** (el modelo no trae
 grupos por vivienda). Se dedujeron de tabiques, puertas y pavimentos con
 `tools/viviendas_serenea.mjs` y están en **`data/viviendas_serenea.json`**:
-166 entradas por id (`"101"`…), cada una con `planta`, `plataforma` (0–7, la misma numeración que el orden de los cajones de `cortes.json`),
-`poligono` = `[[x, z], …]` en planta, `y0`/`y1` = suelo y techo del prisma,
-más `entrada`, `vidrios`, áreas. Es la misma fuente que usa el visor web
-para el clic, el color de estado y la cartela.
+166 entradas por id (`"101"`…), cada una con `planta`, `plataforma` (0–7, la
+misma numeración que el orden de los cajones de `cortes.json`), `poligono` =
+`[[x, z], …]` en planta, `y0`/`y1` = suelo y techo del prisma, más `entrada`,
+`vidrios`, áreas. Es la misma fuente que usa el visor web para el clic, el
+color de estado y la cartela.
 
 **Por tanto, en Unreal las 166 viviendas se generan**, no se importan: un
 prisma por vivienda extruyendo `poligono` de `y0` a `y1` (Geometry Script:
@@ -324,28 +357,76 @@ en canal Visibility, material translúcido con color y opacidad como
 parámetros (opacidad 0 en reposo). Igual que en la web: clic, estado,
 cartela.
 
-**El marco de coordenadas.** Los dos JSON están en el marco del GLB de la
-web: metros, Y arriba, `poligono`/cajones en el plano (x, z). El proyecto de
-Unreal viene de SketchUp por Datasmith: centímetros, Z arriba, Y invertida.
-La transformación exacta (permutación de ejes, signos y posible
-desplazamiento) **se calibra, no se supone**: para cada prisma de
-`APOLO_CORTES` se leen sus límites en mundo por el MCP y se buscan la
-permutación/signos/escala 100 que los hacen coincidir con los 32 cajones de
-`data/cortes.json`. Con 32 cajas es inequívoco. Esa misma transformación se
-aplica a los 166 polígonos. Apuntarla aquí cuando esté.
+### El marco de coordenadas, ya calibrado
 
-Referencia del visor: el centro de la parcela en ese marco es
+Los dos JSON están en el marco del GLB de la web: metros, Y arriba,
+`poligono`/cajones en el plano (x, z). Unreal viene de SketchUp por
+Datasmith: centímetros, Z arriba.
+
+**Calibrado el 17-sep** contra los 32 prismas, comparando la cara superior de
+cada uno con las cotas de `cortes.json`. Sale un desfase **único** de
+**20,49 m**, y con las cuatro plantas el emparejamiento es el único posible:
+
+| `cortes.json` | Unreal | Cota sup. del primer cajón |
+|---|---|---|
+| `baja` | `CORTE_P1` | 32,34 m ↔ 11,85 |
+| `p1` | `CORTE_P2` | 35,34 m ↔ 14,85 |
+| `p2` | `CORTE_P3` | 38,34 m ↔ 17,85 |
+| `atico` | `CORTE_P4` | 41,34 m ↔ 20,85 |
+
+La transformación, en metros:
+
+```
+Unreal.x =  web.x
+Unreal.y =  web.z
+Unreal.z =  web.y + 20,49
+```
+
+Y para pasarlo a lo que consume el motor, **×100**, que Unreal trabaja en
+centímetros. No hay permutación rara ni signos invertidos: la `y` de la web
+(altura) pasa a `z`, la `z` de la web pasa a `y` tal cual, y el único ajuste
+es el desplazamiento vertical. Las huellas en `x`/`y` de los 32 prismas salen
+idénticas a los cajones sin tocar nada, que es la comprobación de que los
+signos están bien.
+
+Esa misma transformación se aplica a los 166 polígonos de
+`viviendas_serenea.json`.
+
+Referencia del visor: el centro de la parcela en el marco de la web es
 (x = 66,72, z = −23,94), `new/js/visor/main.js`.
+
+### Estado actual de los 32
+
+**Ocultos con `bVisible = false`** en el componente de malla, los 32, uno a
+uno (fase 1, 17-sep). **La colisión está intacta** en todos
+(`QueryAndPhysics`, perfil `BlockAll`), así que siguen recibiendo el trazado
+del ratón aunque no se dibujen. Se hizo así y no con el ojo del Esquematizador
+porque **el ojo no llega al ejecutable**: el bloque rosa reaparecería en el
+`.exe`. Aviso: un *Reimport* puede resetearlo, como hace con los materiales,
+así que esto debe entrar en la herramienta «Aplicar materiales Apolo».
+
+**Pendiente de comprobar en la fase 6:** la malla `Componente_9` **no tiene
+colisión simple** — su `aggGeom` está vacío y el `collisionTraceFlag` es
+`CTF_UseDefault`. El trazado tiraría de la colisión compleja, triángulo a
+triángulo, que para una caja son 12 y normalmente funciona. Si falla, se
+arregla añadiendo una caja de colisión simple a esa malla. Lo mismo habrá que
+vigilar en las mallas generadas de las viviendas.
 
 ## Plantas: tres nombres para lo mismo
 
-| `data/units.json` (`planta`) | Protocolo (`orden: planta`) | SketchUp / Outliner |
-|---|---|---|
-| `Baja` (38) | `baja` | `CORTE_P1` (sin confirmar; en `cortes.json`: `baja`) |
-| `1ª` (46) | `p1` | `CORTE_P2` (sin confirmar) |
-| `2ª` (46) | `p2` | `CORTE_P3` (sin confirmar) |
-| `Ático` (36) | `atico` | `CORTE_P4` (sin confirmar) |
-| — | `all` | edificio cerrado |
+Los cuatro nombres, ya **verificados por el MCP** (antes había una planta de
+desfase en esta tabla):
+
+| `data/units.json` (`planta`) | ids | Protocolo (`orden: planta`) | `cortes.json` | Unreal |
+|---|---|---|---|---|
+| `Baja` (38) | 1xx | `baja` | `baja` | **`CORTE_P1`** |
+| `1ª` (46) | 2xx | `p1` | `p1` | **`CORTE_P2`** |
+| `2ª` (46) | 3xx | `p2` | `p2` | **`CORTE_P3`** |
+| `Ático` (36) | 4xx | `atico` | `atico` | **`CORTE_P4`** |
+| — | — | `all` | — | edificio cerrado |
+
+Los ids de `data/units.json` son cadenas y van de `"101"` a `"436"`: la
+centena da la planta.
 
 ## Arquitectura del ejecutable
 
@@ -400,28 +481,64 @@ Puntos clave:
 
 ## Orden de trabajo propuesto
 
-1. ~~Guardar. Borrar `Floor`. Guardar.~~ **Hecho el 17-sep.** (Ocultar
-   `APOLO_CORTES` no procede: no está en la escena.)
+Todo referido a `Serenea_170926`.
+
+1. ~~Guardar. Borrar `Floor`. Ocultar los prismas. Guardar.~~ **Hecho el
+   17-sep** (fase 1 completa).
 2. ← **Aquí.** Exposición (`Min EV100 = Max EV100 = 14`, y `Exposure
-   Compensation` de 1,263 a 0) y `North Offset` calibrado. `SunSky` entero,
-   que sigue en Montreal.
-3. Traer los prismas (ver arriba) y borrar lo que nunca se ve: la rama
-   `SERENEA_APOLO_Central_V4_-_Vista_3D_-_3D_dwg` (5.757 hijos, el DWG de
-   estructura, confirmado en la escena), los 534 módulos fotovoltaicos y
-   `Sree`.
+   Compensation` de 1,263 a 0, con las casillas marcadas) y `North Offset`
+   calibrado. `SunSky` entero, que sigue en valores de plantilla de Montreal.
+   Atajo por probar: la cámara `05___Planta_norte_verdadero` podría dar el
+   ángulo del norte directamente y ahorrar el tanteo contra Google Maps.
+3. Borrar lo que nunca se ve: la rama
+   `SERENEA_APOLO_Central_V4_-_Vista_3D_-_3D_dwg` (5.757 hijos directos, el
+   DWG de estructura), los 534 módulos fotovoltaicos, `Sree` y sus 20
+   materiales. **Por el editor, no por el MCP**, por lo del borrado que no
+   cascadea.
 4. Juego de materiales propios + herramienta «Aplicar materiales Apolo» por
-   nombre. Probarla haciendo un *Synchronize* y viendo que sobrevive.
+   nombre. Que reaplique también la ocultación de los prismas. Probarla
+   haciendo un *Reimport* y viendo que sobrevive.
 5. `MPC_Apolo` + máscara de corte en **nuestros** maestros (no en los de
-   Datasmith). Probar con `AlturaDeCorte`.
-6. Calibrar el marco con los 32 cajones; generar los 166 prismas de
-   vivienda desde `data/viviendas_serenea.json`; material de estado con
-   parámetros.
+   Datasmith). **Con rejilla de 8 cajones por planta, no con un escalar**:
+   ver «El corte de planta».
+6. Generar los 166 prismas de vivienda desde `data/viviendas_serenea.json`
+   con la transformación ya calibrada (ver «Los prismas»); material de
+   estado con parámetros. Confirmar de paso que la colisión responde al
+   trazado, que las mallas vienen sin colisión simple.
 7. Web UI; widget con una página de prueba; los 14 manejadores en Blueprint
    contra el protocolo.
 8. Cámaras, sol enlazado a `hora`/`fecha`, escaparate.
 9. Vegetación canaria, coches, entorno. Fusionar lo que no necesite ser
    independiente para bajar el número de actores.
 10. Empaquetar, probar en un PC que no sea el de desarrollo.
+
+## El día de los dos proyectos (17-sep)
+
+Cómo se perdió `Serenea_160926`, para no repetirlo:
+
+1. Los prismas no habían entrado en la importación del 16-sep. Para traerlos,
+   se volvió a usar **`Añadir (+)` → `Datasmith` → `Import`** sobre el
+   proyecto que ya tenía el modelo.
+2. Eso no actualizó nada: **añadió una segunda escena completa**. 69.259 →
+   138.542 actores, dos `DatasmithSceneActor` los dos etiquetados
+   `SERENEA_Apolo_v75`, con **cero etiquetas en común** (la nueva llevaba
+   todos los hijos con sufijo `_2`, y la rama del DWG con `_3`). Solo la
+   nueva tenía `APOLO_CORTES`.
+3. Quitar la escena vieja por el MCP resultó **inviable**:
+   `remove_from_scene` **no arrastra a los hijos** (se borró un grupo de 26
+   actores y el total bajó exactamente 1), así que habrían sido ~69.000
+   llamadas a ~0,2 s, unas cuatro horas.
+4. La salida correcta era el editor: seleccionar el `DatasmithSceneActor`
+   sobrante → botón derecho → *Select* → *Select All Descendants* → `Supr`.
+   Segundos.
+5. Lo que se hizo al final fue más limpio: cerrar Unreal **sin guardar** y
+   **empezar un proyecto nuevo** (`Serenea_170926`) importando desde
+   **fichero** `.udatasmith` en vez de por Direct Link. Salió a la primera y
+   verificado: una escena, 69.297 actores, los 32 prismas dentro.
+
+Lección corta: **tras cualquier importación, contar los `DatasmithSceneActor`
+antes de seguir.** Es una llamada al MCP y se ve el problema en el momento, no
+cuando el Esquematizador marca el doble de actores.
 
 ## Historia útil (para no repetir errores)
 
@@ -447,6 +564,21 @@ Puntos clave:
 - Con el exportador 5.8 y SketchUp 2026, el triángulo de versiones es:
   SketchUp 2026 ↔ exportador 5.8 ↔ Unreal 5.8. Un exportador de otra versión
   no hace Direct Link con este motor.
+
+- **Los plugins de Unreal se habilitan por proyecto.** Al estrenar
+  `Serenea_170926`, `ModelContextProtocol.StartServer` no hacía nada y el
+  8000 seguía muerto: el comando no existía porque el `.uproject` nuevo no
+  llevaba los plugins. En un proyecto nuevo hay que añadir **los dos**:
+
+  ```json
+  { "Name": "ModelContextProtocol", "Enabled": true },
+  { "Name": "AllToolsets",          "Enabled": true }
+  ```
+
+  Por la interfaz: Edit → Plugins, marcar «Model Context Protocol» y «All
+  Toolsets». **Y reiniciar el editor**, que si no no entran. Luego,
+  `ModelContextProtocol.StartServer` en la consola: el servidor **no arranca
+  solo** al abrir el proyecto.
 
 ## Cómo se maneja el MCP del editor (aprendido a base de intentos)
 
