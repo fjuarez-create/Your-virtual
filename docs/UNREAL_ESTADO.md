@@ -5,9 +5,9 @@ corra **en el PC de Fran, con el editor de Unreal abierto y el MCP oficial
 conectado**, pueda ponerse a trabajar sin tener que releer nada más. Todo lo
 que aquí se afirma está verificado salvo donde pone «sin confirmar».
 
-Fecha de este estado: 17 de septiembre de 2026, tarde. **Proyecto vigente:
+Fecha de este estado: 17 de septiembre de 2026, noche. **Proyecto vigente:
 `Serenea_170926`**, importado desde **fichero `.udatasmith`** (no por Direct
-Link), verificado por el MCP, con los prismas dentro y la fase 1 hecha.
+Link), verificado por el MCP, con los prismas dentro y las fases 1 y 2 hechas.
 `Serenea_160926` queda muerto: ver «El día de los dos proyectos». La interfaz
 web ya está separada del motor y lista para el ejecutable
 (`new/unreal.html`; ver «Arquitectura del ejecutable»).
@@ -102,9 +102,27 @@ Hecho el 17-sep, **fase 1 completa** (`Main.umap` del 17-sep 20:41):
   fase 6 no se rompe.
 - Nivel guardado y limpio (`is_dirty = false`).
 
+Hecho el 17-sep, **fase 2**, a falta de que Fran valide el norte a ojo:
+
+- **Exposición congelada**: `Metering Mode` = Auto Exposure Histogram,
+  `Exposure Compensation` = 0, `Min EV100` = `Max EV100` = 14, las cuatro
+  casillas marcadas, volumen *Unbound*.
+- **`SunSky` puesto en la parcela**: latitud 27,986703, longitud −15,395572,
+  `Time Zone` 1, *Use Daylight Saving Time* desmarcado, 13 de septiembre,
+  `Solar Time` 13,95.
+- **`North Offset` = −77,4512°**, calibrado por medición (ver «La parcela y
+  el sol»).
+- **Lumen ya estaba activo**, no hubo que tocar nada:
+  `r.DynamicGlobalIlluminationMethod=1` y `r.ReflectionMethod=1` en
+  `Config/DefaultEngine.ini`, más `r.Lumen.HardwareRayTracing=True`.
+- Nivel guardado y limpio.
+- **Salvedad**: `year` sigue en 2019 porque el MCP **no deja escribirlo**
+  (`could not be set: year`). Da igual a efectos prácticos — en el 13-sep la
+  declinación solar cambia ~0,1° entre 2019 y 2026 — pero si se quiere
+  exacto, se pone a mano en el panel de detalles.
+
 Sin hacer todavía:
 
-- Exposición, `North Offset`, Lumen (recetas abajo).
 - Materiales: ver «Datasmith y los materiales» antes de tocar ninguno.
 - Vegetación, coches, entorno, lógica de viviendas, interfaz, empaquetado.
 
@@ -238,11 +256,45 @@ contra una implementación independiente, 0,05° de discrepancia máxima):
 13-sep, por horas (brújula 0=N, 90=E, 180=S, 270=O): 10:00 → 28,6° / 101,9°;
 12:00 → 52,9° / 125,6°; 16:00 → 52,0° / 235,7°; 18:00 → 27,5° / 258,7°.
 
-**Calibrar el norte:** a esta latitud, al mediodía solar la sombra apunta
-exactamente al norte, todos los días del año. Poner `Solar Time 13.95` el
-13-sep, vista cenital, y girar `North Offset` hasta que las sombras apunten
-al norte del mapa (Google Maps sobre la parcela). Comprobación: a las 10:00 el
-sol al este-sureste y bajo; a las 18:00 al oeste y bajo.
+### El norte, ya calibrado: `North Offset = -77.4512`
+
+Puesto el 17-sep. No hizo falta tantear a ojo, porque **`North Offset` es
+exactamente el yaw mundial del norte verdadero**. Se demostró midiendo: con
+`northOffset` a 0 y 90, el yaw de la luz direccional pasa de −0,972° a
+89,028°, o sea `yaw_luz = azimut − 180 + northOffset`. Para el azimut 0
+(norte), el yaw es el propio `northOffset`.
+
+El norte verdadero del modelo salió de **dos referencias independientes que
+trae el propio SketchUp**, y coinciden en 0,19°:
+
+- La cámara **`05___Planta_norte_verdadero`**: pitch −90 (cenital) y yaw
+  −77,4512°. En una cámara cenital el «arriba de pantalla» es
+  `(cos yaw, sin yaw, 0)`, así que el norte está a −77,4512° de +X.
+- El objeto **`Norte_verdadero___referencia`** (`StaticMeshActor`, un plano
+  de 7,28 × 13,68 m): yaw 12,3631°, cuyo eje largo local −Y cae en −77,637°.
+
+Se adoptó el valor de la cámara, que sale de una fórmula y no de suponer qué
+eje del objeto apunta a dónde. La diferencia de 0,19° es irrelevante para las
+sombras.
+
+**Comprobación de que la astronomía es correcta.** Con la parcela y la fecha
+puestas, `SunSky` reproduce `sol.js` con 0,1° de margen. Ojo: la propiedad
+`elevation` del SunSky viene como **180 + elevación real**, y la elevación
+real es también el pitch de la luz con el signo cambiado.
+
+| `Solar Time` 13-sep | Unreal (elev / azim) | `sol.js` (elev / azim) |
+|---|---|---|
+| 10:00 | 28,66° / 101,79° | 28,6° / 101,9° |
+| 12:00 | 53,00° / 125,50° | 52,9° / 125,6° |
+| 13:57 | 65,78° / 179,03° | 65,7° / ~180° |
+| 16:00 | 52,09° / 235,78° | 52,0° / 235,7° |
+| 18:00 | 27,56° / 258,76° | 27,5° / 258,7° |
+
+**Lo que sigue pendiente de ojo humano:** que al mediodía solar la sombra
+apunte al norte del mapa (Google Maps sobre la parcela), en vista cenital con
+`Solar Time 13.95`. La astronomía está comprobada por números; lo que ninguna
+medición confirma es que las dos referencias de norte de SketchUp estén bien
+puestas.
 
 ## Recetas
 
@@ -263,8 +315,17 @@ Min = Max congela la exposición. EV100 es el nivel de luz real: 15 pleno sol,
 se enlaza con la hora del sol. El volumen debe tener **Infinite Extent
 (Unbound)** marcado.
 
+**Aplicado el 17-sep** en `Serenea_170926`, con las cuatro casillas marcadas.
+En el MCP estas propiedades viven dentro de la struct `Settings` y se llaman
+`autoExposureMethod`, `autoExposureBias`, `autoExposureMinBrightness` y
+`autoExposureMaxBrightness`; las casillas son los `bOverride_*` de cada una.
+
 Lumen: Project Settings → Global Illumination → Dynamic GI Method = Lumen,
-Reflection Method = Lumen.
+Reflection Method = Lumen. **Ya venía activo** en este proyecto — en
+`Config/DefaultEngine.ini` están `r.DynamicGlobalIlluminationMethod=1`,
+`r.ReflectionMethod=1` y `r.Lumen.HardwareRayTracing=True` — así que no hay
+nada que tocar. (`r.AllowStaticLighting=True` sigue puesto, pero da igual: no
+se hornea nada y Lightmass no se toca.)
 
 ### Materiales
 
@@ -490,12 +551,9 @@ Todo referido a `Serenea_170926`.
 
 1. ~~Guardar. Borrar `Floor`. Ocultar los prismas. Guardar.~~ **Hecho el
    17-sep** (fase 1 completa).
-2. ← **Aquí.** Exposición (`Min EV100 = Max EV100 = 14`, y `Exposure
-   Compensation` de 1,263 a 0, con las casillas marcadas) y `North Offset`
-   calibrado. `SunSky` entero, que sigue en valores de plantilla de Montreal.
-   Atajo por probar: la cámara `05___Planta_norte_verdadero` podría dar el
-   ángulo del norte directamente y ahorrar el tanteo contra Google Maps.
-3. Borrar lo que nunca se ve: la rama
+2. ~~Exposición, `SunSky` y `North Offset`.~~ **Hecho el 17-sep**, y Lumen ya
+   venía activo. Falta solo que Fran valide la sombra a ojo.
+3. ← **Aquí.** Borrar lo que nunca se ve: la rama
    `SERENEA_APOLO_Central_V4_-_Vista_3D_-_3D_dwg` (5.757 hijos directos, el
    DWG de estructura), los 534 módulos fotovoltaicos, `Sree` y sus 20
    materiales. **Por el editor, no por el MCP**, por lo del borrado que no
@@ -621,3 +679,24 @@ cuando el Esquematizador marca el doble de actores.
 - Para saber qué proyecto hay abierto de verdad, la línea de comandos del
   proceso es lo más fiable:
   `Get-CimInstance Win32_Process -Filter "Name like 'UnrealEditor%'"`.
+- **Un `set_properties` con varias propiedades es todo o nada**, y si una
+  falla **aborta el script entero** — un `try/except` alrededor **no lo
+  atrapa**, porque el error no llega como excepción de Python. Cuando haya
+  dudas, una propiedad por llamada.
+- **`year` del SunSky no se puede escribir** por el MCP (`could not be set:
+  year`). El resto (`latitude`, `longitude`, `timeZone`,
+  `useDaylightSavingTime`, `month`, `day`, `solarTime`, `northOffset`) sí.
+- La propiedad `elevation` del SunSky vale **180 + la elevación real**.
+  `dayOfMonth`, `solarElevation` y `solarAzimuth` **no existen**: son `day`,
+  `elevation` y `azimuth`.
+- Para las propiedades del sol y de la luz, el `SunSky` está en el origen con
+  rotación 0, así que la `relativeRotation` de su `directionalLight` es
+  también la rotación en mundo.
+- `ObjectTools.set_properties` sobre una struct grande como `Settings` del
+  `PostProcessVolume` funciona **leyéndola entera, parcheando las claves y
+  devolviéndola completa**. No hace falta (ni funciona bien) tocar campos
+  anidados sueltos.
+- **El servidor MCP no arranca solo.** Cada vez que se abre o reinicia el
+  editor hay que volver a lanzar `ModelContextProtocol.StartServer`. Pasó dos
+  veces el 17-sep. Se comprueba desde fuera con
+  `Get-NetTCPConnection -LocalPort 8000 -State Listen`.
