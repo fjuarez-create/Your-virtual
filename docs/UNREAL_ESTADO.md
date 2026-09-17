@@ -92,9 +92,15 @@ Hecho el 16-sep (el log del editor fecha el import:
   instancias, escena, mallas, texturas, UMG, logs, Python…). Python 3.11 del
   editor activo: plan B para lo que el MCP no cubra.
 
+Hecho el 17-sep, fase 1 completa:
+
+- Guardado: no había nada sucio, el nivel ya estaba en disco.
+- **`Floor` borrado** (la losa de plantilla de 10×10 m en el origen) y el
+  nivel guardado: 69.260 → **69.259 actores**, `Main.umap` del 17-sep 14:14.
+- Ocultar `APOLO_CORTES` no procede: no está en la escena.
+
 Sin hacer todavía (nada de lo del sábado se conserva):
 
-- Borrar `Floor` (la losa de plantilla de 10×10 m en el origen; sigue ahí).
 - Exposición, `North Offset`, Lumen (recetas abajo).
 - Materiales: ver «Direct Link y los materiales» antes de tocar ninguno.
 - Vegetación, coches, entorno, lógica de viviendas, interfaz, empaquetado.
@@ -367,11 +373,11 @@ Puntos clave:
 
 ## Orden de trabajo propuesto
 
-1. ~~Guardar~~ (hecho: el nivel estaba limpio). Borrar `Floor` ← **aquí**.
-   Ocultar `APOLO_CORTES` no procede: no está en la escena.
-2. Exposición (`Min EV100 = Max EV100 = 14`, y `Exposure Compensation` de
-   1,263 a 0) y `North Offset` calibrado. `SunSky` entero, que sigue en
-   Montreal.
+1. ~~Guardar. Borrar `Floor`. Guardar.~~ **Hecho el 17-sep.** (Ocultar
+   `APOLO_CORTES` no procede: no está en la escena.)
+2. ← **Aquí.** Exposición (`Min EV100 = Max EV100 = 14`, y `Exposure
+   Compensation` de 1,263 a 0) y `North Offset` calibrado. `SunSky` entero,
+   que sigue en Montreal.
 3. Traer los prismas (ver arriba) y borrar lo que nunca se ve: la rama
    `SERENEA_APOLO_Central_V4_-_Vista_3D_-_3D_dwg` (5.757 hijos, el DWG de
    estructura, confirmado en la escena), los 534 módulos fotovoltaicos y
