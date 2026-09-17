@@ -254,19 +254,59 @@ Cada reimportación desde SketchUp (por archivo o por Direct Link) vuelve a
 generar los materiales que creó Datasmith. Por tanto:
 
 - **Los materiales de Datasmith no se editan nunca.** Se sustituyen.
-- Se construyen materiales **propios**: maestros (`M_Apolo_Opaco`,
-  `M_Apolo_Vidrio`, `M_Apolo_Suelo`…) con parámetros expuestos, e
-  instancias para los seis que importan, con texturas Megascans a 2K.
-- Una herramienta **«Aplicar materiales Apolo»** (Editor Utility Blueprint,
-  script de Python del editor, o directamente por el MCP) recorre la escena y
-  asigna cada material nuestro **por el nombre del material de SketchUp**
-  (`APOL…claro` → `MI_Apolo_Monocapa`, etc.), como *override* en el
-  componente. Se ejecuta en segundos después de cada sincronización.
-- El mapa nombre-SketchUp → material-nuestro vive en un sitio visible (un
-  DataTable o el propio script) para poder ampliarlo sin tocar Blueprints.
+- Se construyen materiales **propios**, con parámetros expuestos, e
+  instancias para los que importan.
+- Una herramienta **«Aplicar materiales Apolo»** los vuelve a poner después
+  de cada reimportación.
+- El mapa nombre-Datasmith → material-nuestro vive en un sitio visible para
+  poder ampliarlo sin tocar Blueprints.
 
-Es la **primera tarea** de la sesión local con el MCP, antes que cualquier
-afinado a mano.
+### Hecho el 17-sep (fase 4)
+
+Todo en **`/Game/Apolo/Materiales/`**, carpeta propia y fuera de la de
+Datasmith para que un *Reimport* no la toque.
+
+**Dos maestros**, creados y compilados por el MCP:
+
+| Maestro | Parámetros | Notas |
+|---|---|---|
+| `M_Apolo_Opaco` | `ColorBase`, `Rugosidad`, `Metalico`, `Tiling`, `Textura` | `Textura × ColorBase` → Base Color; `TexCoord × Tiling` → UVs. La textura por defecto es `/Engine/EngineResources/WhiteSquareTexture`, así que una instancia sin textura sale de color plano. |
+| `M_Apolo_Vidrio` | `ColorBase`, `Rugosidad`, `Especular`, `Opacidad`, `Metalico` | `BLEND_Translucent` + `TLM_Surface`. |
+
+**Ocho instancias**, con los valores de la receta de «Materiales»:
+`MI_Apolo_Monocapa`, `MI_Apolo_Travertino`, `MI_Apolo_Pamesa`,
+`MI_Apolo_Aluminio`, `MI_Apolo_Asfalto`, `MI_Apolo_Acerado`,
+`MI_Apolo_Vecinos` y `MI_Apolo_Vidrio`. En las tres que llevan textura
+(monocapa, travertino, PAMESA) el `ColorBase` va a blanco y el color lo pone
+la textura; en las demás, `ColorBase` es el color de la receta y la textura
+es el blanco. `Metalico` a 0 en todas, por herencia del maestro.
+
+**El mecanismo cambió, y a mejor.** El documento planteaba *overrides por
+componente*, pero eso son ~57.000 componentes a ~0,2 s: horas. Resulta que
+**161 de los 164 materiales de Datasmith son `MaterialInstanceConstant`**
+(solo 3 son `Material`), colgados de maestros en `Materials/References/`. Así
+que basta **reapadrinarlos a nuestra instancia** con `set_parent`: **una
+llamada por material** y cambia toda la escena de golpe, porque la geometría
+sigue apuntando al mismo asset.
+
+- Cuesta **~1,1 s por material**. El primero tarda mucho más porque compila
+  los shaders de nuestros maestros: conviene lanzarlo en tandas de unos 15
+  para no agotar el tiempo de la llamada MCP.
+- **Aplicados y verificados los 29** del mapa, de los 161 posibles. Lo que no
+  está en el mapa se queda con su material de Datasmith, que es el
+  comportamiento seguro.
+- **El mapa está en `docs/mapa_materiales_apolo.json`** del repositorio, que
+  es la copia versionable, y una copia dentro del proyecto en
+  `Content/Apolo/mapa_materiales.json`. Ampliarlo es añadir nombres a las
+  listas.
+- **Hay que reaplicarlo tras cada *Reimport***, que devuelve los materiales a
+  sus padres originales. En la misma pasada debe ir la ocultación de los 32
+  prismas, por lo mismo.
+
+Pendiente de la fase 4: dejar la herramienta como script de Python del editor
+para que se pueda ejecutar sin el MCP, y decidir si se amplía el mapa a los
+132 materiales restantes (mobiliario, cocinas, gimnasio, coches, vegetación),
+que de momento siguen con el aspecto que les dio Datasmith.
 
 ## La parcela y el sol
 
@@ -591,12 +631,15 @@ Todo referido a `Serenea_170926`.
    sobran `Sree` y `Brush1`, los dos fuera de la parcela: dos actores de
    69.296. La bajada de actores se hace **fusionando** en el paso 9, que va
    después de los materiales. Ver «Inventario de la escena».
-4. ← **Aquí.** Juego de materiales propios + herramienta «Aplicar materiales Apolo» por
-   nombre. Que reaplique también la ocultación de los prismas. Probarla
-   haciendo un *Reimport* y viendo que sobrevive.
-5. `MPC_Apolo` + máscara de corte en **nuestros** maestros (no en los de
-   Datasmith). **Con rejilla de 8 cajones por planta, no con un escalar**:
-   ver «El corte de planta».
+4. **Casi hecho el 17-sep**: los dos maestros, las ocho instancias y el mapa
+   aplicado a 29 materiales por reapadrinamiento. Falta dejar la herramienta
+   como script de Python del editor (que reaplique también la ocultación de
+   los prismas), probarla con un *Reimport*, y decidir si se amplía el mapa a
+   los 132 materiales restantes. Ver «Datasmith y los materiales».
+5. ← **Aquí.** `MPC_Apolo` + máscara de corte en **nuestros** maestros (no en
+   los de Datasmith). **Con rejilla de 8 cajones por planta, no con un
+   escalar**: ver «El corte de planta». El MCP tiene
+   `create_parameter_collection`.
 6. Generar los 166 prismas de vivienda desde `data/viviendas_serenea.json`
    con la transformación ya calibrada (ver «Los prismas»); material de
    estado con parámetros. Confirmar de paso que la colisión responde al
@@ -715,10 +758,21 @@ cuando el Esquematizador marca el doble de actores.
 - Para saber qué proyecto hay abierto de verdad, la línea de comandos del
   proceso es lo más fiable:
   `Get-CimInstance Win32_Process -Filter "Name like 'UnrealEditor%'"`.
-- **Un `set_properties` con varias propiedades es todo o nada**, y si una
-  falla **aborta el script entero** — un `try/except` alrededor **no lo
-  atrapa**, porque el error no llega como excepción de Python. Cuando haya
-  dudas, una propiedad por llamada.
+- Si una propiedad de un `set_properties` falla, **aborta el script entero** —
+  y un `try/except` alrededor **no lo atrapa**, porque el error no llega como
+  excepción de Python. Ojo, **no es todo o nada**: las propiedades que sí
+  valían quedan aplicadas (comprobado con `blendMode`, que se aplicó aunque
+  `translucencyLightingMode` fallara en la misma llamada). Cuando haya dudas,
+  una propiedad por llamada.
+- **`write_file` y `read_file` quieren rutas de disco, no rutas `/Game/`.**
+  Pasar `/Game/Apolo/x.json` lo interpreta como `C:\game\apolo\x.json` y lo
+  rechaza. La ruta buena es
+  `C:/Serenea/Serenea_170926/Content/Apolo/x.json`.
+- En materiales translúcidos, «Surface ForwardShading» de la interfaz es
+  **`TLM_Surface`** en el enum; `TLM_SurfaceForwardShading` no existe en 5.8.
+- Las operaciones que recompilan shaders (`set_parent` sobre una instancia,
+  `recompile`) cuestan ~1 s cada una, y la primera de una tanda mucho más
+  porque compila el maestro. Trocear en tandas de ~15.
 - **`year` del SunSky no se puede escribir** por el MCP (`could not be set:
   year`). El resto (`latitude`, `longitude`, `timeZone`,
   `useDaylightSavingTime`, `month`, `day`, `solarTime`, `northOffset`) sí.

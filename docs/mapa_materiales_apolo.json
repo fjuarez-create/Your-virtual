@@ -1,0 +1,65 @@
+{
+ "_comentario": [
+  "Mapa nombre-de-material-Datasmith -> instancia nuestra, para la herramienta",
+  "«Aplicar materiales Apolo». La clave es nuestra instancia en",
+  "/Game/Apolo/Materiales/; la lista son los materiales que Datasmith genera al",
+  "importar SERENEA_Apolo_17.09.26.udatasmith, en",
+  "/Game/SERENEA_Apolo_17_09_26/Materials/.",
+  "",
+  "Mecanismo: 161 de los 164 materiales de Datasmith son MaterialInstanceConstant,",
+  "asi que se REAPADRINAN a nuestra instancia (set_parent). Una llamada por",
+  "material, ~1,1 s, y cambia toda la escena de golpe. No hacen falta overrides",
+  "por componente, que serian ~57.000 y horas de trabajo.",
+  "",
+  "Hay que reaplicarlo despues de cada Reimport del asset DatasmithScene, porque",
+  "el reimport devuelve los materiales a sus padres originales de Materials/References/.",
+  "",
+  "Ampliar es anadir nombres a estas listas. Lo que no aparezca aqui se queda con",
+  "su material de Datasmith, que es el comportamiento seguro."
+ ],
+ "MI_Apolo_Vidrio": [
+  "APOLO_V6___Vidrio_claro_transparente",
+  "Vidrio_mampara_transparente",
+  "glass",
+  "V6_Vidrio_coche"
+ ],
+ "MI_Apolo_Monocapa": [
+  "APOLO_V6___Monocapa_blanco_roto_5pct_calido",
+  "Casco_blanco_roto",
+  "APOLO_V6___Pintura_interior_blanca_mate",
+  "APOLO___Lacado_blanco_satinado",
+  "APOLO_V6___Puertas_interiores_lacado_blanco"
+ ],
+ "MI_Apolo_Travertino": [
+  "APOLO_V6___Travertino_marfil_veta_vertical"
+ ],
+ "MI_Apolo_Pamesa": [
+  "APOLO_V6___PAMESA_WELLS_Ivory_120x60",
+  "APOLO___Pavimento_interior_neutro",
+  "APOLO___Pavimento_interior_neutro1"
+ ],
+ "MI_Apolo_Aluminio": [
+  "APOLO_V6___Aluminio_plata_grata",
+  "APOLO___Juntas_y_herrajes",
+  "V4_Acero_satinado",
+  "metal"
+ ],
+ "MI_Apolo_Asfalto": [
+  "asphalt"
+ ],
+ "MI_Apolo_Acerado": [
+  "sidewalk",
+  "curb",
+  "tactile",
+  "SERENEA_V3___Bordillo_claro_textura",
+  "SERENEA_V3___Loseta_neutra_60_cm",
+  "APOLO___Hormigon_gris_claro",
+  "APOLO___Hormigon_gris_claro1"
+ ],
+ "MI_Apolo_Vecinos": [
+  "edificacion_costera_clara",
+  "V6_Monocapa_contexto",
+  "industry",
+  "roof"
+ ]
+}
