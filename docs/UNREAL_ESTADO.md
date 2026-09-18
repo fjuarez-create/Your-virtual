@@ -52,6 +52,14 @@ se trabaja en `C:\Serenea` y el repositorio en `D:\Serenea\web`.
   commitea `docs/` y lo que sea del lado Unreal. El código web (`new/`, `js/`,
   `gestion/`) lo lleva la sesión en la nube; no editarlo desde aquí.
 - En Unreal: **guardar a menudo** (Ctrl+Shift+S). El MCP es experimental.
+- **Comprobar los 29 cables de materiales y los 32 prismas por iniciativa
+  propia**, sin que Fran lo pida: al empezar a trabajar, después de cualquier
+  reimport y después de cualquier caída del editor. Se sueltan tanto por
+  reimport como por caída antes de guardar, y desde el visor no se distingue
+  «está mal enchufado» de «el material está feo». Es una llamada.
+- **Lo que recompile shaders en masa va por script de Python del editor, no
+  por el MCP.** La llamada MCP se corta a los ~5 minutos y deja el editor a
+  medias; ya tumbó el editor dos veces el 18-sep.
 - **No tocar Lightmass** (World Settings). Es iluminación horneada; el
   proyecto va con Lumen y nada de ahí afecta.
 - Mantener «Do Not Combine Static Meshes»: cada vivienda tiene que poder
@@ -201,6 +209,33 @@ direcciones y deja juntas horizontales:
 
 Parámetros: `AnchoTira_m`, `AltoRollo_m`, `VariacionEntreTiras`, `Rugosidad`,
 `Metalico`, `ColorBase`, `Textura`.
+
+### Que no haya que acordarse de nada: `apolo_arranque.py`
+
+Registrado como *startup script* en `Config/DefaultEngine.ini`:
+
+```ini
+[/Script/PythonScriptPlugin.PythonScriptPluginSettings]
++StartupScripts=apolo_arranque.py
+bRemoteExecution=True
+```
+
+Al abrir el editor, y sin que nadie toque nada:
+
+1. **Arranca el servidor MCP** (`ModelContextProtocol.StartServer`). No arranca
+   solo, y sin él la sesión de Claude Code está ciega. Había costado ya varias
+   veces tener que lanzarlo a mano tras cada reinicio o caída.
+2. **Engancha la reposición** al reimport.
+3. **Repone ya, en silencio.** Esto es lo importante: el enganche al reimport
+   **no basta**, porque los materiales también se sueltan cuando **el editor se
+   cae antes de guardar** — pasó el 18-sep y dejó los 29 sueltos sin que
+   mediara ningún reimport. Reponer al arrancar cubre las dos causas.
+
+Como el editor arranca de forma asíncrona, el script no actúa de inmediato:
+espera con un callback de tick a que haya mundo, y se desengancha al terminar.
+
+`reponer()` **solo guarda el nivel si ha cambiado algo**, así que llamarlo al
+arrancar no alarga nada cuando está todo correcto.
 
 ### La herramienta que repone: `apolo_reponer.py`
 

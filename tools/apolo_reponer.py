@@ -187,20 +187,31 @@ def reponer_prismas():
 
 # -------------------------------------------------------------------- 3. todo
 
-def reponer(guardar=True):
-    """Repone materiales y prismas, y guarda. Es seguro llamarlo siempre."""
-    _log("reponiendo lo que el reimport deshace...")
+def reponer(guardar=True, silencioso=False):
+    """Repone materiales y prismas. Es seguro llamarlo siempre.
 
+    Solo guarda el nivel **si ha cambiado algo**, para que se pueda llamar al
+    arrancar el editor sin efectos secundarios ni esperas. Cuando está todo en
+    su sitio no hace nada: comprobar los 29 materiales es instantáneo.
+
+    `silencioso` calla el resumen cuando no había nada que reponer, para no
+    ensuciar el log en cada arranque.
+    """
     mat = reponer_materiales()
     pri = reponer_prismas()
+    hubo_cambios = bool(mat["cambiados"] or pri["ocultados"])
 
-    if guardar:
+    if guardar and hubo_cambios:
         unreal.get_editor_subsystem(unreal.LevelEditorSubsystem).save_current_level()
 
-    _log("materiales: {0} reenchufados, {1} ya estaban bien".format(
-        mat["cambiados"], mat["ya_estaban"]))
-    _log("prismas: {0} ocultados, {1} ya estaban ocultos, {2} encontrados".format(
-        pri["ocultados"], pri["ya_estaban"], pri["encontrados"]))
+    if hubo_cambios or not silencioso:
+        _log("materiales: {0} reenchufados, {1} ya estaban bien".format(
+            mat["cambiados"], mat["ya_estaban"]))
+        _log("prismas: {0} ocultados, {1} ya estaban ocultos, {2} encontrados".format(
+            pri["ocultados"], pri["ya_estaban"], pri["encontrados"]))
+        if hubo_cambios:
+            _aviso("habia cosas sueltas y se han repuesto. Si no venias de un "
+                   "reimport, probablemente el editor se cayo antes de guardar.")
 
     if pri["encontrados"] and pri["encontrados"] != 32:
         _aviso("esperaba 32 prismas y he encontrado {0}. Míralo antes de "
