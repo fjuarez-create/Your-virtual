@@ -9,17 +9,11 @@ vivienda), con patios ajardinados interiores y terrazas en la planta 4.
 
 ## ✨ Funcionalidades
 
-Hay **dos visores** sobre el mismo modelo y los mismos datos, para que la
-comercializadora compare y elija:
-
-| | `/` (clásico) | `/new` (nuevo) |
-|---|---|---|
-| Motor | Three.js r170, cielo físico + HDRI, oclusión ambiental y bloom | Three.js r185, CSM, GTAO, bokeh, SMAA y trazado de caminos en reposo |
-| Carga | ligero: primera imagen con la envolvente; el resto llega después | más pesado; cuatro momentos del día horneados |
-| Plantas | cambia a la variante ya cortada del proyecto | ídem, con transición por planos de recorte |
-| Interfaz | cabecera, filtros, listado, modo plano y ficha | raíl lateral, barra de plantas, ficha y galería |
-
-Común a los dos:
+El visor vive en la raíz del sitio (`/new` solo reenvía; el visor clásico se
+retiró el 18-sep-2026): Three.js r185, CSM, GTAO, bokeh, SMAA y trazado de
+caminos en reposo; raíl lateral, barra de plantas, ficha y galería. La misma
+interfaz corre dentro del ejecutable de Unreal (`unreal.html`, ver
+`docs/PROTOCOLO_STREAMING.md`).
 
 - **Modelo del cliente**: `assets/serenea/` sale del GLB que entrega el
   estudio (SketchUp v6) con `tools/build_serenea.mjs`: entorno (terreno,
@@ -58,7 +52,7 @@ O `npx serve`, nginx, GitHub Pages, Netlify, Vercel… cualquier hosting estáti
 ## 🗂️ Panel de gestión (`/gestion`)
 
 El comercial marca cada vivienda como disponible, reservada o vendida en
-`showroom.unikdi.com/gestion` y los dos visores lo enseñan en el siguiente
+`showroom.unikdi.com/gestion` y el visor lo enseña en el siguiente
 refresco, sin tocar el repositorio ni esperar a un deploy. Lo lee también el
 ejecutable de la oficina de ventas al arrancar.
 

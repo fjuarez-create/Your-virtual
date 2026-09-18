@@ -30,13 +30,19 @@
 
 const cfg = () => window.APOLO_API || {};
 
+/* Datos incrustados en la página: new/unreal.html los lleva dentro para
+   funcionar desde disco, sin servidor. El catálogo se usa tal cual; la copia
+   de estados es el último recurso. */
+const incrustado = () => window.APOLO_DATOS || {};
+
 /* Fuente viva y copia de seguridad, en ese orden. */
 const ESTADO_VIVO = 'gestion/api/estado.php';
 const ESTADO_FIJO = 'data/availability.json';
 
 export async function fetchUnits() {
-  const url = cfg().unitsUrl || 'data/units.json';
-  const res = await fetch(url);
+  const url = cfg().unitsUrl;
+  if (!url && Array.isArray(incrustado().units)) return incrustado().units;
+  const res = await fetch(url || 'data/units.json');
   if (!res.ok) throw new Error(`No se pudo cargar el listado de viviendas (${res.status})`);
   return res.json();
 }
@@ -57,10 +63,15 @@ async function pedirEstados(url) {
 
 /* `respaldo` es el JSON estático al que caer si el panel no contesta. Cada
    edificio del catálogo puede traer el suyo (ver promotions.js); si no, el de
-   Apolo. Un `window.APOLO_API.availabilityUrl` explícito manda sobre todo. */
+   Apolo. Un `window.APOLO_API.availabilityUrl` explícito sustituye al panel
+   (el ejecutable de Unreal lo usa para pedir al panel publicado desde disco);
+   la copia estática sigue siendo el último recurso también en ese caso. */
 export async function fetchAvailability(respaldo) {
   const fijado = cfg().availabilityUrl;
-  const intentos = fijado ? [fijado] : [ESTADO_VIVO, respaldo || ESTADO_FIJO];
+  const intentos = [fijado || ESTADO_VIVO];
+  /* Abierta desde disco (el ejecutable) no se puede leer un archivo local con
+     fetch: ahí el último recurso es la copia incrustada, no este JSON. */
+  if (location.protocol !== 'file:') intentos.push(respaldo || ESTADO_FIJO);
   let ultimo = null;
   for (const url of intentos) {
     try {
@@ -72,6 +83,11 @@ export async function fetchAvailability(respaldo) {
     } catch (e) {
       ultimo = e;
     }
+  }
+  const copia = mapaDeEstados(incrustado().availability);
+  if (Object.keys(copia).length) {
+    console.warn('[apolo] Sin respuesta del panel, se usa la copia de estados incrustada:', ultimo && ultimo.message);
+    return copia;
   }
   console.warn('[apolo] Disponibilidad no disponible, se asume todo "disponible":', ultimo && ultimo.message);
   return {};

@@ -10,13 +10,13 @@ Fecha de este estado: 17 de septiembre de 2026, noche. **Proyecto vigente:
 Link), verificado por el MCP, con los prismas dentro y las fases 1 y 2 hechas.
 `Serenea_160926` queda muerto: ver «El día de los dos proyectos». La interfaz
 web ya está separada del motor y lista para el ejecutable
-(`new/unreal.html`; ver «Arquitectura del ejecutable»).
+(`unreal.html`; ver «Arquitectura del ejecutable»).
 
 ## Qué es esto
 
 SERENEA «Edificio Apolo»: 166 viviendas en Las Huesas (Telde, Gran Canaria),
 comercializadas por GILMAR. Ya existe un visor web en three.js en
-`showroom.unikdi.com` (`/` clásico, `/new` nuevo) y un panel en `/gestion`
+`showroom.unikdi.com` (el visor nuevo, en la raíz; el clásico se retiró el 18-sep) y un panel en `/gestion`
 donde el comercial marca cada vivienda como disponible, reservada o vendida.
 
 **Decisión tomada el 15-sep:** se construye además una versión en Unreal
@@ -49,7 +49,7 @@ se trabaja en `C:\Serenea` y el repositorio en `D:\Serenea\web`.
 - `[wip]` en el mensaje de commit evita el deploy al hosting.
 - Ningún secreto nuevo en el repositorio.
 - La sesión local **hace `git pull` antes de tocar el repositorio** y solo
-  commitea `docs/` y lo que sea del lado Unreal. El código web (`new/`, `js/`,
+  commitea `docs/` y lo que sea del lado Unreal. El código web (`js/`, `css/`,
   `gestion/`) lo lleva la sesión en la nube; no editarlo desde aquí.
 - En Unreal: **guardar a menudo** (Ctrl+Shift+S). El MCP es experimental.
 - **Comprobar los 29 cables de materiales y los 32 prismas por iniciativa
@@ -543,7 +543,7 @@ UTC+1 del último domingo de marzo al último de octubre. En el SunSky se pone
 el huso **a mano** (`Time Zone` 1 o 0 según la fecha) con «Use Daylight Saving
 Time» desmarcado, para que no haya ambigüedad.
 
-Valores verificados con `new/js/visor/sol.js` (algoritmo NOAA, contrastado
+Valores verificados con `js/visor/sol.js` (algoritmo NOAA, contrastado
 contra una implementación independiente, 0,05° de discrepancia máxima):
 
 | Fecha | Mediodía solar | Elevación al mediodía | Orto | Ocaso |
@@ -676,7 +676,7 @@ escalonado en el terreno: la baja va de 6,75 a 11,85 m y el ático de 15,75 a
 20,85 m. Cada cajón es un rectángulo en `x`/`z` con su propia cota. Así que
 `MPC_Apolo` necesita **una rejilla de cajones con su cota**, no un
 `AlturaDeCorte` suelto — que es justo lo que resuelve el shader de
-`new/js/visor/cortes.js` con su rejilla de hasta 4 cajones. Decidir esto
+`js/visor/cortes.js` con su rejilla de hasta 4 cajones. Decidir esto
 antes de montar el paso 5.
 
 ### Los prismas: dos familias distintas
@@ -756,7 +756,7 @@ Esa misma transformación se aplica a los 166 polígonos de
 `viviendas_serenea.json`.
 
 Referencia del visor: el centro de la parcela en el marco de la web es
-(x = 66,72, z = −23,94), `new/js/visor/main.js`.
+(x = 66,72, z = −23,94), `js/visor/main.js`.
 
 ### Estado actual de los 32
 
@@ -795,7 +795,7 @@ centena da la planta.
 
 ```
    Apolo.exe (Windows, Shipping)
-   ├── Interfaz: la de showroom.unikdi.com/new, en HTML/CSS/JS,
+   ├── Interfaz: la de showroom.unikdi.com, en HTML/CSS/JS,
    │   dibujada encima del 3D por el plugin Web UI (Tracer Interactive,
    │   Fab, versión para 5.8). Fondo transparente, clics que pasan al 3D.
    │        │  JSON, en los dos sentidos (puente del plugin)
@@ -811,7 +811,7 @@ Puntos clave:
   el transporte (antes WebSocket a Vagon, ahora el puente de Web UI), no los
   mensajes. La sección de Vagon de ese documento ya no aplica.
 - **La lógica comercial no entra en Unreal.** El JavaScript de la interfaz
-  pide `/gestion/api/estado.php` (igual que hace `new/js/api.js` hoy) y manda
+  pide `/gestion/api/estado.php` (igual que hace `js/api.js` hoy) y manda
   a Unreal la orden `estados` con el mapa resuelto. Con eso **no hace falta ni
   C++ ni VaRest** para HTTP: la parte «En Unreal» de
   `docs/PANEL_Y_EJECUTABLE.md` queda sustituida por esto.
@@ -820,16 +820,16 @@ Puntos clave:
   arrancar con él si la petición falla. Timeout corto: nunca colgar el
   arranque delante de un cliente.
 - **La interfaz ya está separada del motor (hecho el 17-sep).**
-  `new/unreal.html` es la página que va dentro del `.exe`;
-  `new/js/motor/puente.js` traduce la interfaz al protocolo y
-  `new/js/motor/transporte.js` habla con Web UI. Cómo se conecta, qué manda
+  `unreal.html` es la página que va dentro del `.exe`;
+  `js/motor/puente.js` traduce la interfaz al protocolo y
+  `js/motor/transporte.js` habla con Web UI. Cómo se conecta, qué manda
   al arrancar y qué queda por confirmar dentro del plugin: sección «Notas de
   implementación» de `docs/PROTOCOLO_STREAMING.md`. Para ver la interfaz sin
-  Unreal: `showroom.unikdi.com/new/?motor=unreal&simulador=1`.
+  Unreal: `showroom.unikdi.com/?motor=unreal&simulador=1`.
 - Si Web UI diera problemas, se sustituye por UMG **sin tocar los
   Blueprints**: reciben los mismos mensajes venga quien venga.
 - Encuadres de cámara (`vista`: conjunto, edificio, planta, plano): los
-  valores están en `new/js/visor/camara.js` (azimut, elevación, distancia,
+  valores están en `js/visor/camara.js` (azimut, elevación, distancia,
   objetivo). Pasan a CineCameraActors.
 - `hora` y `fecha` van directos al SunSky (`Solar Time`, día, mes, huso según
   la regla de arriba). `sol.js` no hace falta en Unreal.
@@ -872,8 +872,8 @@ Todo referido a `Serenea_170926`.
    con la transformación ya calibrada (ver «Los prismas»); material de
    estado con parámetros. Confirmar de paso que la colisión responde al
    trazado, que las mallas vienen sin colisión simple.
-7. Web UI: widget a pantalla completa con `new/unreal.html` (copiar `new/`
-   y `assets/` juntos a la carpeta de interfaz del proyecto y cargarla con
+7. Web UI: widget a pantalla completa con `unreal.html` (copiar `unreal.html`,
+   `css/` y `assets/` juntos a la carpeta de interfaz del proyecto y cargarla con
    *Load File*; es un solo archivo clásico con los datos dentro, así que
    funciona desde disco), transparencia de ratón, y los 14 manejadores en
    Blueprint: 8 órdenes que entran por *On Interface Event* con

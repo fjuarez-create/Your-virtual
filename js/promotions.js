@@ -21,16 +21,11 @@ export const DEVELOPMENTS = [
         id: 'apolo',
         name: 'Apolo',
         active: true,
-        center: [0, 12, 0],       // objetivo de cámara (centro de Apolo, a media altura)
-        camera: [-111.5, 48.3, -93.6], // el encuadre que marcó el cliente: desde el
-                                  // noroeste, a 150 m y 14° de altura, con el campo
-                                  // de fútbol abajo a la izquierda, la calle delante
-                                  // de la fachada larga y el pueblo al fondo. Es el
-                                  // mismo punto de vista que el visor nuevo, para
-                                  // que los dos sistemas se comparen de verdad.
+        center: [0, 5, 0],       // objetivo de cámara
+        camera: [64, 48, 92],    // posición de cámara del encuadre general
         units: 'data/units.json',
         availability: 'data/availability.json',
-        modelo: 'assets/serenea/apolo_envolvente.glb',
+        bim: 'assets/apolo_levels.glb',
       },
       // Próximos edificios de SERENEA (parcelas contiguas):
       // { id: 'artemisa', name: 'Artemisa', active: false, comingSoon: true },

@@ -4,7 +4,7 @@
 # el log del workflow diga en cuál se atasca si algo va mal:
 #
 #   ftp-deploy.sh assets   planos, fichas, HDRI y modelo (lo pesado)
-#   ftp-deploy.sh new      la versión nueva del visor, en /new
+#   ftp-deploy.sh new      el reenvío de /new (el visor vive en la raíz)
 #   ftp-deploy.sh code     css, js, data y vendor
 #   ftp-deploy.sh gestion  el panel comercial, en /gestion
 #   ftp-deploy.sh index    index.html, siempre el último
@@ -106,12 +106,13 @@ if [ "$WHAT" = check ]; then
     printf 'assets/%-12s local %3s   servidor %3s\n' "$d" "$local_n" "$remote_n"
     [ "$remote_n" -ge "$local_n" ] || fallos=$((fallos + 1))
   done
-  for f in index.html js/main.js js/modelo.js css/style.css \
+  for f in index.html unreal.html js/visor/main.js js/shell.js js/motor/puente.js css/shell.css \
+           vendor/three/three.module.min.js \
            gestion/index.php gestion/lib.php gestion/comprobar.php gestion/api/estado.php \
            assets/serenea/entorno.glb assets/serenea/apolo_envolvente.glb \
            assets/serenea/apolo_corte_baja.glb assets/serenea/apolo_mobiliario.glb \
            data/viviendas_serenea.json data/cortes.json \
-           new/index.html new/js/main.js; do
+           new/index.html; do
     if [ "$(remote_count "$f")" -ge 1 ]; then
       echo "ok  $f"
     else
@@ -159,7 +160,7 @@ case "$WHAT" in
       mirror -R --transfer-all --delete --no-perms -v publish/vendor vendor;"
     ;;
   index)
-    CMDS="cd \"$DIR\"; put publish/index.html -o index.html;"
+    CMDS="cd \"$DIR\"; put publish/index.html -o index.html; put publish/unreal.html -o unreal.html;"
     ;;
   # El panel es la única carpeta que se sube SIN --delete, y es a propósito:
   # gestion/datos/ guarda en el servidor el estado vivo de las viviendas, la
@@ -170,8 +171,9 @@ case "$WHAT" in
     CMDS="cd \"$DIR\";
       mirror -R --transfer-all --no-perms -v publish/gestion gestion;"
     ;;
-  # La versión nueva vive en /new y comparte assets, data y vendor con la
-  # raíz: no se duplican los 73 MB de planos, fichas y modelos.
+  # /new solo guarda ya la página que reenvía a la raíz (el visor se mudó allí
+  # el 18-sep-2026); con --delete se lleva por delante lo que quedara del
+  # visor antiguo en esa carpeta.
   new)
     CMDS="cd \"$DIR\";
       mirror -R --transfer-all --delete --no-perms -v publish/new new;"

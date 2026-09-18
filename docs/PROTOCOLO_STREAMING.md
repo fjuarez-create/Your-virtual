@@ -1,7 +1,7 @@
 # Protocolo entre la interfaz y la aplicación de Unreal
 
 Especificación de los mensajes que cruzan entre la interfaz HTML de
-`showroom.unikdi.com/new` y el Apolo de Unreal. Los dos lados se construyen
+`showroom.unikdi.com` y el Apolo de Unreal. Los dos lados se construyen
 contra este documento. Los mensajes no dependen de por dónde viajen: nacieron
 para un stream (Vagon) y valen igual dentro del ejecutable de la oficina de
 ventas, que es donde se usan ahora.
@@ -10,7 +10,7 @@ ventas, que es donde se usan ahora.
 
 ```
    Apolo.exe (Windows)
-   ├── la interfaz de /new, la de siempre         new/unreal.html
+   ├── la interfaz del visor web, la de siempre    unreal.html
    │   dibujada encima del 3D por el plugin Web UI
    │        │  ue.interface.broadcast('apolo', JSON)   página → Blueprint
    │        │  ue.interface.apolo(JSON)                Blueprint → página
@@ -89,25 +89,25 @@ El deslizador solar se mueve a las 18:45:
 
 ### En la página (hecho el 17-sep-2026)
 
-La interfaz de `/new` ya está separada del motor. `new/js/shell.js` habla con
+La interfaz del visor ya está separada del motor. `js/shell.js` habla con
 `window.apolo` y no sabe quién hay debajo:
 
-- `new/js/visor/main.js` — three.js, en el navegador (lo de siempre).
-- `new/js/motor/puente.js` — la misma API `window.apolo`, pero cada llamada
+- `js/visor/main.js` — three.js, en el navegador (lo de siempre).
+- `js/motor/puente.js` — la misma API `window.apolo`, pero cada llamada
   se convierte en una orden de este protocolo y cada evento que vuelve
   actualiza el estado y se reemite a la interfaz. No dibuja nada.
-- `new/js/motor/transporte.js` — el cable: Web UI dentro del `.exe`, o un
+- `js/motor/transporte.js` — el cable: Web UI dentro del `.exe`, o un
   simulador en un navegador normal.
 
-Se elige en `new/index.html`: `?motor=unreal` (o que Web UI ya haya
+Se elige en `index.html`: `?motor=unreal` (o que Web UI ya haya
 inyectado sus globales) carga el puente; si no, three.js. Con
 `&simulador=1` el puente contesta solo: `listo` a los 300 ms, lo enviado se
 apunta en `window.__mensajes` y `window.__simularEvento(evento, valor)` mete
 un evento como si viniera de Unreal. Sirve para probar la interfaz sin
 Unreal, también en el hosting:
-`https://showroom.unikdi.com/new/?motor=unreal&simulador=1`.
+`https://showroom.unikdi.com/?motor=unreal&simulador=1`.
 
-**`new/unreal.html` es la página que va dentro del ejecutable.** La genera
+**`unreal.html` es la página que va dentro del ejecutable.** La genera
 `node tools/unreal_html.mjs` desde `index.html` y se commitea generada:
 
 - un solo archivo de JavaScript clásico (esbuild junta el puente, la interfaz
@@ -118,12 +118,12 @@ Unreal, también en el hosting:
 - los estados vivos se piden a
   `https://showroom.unikdi.com/gestion/api/estado.php` (el endpoint ya manda
   `Access-Control-Allow-Origin: *`); sin internet, vale la copia incrustada;
-- `<base href="../">`: hoja de estilos, logos e iconos relativos a la carpeta
-  de arriba. En el paquete van juntos `new/` y `assets/` (`logo_unik.png`,
+- `<base href="./">`: hoja de estilos, logos e iconos relativos a su carpeta
+  de arriba. En el paquete van juntos `unreal.html`, `css/` y `assets/` (`logo_unik.png`,
   `logo_gilmar.png`, `icono/`; `assets/plans/` si se quiere el plano en la
   ficha).
 
-Probado abriéndola desde disco en Chromium (`file:///…/new/unreal.html?simulador=1`):
+Probado abriéndola desde disco en Chromium (`file:///…/unreal.html?simulador=1`):
 carga, pinta la interfaz y manda las 166 viviendas sin servidor. Cuando
 cambie la interfaz, el puente o los datos: volver a generar y commitear.
 
@@ -150,7 +150,7 @@ Lo que hace el puente por su cuenta:
 ### En Unreal (por hacer; fase 7 de docs/UNREAL_ESTADO.md)
 
 Plugin **Web UI** (Tracer Interactive, en Fab, versión 5.8). Un widget con la
-página `new/unreal.html`, a pantalla completa, fondo transparente y con la
+página `unreal.html`, a pantalla completa, fondo transparente y con la
 transparencia de ratón activada para que los clics sobre el 3D no se queden en
 la página.
 
@@ -166,16 +166,16 @@ la página.
   objeto: la página acepta los dos.
 - Un solo nombre de canal (`apolo`) en los dos sentidos: un manejador por
   lado y el resto se decide por `orden` / `evento`.
-- Copiar `new/` y `assets/` juntos a la carpeta de interfaz del proyecto y
-  cargar `new/unreal.html` con *Load File*. Para desarrollar también vale
-  *Load URL* contra `https://showroom.unikdi.com/new/unreal.html`.
+- Copiar `unreal.html`, `css/` y `assets/` juntos a la carpeta de interfaz
+  del proyecto y cargar `unreal.html` con *Load File*. Para desarrollar también vale
+  *Load URL* contra `https://showroom.unikdi.com/unreal.html`.
 
 **Por confirmar en el .exe** (esto se escribió sin poder abrir la
 documentación del plugin ni probar dentro de Unreal):
 
 1. Los nombres exactos `ue.interface.broadcast` / `ue4` y del evento *On
    Interface Event* en la versión 5.8 del plugin. Si difieren, se cambia solo
-   `new/js/motor/transporte.js` y se vuelve a generar `unreal.html`.
+   `js/motor/transporte.js` y se vuelve a generar `unreal.html`.
 2. Que la petición a `showroom.unikdi.com` salga desde una página cargada de
    disco (origen `null`; el endpoint ya permite cualquier origen). Si el
    navegador del plugin la bloqueara, la interfaz enseña la copia incrustada

@@ -66,7 +66,7 @@ jobs:
         run: |
           set -eu
           rm -rf publish && mkdir publish
-          cp index.html publish/
+          cp index.html unreal.html publish/
           cp -r assets css data js vendor new gestion publish/
           du -sh publish
 
@@ -83,7 +83,7 @@ jobs:
           FTP_SERVER_DIR: ${{ secrets.FTP_SERVER_DIR }}
         run: bash .github/scripts/ftp-deploy.sh assets
 
-      - name: Subir la versión nueva (/new)
+      - name: Subir el reenvío de /new
         timeout-minutes: 10
         env:
           FTP_SERVER: ${{ secrets.FTP_SERVER }}

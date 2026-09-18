@@ -10,33 +10,16 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
-import { FLOOR_DEFS, floorOf } from 'app/layout.js';
-import { paintUnits } from 'app/building.js';
-import { cargarModelo } from 'app/modelo.js';
+import { FLOOR_DEFS, ROOF_Y, floorOf } from 'app/layout.js';
+import { buildBuilding, paintUnits, loadBIM } from 'app/building.js';
 import { fetchUnits, fetchAvailability, pollAvailability, sendLead } from 'app/api.js';
 import * as UI from 'app/ui.js';
 import { ACTIVE_DEV, ACTIVE_BUILDING } from 'app/promotions.js';
+import { createEnvironment, SITE } from 'app/environment.js';
+import { topoPedido, topoCompleto, cargarTopo, aislarTopo } from 'app/topo.js';
 
 const $ = (s) => document.querySelector(s);
-
-/* ── Móvil ──
-   El navegador del teléfono trabaja con una fracción de la memoria de vídeo
-   de un ordenador y cierra la pestaña sin avisar en cuanto se pasa. Aquí eso
-   se traduce en no pedir multimuestreo (dos destinos de pantalla completa
-   con cuatro muestras cada uno) y en limitar la densidad de píxeles. Se puede
-   forzar en cualquier equipo con ?movil=1 y desactivar con ?movil=0. */
-const MOVIL = (() => {
-  const q = new URLSearchParams(location.search).get('movil');
-  if (q === '1') return true;
-  if (q === '0') return false;
-  const ua = navigator.userAgent || '';
-  const tactil = (navigator.maxTouchPoints || 0) > 1;
-  return /iPhone|iPad|iPod|Android/i.test(ua)
-    || (tactil && /Macintosh/.test(ua))                       // iPad reciente
-    || (tactil && Math.min(screen.width, screen.height) < 900);
-})();
 
 /* ─────────────────────────── Estado global ─────────────────────────── */
 const app = {
@@ -69,37 +52,10 @@ window.apolo = app; // depuración
 
 /* ─────────────────────────── Escena ─────────────────────────── */
 const canvas = $('#scene');
-/* `antialias` no pinta nada aquí: con el compositor puesto, lo único que se
-   dibuja en el framebuffer por defecto es el cuadrilátero de salida y los
-   sprites de cartela, que no tienen cantos que suavizar. El suavizado real lo
-   dan las cuatro muestras de composer.renderTarget1/2. Pedirlo igualmente
-   reservaba un framebuffer multimuestreado de unos 27 MB que no se usaba, y
-   en un iPhone esos megas son parte de lo que hace que Safari tire el
-   contexto. `stencil:false` quita otro adjunto que tampoco se usa. */
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false, stencil: false, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, MOVIL ? 1.5 : 2));
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = MOVIL ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
-
-/* Si iOS se queda sin memoria y mata el contexto, el lienzo se queda negro
-   para siempre y el bucle sigue dibujando sobre un contexto muerto. Con esto
-   se sabe que ha pasado y, al volver, se baja el listón para no repetirlo. */
-let contextoPerdido = false;
-canvas.addEventListener('webglcontextlost', (e) => {
-  e.preventDefault();               // sin esto iOS no puede restaurarlo
-  contextoPerdido = true;
-  console.warn('[apolo] contexto WebGL perdido');
-}, false);
-canvas.addEventListener('webglcontextrestored', () => {
-  contextoPerdido = false;
-  console.warn('[apolo] contexto WebGL restaurado');
-  renderer.setPixelRatio(1);        // menos píxeles, menos posibilidades de repetirlo
-  sun.shadow.mapSize.set(1024, 1024);
-  sun.shadow.map?.dispose(); sun.shadow.map = null;
-  sun.shadow.needsUpdate = true;
-}, false);
-/* Los planos de recorte del mobiliario (modelo.js) van por material. */
-renderer.localClippingEnabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 /* AgX en vez de ACES: ACES empasta la parte alta de la curva, y con un
    edificio blanco monocapa eso significa que toda la fachada iluminada acaba
    en la misma nota. Medido: el rango tonal de la fachada cabía en 14 niveles
@@ -158,10 +114,7 @@ clouds.name = 'nubes';
   const tex = new THREE.CanvasTexture(cv);
   let cseed = 77;
   const crnd = () => { cseed = (cseed * 1664525 + 1013904223) % 4294967296; return cseed / 4294967296; };
-  /* Cada nube es un sprite y cada sprite una llamada de dibujo: dieciséis
-     grupos son 172 sprites, que con la envolvente ya fusionada pasaban a ser
-     casi una cuarta parte de todo lo que se dibuja. En el teléfono, seis. */
-  for (let i = 0; i < (MOVIL ? 6 : 16); i++) {
+  for (let i = 0; i < 16; i++) {
     const cluster = new THREE.Group();
     const n = 3 + Math.floor(crnd() * 3);
     for (let j = 0; j < n; j++) {
@@ -273,21 +226,16 @@ camera.position.set(540, 480, 820);
 const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true;
 controls.dampingFactor = 0.06;
-// Gestos como Google Earth: 1 dedo mueve, 2 dedos zoom+giro.
-// Ratón: izquierdo mueve sobre el suelo y rueda zoom (OrbitControls); el
-// derecho desplaza la cámara en el plano de la pantalla y el central gira
-// sobre el punto bajo el cursor, los dos llevados a mano más abajo («Giro
-// sobre el punto»), porque OrbitControls solo tiene un modo de desplazar y
-// gira siempre alrededor de su objetivo. Los dos visores llevan los mismos
-// controles.
+// Gestos como Google Earth: 1 dedo mueve, 2 dedos zoom+giro;
+// ratón: izquierdo mueve, derecho gira, rueda zoom.
 controls.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_ROTATE };
-controls.mouseButtons = { LEFT: THREE.MOUSE.PAN };
+controls.mouseButtons = { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
 controls.screenSpacePanning = false; // el arrastre desliza sobre el plano del suelo
 controls.panSpeed = 1.15;
 controls.maxPolarAngle = Math.PI / 2 - 0.04;
 controls.minDistance = 18;
 controls.maxDistance = 420;
-controls.target.set(0, 9, 0);
+controls.target.set(0, 40, 0);
 controls.enabled = false; // se habilita al terminar la intro
 
 // Luces
@@ -303,20 +251,7 @@ sun.castShadow = true;
 // sobre 150 m se pasa de 12 cm por texel a menos de 4, que es lo que hace
 // falta para que se resuelva el canto de un antepecho o el retranqueo de una
 // ventana. Fuera de esa caja no hay nada que proyecte sombra que importe.
-/* 4096² son unos 134 MB de memoria de vídeo en un mapa RGBA con
-   profundidad. En un teléfono eso, sumado a las texturas, es lo que agotaba
-   el presupuesto de Safari. 1024² sobre 150 m siguen siendo 15 cm por texel,
-   de sobra para lo que se ve en una pantalla de móvil. */
-sun.shadow.mapSize.set(MOVIL ? 1024 : 4096, MOVIL ? 1024 : 4096);
-/* Y no hace falta redibujarlo en cada fotograma: el sol solo se mueve al
-   cambiar de día a noche y al terminar de cargar. Se refresca a mano. */
-sun.shadow.autoUpdate = false;
-sun.shadow.needsUpdate = true;
-/* Lo que cambia lo que proyecta sombra es una lista corta: aislar una planta
-   (cambia la envolvente por la variante cortada y esconde el mobiliario de
-   arriba), pasar a noche (se mueve el sol) y que terminen de llegar las
-   piezas. En todos esos puntos se llama aquí. */
-const refrescarSombra = () => { sun.shadow.needsUpdate = true; };
+sun.shadow.mapSize.set(4096, 4096);
 sun.shadow.camera.left = -75; sun.shadow.camera.right = 75;
 sun.shadow.camera.top = 75; sun.shadow.camera.bottom = -75;
 sun.shadow.camera.far = 340;
@@ -332,8 +267,8 @@ scene.add(fill);
    antialias:true del lienzo no llegaba a aplicarse y todos los cantos salían
    dentados. Pedirle muestras al destino lo devuelve. */
 const composer = new EffectComposer(renderer);
-composer.renderTarget1.samples = MOVIL ? 0 : 4;
-composer.renderTarget2.samples = MOVIL ? 0 : 4;
+composer.renderTarget1.samples = 4;
+composer.renderTarget2.samples = 4;
 composer.addPass(new RenderPass(scene, camera));
 
 /* Oclusión ambiental: oscurece esquinas, retranqueos de ventana, encuentros de
@@ -345,13 +280,7 @@ composer.addPass(new RenderPass(scene, camera));
 const qsAO = new URLSearchParams(location.search).get('ao');
 const usarAO = qsAO === '1' || (qsAO !== '0' && Math.min(screen.width, screen.height) >= 700);
 
-/* Si no se va a usar, NO se construye: GTAOPass reserva cuatro destinos de
-   pantalla completa en cuanto nace, y en un teléfono esa memoria es
-   exactamente la que hace que Safari tire el contexto de WebGL (pantalla en
-   negro y tirón al restaurarlo). Antes se creaba siempre y solo se apagaba
-   con `enabled`, que no libera nada. */
-const gtao = usarAO ? new GTAOPass(scene, camera, innerWidth, innerHeight) : null;
-if (gtao) {
+const gtao = new GTAOPass(scene, camera, innerWidth, innerHeight);
 gtao.enabled = usarAO;
 gtao.output = GTAOPass.OUTPUT.Default;
 /* El radio va en metros y marca hasta dónde busca oclusión. Con 0,55 m solo
@@ -361,7 +290,7 @@ gtao.output = GTAOPass.OUTPUT.Default;
    era de 1,5 sobre 255 —invisible—, y con 2,4 aparecían halos oscuros rodeando
    cada ventana, que leen como contorno sucio y no como sombra. Este es el
    punto intermedio. */
-gtao.blendIntensity = 1.0;   // 1,2 cerraba a negro el jambaje de los huecos
+gtao.blendIntensity = 1.2;
 gtao.updateGtaoMaterial({
   radius: 2.0,
   distanceExponent: 1.5,
@@ -372,101 +301,63 @@ gtao.updateGtaoMaterial({
 // filtrado más ancho: funde el ruido del muestreo sin comerse el contacto
 gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3.5, radius: 8, samples: 16 });
 composer.addPass(gtao);
-}
-/* ── Por qué en el móvil no hay bloom ────────────────────────────────────────
-   OJO, para que nadie repita el camino: el bloom NO era la causa de que el
-   lienzo saliera negro en el teléfono. Eso era el coste por fotograma (ver la
-   fusión de la envolvente en modelo.js): con seis mil llamadas de dibujo el
-   navegador no llega a pintar y enseña teselas sin pintar, que es como se ven
-   esos trozos negros. Aislar la cadena pasada a pasada apuntó al bloom porque
-   con fotogramas de segundos cada captura es una moneda al aire.
-   Se queda fuera del móvil por lo que sí es cierto: es la pasada más cara de
-   todas —trece cuadriláteros a pantalla completa— y este visor es justo el
-   que tiene que ir ligero. Lo único que se pierde es el halo de las ventanas
-   encendidas de noche, que es precisamente lo que el cliente pidió recortar.
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.14, 0.5, 0.92);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
 
-   El radio no es el tamaño del halo: reparte peso entre los cinco niveles y
-   con 0,5 los cinco quedan en 0,6, el de 1/32 incluido —el que reparte luz a
-   trescientos y pico píxeles—. Con 0,34 el destello se queda junto al
-   cristal. */
-const bloom = MOVIL ? null : new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.14, 0.34, 0.92);
-if (bloom) composer.addPass(bloom);
-/* ── Por qué esto lleva `sinProfundidad` ─────────────────────────────────────
-   `OutputPass` y `ShaderPass` de three crean su material SIN desactivar el
-   test de profundidad. El compositor va y viene entre dos destinos que
-   CONSERVAN el búfer de profundidad que escribió la escena en RenderPass, así
-   que el triángulo a pantalla completa de la pasada se prueba contra esa
-   profundidad y se descarta casi entero: el lienzo salía negro con una franja
-   de imagen abajo. En escritorio no se veía porque los destinos van a cuatro
-   muestras y ahí el camino de resolución es otro; en el móvil, con `samples`
-   a cero, salta siempre. Es exactamente el "se ve negro y va a saltos" del
-   teléfono. UnrealBloomPass no lo sufre porque sus materiales sí lo apagan.
-   Un cuadrilátero de pantalla completa nunca debe mirar la profundidad. */
-function sinProfundidad(pase) {
-  const m = pase?.material;
-  if (m) { m.depthTest = false; m.depthWrite = false; m.needsUpdate = true; }
-  return pase;
-}
-composer.addPass(sinProfundidad(new OutputPass()));
-
-/* ── Grado de color ──
-   Sobre la imagen ya mapeada a pantalla. AgX es una curva deliberadamente
-   plana: protege las luces pero deja la imagen sin negros y sin color. Medido
-   contra los renders del estudio, la fachada del visor recorría 91 niveles de
-   gris y la del render 176. Un cuadrilátero a pantalla completa con nueve
-   instrucciones: no se nota en el rendimiento. */
-const GRADO = { dia: { contraste: 1.16, saturacion: 1.12, negros: 0.040 },
-                noche: { contraste: 1.08, saturacion: 1.14, negros: 0.015 } };
-const grado = new ShaderPass({
-  name: 'grado',
-  uniforms: { tDiffuse: { value: null }, contraste: { value: GRADO.dia.contraste },
-              saturacion: { value: GRADO.dia.saturacion }, negros: { value: GRADO.dia.negros } },
-  vertexShader: `
-    varying vec2 vUv;
-    void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 ); }
-  `,
-  fragmentShader: `
-    uniform sampler2D tDiffuse;
-    uniform float contraste;
-    uniform float saturacion;
-    uniform float negros;
-    varying vec2 vUv;
-    void main() {
-      vec4 t = texture2D( tDiffuse, vUv );
-      vec3 c = t.rgb;
-      c = max( vec3( 0.0 ), ( c - negros ) / max( 1e-4, 1.0 - negros ) );
-      c = ( c - 0.5 ) * contraste + 0.5;
-      float l = dot( c, vec3( 0.2126, 0.7152, 0.0722 ) );
-      c = mix( vec3( l ), c, saturacion );
-      gl_FragColor = vec4( clamp( c, 0.0, 1.0 ), t.a );
-    }
-  `,
+/* ─────────────────────── Entorno real (teselas de Google) ─────────────────────
+   Capa opcional: sin clave sellada no se crea nada y el botón no aparece. Las
+   teselas llevan la luz del día horneada, así que el entorno real y el modo
+   noche son excluyentes: activar uno apaga el otro. */
+const envBtn = $('#envToggle');
+const envAttr = $('#envAttr');
+const environment = createEnvironment({
+  scene, camera, renderer,
+  apiKey: window.MAPS_API_KEY,
+  onError: (e) => console.warn('Entorno: tesela no cargada', e),
 });
-composer.addPass(sinProfundidad(grado));
-function aplicarGrado(noche) {
-  const g = noche ? GRADO.noche : GRADO.dia;
-  grado.uniforms.contraste.value = g.contraste;
-  grado.uniforms.saturacion.value = g.saturacion;
-  grado.uniforms.negros.value = g.negros;
+
+function setEnvironment(on) {
+  if (!environment) return;
+  environment.setEnabled(on);
+  envBtn.setAttribute('aria-pressed', String(on));
+  envAttr.classList.toggle('hidden', !on);
+  // El contexto inventado (manzanas genéricas, suelo llano, mar) sobra en
+  // cuanto está el barrio real: se aparta entero.
+  if (scene.userData.contexto) scene.userData.contexto.visible = !on;
+  if (on && app.night) app.setNight(false); // la fotogrametría es de día
 }
 
-/* ── Entorno ──
-   El entorno ya no se inventa ni se descarga de Google: viene en el propio
-   modelo del cliente (assets/serenea/entorno.glb), con el terreno, la costa,
-   las calles y los otros cuatro edificios de SERENEA. El botón del globo, que
-   encendía las teselas, deja de tener sentido. */
-$('#envToggle')?.remove();
-$('#envAttr')?.remove();
-$('#attrib')?.remove();
+// El botón solo aparece con ?entorno=1 mientras la capa no esté rematada: un
+// comercial enseñando el showroom no debe encontrarse un botón que no hace
+// nada. Al terminarla, se quita esta condición.
+if (environment && new URLSearchParams(location.search).get('entorno') === '1') {
+  envBtn.classList.remove('hidden');
+  envBtn.addEventListener('click', () => setEnvironment(!environment.enabled));
+}
 
-// asas de depuración
+// asas de depuración: permiten reajustar el rumbo sin recompilar nada
 app.THREE = THREE;
+app.env = environment;
 app.cam = camera;
 app.ctl = controls;
-app.renderer = renderer;
-app.scene = scene;
-app.composer = composer;
-app.puntoBajoCursor = (x, y) => puntoBajoCursor(x, y, 600); // pruebas del giro sobre el punto
+app.setEnvHeading = (deg) => {
+  if (environment) environment.group.rotation.y = (deg - SITE.azimuthDeg) * (Math.PI / 180);
+};
+
+let attrTick = 0;
+function updateEnvironment(dt) {
+  if (!environment) return;
+  environment.update();
+  if (!environment.enabled) return;
+  attrTick += dt;
+  if (attrTick > 1) {
+    attrTick = 0;
+    const credits = environment.tiles.getAttributions?.() || [];
+    const text = credits.map((c) => c.value).filter(Boolean).join(' · ');
+    envAttr.textContent = text ? `Google · ${text}` : 'Google';
+  }
+}
 
 /* ─────────────────────────── Tween de cámara ─────────────────────────── */
 let camTween = null;
@@ -482,20 +373,16 @@ controls.addEventListener('start', () => { camTween = null; });
 
 /* ─────────────────── Intro cinematográfica ─────────────────── */
 const INTRO = {
-  /* La entrada aterriza en el encuadre que marcó el cliente (fachada
-     noroeste), así que llega por el norte en vez de por el sureste: es la
-     misma curva de antes con x y z cambiados de signo y el punto final en la
-     pose del conjunto. */
   curve: new THREE.CatmullRomCurve3([
-    new THREE.Vector3(-560, 500, -840),
-    new THREE.Vector3(-320, 350, -580),
-    new THREE.Vector3(-60, 210, -400),
-    new THREE.Vector3(150, 110, -240),
-    new THREE.Vector3(70, 70, -120),
-    new THREE.Vector3(-111.5, 48.3, -93.6),
+    new THREE.Vector3(540, 480, 820),
+    new THREE.Vector3(300, 330, 560),
+    new THREE.Vector3(40, 190, 380),
+    new THREE.Vector3(-150, 96, 220),
+    new THREE.Vector3(-90, 56, 130),
+    new THREE.Vector3(64, 48, 92),
   ], false, 'centripetal', 0.4),
-  t0: new THREE.Vector3(0, 150, 60),
-  t1: new THREE.Vector3(0, 12, 0),
+  t0: new THREE.Vector3(0, 140, -60),
+  t1: new THREE.Vector3(0, 5, 0),
   dur: 8.5,
 };
 let intro = null;
@@ -533,17 +420,116 @@ function updateIntro(dt) {
   camera.updateProjectionMatrix();
 }
 
-/* ─────────────────────────── Construcción ───────────────────────────
-   El edificio es el modelo del cliente (modelo.js). Aislar una planta ya no
-   eleva las de arriba ni las funde: se cambia la envolvente por la variante
-   que trae el corte del proyecto, que es lo que el cliente valida en obra. */
-let M = null;   // modelo v6: envolvente, entorno, mobiliario, variantes y prismas
-let B = null;   // { unitMeshes, pickables } — lo que consume la interfaz
+/* ─────────────────────────── Construcción ─────────────────────────── */
+let B = null;   // { floorGroups, roofGroup, unitMeshes, pickables, layout }
+let bim = null; // { group, levels } — modelo Revit (carga diferida)
+let bimLoading = null;
+const floorAnim = new Map(); // key → { yTarget, fadeTarget }
 
-const fadeOf = () => 1;
+function allGroups() {
+  const out = [...B.floorGroups.entries()].map(([k, g]) => [k, g]);
+  out.push(['roof', B.roofGroup]);
+  return out;
+}
+
+function levelOf(key) {
+  if (key === 'roof') return 4;
+  return FLOOR_DEFS.find((f) => f.key === key).level;
+}
+
+function updateFloorTargets() {
+  const selLevel = app.floor === 'all' ? Infinity : FLOOR_DEFS.find((f) => f.key === app.floor).level;
+  for (const [key, g] of allGroups()) {
+    const lvl = levelOf(key);
+    const above = lvl > selLevel;
+    const explodeY = lvl * app.explode * 13;
+    floorAnim.set(key, {
+      yTarget: g.userData.baseY + explodeY + (above ? 34 : 0),
+      fadeTarget: above ? 0 : 1,
+    });
+    const labels = g.children.find?.((c) => c.name === 'labels');
+    if (labels) labels.visible = key === app.floor;
+  }
+  // jardines de patios siguen a la planta baja
+}
+
+// Correspondencia niveles BIM ↔ plantas lógicas
+const BIM_KEY = { baja: 'baja', p1: 'p1', p2: 'p2', atico: 'atico', cubierta: 'roof' };
+
+function animateFloors(dt) {
+  /* En la revisión del levantamiento no hay edificio que animar, y esta
+     función reescribe la visibilidad de plantas, jardines y niveles BIM en
+     cada fotograma: si siguiera corriendo, volvería a encender todo lo que
+     aislarTopo acaba de apartar. */
+  if (app.soloTopo) return;
+  const k = Math.min(1, dt * 4.5);
+  let fading = false;
+  for (const [key, g] of allGroups()) {
+    const a = floorAnim.get(key);
+    if (!a) continue;
+    g.position.y += (a.yTarget - g.position.y) * k;
+    if (Math.abs(a.fadeTarget - g.userData.fade) > 0.002) fading = true;
+    const f = g.userData.fade + (a.fadeTarget - g.userData.fade) * k;
+    g.userData.fade = f;
+    const vis = f > 0.02 && !app.bim;
+    g.visible = vis;
+    for (const m of g.userData.fadeMats) m.opacity = m.userData.baseOpacity * f;
+    if (key === 'baja' && g.userData.gardens) g.userData.gardens.visible = vis;
+  }
+  if (fading) repaint(); // los materiales de vivienda heredan el fundido de su planta
+
+  // El BIM (modelo por defecto) sigue la misma coreografía que las plantas
+  if (bim) {
+    for (const [bimKey, animKey] of Object.entries(BIM_KEY)) {
+      const lvl = bim.levels.get(bimKey);
+      const src = animKey === 'roof' ? B.roofGroup : B.floorGroups.get(animKey);
+      if (!lvl || !src) continue;
+      const dy = src.position.y - src.userData.baseY; // desplazamiento (explosión/aislado)
+      const f = src.userData.fade;
+      for (const h of lvl.holders) { h.position.y = dy; h.visible = f > 0.02; }
+      for (const m of lvl.mats) m.opacity = m.userData.baseOpacity * f;
+      // tapas de corte: solo visibles cuando esta planta está aislada
+      const cutTarget = app.floor !== 'all' && animKey === app.floor ? 1 : 0;
+      lvl.cutVal = (lvl.cutVal ?? 0) + (cutTarget - (lvl.cutVal ?? 0)) * k;
+      if (lvl.byCat?.cap) lvl.byCat.cap.opacity = f * lvl.cutVal;
+
+      /* Techo: una planta seccionada tiene que leerse como interior, no como
+         patio. Un mapa de sombras no basta, porque solo detiene el sol directo
+         y la luz que baña estos interiores es la del cielo, que ninguna sombra
+         afecta. Lo que hace un techo real es tapar el cielo, así que es la
+         iluminación de entorno la que hay que retirar. Sigue la misma rampa
+         que las tapas de corte, de modo que entra con la misma animación. */
+      for (const mat of lvl.mats) {
+        mat.envMapIntensity = (mat.userData.baseEnv ?? 1) * (1 - 0.75 * lvl.cutVal);
+        // El grueso de la luz que baña estos interiores viene de la luz
+        // hemisférica del cielo, que es una luz de escena y no se puede
+        // recortar por material. Se compensa oscureciendo el propio material:
+        // medido, retirar solo la iluminación de entorno no movía un píxel.
+        const bc = mat.userData.baseColor;
+        if (bc) mat.color.copy(bc).multiplyScalar(1 - 0.4 * lvl.cutVal);
+      }
+    }
+
+    // Techo fantasma: al aislar una planta, la losa del nivel superior
+    // sigue proyectando sombra (invisible) para que los interiores no
+    // queden bañados por el sol como si no hubiera techo.
+    const ORDER = ['baja', 'p1', 'p2', 'atico', 'cubierta'];
+    const aboveKey = app.floor !== 'all' ? ORDER[ORDER.indexOf(app.floor) + 1] : null;
+    for (const [bKey, lvl] of bim.levels) {
+      const slabM = lvl.byCat?.slab;
+      if (!slabM) continue;
+      const ghost = bKey === aboveKey;
+      slabM.colorWrite = !ghost;
+      if (ghost) {
+        for (const h of lvl.holders) if (h.name.endsWith('__slab')) h.visible = true;
+      }
+    }
+  }
+}
+
+const fadeOf = (floorKey) => B.floorGroups.get(floorKey)?.userData.fade ?? 1;
 
 function repaint() {
-  if (!B) return;
   paintUnits(
     B.unitMeshes,
     app.estadoDe,
@@ -551,63 +537,40 @@ function repaint() {
     app.selected,
     app.hover,
     fadeOf,
-    app.night,                             // de noche se encienden las libres
-    (floorKey) => app.floor === floorKey   // solo la planta aislada lleva prisma de luz
+    (floorKey) => floorKey === app.floor // dollhouse en la planta aislada
   );
 }
 
-/* ─────────────────────────── Vistas de cámara ───────────────────────────
-   Las cotas salen del modelo (modelo.js: cotasPlanta), no de una tabla: cada
-   planta se corta a la altura que marca el proyecto y el terreno se escalona,
-   así que el encuadre de la planta 1 no está a la misma cota en los dos
-   extremos del edificio. La distancia se calcula para que la barra de 111 m
-   llene el ancho en 16:9. */
-const LARGO = 111;   // eje X del edificio, en metros
-
-function distanciaParaLargo(margen = 1.06) {
-  const tanV = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
-  const tanH = tanV * Math.max(camera.aspect, 1);
-  return ((LARGO / 2) * margen) / tanH;
-}
-
+/* ─────────────────────────── Vistas de cámara ─────────────────────────── */
 function goOverview(dur = 1.6) {
+  // El encuadre crece con la axonometría para abarcar las plantas separadas
+  const e = app.explode;
   const [cx, cy, cz] = app.building.camera;
   const [tx, ty, tz] = app.building.center;
-  tweenCamera(new THREE.Vector3(cx, cy, cz), new THREE.Vector3(tx, ty, tz), dur);
-}
-
-/* Al sur de Apolo, pegado, va uno de los edificios propuestos de SERENEA, tan
-   largo y tan alto como él. Desde el sur bajo tapa media planta, así que la
-   vista de planta mira desde muy arriba (unos 63°) y con el objetivo corrido
-   HACIA_NORTE metros al norte: la cámara queda justo encima del vecino y la
-   planta ocupa el fotograma entero. */
-const HACIA_NORTE = 4;
-
-function goFloor(key, dur = 1.3) {
-  const { suelo, corte } = M ? M.cotasPlanta(key) : { suelo: 0, corte: 12 };
-  const y = (suelo + corte) / 2;
-  const d = distanciaParaLargo(1.07); // un poco de aire: con 1,0 los testeros quedaban justo en el borde
   tweenCamera(
-    new THREE.Vector3(5, y + d * 0.86, d * 0.50 - HACIA_NORTE),
-    new THREE.Vector3(0, y, -HACIA_NORTE),
+    new THREE.Vector3(cx + e * 38, cy + e * 42, cz + e * 48),
+    new THREE.Vector3(tx, ty + e * 26, tz),
     dur
   );
 }
 
+function goFloor(key, dur = 1.3) {
+  const F = FLOOR_DEFS.find((f) => f.key === key);
+  const y = F.y + F.level * app.explode * 13;
+  tweenCamera(new THREE.Vector3(20, y + 52, 60), new THREE.Vector3(0, y, 0), dur);
+}
+
 function goPlano(key, dur = 1.2) {
-  const { corte } = M ? M.cotasPlanta(key) : { corte: 12 };
-  const d = distanciaParaLargo(1.02);
-  tweenCamera(new THREE.Vector3(0, corte + d, 0.5), new THREE.Vector3(0, corte - 1.5, 0), dur);
+  const F = FLOOR_DEFS.find((f) => f.key === key);
+  const y = F.y + F.level * app.explode * 13;
+  tweenCamera(new THREE.Vector3(0, y + 105, 0.5), new THREE.Vector3(0, y, 0), dur);
 }
 
 /* ─────────────────────────── Acciones ─────────────────────────── */
 app.setFloor = (key) => {
   app.floor = key;
   UI.markFloorButtons(key);
-  if (M) M.setFloor(key);
-  refrescarSombra();
-  if (app.selected && key !== 'all' && app.unitsById.get(app.selected)
-    && floorOf(app.unitsById.get(app.selected)) !== key) app.select(null);
+  updateFloorTargets();
   if (key === 'all') {
     if (app.mode === 'plano') { app.mode = '3d'; UI.markModeButtons('3d'); }
     goOverview(1.4);
@@ -634,9 +597,18 @@ app.setMode = (mode) => {
   }
 };
 
-/* La axonometría (plantas separadas en el aire) era propia del volumen
-   esquemático; con el modelo real las plantas se ven por su corte. */
-app.setExplode = () => {};
+let explodeCamTimer = null;
+app.setExplode = (v) => {
+  app.explode = v;
+  updateFloorTargets();
+  // Reencuadra suavemente al soltar el deslizador
+  clearTimeout(explodeCamTimer);
+  explodeCamTimer = setTimeout(() => {
+    if (app.floor === 'all') goOverview(1.0);
+    else if (app.mode === 'plano') goPlano(app.floor, 1.0);
+    else goFloor(app.floor, 1.0);
+  }, 260);
+};
 
 app.recent = []; // últimas vistas: solo en memoria (un refresco lo deja a cero)
 
@@ -652,13 +624,10 @@ app.select = (id, opts = {}) => {
     const fKey = floorOf(unit);
     if (app.floor !== fKey && app.floor !== 'all') app.setFloor(fKey);
     const mesh = B.unitMeshes.get(id);
-    const caja = new THREE.Box3().setFromObject(mesh);
-    const wp = caja.getCenter(new THREE.Vector3());
-    const radio = Math.max(caja.max.x - caja.min.x, caja.max.z - caja.min.z) / 2;
+    const wp = new THREE.Vector3();
+    mesh.getWorldPosition(wp);
     const dir = camera.position.clone().sub(controls.target).normalize();
-    // la vivienda llena el encuadre: distancia según su tamaño, no fija
-    const d = Math.max(22, (radio * 2.4) / Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2));
-    tweenCamera(wp.clone().add(dir.multiplyScalar(d)), wp, 1.1);
+    tweenCamera(wp.clone().add(dir.multiplyScalar(46)), wp, 1.1);
   }
   repaint();
 };
@@ -726,61 +695,132 @@ function rebuildEnvironment() {
   pmrem.dispose();
 }
 
-app.setNight = (on) => {
-  app.night = on;
-  const elev = on ? -12 : 44;
-  sunDir.setFromSphericalCoords(1, THREE.MathUtils.degToRad(90 - elev), THREE.MathUtils.degToRad(42));
+/* Cuatro momentos del día en vez de un interruptor día/noche. Cada uno es
+   una fila de esta tabla: la posición del sol, el aire que atraviesa, el
+   color y la fuerza de las luces, la niebla y el velo. La escena no cambia,
+   cambia la hora. */
+export const MOMENTOS = {
+  amanecer: {
+    nombre: 'Amanecer', elev: 6, azim: 76, turbidez: 5.5, rayleigh: 2.6,
+    sol: 0xffc98e, solInt: 2.8, cielo: 0xb9c6e2, suelo: 0x55564e, hemiInt: 0.18,
+    relleno: 0xa8bcdc, rellenoInt: 0.18, exposicion: 1.06, niebla: 0xc9cdd2,
+    bloom: 0.28, umbral: 0.82, hdri: false, luces: true,
+  },
+  dia: {
+    nombre: 'Mediodía', elev: 44, azim: 42, turbidez: 3.0, rayleigh: 1.05,
+    sol: 0xfff1dc, solInt: 3.0, cielo: 0xe3edf8, suelo: 0x8b9080, hemiInt: 0.28,
+    relleno: 0xa8c4e8, rellenoInt: 0.15, exposicion: 1.0, niebla: 0xd6dde3,
+    bloom: 0.14, umbral: 0.92, hdri: true, luces: false,
+  },
+  atardecer: {
+    /* El sol rasante solo se lee si el cielo deja de mandar: con la luz
+       hemisférica alta, la fachada recibe tanta luz difusa que el naranja del
+       sol no llega a notarse y la hora del día no cambia nada. */
+    nombre: 'Atardecer', elev: 3, azim: 250, turbidez: 8.0, rayleigh: 3.2,
+    sol: 0xff8c3a, solInt: 3.4, cielo: 0xe0a878, suelo: 0x4a3a2c, hemiInt: 0.14,
+    relleno: 0xc98a52, rellenoInt: 0.16, exposicion: 1.12, niebla: 0xe0a06a,
+    bloom: 0.38, umbral: 0.78, hdri: false, luces: true,
+  },
+  noche: {
+    nombre: 'Noche', elev: -12, azim: 42, turbidez: 8, rayleigh: 0.6,
+    sol: 0xbfd1ff, solInt: 0.35, cielo: 0x223252, suelo: 0x0c1016, hemiInt: 0.42,
+    relleno: 0x8fa8d8, rellenoInt: 0.5, exposicion: 1.05, niebla: 0x0b111c,
+    bloom: 0.5, umbral: 0.72, hdri: false, luces: true,
+  },
+};
+
+app.momento = 'dia';
+
+app.setMomento = (clave) => {
+  const M = MOMENTOS[clave] || MOMENTOS.dia;
+  const noche = clave === 'noche';
+  app.momento = clave;
+  app.night = noche;   // el resto del código sigue preguntando por esto
+
+  sunDir.setFromSphericalCoords(1, THREE.MathUtils.degToRad(90 - M.elev),
+                                   THREE.MathUtils.degToRad(M.azim));
   sky.material.uniforms.sunPosition.value.copy(sunDir);
-  sky.material.uniforms.turbidity.value = on ? 8 : 3.0;
-  sky.material.uniforms.rayleigh.value = on ? 0.6 : 1.05;
-  if (on) {
-    // noche procedural: cúpula oscura del shader + estrellas y luna
+  sky.material.uniforms.turbidity.value = M.turbidez;
+  sky.material.uniforms.rayleigh.value = M.rayleigh;
+
+  /* La panorámica diurna solo vale para el mediodía: con el sol rasante o
+     bajo el horizonte hay que volver al cielo procedural, que sí sigue la
+     posición del sol. */
+  if (M.hdri && HDRI_DAY.ready) {
+    applyDaySky();
+  } else {
     sky.visible = true;
     scene.background = null;
     scene.backgroundIntensity = 1;
     rebuildEnvironment();
-    scene.environmentIntensity = 0.4;
-  } else {
-    applyDaySky();
-    if (!HDRI_DAY.ready) { sky.visible = true; scene.background = null; rebuildEnvironment(); scene.environmentIntensity = 0.3; }
+    scene.environmentIntensity = noche ? 0.4 : 0.34;
   }
-  // de noche, la "luz solar" pasa a ser luz de luna fría y tenue
-  sun.intensity = on ? 0.35 : 3.0;
-  sun.color.setHex(on ? 0xbfd1ff : 0xfff1dc);
+
+  sun.intensity = M.solInt;
+  sun.color.setHex(M.sol);
   sun.position.copy(sunDir).multiplyScalar(180);
-  if (on) sun.position.set(60, 150, -45); // misma dirección que la luna
-  hemi.color.setHex(on ? 0x223252 : 0xe3edf8);
-  hemi.groundColor.setHex(on ? 0x0c1016 : 0x8b9080);
-  hemi.intensity = on ? 0.42 : 0.28;
-  fill.color.setHex(on ? 0x8fa8d8 : 0xa8c4e8);
-  fill.intensity = on ? 0.5 : 0.15;
-  renderer.toneMappingExposure = on ? 1.05 : 1.0;
-  scene.fog.color.setHex(on ? 0x0b111c : 0xd6dde3);
-  if (bloom) {
-    bloom.strength = on ? 0.30 : 0.14;
-    bloom.threshold = 0.92;
-    bloom.radius = on ? 0.24 : 0.34;
-  }
-  // cielo nocturno: estrellas + luna, y nubes escasas teñidas de noche
-  nightSky.visible = on;
+  if (noche) sun.position.set(60, 150, -45); // la luna, no el sol
+  hemi.color.setHex(M.cielo);
+  hemi.groundColor.setHex(M.suelo);
+  hemi.intensity = M.hemiInt;
+  fill.color.setHex(M.relleno);
+  fill.intensity = M.rellenoInt;
+  renderer.toneMappingExposure = M.exposicion;
+  scene.fog.color.setHex(M.niebla);
+  bloom.strength = M.bloom;
+  bloom.threshold = M.umbral;
+
+  nightSky.visible = noche;
   clouds.children.forEach((cluster, i) => {
-    cluster.visible = !on || i % 2 === 0;
+    cluster.visible = !noche || i % 2 === 0;
     for (const sp of cluster.children) {
       const m = sp.material;
-      m.opacity = (m.userData.baseOp ?? m.opacity) * (on ? 0.3 : 1);
-      m.color.setHex(on ? 0x55617c : 0xffffff);
+      m.opacity = (m.userData.baseOp ?? m.opacity) * (noche ? 0.3 : 1);
+      m.color.setHex(noche ? 0x55617c : 0xffffff);
     }
   });
-  // Ventanas: se encienden las de las viviendas que siguen a la venta; las
-  // vendidas se quedan a oscuras, como en el visor nuevo.
-  if (M) M.setNight(on);
-  aplicarGrado(on);
-  refrescarSombra();
-  /* Sin este repintado los prismas de noche no llegaban a aplicarse: las
-     libres no se encendían y las vendidas seguían con el factor de día. */
-  repaint();
-  UI.markDayNight(on);
+
+  /* Ventanas encendidas: de momento todas a la vez, porque el vidrio del BIM
+     es un solo material por planta. Para encender solo las disponibles hace
+     falta que cada vivienda traiga su propio vidrio, y eso llega con el
+     modelo de SketchUp con las viviendas nombradas una a una. */
+  encenderVentanas(M.luces);
+  UI.markDayNight?.(noche);
 };
+
+function encenderVentanas(on) {
+  if (!bim) return;
+  for (const [, lvl] of bim.levels) {
+    const glass = lvl.byCat?.glass;
+    if (!glass) continue;
+    glass.emissive.setHex(on ? 0xffd9a0 : 0x000000);
+    glass.emissiveIntensity = on ? 0.8 : 0;
+  }
+}
+
+// Compatibilidad con lo que ya llamaba a setNight
+app.setNight = (on) => app.setMomento(on ? 'noche' : 'dia');
+
+/* La noche procedural y la fotogrametría diurna no pueden convivir: encender
+   una apaga la otra. La ida está en setEnvironment; esta es la vuelta. */
+const setNightBase = app.setNight;
+app.setNight = (on) => {
+  if (on && environment?.enabled) setEnvironment(false);
+  setNightBase(on);
+};
+
+/* ──────────── Modelo BIM: siempre cargado, modelo por defecto ──────────── */
+function ensureBIM() {
+  if (bim) return Promise.resolve(bim);
+  if (!bimLoading) {
+    bimLoading = loadBIM(scene).then((b) => {
+      bim = b;
+      b.group.visible = true;
+      return b;
+    }).catch((e) => { console.error('[apolo] BIM no disponible:', e); bimLoading = null; });
+  }
+  return bimLoading;
+}
 
 /* ─────────────────────────── Picking ─────────────────────────── */
 const raycaster = new THREE.Raycaster();
@@ -799,7 +839,7 @@ canvas.addEventListener('pointermove', (e) => {
   pointerPx = { x: e.clientX, y: e.clientY };
 });
 canvas.addEventListener('pointerleave', () => { mouseActive = false; });
-canvas.addEventListener('pointerdown', (e) => { downPos = e.button === 0 ? { x: e.clientX, y: e.clientY } : null; });
+canvas.addEventListener('pointerdown', (e) => { downPos = { x: e.clientX, y: e.clientY }; });
 canvas.addEventListener('pointerup', (e) => {
   if (!downPos) return;
   const moved = Math.hypot(e.clientX - downPos.x, e.clientY - downPos.y);
@@ -811,180 +851,25 @@ canvas.addEventListener('pointerup', (e) => {
   app.select(id, { focus: false });
 });
 
-/* ─────── Giro sobre el punto (central) y desplazamiento en pantalla (derecho) ───────
-   Central, como en SketchUp: con la rueda pulsada, la vista gira alrededor
-   del punto que había bajo el cursor al pulsar, y ese punto no se mueve de
-   sitio en la pantalla. OrbitControls solo sabe girar alrededor de su
-   objetivo, así que este gesto se lleva aquí: cámara y objetivo giran
-   juntos, rígidamente, en torno al punto (acimut sobre la vertical,
-   inclinación sobre el eje horizontal de la cámara), y OrbitControls se
-   encuentra después una pose coherente. El punto se busca contra el mapa de
-   alturas del modelo, el mismo que limita la cámara: sin triángulos ni BVH,
-   en una fachada cae donde el rayo entra en el volumen del edificio. Si no
-   hay nada bajo el cursor (cielo), se gira sobre el objetivo.
-   Derecho: la cámara se desplaza en el plano de la pantalla (lateral y
-   vertical) sin girar, para bajar por una fachada sin dejar de mirarla.
-   OrbitControls tiene un solo modo de desplazar, y el izquierdo ya lo usa
-   para moverse sobre el suelo, así que este también va a mano, con la misma
-   escala que OrbitControls (a la distancia del objetivo, una altura de
-   pantalla = 2·d·tan(fov/2)). Al soltar cualquiera de los dos, el objetivo
-   vuelve al eje de la vista (recentrarObjetivo). */
-const ARRIBA = new THREE.Vector3(0, 1, 0);
-const _giroQ = new THREE.Quaternion();
-const _giroEje = new THREE.Vector3();
-const _giroV = new THREE.Vector3();
-const _giroPos0 = new THREE.Vector3(), _giroObj0 = new THREE.Vector3();
-/* El círculo de visita (limitarAmbito) también vale con estos gestos: un
-   movimiento que sacara la cámara del círculo no se aplica, y así al soltar
-   no hay nada que recortar ni tirones. */
-const dentroDelAmbito = (p) => { const a = M?.ambito; return !a || Math.hypot(p.x - a.x, p.z - a.z) <= a.radio; };
-let giro = null; // { pivote, x, y, id } mientras se arrastra con el botón central
-let desplazamiento = null; // { x, y, id } mientras se arrastra con el botón derecho
-
-function puntoBajoCursor(cx, cy, alcance) {
-  if (!M) return null;
-  raycaster.setFromCamera(new THREE.Vector2((cx / innerWidth) * 2 - 1, -(cy / innerHeight) * 2 + 1), camera);
-  const { origin: o, direction: d } = raycaster.ray;
-  const PASO = 0.5;
-  const dentro = (t) => o.y + d.y * t <= M.superficieEn(o.x + d.x * t, o.z + d.z * t);
-  let previo = 2; // los dos primeros metros no cuentan: la cámara puede rozar el límite
-  for (let t = previo + PASO; t <= alcance; t += PASO) {
-    if (dentro(t)) {
-      let a = previo, b = t;
-      for (let i = 0; i < 8; i++) { const m = (a + b) / 2; if (dentro(m)) b = m; else a = m; }
-      return new THREE.Vector3(o.x + d.x * b, o.y + d.y * b, o.z + d.z * b);
-    }
-    previo = t;
-  }
-  return null;
-}
-
-/* Gira cámara y objetivo en torno a `pivote`. La inclinación cambia el ángulo
-   polar cámara-objetivo exactamente en `inclinacion`, así que se recorta a los
-   límites de OrbitControls antes de aplicarla y el suelo no se traspasa. */
-function girarSobre(pivote, acimut, inclinacion) {
-  const pos = camera.position, obj = controls.target;
-  _giroPos0.copy(pos); _giroObj0.copy(obj);
-  _giroV.subVectors(pos, obj);
-  const polar = Math.acos(THREE.MathUtils.clamp(_giroV.y / (_giroV.length() || 1), -1, 1));
-  const polarNuevo = THREE.MathUtils.clamp(polar + inclinacion, controls.minPolarAngle + 0.01, controls.maxPolarAngle);
-  inclinacion = polarNuevo - polar;
-  _giroQ.setFromAxisAngle(ARRIBA, acimut);
-  pos.sub(pivote).applyQuaternion(_giroQ).add(pivote);
-  obj.sub(pivote).applyQuaternion(_giroQ).add(pivote);
-  /* El eje de inclinación es la derecha de la cámara YA GIRADA en acimut:
-     lookAt + updateMatrix aquí mismo, porque puede haber varios movimientos
-     por fotograma y la matriz sería la del fotograma anterior. */
-  camera.lookAt(obj);
-  camera.updateMatrix();
-  _giroEje.setFromMatrixColumn(camera.matrix, 0).setY(0).normalize(); // horizontal, a la derecha de la cámara
-  if (_giroEje.lengthSq() > 0.5) {
-    _giroQ.setFromAxisAngle(_giroEje, inclinacion);
-    pos.sub(pivote).applyQuaternion(_giroQ).add(pivote);
-    obj.sub(pivote).applyQuaternion(_giroQ).add(pivote);
-  }
-  if (!dentroDelAmbito(pos)) { pos.copy(_giroPos0); obj.copy(_giroObj0); }
-  camera.lookAt(obj);
-}
-
-/* Desplaza cámara y objetivo en el plano de la pantalla: dx, dy en píxeles. */
-function desplazarPantalla(dx, dy) {
-  const d = camera.position.distanceTo(controls.target);
-  const k = (2 * d * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * controls.panSpeed) / innerHeight;
-  camera.updateMatrix();
-  _giroEje.setFromMatrixColumn(camera.matrix, 0).multiplyScalar(-dx * k);       // derecha de la cámara
-  _giroV.setFromMatrixColumn(camera.matrix, 1).multiplyScalar(dy * k).add(_giroEje); // arriba de la cámara
-  if (!dentroDelAmbito(_giroPos0.copy(camera.position).add(_giroV))) return;
-  camera.position.add(_giroV);
-  controls.target.add(_giroV);
-}
-
-canvas.addEventListener('pointerdown', (e) => {
-  if ((e.button !== 1 && e.button !== 2) || e.pointerType !== 'mouse' || intro || !controls.enabled) return;
-  e.preventDefault();
-  camTween = null;
-  autoRotate = false;
-  if (e.button === 2) {
-    desplazamiento = { x: e.clientX, y: e.clientY, id: e.pointerId };
-  } else {
-    const alcance = Math.min(controls.maxDistance + 60, 600);
-    const pivote = puntoBajoCursor(e.clientX, e.clientY, alcance) || controls.target.clone();
-    giro = { pivote, x: e.clientX, y: e.clientY, id: e.pointerId };
-  }
-  canvas.setPointerCapture(e.pointerId);
-});
-canvas.addEventListener('pointermove', (e) => {
-  if (desplazamiento && e.pointerId === desplazamiento.id) {
-    desplazarPantalla(e.clientX - desplazamiento.x, e.clientY - desplazamiento.y);
-    desplazamiento.x = e.clientX; desplazamiento.y = e.clientY;
-    return;
-  }
-  if (!giro || e.pointerId !== giro.id) return;
-  const dx = e.clientX - giro.x, dy = e.clientY - giro.y;
-  giro.x = e.clientX; giro.y = e.clientY;
-  // misma sensibilidad que OrbitControls: una altura de pantalla = una vuelta
-  girarSobre(giro.pivote, (-2 * Math.PI * dx) / innerHeight, (-2 * Math.PI * dy) / innerHeight);
-});
-/* Al soltar, el objetivo vuelve al eje de la vista sin mover la cámara: sobre
-   la superficie que hay en el centro de la pantalla (lo natural para seguir
-   orbitando con el botón derecho) o, si en el centro solo hay cielo, a la
-   profundidad del pivote. Nunca más cerca de minDistance, que OrbitControls
-   empujaría la cámara hacia atrás. */
-function recentrarObjetivo(profundidadRespaldo) {
-  const alcance = Math.min(controls.maxDistance + 60, 600);
-  const centro = puntoBajoCursor(innerWidth / 2, innerHeight / 2, alcance);
-  camera.getWorldDirection(_giroV);
-  const dMin = controls.minDistance + 0.5;
-  const d = Math.max(centro ? centro.distanceTo(camera.position) : profundidadRespaldo, dMin);
-  controls.target.copy(camera.position).addScaledVector(_giroV, d);
-  camera.lookAt(controls.target);
-  /* El freno de limitarAmbito compara con el fotograma anterior: el objetivo
-     recién colocado es el nuevo punto de partida, aunque quede fuera del
-     círculo interior. */
-  const a = M?.ambito;
-  if (a) objetivoPrevio = { x: controls.target.x, z: controls.target.z, d: Math.hypot(controls.target.x - a.x, controls.target.z - a.z) };
-}
-const soltarGiro = (e) => {
-  if (giro && e.pointerId === giro.id) {
-    const { pivote } = giro;
-    giro = null;
-    recentrarObjetivo(camera.position.distanceTo(pivote));
-  } else if (desplazamiento && e.pointerId === desplazamiento.id) {
-    desplazamiento = null;
-    recentrarObjetivo(camera.position.distanceTo(controls.target));
-  }
-};
-canvas.addEventListener('pointerup', soltarGiro);
-canvas.addEventListener('pointercancel', soltarGiro);
-/* El botón central no debe activar el autodesplazamiento del navegador. */
-canvas.addEventListener('mousedown', (e) => { if (e.button === 1) e.preventDefault(); });
-canvas.addEventListener('auxclick', (e) => { if (e.button === 1) e.preventDefault(); });
-
-/* Una vivienda es señalable si pasa los filtros, no está vendida y, con una
-   planta aislada, es de esa planta (las demás no se ven). */
-function senalable(id) {
-  if (!id) return false;
-  if (app.floor !== 'all') {
-    const u = app.unitsById.get(id);
-    if (!u || floorOf(u) !== app.floor) return false;
-  }
-  if (!app.passesFilters(app.unitsById.get(id))) return false;
-  return app.estadoDe(id) !== 'vendida';
-}
-
 function pickAt(cx, cy) {
-  if (!B) return null;
+  // en la revisión del levantamiento el edificio está apartado: no hay
+  // viviendas que señalar aunque sus mallas sigan en la escena
+  if (!B || app.soloTopo) return null;
   const p = new THREE.Vector2((cx / innerWidth) * 2 - 1, -(cy / innerHeight) * 2 + 1);
   raycaster.setFromCamera(p, camera);
-  for (const h of raycaster.intersectObjects(B.pickables, false)) {
+  const hits = raycaster.intersectObjects(B.pickables, false);
+  for (const h of hits) {
+    if (h.object.parent.userData.fade < 0.6) continue;
     const hid = h.object.userData.unitId;
-    if (senalable(hid)) return hid;
+    if (!app.passesFilters(app.unitsById.get(hid))) continue;
+    if (app.estadoDe(hid) === 'vendida') continue;
+    return hid;
   }
   return null;
 }
 
 function updateHover() {
-  if (!B) return;
+  if (!B || app.soloTopo) return;
   if (!mouseActive) {
     // sin ratón (táctil o fuera del lienzo): nunca hover ni tooltip
     if (app.hover) { app.hover = null; repaint(); }
@@ -992,10 +877,16 @@ function updateHover() {
     return;
   }
   raycaster.setFromCamera(pointer, camera);
+  const hits = raycaster.intersectObjects(B.pickables, false);
   let id = null;
-  for (const h of raycaster.intersectObjects(B.pickables, false)) {
+  for (const h of hits) {
+    const g = h.object.parent;
+    if (g.userData.fade < 0.6) continue; // planta oculta
     const hid = h.object.userData.unitId;
-    if (senalable(hid)) { id = hid; break; }
+    if (!app.passesFilters(app.unitsById.get(hid))) continue; // descartada por filtros
+    if (app.estadoDe(hid) === 'vendida') continue;            // vendida: inerte
+    id = hid;
+    break;
   }
   if (id !== app.hover) {
     app.hover = id;
@@ -1013,101 +904,13 @@ function updateCompass() {
   needle.style.transform = `rotate(${(-az * 180) / Math.PI - 45}deg)`;
 }
 
-/* La cámara no baja nunca del suelo ni entra en ningún volumen: el límite lo
-   da el mapa de alturas del modelo, punto por punto. */
-function limitarSuelo() {
-  if (!M) return;
-  const p = camera.position;
-  /* El mapa de alturas del modelo dice lo más alto que hay debajo de cada
-     punto: terreno, calle, vecino o la propia envolvente. La cámara no baja
-     de ahí, así que no se mete bajo tierra ni atraviesa un muro, y en cambio
-     sí puede bajar por un patio interior, donde lo más alto es el pavimento
-     del patio. Como un pájaro. */
-  const yMin = M.sueloEn(p.x, p.z);
-  if (p.y < yMin) {
-    /* Con el central o el derecho pulsados el objetivo va rígido con la
-       cámara: si esta toca el suelo, el objetivo sube lo mismo y la vista no
-       se tuerce. */
-    if (giro || desplazamiento) controls.target.y += yMin - p.y;
-    p.y = yMin;
-  }
-  /* Durante esos dos gestos el objetivo no se recorta: moverlo torcería la
-     vista y el punto se iría del cursor. Al soltar, el objetivo vuelve al eje
-     de la vista (recentrarObjetivo) y estos recortes vuelven a aplicarse. */
-  if (giro || desplazamiento) return;
-  const yMinObjetivo = M.sueloEn(controls.target.x, controls.target.z) - 2.5;
-  if (controls.target.y < yMinObjetivo) controls.target.y = yMinObjetivo;
-  if (!intro) limitarAmbito(); // la entrada cinematográfica llega desde lejos a propósito
-}
-
-/* Ámbito de visita: alejarse un kilómetro no aporta nada y distrae, así que
-   ni el objetivo ni la cámara salen de un círculo alrededor del centro de la
-   parcela. La distancia máxima se recalcula con la dirección de la vista para
-   que la rueda deje de alejar justo en el borde, sin tirones. */
-let objetivoPrevio = null; // { x, z, d } del fotograma anterior, para el freno del objetivo
-function limitarAmbito() {
-  const a = M?.ambito;
-  if (!a) return;
-  const t = controls.target;
-  const dx = t.x - a.x, dz = t.z - a.z;
-  let d = Math.hypot(dx, dz);
-  const maxObjetivo = a.radio * 0.55;
-  /* El objetivo no se aleja del centro más de 0,55·radio. Antes se encajaba
-     en el círculo de golpe, y como la cámara se queda donde está, eso giraba
-     la vista. Ahora es un freno: si va a salir y además se aleja, cámara y
-     objetivo vuelven en planta a donde estaban en el fotograma anterior
-     (rígido, sin girar). Acercarse siempre se puede, así que tras un giro
-     sobre un punto lejano o un desplazamiento en pantalla el objetivo puede
-     quedar fuera sin que pase nada: solo no se podrá arrastrar más lejos. */
-  if (d > maxObjetivo && objetivoPrevio && d > objetivoPrevio.d + 1e-6) {
-    const sx = objetivoPrevio.x - t.x, sz = objetivoPrevio.z - t.z;
-    t.x += sx; t.z += sz;
-    camera.position.x += sx; camera.position.z += sz;
-    d = objetivoPrevio.d;
-  }
-  objetivoPrevio = { x: t.x, z: t.z, d };
-  const vx = camera.position.x - t.x, vy = camera.position.y - t.y, vz = camera.position.z - t.z;
-  const dist = Math.hypot(vx, vy, vz);
-  if (dist < 1e-4) return;
-  const ux = vx / dist, uz = vz / dist;
-  const q = ux * ux + uz * uz;
-  let maxDist = 420;
-  if (q > 1e-6) {
-    const ox = t.x - a.x, oz = t.z - a.z;
-    const b = 2 * (ox * ux + oz * uz);
-    const c = ox * ox + oz * oz - a.radio * a.radio;
-    const disc = b * b - 4 * q * c;
-    maxDist = disc > 0 ? Math.max(controls.minDistance, (-b + Math.sqrt(disc)) / (2 * q)) : controls.minDistance;
-  }
-  controls.maxDistance = Math.min(420, maxDist);
-  if (dist > controls.maxDistance) {
-    const k = controls.maxDistance / dist;
-    camera.position.set(t.x + vx * k, t.y + vy * k, t.z + vz * k);
-  }
-}
-
 /* ─────────────────────────── Bucle ─────────────────────────── */
 const clock = new THREE.Clock();
 let autoRotate = true;
 controls.addEventListener('start', () => { autoRotate = false; });
 
-/* Con la pestaña en segundo plano no se dibuja: WebKit purga recursos de GPU
-   de las pestañas ocultas, y volver con el reloj acumulado daba un salto de
-   cámara y un fotograma en negro. */
-let corriendo = true;
-document.addEventListener('visibilitychange', () => {
-  if (document.hidden) { corriendo = false; return; }
-  if (corriendo) return;
-  corriendo = true;
-  clock.getDelta();          // descarta el tiempo que ha pasado oculto
-  onResize({ inmediato: true });
-  requestAnimationFrame(loop);
-});
-
 function loop() {
-  if (!corriendo) return;    // lo vuelve a arrancar visibilitychange
   requestAnimationFrame(loop);
-  if (contextoPerdido) return;
   const rawDt = clock.getDelta();
   const dt = Math.min(rawDt, 0.05);
 
@@ -1131,81 +934,75 @@ function loop() {
   }
 
   updateIntro(Math.min(rawDt, 0.6)); // tiempo real: la intro dura lo mismo en cualquier dispositivo
+  if (B) animateFloors(dt);
+  updateEnvironment(dt);
   updateHover();
   updateCompass();
   if (!intro) controls.update();
-  limitarSuelo();
   composer.render();
   // pasada de cartelas (capa 1): sin bloom ni tone mapping, siempre visibles.
   // El fondo se anula durante la pasada para no repintar el cielo encima
   // de la escena ya compuesta.
   const bg = scene.background;
-  try {
-    scene.background = null;
-    renderer.autoClear = false;
-    camera.layers.set(1);
-    renderer.render(scene, camera);
-  } finally {
-    camera.layers.set(0);
-    renderer.autoClear = true;
-    scene.background = bg;
-  }
+  scene.background = null;
+  renderer.autoClear = false;
+  renderer.clearDepth();
+  camera.layers.set(1);
+  renderer.render(scene, camera);
+  camera.layers.set(0);
+  renderer.autoClear = true;
+  scene.background = bg;
 }
 
-/* ─────────────────────────── Resize ───────────────────────────
-   La medida la manda la caja CSS del lienzo (#scene llena #app), no
-   `innerHeight` ni `visualViewport`: en el navegador del móvil esas dos dan
-   una altura menor mientras están las barras, y `setSize` escribía ese alto
-   en el estilo del lienzo. Resultado: el 3D ocupaba un tercio de la pantalla
-   y el resto quedaba en negro. Con `setSize(w, h, false)` el estilo no se
-   toca y un ResizeObserver avisa de cualquier cambio de tamaño, venga de
-   donde venga (giro, barras que aparecen, teclado, split view). */
-const tam = { w: 0, h: 0 };
-
-/* ── Por qué esto va con retardo ──
-   Cambiar el tamaño no es gratis: `composer.setSize` DESTRUYE y vuelve a
-   crear los dos destinos de pantalla completa, y GTAOPass otros cuatro. En
-   iOS, al plegarse la barra de direcciones, el alto del lienzo cambia en cada
-   fotograma de la animación, así que se estaban recreando seis destinos
-   sesenta veces por segundo. Eso es exactamente lo que se veía: parpadeo y
-   pantallazos en negro mientras se desplaza, y un tirón al soltar.
-   Ahora el cambio se aplica una sola vez, cuando el tamaño lleva un cuarto de
-   segundo quieto. Mientras tanto el 3D se estira un poco, que no se nota, en
-   vez de apagarse. El primer ajuste sí es inmediato, y el giro de pantalla
-   también, que ahí el salto es grande y conviene verlo ya. */
-const ESPERA_TAM = 250;   // ms de quietud antes de tocar los destinos
-let plazoTam = null;
-
-function aplicarTam() {
-  plazoTam = null;
-  const w = Math.max(1, canvas.clientWidth || Math.round(window.visualViewport?.width || innerWidth));
-  const h = Math.max(1, canvas.clientHeight || Math.round(window.visualViewport?.height || innerHeight));
-  if (w === tam.w && h === tam.h) return;
-  tam.w = w; tam.h = h;
+/* ─────────────────────────── Resize ─────────────────────────── */
+function onResize() {
+  // visualViewport da la medida real; innerWidth se queda corto cuando hay
+  // barras del navegador de por medio.
+  const vv = window.visualViewport;
+  const w = Math.round(vv ? vv.width : innerWidth);
+  const h = Math.round(vv ? vv.height : innerHeight);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
-  renderer.setSize(w, h, false);
-  composer.setSize(w, h);   // ya redimensiona el GTAO, y en píxeles de dispositivo
+  renderer.setSize(w, h);
+  composer.setSize(w, h);
+  gtao.setSize(w, h);
 }
 
-function onResize({ inmediato = false } = {}) {
-  if (plazoTam) { clearTimeout(plazoTam); plazoTam = null; }
-  if (inmediato || tam.w === 0) { aplicarTam(); return; }
-  plazoTam = setTimeout(aplicarTam, ESPERA_TAM);
+/* Al girar el móvil, iOS avisa del cambio con las medidas TODAVÍA en vertical.
+   Si se hace caso a ese primer aviso, el lienzo se queda con el ancho antiguo y
+   aparecen franjas a los lados. Por eso se repite el ajuste en los instantes
+   siguientes, hasta que el navegador da la medida buena. */
+function resizeSoon() {
+  onResize();
+  requestAnimationFrame(onResize);
+  for (const ms of [60, 180, 400, 700]) setTimeout(onResize, ms);
 }
-
-if (typeof ResizeObserver === 'function') new ResizeObserver(() => onResize()).observe(canvas);
-window.addEventListener('resize', () => onResize());
-window.addEventListener('orientationchange', () => onResize({ inmediato: true }));
-window.addEventListener('pageshow', () => onResize({ inmediato: true }));
-window.visualViewport?.addEventListener('resize', () => onResize());
-window.visualViewport?.addEventListener('scroll', () => onResize());
+window.addEventListener('resize', resizeSoon);
+window.addEventListener('orientationchange', resizeSoon);
+window.visualViewport?.addEventListener('resize', onResize);
 onResize();
 
 /* ─────────────────────────── Arranque ─────────────────────────── */
 app.enter = () => {
   $('#hero').classList.add('gone');
   startIntro();
+
+  /* Revisión del levantamiento topográfico: ?topo=1 carga el entorno
+     reconstruido del DWG del topógrafo y aparta el edificio y el contexto
+     inventado. Es una vista de trabajo, no algo que un cliente deba
+     encontrarse: sin el parámetro no existe. */
+  if (topoPedido() && !app.topoActivo) {
+    app.topoActivo = true;
+    app.soloTopo = true;
+    cargarTopo(scene, { todo: topoCompleto() }).then(({ porMaterial, fuera }) => {
+      console.log('levantamiento cargado:', porMaterial.join(' · '));
+      if (fuera.length) console.log('fuera de esta vista:', fuera.join(', '));
+    }).catch((e) => console.warn('no se pudo cargar el levantamiento', e));
+    /* El BIM llega más tarde por su cuenta y los botones de planta vuelven a
+       encender lo que apartamos, así que en esta vista se insiste mientras
+       dure. Son cuatro objetos: no cuesta nada. */
+    setInterval(() => aislarTopo(scene), 400);
+  }
 };
 
 /* Vuelta a la portada (selector de promociones) desde la flecha ← */
@@ -1230,25 +1027,10 @@ async function boot() {
     app.estados = estados;
     app.unitsById = new Map(units.map((u) => [u.id, u]));
 
-    const paso = $('#loader')?.querySelector('p');
-    M = await cargarModelo(scene, app.unitsById, {
-      estadoDe: app.estadoDe,
-      plantasBajoDemanda: MOVIL,
-      /* Techo de textura: ver js/texturas.js. Sin él, el modelo sube casi
-         400 MB de imágenes a la tarjeta y Safari tira el contexto. */
-      texturaMax: MOVIL ? 512 : 1024,
-      onProgreso: (texto) => { if (paso) paso.textContent = texto; },
-    });
-    app.modelo = M;
-    B = { unitMeshes: M.unitMeshes, pickables: M.pickables };
-    M.setFloor(app.floor);
-    M.setNight(app.night);
-    refrescarSombra();
+    B = buildBuilding(scene, app.unitsById);
+    ensureBIM(); // el modelo real es el edificio por defecto
+    updateFloorTargets();
     repaint();
-    /* Mobiliario y plantas cortadas: 40 MB que llegan después de la primera
-       imagen, para que el showroom se pueda enseñar mientras terminan. */
-    M.cargarSecundarios().then(() => { M.setFloor(app.floor); refrescarSombra(); repaint(); })
-      .catch((e) => console.warn('[apolo] secundarios:', e));
 
     UI.initUI(app);
     UI.updateStats(app);
@@ -1257,7 +1039,6 @@ async function boot() {
     pollAvailability((nuevos) => {
       app.estados = nuevos;
       UI.updateStats(app);
-      M?.refrescarEstados();
       repaint();
       if (app.selected) UI.renderPanel(app, app.unitsById.get(app.selected));
     });

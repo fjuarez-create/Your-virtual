@@ -11,8 +11,8 @@ el endpoint que las publica y el ejecutable de Unreal que las lee al arrancar.
    gestion/datos/estado.json            estado vivo, en el servidor
               │
               ▼
-   /gestion/api/estado.php   ──────►    visor clásico  (showroom.unikdi.com/)
-   (JSON público, sin clave)  ──────►   visor nuevo    (/new)
+   /gestion/api/estado.php   ──────►    visor web      (showroom.unikdi.com/)
+   (JSON público, sin clave)  ──────►   ejecutable de Unreal (unreal.html)
                               ──────►   Apolo.exe      (oficina de ventas)
                                             │
                                             ▼
