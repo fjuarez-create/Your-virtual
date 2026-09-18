@@ -145,6 +145,29 @@ Para traer una versión nueva del modelo:
    hace con los materiales. Debería ir todo en la misma herramienta del
    paso 4 del orden de trabajo.
 
+### Qué sobrevive a un reimport y qué no
+
+La regla estructural, y es la respuesta a «¿puedo reimportar una y otra vez
+sin repetir trabajo?»:
+
+- **Todo lo que creemos nosotros en Unreal es permanente.** `/Game/Apolo/`
+  (maestros e instancias), los actores de la plantilla (SunSky, exposición,
+  cámaras) y todo lo que añadamos más adelante — mobiliario propio,
+  vegetación, coches, personas — vive fuera de la jerarquía de Datasmith y
+  **ningún reimport lo toca**.
+- **Solo se regenera lo que viene de SketchUp**: la geometría, los 161
+  materiales de Datasmith y la jerarquía de actores bajo el
+  `DatasmithSceneActor`.
+- Por tanto lo único vulnerable es **el enchufe** entre los materiales de
+  Datasmith y los nuestros (el `parent` de cada instancia), más la
+  **ocultación de los 32 prismas**. Las dos cosas se reponen en ~90 s.
+
+**Condiciones para que el mapa siga valiendo entero:** no cambiar ni
+renombrar materiales en SketchUp, y **no ocultar la etiqueta de los prismas
+en SketchUp** (ha costado dos reimports). Si aparece un material nuevo no se
+rompe nada: esa superficie entra con el aspecto de Datasmith hasta que se
+añada **una línea** al mapa.
+
 ### Reimport del 17-sep por la noche (fachada corregida): qué reponer
 
 Fran corrigió dos fallos de modelado de la fachada en SketchUp y volvió a
@@ -373,11 +396,11 @@ sigue apuntando al mismo asset.
   `Content`**: un `.json` dentro de `Content` hace que Unreal lo tome por una
   tabla de datos y pregunte si quiere importarlo en cada arranque. Ampliarlo
   es añadir nombres a las listas.
-- **Un *Reimport* no lo deshace.** Comprobado el 17-sep por la noche: los 29
-  siguieron apadrinados por nuestras instancias. Lo que sí hay que comprobar
-  tras cada reimport es que siguen (una llamada) y, sobre todo, **el estado de
-  los prismas**, que esa vez sí desaparecieron. Una importación nueva, en
-  cambio, regenera los materiales desde cero y sí obligaría a reaplicar.
+- **Un *Reimport* a veces lo deshace y a veces no: hay que comprobarlo
+  siempre.** El reimport del 17-sep por la noche **conservó** los 29
+  apadrinamientos; el del 18-sep los **revirtió** todos. No se ha encontrado
+  la regla, así que no se puede dar por supuesto ninguno de los dos
+  comportamientos. Comprobarlo cuesta una llamada; reponerlo, 90 segundos.
 
 Pendiente de la fase 4: dejar la herramienta como script de Python del editor
 para que se pueda ejecutar sin el MCP, y decidir si se amplía el mapa a los
