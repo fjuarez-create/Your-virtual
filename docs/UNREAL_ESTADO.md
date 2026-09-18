@@ -169,9 +169,18 @@ Avisa por el *Output Log* si encuentra un número de prismas distinto de 32, o
 si `APOLO_CORTES` no está (con la explicación de la etiqueta oculta en
 SketchUp), o si algún prisma ha perdido el perfil de colisión `BlockAll`.
 
-**Sin probar todavía en el editor**: el MCP no ejecuta Python, así que está
-escrita pero no ejecutada. La primera vez hay que lanzarla a mano y mirar el
-*Output Log*.
+**Probada en el editor el 18-sep** y verificada después por el MCP: los
+materiales siguieron siendo los nuestros, los 32 prismas ocultos y el nivel
+guardado.
+
+**Trampa al desplegarla:** Unreal solo mira `Content/Python` **al arrancar**.
+Si la carpeta se crea con el editor ya abierto, `import apolo_reponer` falla
+con `ModuleNotFoundError`. Se sale de dos formas: reiniciar el editor, o
+añadir la ruta a mano en esa sesión:
+
+```python
+import sys; sys.path.append(r"C:/Serenea/Serenea_170926/Content/Python"); import apolo_reponer; apolo_reponer.reponer()
+```
 
 ### Qué sobrevive a un reimport y qué no
 
