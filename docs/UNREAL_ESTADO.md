@@ -145,6 +145,34 @@ Para traer una versión nueva del modelo:
    hace con los materiales. Debería ir todo en la misma herramienta del
    paso 4 del orden de trabajo.
 
+### La herramienta que repone: `apolo_reponer.py`
+
+Escrita el 18-sep. Vive en `tools/apolo_reponer.py` del repositorio y
+desplegada en `C:\Serenea\Serenea_170926\Content\Python\apolo_reponer.py`,
+que Unreal añade solo al `sys.path`. Lee el mapa de
+`<Proyecto>\Apolo\mapa_materiales.json` (fuera de `Content`, por lo del aviso
+de importación).
+
+Hace las dos cosas que un reimport deshace, y **solo las que hagan falta**:
+se salta los materiales cuyo padre ya es el nuestro, que es lo que la hace
+rápida cuando no hay nada que reponer.
+
+- **Manual**, en la consola de Unreal en modo Python:
+  `import apolo_reponer; apolo_reponer.reponer()`
+- **Automática**, enganchada a `ImportSubsystem.on_assets_post_import`:
+  `import apolo_reponer; apolo_reponer.activar_automatico()`
+- **Para siempre**: Project Settings → Plugins → Python → *Startup scripts*
+  → añadir `apolo_reponer.py`. Ejecutar el fichero activa el modo automático
+  pero no repone en ese momento, para no alargar el arranque.
+
+Avisa por el *Output Log* si encuentra un número de prismas distinto de 32, o
+si `APOLO_CORTES` no está (con la explicación de la etiqueta oculta en
+SketchUp), o si algún prisma ha perdido el perfil de colisión `BlockAll`.
+
+**Sin probar todavía en el editor**: el MCP no ejecuta Python, así que está
+escrita pero no ejecutada. La primera vez hay que lanzarla a mano y mirar el
+*Output Log*.
+
 ### Qué sobrevive a un reimport y qué no
 
 La regla estructural, y es la respuesta a «¿puedo reimportar una y otra vez
