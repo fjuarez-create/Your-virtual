@@ -236,10 +236,12 @@ camara.interrumpir()
   el control al usuario. Ratón, **igual que el visor clásico** (decidido el
   18-sep-2026): rueda = zoom hacia el centro de la vista; izquierdo =
   desplazar sobre el suelo (lateral y hacia delante, sin cambiar de altura);
-  derecho = orbitar; rueda pulsada = orbitar alrededor del punto bajo el
-  cursor, como en SketchUp (`setOrbitPoint` con el punto buscado contra el
-  mapa de alturas; al soltar, el objetivo vuelve al eje de la vista). Táctil:
-  un dedo orbita, dos dedos zoom y desplazan.
+  derecho = desplazar la cámara en el plano de la pantalla (lateral y
+  vertical, sin girar: bajar por una fachada sin dejar de mirarla); rueda
+  pulsada = orbitar alrededor del punto bajo el cursor, como en SketchUp
+  (`setOrbitPoint` con el punto buscado contra el mapa de alturas; al soltar,
+  el objetivo vuelve al eje de la vista). Orbitar con el ratón es solo eso:
+  rueda pulsada. Táctil: un dedo orbita, dos dedos zoom y desplazan.
 - Límites: no atravesar el suelo (polar máximo 88°), distancia mínima 3 m,
   máxima 900 m. `smoothTime` 0,25.
 - Encuadres: `conjunto` (todo el entorno), `edificio` (caja del edificio) y

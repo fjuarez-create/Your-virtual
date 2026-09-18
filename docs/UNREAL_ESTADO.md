@@ -884,9 +884,10 @@ Todo referido a `Serenea_170926`.
 8. Cámaras, sol enlazado a `hora`/`fecha`, escaparate. **Controles de ratón
    iguales que en la web** (decididos el 18-sep): rueda = zoom hacia el
    centro de la vista; izquierdo + arrastrar = desplazar sobre el suelo sin
-   cambiar de altura; derecho + arrastrar = orbitar; rueda pulsada +
-   arrastrar = orbitar alrededor del punto que hay bajo el cursor, como en
-   SketchUp.
+   cambiar de altura; derecho + arrastrar = desplazar la cámara en el plano
+   de la pantalla, lateral y vertical, sin girar (bajar por una fachada sin
+   dejar de mirarla); rueda pulsada + arrastrar = orbitar alrededor del
+   punto que hay bajo el cursor, como en SketchUp.
 9. Vegetación canaria, coches, entorno. **Fusionar los repetidos** (534
    módulos fotovoltaicos, ~79 coches, 235 armarios, patas y neumáticos) para
    bajar el número de actores; ver «Inventario de la escena». Lo que no

@@ -64,11 +64,13 @@ export function crearCamara(ctx) {
 
   // ── Interacción según el contrato: los mismos controles que el visor clásico ──
   /* Izquierdo desplaza sobre el suelo (SCREEN_PAN: lateral en pantalla,
-     vertical hacia delante, sin cambiar de altura), derecho orbita, rueda
-     acerca hacia el centro de la vista y la rueda pulsada orbita alrededor
-     del punto bajo el cursor, como en SketchUp (ver «Giro sobre el punto»). */
+     vertical hacia delante, sin cambiar de altura); derecho desplaza la
+     cámara en el plano de la pantalla (TRUCK: lateral y vertical, sin girar,
+     para bajar por una fachada sin dejar de mirarla); rueda acerca hacia el
+     centro de la vista; rueda pulsada orbita alrededor del punto bajo el
+     cursor, como en SketchUp (ver «Giro sobre el punto»). */
   controles.mouseButtons.left = CameraControls.ACTION.SCREEN_PAN;
-  controles.mouseButtons.right = CameraControls.ACTION.ROTATE;
+  controles.mouseButtons.right = CameraControls.ACTION.TRUCK;
   controles.mouseButtons.middle = CameraControls.ACTION.ROTATE;
   controles.mouseButtons.wheel = CameraControls.ACTION.DOLLY;
   controles.touches.one = CameraControls.ACTION.TOUCH_ROTATE;
@@ -181,8 +183,17 @@ export function crearCamara(ctx) {
     const c = camera.position, r = controles.distance;
     controles.setOrbitPoint(c.x + _vista.x * r, c.y + _vista.y * r, c.z + _vista.z * r);
   }
-  const alBotonCentral = (e) => { if (e.button === 1 && e.pointerType === 'mouse') fijarPivote(e.clientX, e.clientY); };
-  canvas.addEventListener('pointerdown', alBotonCentral, { capture: true }); // antes que camera-controls
+  /* `desplazando`: arrastre con el botón derecho en curso. Si al bajar por
+     una fachada la cámara toca el suelo, el objetivo baja lo mismo que la
+     cámara sube (ver limitarVolumen): la vista no se tuerce. */
+  let desplazando = false;
+  const alBoton = (e) => {
+    if (e.pointerType !== 'mouse') return;
+    if (e.button === 1) fijarPivote(e.clientX, e.clientY);
+    if (e.button === 2) desplazando = true;
+  };
+  canvas.addEventListener('pointerdown', alBoton, { capture: true }); // antes que camera-controls
+  controles.addEventListener('controlend', () => { desplazando = false; });
   controles.addEventListener('update', marcarMovimiento);
 
   function interrumpir() {
@@ -352,10 +363,15 @@ export function crearCamara(ctx) {
   const _p = new THREE.Vector3(), _t = new THREE.Vector3();
   function limitarVolumen() {
     controles.getPosition(_p, true);
+    controles.getTarget(_t, true);
     let tocado = false;
 
     const ySuelo = sueloEn(_p.x, _p.z);
-    if (_p.y < ySuelo) { _p.y = ySuelo; tocado = true; }
+    if (_p.y < ySuelo) {
+      if (desplazando) _t.y += ySuelo - _p.y; // rígido: la vista no se tuerce al tocar el suelo
+      _p.y = ySuelo;
+      tocado = true;
+    }
 
     if (volumen) {
       const { min, max, techo } = volumen;
@@ -376,7 +392,6 @@ export function crearCamara(ctx) {
     }
 
     if (!tocado) return;
-    controles.getTarget(_t, true);
     controles.setPosition(_p.x, _p.y, _p.z, false);
     controles.setTarget(_t.x, _t.y, _t.z, false);
   }
@@ -481,7 +496,7 @@ export function crearCamara(ctx) {
   }
 
   function destruir() {
-    canvas.removeEventListener('pointerdown', alBotonCentral, { capture: true });
+    canvas.removeEventListener('pointerdown', alBoton, { capture: true });
     canvas.removeEventListener('pointerdown', alEntrada, opcionesEscucha);
     canvas.removeEventListener('wheel', alEntrada, opcionesEscucha);
     canvas.removeEventListener('touchstart', alEntrada, opcionesEscucha);

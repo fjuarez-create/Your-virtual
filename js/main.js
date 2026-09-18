@@ -273,13 +273,15 @@ camera.position.set(540, 480, 820);
 const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true;
 controls.dampingFactor = 0.06;
-// Gestos como Google Earth: 1 dedo mueve, 2 dedos zoom+giro;
-// ratón: izquierdo mueve, derecho gira, rueda zoom. El botón central no se
-// le da a OrbitControls: gira sobre el punto bajo el cursor (ver «Giro sobre
-// el punto», más abajo), que es el gesto de SketchUp. Los dos visores llevan
-// los mismos controles.
+// Gestos como Google Earth: 1 dedo mueve, 2 dedos zoom+giro.
+// Ratón: izquierdo mueve sobre el suelo y rueda zoom (OrbitControls); el
+// derecho desplaza la cámara en el plano de la pantalla y el central gira
+// sobre el punto bajo el cursor, los dos llevados a mano más abajo («Giro
+// sobre el punto»), porque OrbitControls solo tiene un modo de desplazar y
+// gira siempre alrededor de su objetivo. Los dos visores llevan los mismos
+// controles.
 controls.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_ROTATE };
-controls.mouseButtons = { LEFT: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE };
+controls.mouseButtons = { LEFT: THREE.MOUSE.PAN };
 controls.screenSpacePanning = false; // el arrastre desliza sobre el plano del suelo
 controls.panSpeed = 1.15;
 controls.maxPolarAngle = Math.PI / 2 - 0.04;
@@ -809,22 +811,35 @@ canvas.addEventListener('pointerup', (e) => {
   app.select(id, { focus: false });
 });
 
-/* ─────────────── Giro sobre el punto (botón central) ───────────────
-   Como en SketchUp: con la rueda pulsada, la vista gira alrededor del punto
-   que había bajo el cursor al pulsar, y ese punto no se mueve de sitio en la
-   pantalla. OrbitControls solo sabe girar alrededor de su objetivo, así que
-   este gesto se lleva aquí: cámara y objetivo giran juntos, rígidamente, en
-   torno al punto (acimut sobre la vertical, inclinación sobre el eje
-   horizontal de la cámara), y OrbitControls se encuentra después una pose
-   coherente. El punto se busca contra el mapa de alturas del modelo, el
-   mismo que limita la cámara: sin triángulos ni BVH, en una fachada cae
-   donde el rayo entra en el volumen del edificio. Si no hay nada bajo el
-   cursor (cielo), se gira sobre el objetivo, como con el botón derecho. */
+/* ─────── Giro sobre el punto (central) y desplazamiento en pantalla (derecho) ───────
+   Central, como en SketchUp: con la rueda pulsada, la vista gira alrededor
+   del punto que había bajo el cursor al pulsar, y ese punto no se mueve de
+   sitio en la pantalla. OrbitControls solo sabe girar alrededor de su
+   objetivo, así que este gesto se lleva aquí: cámara y objetivo giran
+   juntos, rígidamente, en torno al punto (acimut sobre la vertical,
+   inclinación sobre el eje horizontal de la cámara), y OrbitControls se
+   encuentra después una pose coherente. El punto se busca contra el mapa de
+   alturas del modelo, el mismo que limita la cámara: sin triángulos ni BVH,
+   en una fachada cae donde el rayo entra en el volumen del edificio. Si no
+   hay nada bajo el cursor (cielo), se gira sobre el objetivo.
+   Derecho: la cámara se desplaza en el plano de la pantalla (lateral y
+   vertical) sin girar, para bajar por una fachada sin dejar de mirarla.
+   OrbitControls tiene un solo modo de desplazar, y el izquierdo ya lo usa
+   para moverse sobre el suelo, así que este también va a mano, con la misma
+   escala que OrbitControls (a la distancia del objetivo, una altura de
+   pantalla = 2·d·tan(fov/2)). Al soltar cualquiera de los dos, el objetivo
+   vuelve al eje de la vista (recentrarObjetivo). */
 const ARRIBA = new THREE.Vector3(0, 1, 0);
 const _giroQ = new THREE.Quaternion();
 const _giroEje = new THREE.Vector3();
 const _giroV = new THREE.Vector3();
+const _giroPos0 = new THREE.Vector3(), _giroObj0 = new THREE.Vector3();
+/* El círculo de visita (limitarAmbito) también vale con estos gestos: un
+   movimiento que sacara la cámara del círculo no se aplica, y así al soltar
+   no hay nada que recortar ni tirones. */
+const dentroDelAmbito = (p) => { const a = M?.ambito; return !a || Math.hypot(p.x - a.x, p.z - a.z) <= a.radio; };
 let giro = null; // { pivote, x, y, id } mientras se arrastra con el botón central
+let desplazamiento = null; // { x, y, id } mientras se arrastra con el botón derecho
 
 function puntoBajoCursor(cx, cy, alcance) {
   if (!M) return null;
@@ -849,6 +864,7 @@ function puntoBajoCursor(cx, cy, alcance) {
    límites de OrbitControls antes de aplicarla y el suelo no se traspasa. */
 function girarSobre(pivote, acimut, inclinacion) {
   const pos = camera.position, obj = controls.target;
+  _giroPos0.copy(pos); _giroObj0.copy(obj);
   _giroV.subVectors(pos, obj);
   const polar = Math.acos(THREE.MathUtils.clamp(_giroV.y / (_giroV.length() || 1), -1, 1));
   const polarNuevo = THREE.MathUtils.clamp(polar + inclinacion, controls.minPolarAngle + 0.01, controls.maxPolarAngle);
@@ -867,20 +883,42 @@ function girarSobre(pivote, acimut, inclinacion) {
     pos.sub(pivote).applyQuaternion(_giroQ).add(pivote);
     obj.sub(pivote).applyQuaternion(_giroQ).add(pivote);
   }
+  if (!dentroDelAmbito(pos)) { pos.copy(_giroPos0); obj.copy(_giroObj0); }
   camera.lookAt(obj);
 }
 
+/* Desplaza cámara y objetivo en el plano de la pantalla: dx, dy en píxeles. */
+function desplazarPantalla(dx, dy) {
+  const d = camera.position.distanceTo(controls.target);
+  const k = (2 * d * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * controls.panSpeed) / innerHeight;
+  camera.updateMatrix();
+  _giroEje.setFromMatrixColumn(camera.matrix, 0).multiplyScalar(-dx * k);       // derecha de la cámara
+  _giroV.setFromMatrixColumn(camera.matrix, 1).multiplyScalar(dy * k).add(_giroEje); // arriba de la cámara
+  if (!dentroDelAmbito(_giroPos0.copy(camera.position).add(_giroV))) return;
+  camera.position.add(_giroV);
+  controls.target.add(_giroV);
+}
+
 canvas.addEventListener('pointerdown', (e) => {
-  if (e.button !== 1 || e.pointerType !== 'mouse' || intro || !controls.enabled) return;
+  if ((e.button !== 1 && e.button !== 2) || e.pointerType !== 'mouse' || intro || !controls.enabled) return;
   e.preventDefault();
   camTween = null;
   autoRotate = false;
-  const alcance = Math.min(controls.maxDistance + 60, 600);
-  const pivote = puntoBajoCursor(e.clientX, e.clientY, alcance) || controls.target.clone();
-  giro = { pivote, x: e.clientX, y: e.clientY, id: e.pointerId };
+  if (e.button === 2) {
+    desplazamiento = { x: e.clientX, y: e.clientY, id: e.pointerId };
+  } else {
+    const alcance = Math.min(controls.maxDistance + 60, 600);
+    const pivote = puntoBajoCursor(e.clientX, e.clientY, alcance) || controls.target.clone();
+    giro = { pivote, x: e.clientX, y: e.clientY, id: e.pointerId };
+  }
   canvas.setPointerCapture(e.pointerId);
 });
 canvas.addEventListener('pointermove', (e) => {
+  if (desplazamiento && e.pointerId === desplazamiento.id) {
+    desplazarPantalla(e.clientX - desplazamiento.x, e.clientY - desplazamiento.y);
+    desplazamiento.x = e.clientX; desplazamiento.y = e.clientY;
+    return;
+  }
   if (!giro || e.pointerId !== giro.id) return;
   const dx = e.clientX - giro.x, dy = e.clientY - giro.y;
   giro.x = e.clientX; giro.y = e.clientY;
@@ -892,20 +930,29 @@ canvas.addEventListener('pointermove', (e) => {
    orbitando con el botón derecho) o, si en el centro solo hay cielo, a la
    profundidad del pivote. Nunca más cerca de minDistance, que OrbitControls
    empujaría la cámara hacia atrás. */
-function recentrarObjetivo(pivote) {
+function recentrarObjetivo(profundidadRespaldo) {
   const alcance = Math.min(controls.maxDistance + 60, 600);
   const centro = puntoBajoCursor(innerWidth / 2, innerHeight / 2, alcance);
   camera.getWorldDirection(_giroV);
-  let d = centro ? centro.distanceTo(camera.position) : camera.position.distanceTo(pivote);
-  d = Math.max(d, controls.minDistance + 0.5);
+  const dMin = controls.minDistance + 0.5;
+  const d = Math.max(centro ? centro.distanceTo(camera.position) : profundidadRespaldo, dMin);
   controls.target.copy(camera.position).addScaledVector(_giroV, d);
   camera.lookAt(controls.target);
+  /* El freno de limitarAmbito compara con el fotograma anterior: el objetivo
+     recién colocado es el nuevo punto de partida, aunque quede fuera del
+     círculo interior. */
+  const a = M?.ambito;
+  if (a) objetivoPrevio = { x: controls.target.x, z: controls.target.z, d: Math.hypot(controls.target.x - a.x, controls.target.z - a.z) };
 }
 const soltarGiro = (e) => {
-  if (!giro || e.pointerId !== giro.id) return;
-  const { pivote } = giro;
-  giro = null;
-  recentrarObjetivo(pivote);
+  if (giro && e.pointerId === giro.id) {
+    const { pivote } = giro;
+    giro = null;
+    recentrarObjetivo(camera.position.distanceTo(pivote));
+  } else if (desplazamiento && e.pointerId === desplazamiento.id) {
+    desplazamiento = null;
+    recentrarObjetivo(camera.position.distanceTo(controls.target));
+  }
 };
 canvas.addEventListener('pointerup', soltarGiro);
 canvas.addEventListener('pointercancel', soltarGiro);
@@ -977,12 +1024,17 @@ function limitarSuelo() {
      sí puede bajar por un patio interior, donde lo más alto es el pavimento
      del patio. Como un pájaro. */
   const yMin = M.sueloEn(p.x, p.z);
-  if (p.y < yMin) p.y = yMin;
-  /* Durante el giro sobre el punto (botón central) el objetivo va rígido
-     con la cámara: recortarlo aquí movería la vista y el punto se iría del
-     cursor. Al soltar, el objetivo vuelve al eje de la vista (ver
-     recentrarObjetivo) y estos recortes vuelven a aplicarse. */
-  if (giro) return;
+  if (p.y < yMin) {
+    /* Con el central o el derecho pulsados el objetivo va rígido con la
+       cámara: si esta toca el suelo, el objetivo sube lo mismo y la vista no
+       se tuerce. */
+    if (giro || desplazamiento) controls.target.y += yMin - p.y;
+    p.y = yMin;
+  }
+  /* Durante esos dos gestos el objetivo no se recorta: moverlo torcería la
+     vista y el punto se iría del cursor. Al soltar, el objetivo vuelve al eje
+     de la vista (recentrarObjetivo) y estos recortes vuelven a aplicarse. */
+  if (giro || desplazamiento) return;
   const yMinObjetivo = M.sueloEn(controls.target.x, controls.target.z) - 2.5;
   if (controls.target.y < yMinObjetivo) controls.target.y = yMinObjetivo;
   if (!intro) limitarAmbito(); // la entrada cinematográfica llega desde lejos a propósito
@@ -992,14 +1044,28 @@ function limitarSuelo() {
    ni el objetivo ni la cámara salen de un círculo alrededor del centro de la
    parcela. La distancia máxima se recalcula con la dirección de la vista para
    que la rueda deje de alejar justo en el borde, sin tirones. */
+let objetivoPrevio = null; // { x, z, d } del fotograma anterior, para el freno del objetivo
 function limitarAmbito() {
   const a = M?.ambito;
   if (!a) return;
   const t = controls.target;
   const dx = t.x - a.x, dz = t.z - a.z;
-  const d = Math.hypot(dx, dz);
+  let d = Math.hypot(dx, dz);
   const maxObjetivo = a.radio * 0.55;
-  if (d > maxObjetivo && d > 1e-6) { const k = maxObjetivo / d; t.x = a.x + dx * k; t.z = a.z + dz * k; }
+  /* El objetivo no se aleja del centro más de 0,55·radio. Antes se encajaba
+     en el círculo de golpe, y como la cámara se queda donde está, eso giraba
+     la vista. Ahora es un freno: si va a salir y además se aleja, cámara y
+     objetivo vuelven en planta a donde estaban en el fotograma anterior
+     (rígido, sin girar). Acercarse siempre se puede, así que tras un giro
+     sobre un punto lejano o un desplazamiento en pantalla el objetivo puede
+     quedar fuera sin que pase nada: solo no se podrá arrastrar más lejos. */
+  if (d > maxObjetivo && objetivoPrevio && d > objetivoPrevio.d + 1e-6) {
+    const sx = objetivoPrevio.x - t.x, sz = objetivoPrevio.z - t.z;
+    t.x += sx; t.z += sz;
+    camera.position.x += sx; camera.position.z += sz;
+    d = objetivoPrevio.d;
+  }
+  objetivoPrevio = { x: t.x, z: t.z, d };
   const vx = camera.position.x - t.x, vy = camera.position.y - t.y, vz = camera.position.z - t.z;
   const dist = Math.hypot(vx, vy, vz);
   if (dist < 1e-4) return;
