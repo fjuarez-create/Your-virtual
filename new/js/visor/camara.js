@@ -62,10 +62,14 @@ export function crearCamara(ctx) {
   const { camera, canvas } = ctx;
   const controles = new CameraControls(camera, canvas);
 
-  // ── Interacción según el contrato ──
-  controles.mouseButtons.left = CameraControls.ACTION.ROTATE;
-  controles.mouseButtons.right = CameraControls.ACTION.TRUCK;
-  controles.mouseButtons.middle = CameraControls.ACTION.DOLLY;
+  // ── Interacción según el contrato: los mismos controles que el visor clásico ──
+  /* Izquierdo desplaza sobre el suelo (SCREEN_PAN: lateral en pantalla,
+     vertical hacia delante, sin cambiar de altura), derecho orbita, rueda
+     acerca hacia el centro de la vista y la rueda pulsada orbita alrededor
+     del punto bajo el cursor, como en SketchUp (ver «Giro sobre el punto»). */
+  controles.mouseButtons.left = CameraControls.ACTION.SCREEN_PAN;
+  controles.mouseButtons.right = CameraControls.ACTION.ROTATE;
+  controles.mouseButtons.middle = CameraControls.ACTION.ROTATE;
   controles.mouseButtons.wheel = CameraControls.ACTION.DOLLY;
   controles.touches.one = CameraControls.ACTION.TOUCH_ROTATE;
   controles.touches.two = CameraControls.ACTION.TOUCH_DOLLY_TRUCK;
@@ -76,7 +80,7 @@ export function crearCamara(ctx) {
   controles.maxDistance = DIST_MAX;
   controles.minPolarAngle = POLAR_MIN;
   controles.maxPolarAngle = POLAR_MAX;
-  controles.dollyToCursor = true;   // la rueda acerca hacia donde se mira, como en cualquier visor CAD
+  controles.dollyToCursor = false;  // la rueda acerca hacia el centro de la vista, como en el visor clásico
   controles.dollySpeed = 0.8;
   controles.truckSpeed = 1.6;
 
@@ -119,6 +123,66 @@ export function crearCamara(ctx) {
      del usuario, nunca rotate()/setLookAt(), así que no corta vuelos propios. */
   controles.addEventListener('control', () => { ultimaEntrada = reloj; marcarMovimiento(); interrumpir(); });
   controles.addEventListener('controlend', () => { usuarioActivo = false; ultimaEntrada = reloj; });
+
+  // ── Giro sobre el punto (botón central), como en SketchUp ──
+  /* camera-controls sabe orbitar alrededor de un punto que no es el objetivo:
+     setOrbitPoint lleva el objetivo al punto y lo compensa con el
+     desplazamiento focal, de modo que la cámara ni se mueve ni gira. Al
+     pulsar la rueda se busca el punto bajo el cursor contra el mapa de
+     alturas (lo que hay bajo cada (x, z), sin la holgura de la cámara):
+     se avanza por el rayo hasta entrar en el volumen y se afina por
+     bisección; en una fachada cae donde el rayo entra en el edificio. Al
+     soltar, en cuanto la cámara se aquieta, el objetivo vuelve al eje de la
+     vista a la misma distancia sin mover la cámara: así los vuelos, la rueda
+     y los límites siguen viendo un objetivo normal, sin desplazamiento focal.
+     Sin nada bajo el cursor (cielo) se orbita sobre el objetivo, como con el
+     botón derecho. */
+  let superficieDe = null;
+  let pivoteSucio = false;
+  const _rayo = new THREE.Raycaster();
+  const _ndc = new THREE.Vector2();
+  const _piv = new THREE.Vector3(), _fo = new THREE.Vector3(), _vista = new THREE.Vector3();
+  function puntoBajoCursor(cx, cy, alcance) {
+    if (!superficieDe) return null;
+    const r = canvas.getBoundingClientRect();
+    _ndc.set(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1);
+    _rayo.setFromCamera(_ndc, camera);
+    const { origin: o, direction: d } = _rayo.ray;
+    const PASO = 0.5;
+    const dentro = (t) => { const s = superficieDe(o.x + d.x * t, o.z + d.z * t); return Number.isFinite(s) && o.y + d.y * t <= s; };
+    let previo = DIST_MIN + 0.5; // más cerca no se puede orbitar (minDistance)
+    for (let t = previo + PASO; t <= alcance; t += PASO) {
+      if (dentro(t)) {
+        let a = previo, b = t;
+        for (let i = 0; i < 8; i++) { const m = (a + b) / 2; if (dentro(m)) b = m; else a = m; }
+        return _piv.set(o.x + d.x * b, o.y + d.y * b, o.z + d.z * b);
+      }
+      previo = t;
+    }
+    return null;
+  }
+  function fijarPivote(cx, cy) {
+    const p = puntoBajoCursor(cx, cy, controles.maxDistance);
+    if (!p) return;
+    controles.setOrbitPoint(p.x, p.y, p.z);
+    pivoteSucio = true;
+  }
+  /* El objetivo vuelve al eje de la vista, a la distancia actual, sin mover la
+     cámara. Se parte de la posición REAL de la cámara (camera.position, que ya
+     lleva el desplazamiento focal), no de getPosition(), que devuelve la
+     posición sin él: con esa el objetivo quedaría fuera del eje y el
+     desplazamiento no volvería a cero. */
+  function reajustarPivote() {
+    pivoteSucio = false;
+    controles.getFocalOffset(_fo, false);
+    if (_fo.lengthSq() < 1e-6) return;
+    camera.updateMatrixWorld();
+    camera.getWorldDirection(_vista);
+    const c = camera.position, r = controles.distance;
+    controles.setOrbitPoint(c.x + _vista.x * r, c.y + _vista.y * r, c.z + _vista.z * r);
+  }
+  const alBotonCentral = (e) => { if (e.button === 1 && e.pointerType === 'mouse') fijarPivote(e.clientX, e.clientY); };
+  canvas.addEventListener('pointerdown', alBotonCentral, { capture: true }); // antes que camera-controls
   controles.addEventListener('update', marcarMovimiento);
 
   function interrumpir() {
@@ -141,6 +205,9 @@ export function crearCamara(ctx) {
 
   function iniciarVuelo({ posicion, objetivo }, { duracion = 1.6, arco = 0.35, deReposo = false } = {}) {
     interrumpir();
+    /* setLookAt fija cámara y objetivo: un desplazamiento focal pendiente
+       torcería la llegada. */
+    if (pivoteSucio) { controles.setFocalOffset(0, 0, 0, false); pivoteSucio = false; }
     const p1 = new THREE.Vector3().copy(posicion);
     const t1 = new THREE.Vector3().copy(objetivo);
     if (!(duracion > 0)) {
@@ -393,6 +460,7 @@ export function crearCamara(ctx) {
     if (controles.update(dt)) marcarMovimiento();
     if (!vuelo) limitarVolumen(); // durante un vuelo manda el guion de cámara
     if (usuarioActivo) marcarMovimiento();
+    if (pivoteSucio && !usuarioActivo && !vuelo && reloj - ultimoMovimiento >= QUIETA_TRAS) reajustarPivote();
 
     if (salto) {
       salto = false;
@@ -413,6 +481,7 @@ export function crearCamara(ctx) {
   }
 
   function destruir() {
+    canvas.removeEventListener('pointerdown', alBotonCentral, { capture: true });
     canvas.removeEventListener('pointerdown', alEntrada, opcionesEscucha);
     canvas.removeEventListener('wheel', alEntrada, opcionesEscucha);
     canvas.removeEventListener('touchstart', alEntrada, opcionesEscucha);
@@ -440,6 +509,12 @@ export function crearCamara(ctx) {
 
     /** Cota mínima de la cámara en cada punto: fn(x, z) → y mínima. */
     setSuelo(fn) { sueloDe = typeof fn === 'function' ? fn : null; },
+
+    /** Cota real de lo que hay bajo cada punto (sin holgura): fn(x, z) → y.
+        Es donde se apoya el giro sobre el punto (botón central). */
+    setSuperficie(fn) { superficieDe = typeof fn === 'function' ? fn : null; },
+    /** Punto de la escena bajo unas coordenadas de cliente, o null. */
+    puntoBajoCursor(cx, cy) { const p = puntoBajoCursor(cx, cy, controles.maxDistance); return p ? p.clone() : null; },
 
     /** Círculo (en planta) del que la cámara no sale: { x, z, radio } o null. */
     setAmbito(a) {

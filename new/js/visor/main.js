@@ -1245,6 +1245,7 @@ async function arrancar() {
      que le corresponde a cada punto. */
   construirAlturas();
   camara.setSuelo(sueloTerreno);
+  camara.setSuperficie((x, z) => sueloTerreno(x, z) - HOLGURA_SUELO); // giro sobre el punto
   camara.setAmbito({ x: centroParcelaXZ.x, z: centroParcelaXZ.y, radio: RADIO_VISION });
   actualizarVolumen();
 

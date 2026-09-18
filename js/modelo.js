@@ -833,6 +833,9 @@ export async function cargarModelo(scene, unitsById, { estadoDe = () => 'disponi
       }
       return y + HOLGURA_SUELO;
     },
+    /* Lo mismo sin la holgura: la cota real de lo que hay bajo (x, z), para
+       buscar el punto que hay bajo el cursor (giro sobre el punto). */
+    superficieEn(x, z) { return M.sueloEn(x, z) - HOLGURA_SUELO; },
 
     /* Círculo de visita, en coordenadas de escena. */
     ambito: { x: centroAmbito.x, z: centroAmbito.z, radio: RADIO_VISION },

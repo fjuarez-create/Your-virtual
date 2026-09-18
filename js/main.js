@@ -274,9 +274,12 @@ const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true;
 controls.dampingFactor = 0.06;
 // Gestos como Google Earth: 1 dedo mueve, 2 dedos zoom+giro;
-// ratón: izquierdo mueve, derecho gira, rueda zoom.
+// ratón: izquierdo mueve, derecho gira, rueda zoom. El botón central no se
+// le da a OrbitControls: gira sobre el punto bajo el cursor (ver «Giro sobre
+// el punto», más abajo), que es el gesto de SketchUp. Los dos visores llevan
+// los mismos controles.
 controls.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_ROTATE };
-controls.mouseButtons = { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
+controls.mouseButtons = { LEFT: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE };
 controls.screenSpacePanning = false; // el arrastre desliza sobre el plano del suelo
 controls.panSpeed = 1.15;
 controls.maxPolarAngle = Math.PI / 2 - 0.04;
@@ -461,6 +464,7 @@ app.ctl = controls;
 app.renderer = renderer;
 app.scene = scene;
 app.composer = composer;
+app.puntoBajoCursor = (x, y) => puntoBajoCursor(x, y, 600); // pruebas del giro sobre el punto
 
 /* ─────────────────────────── Tween de cámara ─────────────────────────── */
 let camTween = null;
@@ -793,7 +797,7 @@ canvas.addEventListener('pointermove', (e) => {
   pointerPx = { x: e.clientX, y: e.clientY };
 });
 canvas.addEventListener('pointerleave', () => { mouseActive = false; });
-canvas.addEventListener('pointerdown', (e) => { downPos = { x: e.clientX, y: e.clientY }; });
+canvas.addEventListener('pointerdown', (e) => { downPos = e.button === 0 ? { x: e.clientX, y: e.clientY } : null; });
 canvas.addEventListener('pointerup', (e) => {
   if (!downPos) return;
   const moved = Math.hypot(e.clientX - downPos.x, e.clientY - downPos.y);
@@ -804,6 +808,110 @@ canvas.addEventListener('pointerup', (e) => {
   const id = pickAt(e.clientX, e.clientY);
   app.select(id, { focus: false });
 });
+
+/* ─────────────── Giro sobre el punto (botón central) ───────────────
+   Como en SketchUp: con la rueda pulsada, la vista gira alrededor del punto
+   que había bajo el cursor al pulsar, y ese punto no se mueve de sitio en la
+   pantalla. OrbitControls solo sabe girar alrededor de su objetivo, así que
+   este gesto se lleva aquí: cámara y objetivo giran juntos, rígidamente, en
+   torno al punto (acimut sobre la vertical, inclinación sobre el eje
+   horizontal de la cámara), y OrbitControls se encuentra después una pose
+   coherente. El punto se busca contra el mapa de alturas del modelo, el
+   mismo que limita la cámara: sin triángulos ni BVH, en una fachada cae
+   donde el rayo entra en el volumen del edificio. Si no hay nada bajo el
+   cursor (cielo), se gira sobre el objetivo, como con el botón derecho. */
+const ARRIBA = new THREE.Vector3(0, 1, 0);
+const _giroQ = new THREE.Quaternion();
+const _giroEje = new THREE.Vector3();
+const _giroV = new THREE.Vector3();
+let giro = null; // { pivote, x, y, id } mientras se arrastra con el botón central
+
+function puntoBajoCursor(cx, cy, alcance) {
+  if (!M) return null;
+  raycaster.setFromCamera(new THREE.Vector2((cx / innerWidth) * 2 - 1, -(cy / innerHeight) * 2 + 1), camera);
+  const { origin: o, direction: d } = raycaster.ray;
+  const PASO = 0.5;
+  const dentro = (t) => o.y + d.y * t <= M.superficieEn(o.x + d.x * t, o.z + d.z * t);
+  let previo = 2; // los dos primeros metros no cuentan: la cámara puede rozar el límite
+  for (let t = previo + PASO; t <= alcance; t += PASO) {
+    if (dentro(t)) {
+      let a = previo, b = t;
+      for (let i = 0; i < 8; i++) { const m = (a + b) / 2; if (dentro(m)) b = m; else a = m; }
+      return new THREE.Vector3(o.x + d.x * b, o.y + d.y * b, o.z + d.z * b);
+    }
+    previo = t;
+  }
+  return null;
+}
+
+/* Gira cámara y objetivo en torno a `pivote`. La inclinación cambia el ángulo
+   polar cámara-objetivo exactamente en `inclinacion`, así que se recorta a los
+   límites de OrbitControls antes de aplicarla y el suelo no se traspasa. */
+function girarSobre(pivote, acimut, inclinacion) {
+  const pos = camera.position, obj = controls.target;
+  _giroV.subVectors(pos, obj);
+  const polar = Math.acos(THREE.MathUtils.clamp(_giroV.y / (_giroV.length() || 1), -1, 1));
+  const polarNuevo = THREE.MathUtils.clamp(polar + inclinacion, controls.minPolarAngle + 0.01, controls.maxPolarAngle);
+  inclinacion = polarNuevo - polar;
+  _giroQ.setFromAxisAngle(ARRIBA, acimut);
+  pos.sub(pivote).applyQuaternion(_giroQ).add(pivote);
+  obj.sub(pivote).applyQuaternion(_giroQ).add(pivote);
+  /* El eje de inclinación es la derecha de la cámara YA GIRADA en acimut:
+     lookAt + updateMatrix aquí mismo, porque puede haber varios movimientos
+     por fotograma y la matriz sería la del fotograma anterior. */
+  camera.lookAt(obj);
+  camera.updateMatrix();
+  _giroEje.setFromMatrixColumn(camera.matrix, 0).setY(0).normalize(); // horizontal, a la derecha de la cámara
+  if (_giroEje.lengthSq() > 0.5) {
+    _giroQ.setFromAxisAngle(_giroEje, inclinacion);
+    pos.sub(pivote).applyQuaternion(_giroQ).add(pivote);
+    obj.sub(pivote).applyQuaternion(_giroQ).add(pivote);
+  }
+  camera.lookAt(obj);
+}
+
+canvas.addEventListener('pointerdown', (e) => {
+  if (e.button !== 1 || e.pointerType !== 'mouse' || intro || !controls.enabled) return;
+  e.preventDefault();
+  camTween = null;
+  autoRotate = false;
+  const alcance = Math.min(controls.maxDistance + 60, 600);
+  const pivote = puntoBajoCursor(e.clientX, e.clientY, alcance) || controls.target.clone();
+  giro = { pivote, x: e.clientX, y: e.clientY, id: e.pointerId };
+  canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener('pointermove', (e) => {
+  if (!giro || e.pointerId !== giro.id) return;
+  const dx = e.clientX - giro.x, dy = e.clientY - giro.y;
+  giro.x = e.clientX; giro.y = e.clientY;
+  // misma sensibilidad que OrbitControls: una altura de pantalla = una vuelta
+  girarSobre(giro.pivote, (-2 * Math.PI * dx) / innerHeight, (-2 * Math.PI * dy) / innerHeight);
+});
+/* Al soltar, el objetivo vuelve al eje de la vista sin mover la cámara: sobre
+   la superficie que hay en el centro de la pantalla (lo natural para seguir
+   orbitando con el botón derecho) o, si en el centro solo hay cielo, a la
+   profundidad del pivote. Nunca más cerca de minDistance, que OrbitControls
+   empujaría la cámara hacia atrás. */
+function recentrarObjetivo(pivote) {
+  const alcance = Math.min(controls.maxDistance + 60, 600);
+  const centro = puntoBajoCursor(innerWidth / 2, innerHeight / 2, alcance);
+  camera.getWorldDirection(_giroV);
+  let d = centro ? centro.distanceTo(camera.position) : camera.position.distanceTo(pivote);
+  d = Math.max(d, controls.minDistance + 0.5);
+  controls.target.copy(camera.position).addScaledVector(_giroV, d);
+  camera.lookAt(controls.target);
+}
+const soltarGiro = (e) => {
+  if (!giro || e.pointerId !== giro.id) return;
+  const { pivote } = giro;
+  giro = null;
+  recentrarObjetivo(pivote);
+};
+canvas.addEventListener('pointerup', soltarGiro);
+canvas.addEventListener('pointercancel', soltarGiro);
+/* El botón central no debe activar el autodesplazamiento del navegador. */
+canvas.addEventListener('mousedown', (e) => { if (e.button === 1) e.preventDefault(); });
+canvas.addEventListener('auxclick', (e) => { if (e.button === 1) e.preventDefault(); });
 
 /* Una vivienda es señalable si pasa los filtros, no está vendida y, con una
    planta aislada, es de esa planta (las demás no se ven). */
@@ -870,6 +978,11 @@ function limitarSuelo() {
      del patio. Como un pájaro. */
   const yMin = M.sueloEn(p.x, p.z);
   if (p.y < yMin) p.y = yMin;
+  /* Durante el giro sobre el punto (botón central) el objetivo va rígido
+     con la cámara: recortarlo aquí movería la vista y el punto se iría del
+     cursor. Al soltar, el objetivo vuelve al eje de la vista (ver
+     recentrarObjetivo) y estos recortes vuelven a aplicarse. */
+  if (giro) return;
   const yMinObjetivo = M.sueloEn(controls.target.x, controls.target.z) - 2.5;
   if (controls.target.y < yMinObjetivo) controls.target.y = yMinObjetivo;
   if (!intro) limitarAmbito(); // la entrada cinematográfica llega desde lejos a propósito
