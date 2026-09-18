@@ -155,7 +155,7 @@ def resto():
     """Los que aún no hemos repasado con Fran, con la escala corregida."""
     pam = _cargar("MI_Apolo_Pamesa")
     if pam is not None:
-        _vec(pam, "ColorBase", 1.18, 1.08, 0.92)
+        _vec(pam, "ColorBase", 1.02, 0.93, 0.79)
         _esc(pam, "Rugosidad", 0.68)
         _esc(pam, "Tiling", tiling_para(1.2))   # pieza de 120x60
         _esc(pam, "TilingV", 2.0)               # la mitad de alta que ancha

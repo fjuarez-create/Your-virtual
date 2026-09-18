@@ -38,7 +38,9 @@
   "APOLO___Pavimento_interior_neutro",
   "APOLO___Pavimento_interior_neutro1",
   "APOLO___Tarima_exterior_greige",
-  "APOLO___Tarima_exterior_greige1"
+  "APOLO___Tarima_exterior_greige1",
+  "EXT_Ceramica_arena",
+  "EXT_Ceramica_grafito"
  ],
  "MI_Apolo_Aluminio": [
   "APOLO_V6___Aluminio_plata_grata",
