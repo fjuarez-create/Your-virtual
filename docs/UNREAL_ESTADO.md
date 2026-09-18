@@ -145,6 +145,63 @@ Para traer una versión nueva del modelo:
    hace con los materiales. Debería ir todo en la misma herramienta del
    paso 4 del orden de trabajo.
 
+### Las UV de este modelo van en PULGADAS
+
+El dato que explica por qué todo lo texturizado salía plano. Mirando el
+`UV_Tiling` que Datasmith puso en los materiales que no hemos tocado:
+**0,0254 en la gravilla de cubierta**, que es exactamente una pulgada en
+metros. O sea que las UV que trae SketchUp están en pulgadas.
+
+Con `Tiling = 1`, la textura repetía **cada 2,54 cm**: por eso el travertino
+parecía un rayado fino y el monocapa un color liso. La fórmula:
+
+```
+Tiling = 0.0254 / (metros que debe medir una repetición)
+```
+
+### La definición de materiales: `apolo_materiales.py`
+
+`tools/apolo_materiales.py`, desplegado en `Content/Python/`. Aplica de una
+pasada los valores acordados con Fran, y es **idempotente**: se ejecuta las
+veces que haga falta.
+
+```python
+import apolo_materiales; apolo_materiales.aplicar()
+```
+
+Se hizo como script y no por el MCP por una razón práctica: **el editor se
+cayó dos veces** (18-sep, 16:42 y 17:08) aplicándolo por ahí. Reapadrinar una
+instancia a un maestro nuevo dispara una compilación de shaders larga sobre
+~1.000 actores, y la llamada MCP se corta antes de que termine. Desde la
+consola del editor no hay límite de tiempo y aguanta. **Para cualquier cosa
+que recompile shaders en masa, script; el MCP para consultar y para cambios
+pequeños.**
+
+Lo acordado hasta ahora, y el porqué de cada cosa:
+
+| Material | Valores | Razón |
+|---|---|---|
+| **Travertino** | Maestro `M_Apolo_PiedraRollo`. Tiras de 1,20 m, rollo de 8 m, variación 0,5. `ColorBase` (0,74 · 0,755 · 0,77), rugosidad 0,55 | Es travertino **flexible en rollo** (tipo Slate-Lite): **ninguna junta horizontal**, solo verticales cada 1,20 m, confirmado. Gris frío, no marfil cálido |
+| **Aluminio** | `Metalico` **1**, `ColorBase` 0,52, rugosidad 0,52 | Anodizado, no lacado: con `Metallic` 0 parecía PVC gris. Rompe a propósito la regla de «Metallic 0 en todo» |
+| **Monocapa** | `ColorBase` (0,72 · 0,705 · 0,675), rugosidad 0,80, repetición cada 2 m | Blanco roto cálido. No sube de 0,72 porque con Lumen una fachada así en blanco puro lava la escena entera |
+| **Vidrio** | Opacidad 0,09 de frente, 0,55 en rasante, tinte verde-azulado | Baja emisividad con Fresnel: es lo que separa un vidrio de una lámina de plástico gris |
+
+### El maestro de piedra en rollo: `M_Apolo_PiedraRollo`
+
+26 nodos. Resuelve el problema de que un `Tiling` normal repite en las dos
+direcciones y deja juntas horizontales:
+
+- Escala en **metros de verdad**, con `AnchoTira_m` y `AltoRollo_m`,
+  convirtiendo desde pulgadas.
+- `AltoRollo_m` a 8 m: más alto que cualquier paño del zócalo, así que la
+  textura **nunca llega a repetir en vertical**.
+- **Variación por tira**: saca el índice de tira con un `Floor` sobre la U ya
+  escalada, lo pasa por un hash (`sin`·constante·`frac`) y desplaza la V de
+  esa tira. Así ninguna tira sale con el dibujo de su vecina.
+
+Parámetros: `AnchoTira_m`, `AltoRollo_m`, `VariacionEntreTiras`, `Rugosidad`,
+`Metalico`, `ColorBase`, `Textura`.
+
 ### La herramienta que repone: `apolo_reponer.py`
 
 Escrita el 18-sep. Vive en `tools/apolo_reponer.py` del repositorio y
