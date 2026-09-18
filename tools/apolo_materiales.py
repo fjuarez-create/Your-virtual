@@ -120,8 +120,8 @@ def monocapa():
     inst = _cargar("MI_Apolo_Monocapa")
     if inst is None:
         return False
-    _vec(inst, "ColorBase", 0.72, 0.705, 0.675)
-    _esc(inst, "Rugosidad", 0.80)
+    _vec(inst, "ColorBase", 1.16, 1.155, 1.14)
+    _esc(inst, "Rugosidad", 0.82)
     _esc(inst, "Metalico", 0.0)
     _esc(inst, "Tiling", tiling_para(2.0))   # grano cada 2 m
     _esc(inst, "TilingV", 1.0)
@@ -139,11 +139,12 @@ def vidrio():
     inst = _cargar("MI_Apolo_Vidrio")
     if inst is None:
         return False
-    _vec(inst, "ColorBase", 0.016, 0.032, 0.030)
-    _esc(inst, "Opacidad", 0.09)
-    _esc(inst, "OpacidadBorde", 0.55)
+    _vec(inst, "ColorBase", 0.045, 0.075, 0.095)
+    _esc(inst, "Opacidad", 0.42)
+    _esc(inst, "OpacidadBorde", 0.92)
+    _esc(inst, "FresnelPotencia", 2.0)
     _esc(inst, "Rugosidad", 0.0)
-    _esc(inst, "Especular", 0.5)
+    _esc(inst, "Especular", 1.0)
     _esc(inst, "Metalico", 0.0)
     unreal.EditorAssetLibrary.save_loaded_asset(inst, False)
     _log("vidrio listo: baja emisividad con Fresnel")
