@@ -1264,6 +1264,10 @@ function construirAlturas() {
 /* ── Carga ── */
 const progreso = { luz: 0, edificio: 0, entorno: 0 };
 const PESOS = { luz: 0.1, edificio: 0.45, entorno: 0.45 };
+/* Las descargas llenan la barra solo hasta aquí: el resto es preparar la
+   escena (alturas, cortes, sombras, cámara) y pintar la primera imagen. El 1
+   lo da únicamente 'listo', que es lo que retira la portada. */
+const PROGRESO_DESCARGA = 0.96;
 /* Bytes de los dos ficheros de la primera imagen, para que la portada enseñe
    megas reales y no solo un tanto por ciento. Solo se anuncian cuando se
    conocen los dos totales; hasta entonces van a 0 y la portada calla. */
@@ -1278,7 +1282,7 @@ function avanzar(etapa, valor, cargados = 0, total = 0) {
   if (bytes[etapa] && total > 0) { bytes[etapa].total = total; bytes[etapa].cargados = Math.max(bytes[etapa].cargados, Math.min(cargados, total)); }
   if (bytes[etapa] && valor >= 1 && bytes[etapa].total > 0) bytes[etapa].cargados = bytes[etapa].total;
   const suma = Object.keys(PESOS).reduce((s, k) => s + PESOS[k] * progreso[k], 0);
-  emitir('carga', { progreso: Math.min(1, suma), etapa: valor >= 1 ? etapa : `${etapa}…`, ...bytesCarga() });
+  emitir('carga', { progreso: Math.min(PROGRESO_DESCARGA, suma), etapa: valor >= 1 ? etapa : `${etapa}…`, ...bytesCarga() });
 }
 
 async function arrancar() {
@@ -1294,6 +1298,7 @@ async function arrancar() {
       .catch((err) => { console.warn('[apolo] sin entorno:', err); avanzar('entorno', 1); return null; }),
   ]);
   edificio = ed;
+  emitir('carga', { progreso: 0.97, etapa: 'escena…', ...bytesCarga() });
   entorno = ent;
   edificio.caja.getCenter(centroEdificio);
   apolo.units = edificio.units;

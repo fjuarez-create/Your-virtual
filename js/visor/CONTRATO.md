@@ -284,7 +284,10 @@ que `data/availability.json` traiga otra cosa.
 Hasta que la primera imagen está completa (cielo, edificio y entorno) el
 lienzo lo tapa `#portada`, que shell.js pinta con el evento `carga`: barra
 con `progreso` y, cuando se conocen los totales, `cargados` / `total` en
-bytes de los dos GLB. El motor no anuncia `progreso: 1` hasta haber pintado
+bytes de los dos GLB. Las descargas llenan la barra hasta 0,96
+(`PROGRESO_DESCARGA`); después llega `escena…` (preparar alturas, cortes,
+sombras y cámara) y solo `listo` trae `progreso: 1`, que es lo que retira
+la portada (shell.js mira la etapa, no la cifra). El motor no anuncia `progreso: 1` hasta haber pintado
 dos fotogramas con la escena completa en la pose de entrada
 (`esperarFotogramas`): así el fundido nunca destapa una imagen a medias, por
 lento que sea el dispositivo. Con `progreso: 1` la portada se funde (0,9 s)

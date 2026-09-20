@@ -181,7 +181,7 @@ cuandoHayaApp((app) => {
   const barra = $('#progresoBarra');
   const cargando = $('#cargando');
   const textoCarga = $('#cargandoTexto');
-  const ETAPAS = { luz: 'Cielo listo…', edificio: 'Edificio cargado…', entorno: 'Entorno cargado…', listo: '', error: 'No se pudo cargar el visor' };
+  const ETAPAS = { luz: 'Cielo listo…', edificio: 'Edificio cargado…', entorno: 'Entorno cargado…', 'escena…': 'Preparando la escena…', listo: '', error: 'No se pudo cargar el visor' };
   let cargado = false;
   function pintarBarra(fraccion, clase) {
     progreso.className = clase;
@@ -196,7 +196,8 @@ cuandoHayaApp((app) => {
   const TEXTO_PORTADA = {
     'inicio': 'Preparando el visor', 'luz…': 'Preparando el cielo', 'luz': 'Cielo listo',
     'edificio…': 'Descargando el edificio', 'edificio': 'Edificio cargado',
-    'entorno…': 'Descargando el entorno', 'entorno': 'Entorno cargado', 'listo': 'Entrando',
+    'entorno…': 'Descargando el entorno', 'entorno': 'Entorno cargado',
+    'escena…': 'Preparando la escena', 'listo': 'Entrando',
   };
   const mb = (b) => (b / 1048576).toLocaleString('es-ES', { maximumFractionDigits: 1 });
   function pintarPortada({ progreso: p, etapa, error, cargados, total }) {
@@ -205,7 +206,10 @@ cuandoHayaApp((app) => {
     if (error) { portada.classList.add('error'); portadaEtapa.textContent = 'No se pudo cargar el visor. Recarga la página.'; portadaMB.textContent = ''; return; }
     if (TEXTO_PORTADA[etapa]) portadaEtapa.textContent = TEXTO_PORTADA[etapa];
     portadaMB.textContent = total > 0 ? `${mb(Math.min(cargados, total))} / ${mb(total)} MB` : '';
-    if (p >= 1) {
+    /* Se retira con 'listo', no con la barra llena: la barra llega al 96 %
+       al acabar las descargas y el motor aún tiene que preparar la escena y
+       pintar la primera imagen; hasta entonces nada se destapa. */
+    if (etapa === 'listo') {
       portada.classList.add('fuera');
       setTimeout(() => { portada.hidden = true; }, 1000);
     }

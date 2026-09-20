@@ -816,7 +816,7 @@ objetivo ${c.objetivo.join(", ")}` : "la cámara no está lista";
     const barra = $("#progresoBarra");
     const cargando = $("#cargando");
     const textoCarga = $("#cargandoTexto");
-    const ETAPAS = { luz: "Cielo listo…", edificio: "Edificio cargado…", entorno: "Entorno cargado…", listo: "", error: "No se pudo cargar el visor" };
+    const ETAPAS = { luz: "Cielo listo…", edificio: "Edificio cargado…", entorno: "Entorno cargado…", "escena…": "Preparando la escena…", listo: "", error: "No se pudo cargar el visor" };
     let cargado = false;
     function pintarBarra(fraccion, clase) {
       progreso.className = clase;
@@ -835,6 +835,7 @@ objetivo ${c.objetivo.join(", ")}` : "la cámara no está lista";
       "edificio": "Edificio cargado",
       "entorno…": "Descargando el entorno",
       "entorno": "Entorno cargado",
+      "escena…": "Preparando la escena",
       "listo": "Entrando"
     };
     const mb = (b) => (b / 1048576).toLocaleString("es-ES", { maximumFractionDigits: 1 });
@@ -849,7 +850,7 @@ objetivo ${c.objetivo.join(", ")}` : "la cámara no está lista";
       }
       if (TEXTO_PORTADA[etapa]) portadaEtapa.textContent = TEXTO_PORTADA[etapa];
       portadaMB.textContent = total > 0 ? `${mb(Math.min(cargados, total))} / ${mb(total)} MB` : "";
-      if (p >= 1) {
+      if (etapa === "listo") {
         portada.classList.add("fuera");
         setTimeout(() => {
           portada.hidden = true;
