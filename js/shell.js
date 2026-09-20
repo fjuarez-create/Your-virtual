@@ -187,7 +187,42 @@ cuandoHayaApp((app) => {
     progreso.className = clase;
     barra.style.transform = `scaleX(${Math.max(0, Math.min(1, fraccion))})`;
   }
-  app.on('carga', ({ progreso: p, etapa, error, secundaria }) => {
+  // ── Portada de carga y entrada ──
+  const portada = $('#portada');
+  const portadaBarra = $('#portadaBarra');
+  const portadaEtapa = $('#portadaEtapa');
+  const portadaMB = $('#portadaMB');
+  const saltar = $('#saltarEntrada');
+  const TEXTO_PORTADA = {
+    'inicio': 'Preparando el visor', 'luz…': 'Preparando el cielo', 'luz': 'Cielo listo',
+    'edificio…': 'Descargando el edificio', 'edificio': 'Edificio cargado',
+    'entorno…': 'Descargando el entorno', 'entorno': 'Entorno cargado', 'listo': 'Entrando',
+  };
+  const mb = (b) => (b / 1048576).toLocaleString('es-ES', { maximumFractionDigits: 1 });
+  function pintarPortada({ progreso: p, etapa, error, cargados, total }) {
+    if (!portada || portada.hidden) return;
+    portadaBarra.style.transform = `scaleX(${Math.max(0, Math.min(1, p))})`;
+    if (error) { portada.classList.add('error'); portadaEtapa.textContent = 'No se pudo cargar el visor. Recarga la página.'; portadaMB.textContent = ''; return; }
+    if (TEXTO_PORTADA[etapa]) portadaEtapa.textContent = TEXTO_PORTADA[etapa];
+    portadaMB.textContent = total > 0 ? `${mb(Math.min(cargados, total))} / ${mb(total)} MB` : '';
+    if (p >= 1) {
+      portada.classList.add('fuera');
+      setTimeout(() => { portada.hidden = true; }, 1000);
+    }
+  }
+  /* La entrada cinematográfica la anuncia el motor; el botón la salta. Sale
+     con un pequeño retraso para no pisar al aviso de carga mientras se va. */
+  let asomarSaltar = null;
+  app.on('entrada', ({ activa }) => {
+    clearTimeout(asomarSaltar);
+    if (!saltar) return;
+    if (activa) asomarSaltar = setTimeout(() => { saltar.hidden = false; }, 700);
+    else saltar.hidden = true;
+  });
+  saltar?.addEventListener('click', () => { saltar.hidden = true; app.saltarEntrada?.(); });
+
+  app.on('carga', ({ progreso: p, etapa, error, secundaria, cargados, total }) => {
+    if (!secundaria) pintarPortada({ progreso: p, etapa, error, cargados, total });
     /* Mobiliario y plantas cortadas llegan después de la primera imagen: la
        línea fina los sigue, sin volver a enseñar el aviso de carga. */
     if (secundaria) {

@@ -176,6 +176,7 @@ Object.assign(apolo, {
   },
 
   setCalidad(tier) { return tier; },
+  saltarEntrada() { /* la entrada la decide la aplicación de Unreal */ },
 });
 
 /* units.json trae la planta con la nomenclatura del listado de precios. */

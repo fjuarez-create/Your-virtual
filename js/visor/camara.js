@@ -50,6 +50,7 @@ const SUELO = 1.5;                             // altura mínima de la cámara (
 const POLAR_MAX = THREE.MathUtils.degToRad(88); // no mirar desde debajo del horizonte
 const POLAR_MIN = 0.02;                        // evita la singularidad cenital
 const DIST_MIN = 3, DIST_MAX = 320;
+const REENTRADA_SUAVE_M = 5;     // m fuera del ámbito a partir de los que se entra amortiguado
 const QUIETA_TRAS = 0.3;                       // s sin movimiento para declarar reposo
 const grados = THREE.MathUtils.degToRad;
 
@@ -229,7 +230,12 @@ export function crearCamara(ctx) {
       marcarMovimiento();
       return Promise.resolve(true);
     }
-    const p0 = camera.position.clone();
+    /* Origen: el estado ACTUAL de los controles, no camera.position. Si
+       justo antes hubo un salto (duración 0), camera.position sigue siendo
+       la de antes hasta el próximo update(), y el vuelo saldría desde ahí
+       en vez de desde donde se acaba de colocar la cámara (la entrada
+       arrancaba desde la posición inicial en vez de desde lejos). */
+    const p0 = controles.getPosition(new THREE.Vector3(), false);
     const t0 = controles.getTarget(new THREE.Vector3(), false);
     const desplazamiento = _tmp.subVectors(p1, p0);
     const distancia = desplazamiento.length();
@@ -299,6 +305,7 @@ export function crearCamara(ctx) {
      fotograma con la dirección de la vista, de modo que la rueda deja de
      alejar justo en el borde en vez de dar un tirón. */
   let ambito = null;
+  let reentrando = false;        // volviendo al ámbito con amortiguación tras un vuelo cortado fuera
   function sueloEn(x, z) {
     if (!sueloDe) return SUELO;
     const v = sueloDe(x, z);
@@ -469,8 +476,16 @@ export function crearCamara(ctx) {
       limitarObjetivo();
       const max = distanciaMaximaAmbito();
       controles.maxDistance = max;
-      // maxDistance solo recorta lo que venga después; si ya está fuera, se entra
-      if (controles.distance > max + 0.01) controles.dollyTo(max, false);
+      /* maxDistance solo recorta lo que venga después; si ya está fuera, se
+         entra. Un gesto junto al borde deja la cámara fuera por muy poco y se
+         entra en seco, como un tope. Un exceso grande solo se da al cortar un
+         vuelo que iba por fuera del círculo (la entrada): ahí se vuelve con la
+         amortiguación de los controles, sin salto, hasta estar dentro. */
+      const exceso = controles.distance - max;
+      if (exceso > 0.01) {
+        if (exceso > REENTRADA_SUAVE_M) reentrando = true;
+        controles.dollyTo(max, reentrando);
+      } else reentrando = false;
     }
     if (controles.update(dt)) marcarMovimiento();
     if (!vuelo) limitarVolumen(); // durante un vuelo manda el guion de cámara

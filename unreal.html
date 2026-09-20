@@ -69,6 +69,23 @@ window.APOLO_DATOS = {"units":[{"id":"101","planta":"Baja","dorm":2,"orientacion
 <div id="progreso" aria-hidden="true"><div id="progresoBarra"></div></div>
 <div id="cargando" role="status" aria-live="polite"><span class="punto"></span><span id="cargandoTexto">Preparando el edificio…</span></div>
 
+<!-- Portada de carga: tapa el lienzo hasta que la primera imagen está
+     completa (cielo, edificio, entorno y encuadre), con el progreso real en
+     megas, y se funde cuando arranca la entrada. Así nunca se ve el edificio
+     a medias ni el salto de cámara. -->
+<div id="portada" role="status" aria-live="polite">
+  <div class="portada-centro">
+    <img class="portada-logo" src="assets/logo_unik.png" alt="UNIK">
+    <div class="portada-titulo">SERENEA</div>
+    <div class="portada-sub">Edificio Apolo · Las Huesas, Telde</div>
+    <div class="portada-barra" aria-hidden="true"><div id="portadaBarra"></div></div>
+    <div class="portada-etapa"><span id="portadaEtapa">Preparando el visor</span><span id="portadaMB"></span></div>
+  </div>
+  <div class="portada-pie">Showroom virtual</div>
+</div>
+<!-- Entrada cinematográfica: la cámara llega volando hasta el conjunto. -->
+<button id="saltarEntrada" type="button" hidden>Saltar la entrada</button>
+
 <!-- ═══════════════════ Carcasa ═══════════════════ -->
 <nav id="rail" aria-label="Herramientas">
   <div id="brand"><img src="assets/logo_unik.png" alt="UNIK"></div>
@@ -489,6 +506,8 @@ window.APOLO_DATOS = {"units":[{"id":"101","planta":"Baja","dorm":2,"orientacion
     },
     setCalidad(tier) {
       return tier;
+    },
+    saltarEntrada() {
     }
   });
   var PLANTA_DEL_LISTADO = { "Baja": "baja", "1ª": "p1", "2ª": "p2", "Ático": "atico" };
@@ -803,7 +822,56 @@ objetivo ${c.objetivo.join(", ")}` : "la cámara no está lista";
       progreso.className = clase;
       barra.style.transform = `scaleX(${Math.max(0, Math.min(1, fraccion))})`;
     }
-    app.on("carga", ({ progreso: p, etapa, error, secundaria }) => {
+    const portada = $("#portada");
+    const portadaBarra = $("#portadaBarra");
+    const portadaEtapa = $("#portadaEtapa");
+    const portadaMB = $("#portadaMB");
+    const saltar = $("#saltarEntrada");
+    const TEXTO_PORTADA = {
+      "inicio": "Preparando el visor",
+      "luz…": "Preparando el cielo",
+      "luz": "Cielo listo",
+      "edificio…": "Descargando el edificio",
+      "edificio": "Edificio cargado",
+      "entorno…": "Descargando el entorno",
+      "entorno": "Entorno cargado",
+      "listo": "Entrando"
+    };
+    const mb = (b) => (b / 1048576).toLocaleString("es-ES", { maximumFractionDigits: 1 });
+    function pintarPortada({ progreso: p, etapa, error, cargados, total }) {
+      if (!portada || portada.hidden) return;
+      portadaBarra.style.transform = `scaleX(${Math.max(0, Math.min(1, p))})`;
+      if (error) {
+        portada.classList.add("error");
+        portadaEtapa.textContent = "No se pudo cargar el visor. Recarga la página.";
+        portadaMB.textContent = "";
+        return;
+      }
+      if (TEXTO_PORTADA[etapa]) portadaEtapa.textContent = TEXTO_PORTADA[etapa];
+      portadaMB.textContent = total > 0 ? `${mb(Math.min(cargados, total))} / ${mb(total)} MB` : "";
+      if (p >= 1) {
+        portada.classList.add("fuera");
+        setTimeout(() => {
+          portada.hidden = true;
+        }, 1e3);
+      }
+    }
+    let asomarSaltar = null;
+    app.on("entrada", ({ activa }) => {
+      clearTimeout(asomarSaltar);
+      if (!saltar) return;
+      if (activa) asomarSaltar = setTimeout(() => {
+        saltar.hidden = false;
+      }, 700);
+      else saltar.hidden = true;
+    });
+    saltar == null ? void 0 : saltar.addEventListener("click", () => {
+      var _a2;
+      saltar.hidden = true;
+      (_a2 = app.saltarEntrada) == null ? void 0 : _a2.call(app);
+    });
+    app.on("carga", ({ progreso: p, etapa, error, secundaria, cargados, total }) => {
+      if (!secundaria) pintarPortada({ progreso: p, etapa, error, cargados, total });
       if (secundaria) {
         if (!cargado) return;
         pintarBarra(p, "carga");

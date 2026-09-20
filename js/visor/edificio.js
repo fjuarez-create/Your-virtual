@@ -222,7 +222,7 @@ function cargadorGLB() {
 }
 function cargarGLB(url, onProgreso) {
   return new Promise((ok, ko) => cargadorGLB().load(url, ok, (xhr) => {
-    if (onProgreso && xhr.lengthComputable && xhr.total > 0) onProgreso(xhr.loaded / xhr.total);
+    if (onProgreso && xhr.lengthComputable && xhr.total > 0) onProgreso(xhr.loaded / xhr.total, xhr.loaded, xhr.total);
   }, ko));
 }
 

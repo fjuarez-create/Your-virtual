@@ -462,6 +462,102 @@ html.motor-unreal.simulador body { background: radial-gradient(ellipse at 60% 40
 #progreso.bvh #progresoBarra { background: rgba(255, 255, 255, 0.35); }
 #progreso.trazado #progresoBarra { background: rgba(255, 255, 255, 0.6); }
 
+/* ─────────────────────────── Portada de carga ─────────────────────────── */
+
+#portada {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(ellipse at 50% 42%, #1c232b 0%, #0b0f13 72%);
+  color: var(--tinta);
+  transition: opacity 0.9s ease;
+}
+#portada.fuera { opacity: 0; pointer-events: none; }
+#portada.error .portada-barra { display: none; }
+#portada.error .portada-etapa { color: rgba(255, 150, 150, 0.9); text-transform: none; letter-spacing: 0.02em; }
+.portada-centro {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 0 24px;
+  text-align: center;
+}
+.portada-logo {
+  width: 132px;
+  height: auto;
+  margin-bottom: 18px;
+  animation: respira 2.6s ease-in-out infinite;
+}
+@keyframes respira { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+.portada-titulo { font-size: 26px; font-weight: 300; letter-spacing: 0.42em; margin-left: 0.42em; }
+.portada-sub { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--tinta-baja); }
+.portada-barra {
+  width: min(280px, 70vw);
+  height: 2px;
+  margin-top: 26px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.14);
+  overflow: hidden;
+}
+#portadaBarra {
+  width: 100%;
+  height: 100%;
+  transform-origin: left center;
+  transform: scaleX(0);
+  background: rgba(255, 255, 255, 0.9);
+  transition: transform 0.35s ease;
+}
+.portada-etapa {
+  display: flex;
+  gap: 12px;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--tinta-baja);
+  min-height: 14px;
+}
+#portadaMB:empty { display: none; }
+.portada-pie {
+  position: absolute;
+  bottom: 26px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+/* Botón para saltar la entrada cinematográfica: mismo cristal que el aviso de carga. */
+#saltarEntrada {
+  position: absolute;
+  left: 50%;
+  bottom: 26px;
+  transform: translateX(-50%);
+  padding: 9px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--linea);
+  background: var(--glass-alta);
+  backdrop-filter: blur(16px) saturate(1.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  color: var(--tinta);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  z-index: 35;
+  transition: opacity 0.4s ease, background 0.18s ease;
+}
+#saltarEntrada:hover { background: rgba(16, 20, 24, 0.62); }
+#saltarEntrada[hidden] { display: none; }
+@media (max-width: 760px) { #saltarEntrada { bottom: 84px; } }
+
 /* Aviso discreto de carga, centrado abajo, que se retira en cuanto hay imagen. */
 #cargando {
   position: absolute;

@@ -333,7 +333,7 @@ function encenderEntorno(fraccionNoche) {
 const cargadorGLB = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
 function cargarGLB(url, onProgreso) {
   return new Promise((ok, ko) => cargadorGLB.load(url, ok, (xhr) => {
-    if (onProgreso && xhr.lengthComputable && xhr.total > 0) onProgreso(xhr.loaded / xhr.total);
+    if (onProgreso && xhr.lengthComputable && xhr.total > 0) onProgreso(xhr.loaded / xhr.total, xhr.loaded, xhr.total);
   }, ko));
 }
 
@@ -723,6 +723,38 @@ function volarAPose(pose, duracion) {
   const posicion = dir.clone().multiplyScalar(distanciaDentroDelAmbito(objetivo, dir, pose.distancia * retiro)).add(objetivo);
   return camara.volarA({ posicion, objetivo }, { duracion, arco: 0.3 });
 }
+
+/* ── Entrada cinematográfica ──
+   Mientras la portada tapa el lienzo, la cámara espera lejos y alta, en un
+   acimut algo girado respecto al conjunto. Al estar la primera imagen, la
+   portada se funde y la cámara vuela hasta la pose de conjunto en
+   ENTRADA.duracion s, con el arco lateral de volarA: llega rodeando la
+   parcela. Un gesto del usuario la corta donde esté (toma el control, como
+   con cualquier vuelo); el botón «Saltar la entrada» la termina deprisa. Los
+   límites de ámbito y volumen no actúan durante un vuelo, así que puede
+   arrancar fuera del círculo de visita. */
+const ENTRADA = { duracion: 5.5, factorDistancia: 2.4, elevacion: 30, giro: 28 };
+let entradaActiva = false;
+function poseLejana() {
+  const pose = POSE.conjunto;
+  const aspecto = camera.aspect || ASPECTO_POSE;
+  const retiro = Math.min(RETIRO_MAX, Math.max(1, ASPECTO_POSE / aspecto));
+  const polar = THREE.MathUtils.degToRad(90 - ENTRADA.elevacion);
+  const az = THREE.MathUtils.degToRad(pose.azimut + ENTRADA.giro);
+  const objetivo = new THREE.Vector3(...pose.objetivo);
+  const dir = new THREE.Vector3(Math.sin(polar) * Math.sin(az), Math.cos(polar), Math.sin(polar) * Math.cos(az));
+  return { posicion: dir.multiplyScalar(pose.distancia * retiro * ENTRADA.factorDistancia).add(objetivo), objetivo };
+}
+function colocarParaEntrada() { camara.volarA(poseLejana(), { duracion: 0 }); }
+async function entrada() {
+  entradaActiva = true;
+  emitir('entrada', { activa: true });
+  await volarAPose(POSE.conjunto, ENTRADA.duracion);
+  entradaActiva = false;
+  emitir('entrada', { activa: false });
+}
+/* Termina la entrada en menos de un segundo. Fuera de la entrada no hace nada. */
+apolo.saltarEntrada = () => { if (entradaActiva) volarAPose(POSE.conjunto, 0.9); };
 
 /* La corrección por pantalla estrecha no puede sacar la cámara del ámbito:
    antes de alejarse se corta la distancia en el borde del círculo. */
@@ -1147,6 +1179,7 @@ function vigilarFluidez(ms) {
 ctx.on('geometria', ensuciarSombras);
 ctx.on('calidad', ensuciarSombras);
 
+let fotogramas = 0; // pintados por el bucle; ver esperarFotogramas()
 function fotograma() {
   requestAnimationFrame(fotograma);
   const dt = Math.min(reloj.getDelta(), 0.1);
@@ -1186,6 +1219,15 @@ function fotograma() {
   const pintado = trazador.update(dt, { quieta });
   if (!pintado) post.render(dt);
   informarTrazado(pintado);
+  fotogramas++;
+}
+/* Resuelve cuando el bucle ha pintado n fotogramas más. La portada no se
+   retira hasta que la primera imagen en la pose de entrada está de verdad en
+   pantalla: en un móvil lento ese primer fotograma con toda la escena puede
+   tardar más que el fundido, y asomaría la imagen previa a medio cargar. */
+function esperarFotogramas(n = 2) {
+  const meta = fotogramas + n;
+  return new Promise((ok) => { (function mirar() { if (fotogramas >= meta) ok(); else requestAnimationFrame(mirar); })(); });
 }
 function informarTrazado(pintando) {
   const progreso = Math.round(trazador.progreso * 100) / 100;
@@ -1222,10 +1264,21 @@ function construirAlturas() {
 /* ── Carga ── */
 const progreso = { luz: 0, edificio: 0, entorno: 0 };
 const PESOS = { luz: 0.1, edificio: 0.45, entorno: 0.45 };
-function avanzar(etapa, valor) {
+/* Bytes de los dos ficheros de la primera imagen, para que la portada enseñe
+   megas reales y no solo un tanto por ciento. Solo se anuncian cuando se
+   conocen los dos totales; hasta entonces van a 0 y la portada calla. */
+const bytes = { edificio: { cargados: 0, total: 0 }, entorno: { cargados: 0, total: 0 } };
+function bytesCarga() {
+  const b = Object.values(bytes);
+  if (!b.every((x) => x.total > 0)) return { cargados: 0, total: 0 };
+  return { cargados: b.reduce((s, x) => s + x.cargados, 0), total: b.reduce((s, x) => s + x.total, 0) };
+}
+function avanzar(etapa, valor, cargados = 0, total = 0) {
   progreso[etapa] = Math.max(progreso[etapa], valor);
-  const total = Object.keys(PESOS).reduce((s, k) => s + PESOS[k] * progreso[k], 0);
-  emitir('carga', { progreso: Math.min(1, total), etapa: valor >= 1 ? etapa : `${etapa}…` });
+  if (bytes[etapa] && total > 0) { bytes[etapa].total = total; bytes[etapa].cargados = Math.max(bytes[etapa].cargados, Math.min(cargados, total)); }
+  if (bytes[etapa] && valor >= 1 && bytes[etapa].total > 0) bytes[etapa].cargados = bytes[etapa].total;
+  const suma = Object.keys(PESOS).reduce((s, k) => s + PESOS[k] * progreso[k], 0);
+  emitir('carga', { progreso: Math.min(1, suma), etapa: valor >= 1 ? etapa : `${etapa}…`, ...bytesCarga() });
 }
 
 async function arrancar() {
@@ -1236,8 +1289,8 @@ async function arrancar() {
   avanzar('luz', 1);
 
   const [ed, ent] = await Promise.all([
-    cargarEdificio(ctx, ACTIVE_BUILDING, { luz, texturaMax: TEXTURA_MAX, onProgreso: (f) => avanzar('edificio', f) }).then((e) => { avanzar('edificio', 1); return e; }),
-    cargarEntorno((f) => avanzar('entorno', f)).then((e) => { avanzar('entorno', 1); return e; })
+    cargarEdificio(ctx, ACTIVE_BUILDING, { luz, texturaMax: TEXTURA_MAX, onProgreso: (f, l, t) => avanzar('edificio', f, l, t) }).then((e) => { avanzar('edificio', 1); return e; }),
+    cargarEntorno((f, l, t) => avanzar('entorno', f, l, t)).then((e) => { avanzar('entorno', 1); return e; })
       .catch((err) => { console.warn('[apolo] sin entorno:', err); avanzar('entorno', 1); return null; }),
   ]);
   edificio = ed;
@@ -1276,17 +1329,19 @@ async function arrancar() {
   actualizarReflectantes();
   repintar();
 
-  // la cámara toma el objetivo antes del primer fotograma con edificio
-  encuadrarVista('conjunto', { duracion: 0 });
+  // la cámara espera lejos, tras la portada; la entrada la trae al conjunto
+  colocarParaEntrada();
   ajustarSombras();
   camara.reposoTras(REPOSO_S);
   cargando = false;
+  await esperarFotogramas(2); // la primera imagen, ya en pantalla, antes de retirar la portada
   apolo.cargado = true;
   apolo.tiempos.primeraImagenMs = Math.round(performance.now() - t0);
   apolo.tiempos.vidrio = edificio.vidrio;
-  emitir('carga', { progreso: 1, etapa: 'listo' });
+  emitir('carga', { progreso: 1, etapa: 'listo', ...bytesCarga() });
   emitir('planta', apolo.floor);
   emitir('momento', apolo.momento);
+  entrada();
 
   /* Segundo plano tras la primera imagen: mobiliario y variantes cortadas
      (se registran en cortes según llegan), y los otros tres cielos. */

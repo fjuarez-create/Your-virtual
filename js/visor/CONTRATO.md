@@ -264,7 +264,9 @@ apolo.select(id) / apolo.selected / apolo.hover
 apolo.units, apolo.unitsById, apolo.estados, apolo.estadoDe(id)
 apolo.setCalidad(tier)
 apolo.on(evento, fn)           // 'planta', 'momento', 'seleccion', 'reposo',
-                               // 'carga' ({ progreso })
+                               // 'carga' ({ progreso, etapa, cargados, total }),
+                               // 'entrada' ({ activa })
+apolo.saltarEntrada()          // termina la entrada cinematográfica (ver abajo)
 apolo.enter()                  // compatibilidad con shell.js
 ```
 
@@ -276,6 +278,27 @@ Bucle: `camara.update` → `luz.update` → `cortes.update` → hover/picking
 Estado de demostración: 70 % disponibles y 30 % vendidas, determinista (cada
 tercera vivienda por orden de id, empezando por la segunda, es vendida) salvo
 que `data/availability.json` traiga otra cosa.
+
+## Portada y entrada (añadido el 20-sep-2026)
+
+Hasta que la primera imagen está completa (cielo, edificio y entorno) el
+lienzo lo tapa `#portada`, que shell.js pinta con el evento `carga`: barra
+con `progreso` y, cuando se conocen los totales, `cargados` / `total` en
+bytes de los dos GLB. El motor no anuncia `progreso: 1` hasta haber pintado
+dos fotogramas con la escena completa en la pose de entrada
+(`esperarFotogramas`): así el fundido nunca destapa una imagen a medias, por
+lento que sea el dispositivo. Con `progreso: 1` la portada se funde (0,9 s)
+y el motor arranca la **entrada**: la cámara esperaba lejos y alta
+(`poseLejana`) y vuela hasta la pose de conjunto en 5,5 s. Mientras dura,
+el motor emite `entrada { activa: true }` y el shell enseña «Saltar la
+entrada», que llama a `apolo.saltarEntrada()` (vuelo de 0,9 s al conjunto).
+Un gesto del usuario la corta donde esté, como cualquier vuelo; si la
+cámara queda fuera del círculo de visita (la entrada arranca fuera), vuelve
+al borde con la amortiguación de los controles, no de un salto
+(`REENTRADA_SUAVE_M` en camara.js). Así nunca se ve el edificio a medias ni
+el salto de cámara del arranque. El puente de
+Unreal retira la portada en `listo` y no vuela: la cámara la lleva la
+aplicación.
 
 ## Dos motores, una interfaz (añadido el 17-sep-2026)
 

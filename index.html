@@ -111,6 +111,23 @@
 <div id="progreso" aria-hidden="true"><div id="progresoBarra"></div></div>
 <div id="cargando" role="status" aria-live="polite"><span class="punto"></span><span id="cargandoTexto">Preparando el edificio…</span></div>
 
+<!-- Portada de carga: tapa el lienzo hasta que la primera imagen está
+     completa (cielo, edificio, entorno y encuadre), con el progreso real en
+     megas, y se funde cuando arranca la entrada. Así nunca se ve el edificio
+     a medias ni el salto de cámara. -->
+<div id="portada" role="status" aria-live="polite">
+  <div class="portada-centro">
+    <img class="portada-logo" src="assets/logo_unik.png" alt="UNIK">
+    <div class="portada-titulo">SERENEA</div>
+    <div class="portada-sub">Edificio Apolo · Las Huesas, Telde</div>
+    <div class="portada-barra" aria-hidden="true"><div id="portadaBarra"></div></div>
+    <div class="portada-etapa"><span id="portadaEtapa">Preparando el visor</span><span id="portadaMB"></span></div>
+  </div>
+  <div class="portada-pie">Showroom virtual</div>
+</div>
+<!-- Entrada cinematográfica: la cámara llega volando hasta el conjunto. -->
+<button id="saltarEntrada" type="button" hidden>Saltar la entrada</button>
+
 <!-- ═══════════════════ Carcasa ═══════════════════ -->
 <nav id="rail" aria-label="Herramientas">
   <div id="brand"><img src="assets/logo_unik.png" alt="UNIK"></div>
