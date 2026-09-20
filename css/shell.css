@@ -520,7 +520,6 @@ html.motor-unreal.simulador body { background: radial-gradient(ellipse at 60% 40
   color: var(--tinta-baja);
   min-height: 14px;
 }
-#portadaMB:empty { display: none; }
 .portada-pie {
   position: absolute;
   bottom: 26px;

@@ -70,8 +70,8 @@ window.APOLO_DATOS = {"units":[{"id":"101","planta":"Baja","dorm":2,"orientacion
 <div id="cargando" role="status" aria-live="polite"><span class="punto"></span><span id="cargandoTexto">Preparando el edificio…</span></div>
 
 <!-- Portada de carga: tapa el lienzo hasta que la primera imagen está
-     completa (cielo, edificio, entorno y encuadre), con el progreso real en
-     megas, y se funde cuando arranca la entrada. Así nunca se ve el edificio
+     completa (cielo, edificio, entorno y encuadre), con la barra de progreso
+     y lo que se está haciendo, y se funde cuando arranca la entrada. Así nunca se ve el edificio
      a medias ni el salto de cámara. -->
 <div id="portada" role="status" aria-live="polite">
   <div class="portada-centro">
@@ -79,7 +79,7 @@ window.APOLO_DATOS = {"units":[{"id":"101","planta":"Baja","dorm":2,"orientacion
     <div class="portada-titulo">SERENEA</div>
     <div class="portada-sub">Edificio Apolo · Las Huesas, Telde</div>
     <div class="portada-barra" aria-hidden="true"><div id="portadaBarra"></div></div>
-    <div class="portada-etapa"><span id="portadaEtapa">Preparando el visor</span><span id="portadaMB"></span></div>
+    <div class="portada-etapa"><span id="portadaEtapa">Preparando el visor</span></div>
   </div>
   <div class="portada-pie">Showroom virtual</div>
 </div>
@@ -816,7 +816,7 @@ objetivo ${c.objetivo.join(", ")}` : "la cámara no está lista";
     const barra = $("#progresoBarra");
     const cargando = $("#cargando");
     const textoCarga = $("#cargandoTexto");
-    const ETAPAS = { luz: "Cielo listo…", edificio: "Edificio cargado…", entorno: "Entorno cargado…", "escena…": "Preparando la escena…", listo: "", error: "No se pudo cargar el visor" };
+    const ETAPAS = { luz: "Cielo listo…", "edificio…": "Cargando el edificio…", edificio: "Edificio cargado…", "entorno…": "Cargando el entorno…", entorno: "Entorno cargado…", "escena…": "Preparando la escena…", listo: "", error: "No se pudo cargar el visor" };
     let cargado = false;
     function pintarBarra(fraccion, clase) {
       progreso.className = clase;
@@ -825,31 +825,27 @@ objetivo ${c.objetivo.join(", ")}` : "la cámara no está lista";
     const portada = $("#portada");
     const portadaBarra = $("#portadaBarra");
     const portadaEtapa = $("#portadaEtapa");
-    const portadaMB = $("#portadaMB");
     const saltar = $("#saltarEntrada");
     const TEXTO_PORTADA = {
       "inicio": "Preparando el visor",
       "luz…": "Preparando el cielo",
       "luz": "Cielo listo",
-      "edificio…": "Descargando el edificio",
+      "edificio…": "Cargando el edificio",
       "edificio": "Edificio cargado",
-      "entorno…": "Descargando el entorno",
+      "entorno…": "Cargando el entorno",
       "entorno": "Entorno cargado",
       "escena…": "Preparando la escena",
       "listo": "Entrando"
     };
-    const mb = (b) => (b / 1048576).toLocaleString("es-ES", { maximumFractionDigits: 1 });
-    function pintarPortada({ progreso: p, etapa, error, cargados, total }) {
+    function pintarPortada({ progreso: p, etapa, error }) {
       if (!portada || portada.hidden) return;
       portadaBarra.style.transform = `scaleX(${Math.max(0, Math.min(1, p))})`;
       if (error) {
         portada.classList.add("error");
         portadaEtapa.textContent = "No se pudo cargar el visor. Recarga la página.";
-        portadaMB.textContent = "";
         return;
       }
       if (TEXTO_PORTADA[etapa]) portadaEtapa.textContent = TEXTO_PORTADA[etapa];
-      portadaMB.textContent = total > 0 ? `${mb(Math.min(cargados, total))} / ${mb(total)} MB` : "";
       if (etapa === "listo") {
         portada.classList.add("fuera");
         setTimeout(() => {
@@ -871,8 +867,8 @@ objetivo ${c.objetivo.join(", ")}` : "la cámara no está lista";
       saltar.hidden = true;
       (_a2 = app.saltarEntrada) == null ? void 0 : _a2.call(app);
     });
-    app.on("carga", ({ progreso: p, etapa, error, secundaria, cargados, total }) => {
-      if (!secundaria) pintarPortada({ progreso: p, etapa, error, cargados, total });
+    app.on("carga", ({ progreso: p, etapa, error, secundaria }) => {
+      if (!secundaria) pintarPortada({ progreso: p, etapa, error });
       if (secundaria) {
         if (!cargado) return;
         pintarBarra(p, "carga");

@@ -283,8 +283,10 @@ que `data/availability.json` traiga otra cosa.
 
 Hasta que la primera imagen está completa (cielo, edificio y entorno) el
 lienzo lo tapa `#portada`, que shell.js pinta con el evento `carga`: barra
-con `progreso` y, cuando se conocen los totales, `cargados` / `total` en
-bytes de los dos GLB. Las descargas llenan la barra hasta 0,96
+con `progreso` y el texto de lo que se está haciendo (la `etapa` en curso
+lleva «…»; sin él, ha terminado). El evento trae también `cargados` /
+`total` en bytes de los dos GLB, pero la portada no enseña cifras: Fran
+no quiere megas, solo la actividad. Las descargas llenan la barra hasta 0,96
 (`PROGRESO_DESCARGA`); después llega `escena…` (preparar alturas, cortes,
 sombras y cámara) y solo `listo` trae `progreso: 1`, que es lo que retira
 la portada (shell.js mira la etapa, no la cifra). El motor no anuncia `progreso: 1` hasta haber pintado

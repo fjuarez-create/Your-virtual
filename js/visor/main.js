@@ -1282,8 +1282,16 @@ function avanzar(etapa, valor, cargados = 0, total = 0) {
   if (bytes[etapa] && total > 0) { bytes[etapa].total = total; bytes[etapa].cargados = Math.max(bytes[etapa].cargados, Math.min(cargados, total)); }
   if (bytes[etapa] && valor >= 1 && bytes[etapa].total > 0) bytes[etapa].cargados = bytes[etapa].total;
   const suma = Object.keys(PESOS).reduce((s, k) => s + PESOS[k] * progreso[k], 0);
-  emitir('carga', { progreso: Math.min(PROGRESO_DESCARGA, suma), etapa: valor >= 1 ? etapa : `${etapa}…`, ...bytesCarga() });
+  /* La etapa anunciada es lo que sigue en curso (con «…»), no lo que acaba
+     de terminar: con dos descargas en paralelo, al acabar una la portada
+     pasa a decir que carga la otra. Sin nada en curso, la que ha terminado. */
+  const enCurso = Object.keys(PESOS).find((k) => progreso[k] < 1);
+  emitir('carga', { progreso: Math.min(PROGRESO_DESCARGA, suma), etapa: enCurso ? `${enCurso}…` : etapa, ...bytesCarga() });
 }
+/* El progreso de red llega a 1 con el fichero descargado pero aún sin
+   parsear (el GLB se decodifica después, y en un móvil son segundos): hasta
+   que el loader resuelve, la etapa sigue en curso. */
+const CASI = 0.995;
 
 async function arrancar() {
   const t0 = performance.now();
@@ -1293,8 +1301,8 @@ async function arrancar() {
   avanzar('luz', 1);
 
   const [ed, ent] = await Promise.all([
-    cargarEdificio(ctx, ACTIVE_BUILDING, { luz, texturaMax: TEXTURA_MAX, onProgreso: (f, l, t) => avanzar('edificio', f, l, t) }).then((e) => { avanzar('edificio', 1); return e; }),
-    cargarEntorno((f, l, t) => avanzar('entorno', f, l, t)).then((e) => { avanzar('entorno', 1); return e; })
+    cargarEdificio(ctx, ACTIVE_BUILDING, { luz, texturaMax: TEXTURA_MAX, onProgreso: (f, l, t) => avanzar('edificio', Math.min(CASI, f), l, t) }).then((e) => { avanzar('edificio', 1); return e; }),
+    cargarEntorno((f, l, t) => avanzar('entorno', Math.min(CASI, f), l, t)).then((e) => { avanzar('entorno', 1); return e; })
       .catch((err) => { console.warn('[apolo] sin entorno:', err); avanzar('entorno', 1); return null; }),
   ]);
   edificio = ed;

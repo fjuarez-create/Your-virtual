@@ -181,7 +181,7 @@ cuandoHayaApp((app) => {
   const barra = $('#progresoBarra');
   const cargando = $('#cargando');
   const textoCarga = $('#cargandoTexto');
-  const ETAPAS = { luz: 'Cielo listo…', edificio: 'Edificio cargado…', entorno: 'Entorno cargado…', 'escena…': 'Preparando la escena…', listo: '', error: 'No se pudo cargar el visor' };
+  const ETAPAS = { luz: 'Cielo listo…', 'edificio…': 'Cargando el edificio…', edificio: 'Edificio cargado…', 'entorno…': 'Cargando el entorno…', entorno: 'Entorno cargado…', 'escena…': 'Preparando la escena…', listo: '', error: 'No se pudo cargar el visor' };
   let cargado = false;
   function pintarBarra(fraccion, clase) {
     progreso.className = clase;
@@ -191,21 +191,20 @@ cuandoHayaApp((app) => {
   const portada = $('#portada');
   const portadaBarra = $('#portadaBarra');
   const portadaEtapa = $('#portadaEtapa');
-  const portadaMB = $('#portadaMB');
   const saltar = $('#saltarEntrada');
+  /* Solo lo que se está haciendo (Fran no quiere cifras de megas): el motor
+     manda la etapa en curso con «…» y sin él cuando ha terminado. */
   const TEXTO_PORTADA = {
     'inicio': 'Preparando el visor', 'luz…': 'Preparando el cielo', 'luz': 'Cielo listo',
-    'edificio…': 'Descargando el edificio', 'edificio': 'Edificio cargado',
-    'entorno…': 'Descargando el entorno', 'entorno': 'Entorno cargado',
+    'edificio…': 'Cargando el edificio', 'edificio': 'Edificio cargado',
+    'entorno…': 'Cargando el entorno', 'entorno': 'Entorno cargado',
     'escena…': 'Preparando la escena', 'listo': 'Entrando',
   };
-  const mb = (b) => (b / 1048576).toLocaleString('es-ES', { maximumFractionDigits: 1 });
-  function pintarPortada({ progreso: p, etapa, error, cargados, total }) {
+  function pintarPortada({ progreso: p, etapa, error }) {
     if (!portada || portada.hidden) return;
     portadaBarra.style.transform = `scaleX(${Math.max(0, Math.min(1, p))})`;
-    if (error) { portada.classList.add('error'); portadaEtapa.textContent = 'No se pudo cargar el visor. Recarga la página.'; portadaMB.textContent = ''; return; }
+    if (error) { portada.classList.add('error'); portadaEtapa.textContent = 'No se pudo cargar el visor. Recarga la página.'; return; }
     if (TEXTO_PORTADA[etapa]) portadaEtapa.textContent = TEXTO_PORTADA[etapa];
-    portadaMB.textContent = total > 0 ? `${mb(Math.min(cargados, total))} / ${mb(total)} MB` : '';
     /* Se retira con 'listo', no con la barra llena: la barra llega al 96 %
        al acabar las descargas y el motor aún tiene que preparar la escena y
        pintar la primera imagen; hasta entonces nada se destapa. */
@@ -225,8 +224,8 @@ cuandoHayaApp((app) => {
   });
   saltar?.addEventListener('click', () => { saltar.hidden = true; app.saltarEntrada?.(); });
 
-  app.on('carga', ({ progreso: p, etapa, error, secundaria, cargados, total }) => {
-    if (!secundaria) pintarPortada({ progreso: p, etapa, error, cargados, total });
+  app.on('carga', ({ progreso: p, etapa, error, secundaria }) => {
+    if (!secundaria) pintarPortada({ progreso: p, etapa, error });
     /* Mobiliario y plantas cortadas llegan después de la primera imagen: la
        línea fina los sigue, sin volver a enseñar el aviso de carga. */
     if (secundaria) {
