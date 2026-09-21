@@ -334,6 +334,209 @@ for (const grupo of nodosExtra) {
   for (const [k, v] of [...familias].sort((a, b) => b[1].tris - a[1].tris).slice(0, 40)) console.log(`   ${Math.round(v.tris).toString().padStart(8)}  ${String(v.n).padStart(4)}x  ${v.cat.padEnd(11)} ${k.slice(0, 80)}`);
 }
 
+/* ─────────────────────────── 2c. Suelos ─────────────────────────── */
+/* Parquet en todas las viviendas y porcelánico en las zonas comunes (Fran,
+   21-sep-2026). El modelo trae el suelo de cada vivienda en DOS capas: el
+   vinilo (parquet) a la cota del suelo y una tarima 10 cm más abajo; en 27
+   viviendas falta la capa de vinilo (y asoma la tarima, u otro roble en los
+   áticos) y en 12 áticos el acabado es "V4_Roble_claro_detalle". Los
+   pasillos y portales de las plantas altas van en vinilo cuando deben llevar
+   el porcelánico de las zonas comunes de la planta baja (Tile_Interior_05).
+
+   El polígono de cada vivienda (data/viviendas_serenea.json) es exactamente
+   su interior (área = superficie), así que:
+   · Capa superior de acabado que cubra ≥ 85 % del polígono (entre −15 y
+     +25 cm de su cota): si no es vinilo, sus caras pasan a vinilo.
+   · Sin ninguna capa que lo cubra (suelos a trozos): se quitan los acabados
+     que haya entre −5 y +25 cm y se genera un suelo de vinilo con el
+     polígono a la cota de la vivienda.
+   · Fuera de las viviendas (a más de 15 cm del polígono) y dentro de los
+     cajones, el vinilo a la cota del suelo de la planta pasa a porcelánico.
+   Las UV de lo cambiado se rehacen planas con la escala del material
+   destino, medida en sus propias caras. */
+const RUTA_VIVIENDAS = path.join(RAIZ, 'data', 'viviendas_serenea.json');
+const MAT_PARQUET = 'APOLO V3 | Vinilo roble natural claro';
+const MAT_PORCELANICO = 'Tile_Interior_05_1K';
+/* El roble de los áticos llega como "V6_Aticos_Acabado_interior_roble" (tras
+   dedup() en el fichero final se llama "V4_Roble_claro_detalle"). */
+const ES_ACABADO_SUELO = /Vinilo|Tarima|V4_Roble|Acabado_interior|Monocapa|Pavimento interior|Tile_Interior/i;
+const ES_MADERA_INTERIOR = /Vinilo|V4_Roble|Acabado_interior/i; // lo que en zonas comunes pasa a porcelánico
+const ES_PARQUET = /Vinilo/i;
+if (fs.existsSync(RUTA_VIVIENDAS)) ajustarSuelos(JSON.parse(fs.readFileSync(RUTA_VIVIENDAS, 'utf8')).viviendas);
+else log('AVISO: sin data/viviendas_serenea.json, no se ajustan los suelos');
+
+function ajustarSuelos(viviendas) {
+  const dentroPoli = (poli, x, z) => { let d = false; for (let i = 0, j = poli.length - 1; i < poli.length; j = i++) { const [xi, zi] = poli[i], [xj, zj] = poli[j]; if (((zi > z) !== (zj > z)) && (x < (xj - xi) * (z - zi) / (zj - zi) + xi)) d = !d; } return d; };
+  const areaPoli = (poli) => { let a = 0; for (let i = 0, n = poli.length; i < n; i++) { const p = poli[i], q = poli[(i + 1) % n]; a += p[0] * q[1] - q[0] * p[1]; } return Math.abs(a / 2); };
+  const distPoli = (poli, x, z) => { let m = Infinity; for (let i = 0, n = poli.length; i < n; i++) { const [ax, az] = poli[i], [bx, bz] = poli[(i + 1) % n]; const ex = bx - ax, ez = bz - az; const L2 = ex * ex + ez * ez || 1e-12; const t = Math.max(0, Math.min(1, ((x - ax) * ex + (z - az) * ez) / L2)); m = Math.min(m, Math.hypot(x - ax - ex * t, z - az - ez * t)); } return m; };
+  const vertice = (g, vi, out) => { const P = g.attributes.position; out[0] = P.getX(vi); out[1] = P.getY(vi); out[2] = P.getZ(vi); return out; };
+  const indice = (g, t, c) => (g.index ? g.index.getX(3 * t + c) : 3 * t + c);
+  /* Índice de caras horizontales hacia arriba de acabado de suelo, con su pieza. */
+  const caras = [];
+  const a = [0, 0, 0], b = [0, 0, 0], c = [0, 0, 0];
+  for (const p of piezas) {
+    if (p.cat !== 'envolvente' || !ES_ACABADO_SUELO.test(p.material?.getName() || '')) continue;
+    const g = p.geometria; const n = trisDe(g);
+    for (let t = 0; t < n; t++) {
+      vertice(g, indice(g, t, 0), a); vertice(g, indice(g, t, 1), b); vertice(g, indice(g, t, 2), c);
+      const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
+      const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx; const L = Math.hypot(nx, ny, nz); if (L < 1e-9 || ny / L < 0.95) continue;
+      caras.push({ p, t, area: L / 2, x: (a[0] + b[0] + c[0]) / 3, y: (a[1] + b[1] + c[1]) / 3, z: (a[2] + b[2] + c[2]) / 3, mat: p.material.getName() });
+    }
+  }
+  /* Escala UV plana de cada material destino: afín uv = A·[x, z] + b,
+     resuelta en una de sus caras horizontales grandes. */
+  function transformacionUV(nombre) {
+    const cand = caras.filter((f) => f.mat === nombre && f.p.geometria.attributes.uv).sort((x, y) => y.area - x.area);
+    for (const f of cand.slice(0, 20)) {
+      const g = f.p.geometria; const U = g.attributes.uv; const i0 = indice(g, f.t, 0), i1 = indice(g, f.t, 1), i2 = indice(g, f.t, 2);
+      const P0 = vertice(g, i0, [0, 0, 0]), P1 = vertice(g, i1, [0, 0, 0]), P2 = vertice(g, i2, [0, 0, 0]);
+      const dx1 = P1[0] - P0[0], dz1 = P1[2] - P0[2], dx2 = P2[0] - P0[0], dz2 = P2[2] - P0[2];
+      const det = dx1 * dz2 - dx2 * dz1; if (Math.abs(det) < 1e-6) continue;
+      const du1 = U.getX(i1) - U.getX(i0), dv1 = U.getY(i1) - U.getY(i0), du2 = U.getX(i2) - U.getX(i0), dv2 = U.getY(i2) - U.getY(i0);
+      // A = [[a11, a12], [a21, a22]] con u = a11·x + a12·z, v = a21·x + a22·z
+      const a11 = (du1 * dz2 - du2 * dz1) / det, a12 = (dx1 * du2 - dx2 * du1) / det;
+      const a21 = (dv1 * dz2 - dv2 * dz1) / det, a22 = (dx1 * dv2 - dx2 * dv1) / det;
+      const escala = Math.hypot(a11, a21);
+      if (!Number.isFinite(escala) || escala < 1e-4 || escala > 100) continue;
+      return { a11, a12, a21, a22 };
+    }
+    return { a11: 0.5, a12: 0, a21: 0, a22: 0.5 }; // respaldo: 2 m por repetición
+  }
+  const uvDe = { [MAT_PARQUET]: transformacionUV(MAT_PARQUET), [MAT_PORCELANICO]: transformacionUV(MAT_PORCELANICO) };
+  const uvPlana = (T, x, z) => [T.a11 * x + T.a12 * z, T.a21 * x + T.a22 * z];
+  const matParquet = materialPorNombre(doc, MAT_PARQUET), matPorcelanico = materialPorNombre(doc, MAT_PORCELANICO);
+  if (!matParquet || !matPorcelanico) { log(`AVISO: faltan materiales de suelo (${!matParquet ? MAT_PARQUET : MAT_PORCELANICO}); no se ajustan los suelos`); return; }
+
+  /* Caras → capas: se ordenan por altura y se agrupan las que distan menos
+     de 6 cm (un acabado no queda a una altura exacta). Cada capa: { h (media
+     ponderada), area, caras }. */
+  function agruparCapas(lista) {
+    const orden = [...lista].sort((x, y) => x.y - y.y);
+    const capas = [];
+    for (const f of orden) {
+      const ultima = capas[capas.length - 1];
+      if (ultima && f.y - ultima.yMax < 0.06) { ultima.caras.push(f); ultima.area += f.area; ultima.yMax = f.y; ultima.suma += f.y * f.area; }
+      else capas.push({ caras: [f], area: f.area, yMax: f.y, suma: f.y * f.area });
+    }
+    for (const l of capas) l.h = l.suma / (l.area || 1);
+    return capas;
+  }
+
+  /* Decisiones por cara: quitar, o mover a un material con UV nuevas. */
+  const quitar = new Map();   // pieza → Set(t)
+  const mover = new Map();    // pieza → Map(t → material destino)
+  const marcar = (mapa, f, valor) => { let m = mapa.get(f.p); if (!m) { m = valor === true ? new Set() : new Map(); mapa.set(f.p, m); } if (valor === true) m.add(f.t); else m.set(f.t, valor); };
+  const generados = [];       // { poligono, y, plataforma }
+  const resumen = { remapeadas: [], regeneradas: [], ok: 0, comunes: 0, comunesArea: 0 };
+
+  for (const [id, v] of Object.entries(viviendas)) {
+    const Ap = areaPoli(v.poligono);
+    const minX = Math.min(...v.poligono.map((q) => q[0])) - 0.01, maxX = Math.max(...v.poligono.map((q) => q[0])) + 0.01;
+    const minZ = Math.min(...v.poligono.map((q) => q[1])) - 0.01, maxZ = Math.max(...v.poligono.map((q) => q[1])) + 0.01;
+    const dentro = caras.filter((f) => f.y >= v.y0 - 0.3 && f.y <= v.y0 + 0.3 && f.x >= minX && f.x <= maxX && f.z >= minZ && f.z <= maxZ && dentroPoli(v.poligono, f.x, f.z));
+    // capas por altura entre −15 y +25 cm: alturas ordenadas, agrupadas cuando distan menos de 6 cm
+    const capas = agruparCapas(dentro.filter((f) => f.y >= v.y0 - 0.15 && f.y <= v.y0 + 0.25));
+    const alturas = capas.filter((l) => l.area >= 0.85 * Ap).map((l) => l.h).sort((x, y) => y - x);
+    if (alturas.length) {
+      const capa = capas.find((l) => l.h === alturas[0]);
+      const ajenas = capa.caras.filter((f) => !ES_PARQUET.test(f.mat));
+      if (!ajenas.length) { resumen.ok++; continue; }
+      for (const f of ajenas) marcar(mover, f, matParquet);
+      resumen.remapeadas.push(`${id}(${alturas[0] - v.y0 >= 0 ? '+' : ''}${((alturas[0] - v.y0) * 100).toFixed(0)} cm, ${ajenas.reduce((s, f) => s + f.area, 0).toFixed(0)} m²)`);
+      continue;
+    }
+    // sin capa que cubra: fuera todo acabado entre −12 y +25 cm (la tarima de debajo incluida) y suelo nuevo
+    for (const f of dentro) if (f.y >= v.y0 - 0.12 && f.y <= v.y0 + 0.25) marcar(quitar, f, true);
+    generados.push({ id, poligono: v.poligono, y: v.y0, plataforma: v.plataforma });
+    resumen.regeneradas.push(`${id}(${Ap.toFixed(0)} m²)`);
+  }
+
+  /* Zonas comunes: vinilo (o el roble de los áticos) a la cota del suelo de
+     la planta, dentro de los cajones y a más de 15 cm de cualquier vivienda. */
+  const porPlanta = {};
+  for (const v of Object.values(viviendas)) (porPlanta[v.planta] = porPlanta[v.planta] || []).push(v);
+  for (const [planta, vs] of Object.entries(porPlanta)) {
+    const cajones = cortes.plantas[planta] || [];
+    for (const [i, caj] of cajones.entries()) {
+      const y0s = vs.filter((w) => w.plataforma === i).map((w) => w.y0).sort((x, y) => x - y);
+      if (!y0s.length) continue;
+      const y0 = y0s[Math.floor(y0s.length / 2)];
+      for (const f of caras) {
+        if (!ES_MADERA_INTERIOR.test(f.mat) || Math.abs(f.y - y0) > 0.15) continue;
+        if (f.x < caj.x0 || f.x > caj.x1 || f.z < caj.z0 || f.z > caj.z1) continue;
+        if (vs.some((w) => dentroPoli(w.poligono, f.x, f.z) || distPoli(w.poligono, f.x, f.z) < 0.15)) continue;
+        marcar(mover, f, matPorcelanico);
+        resumen.comunes++; resumen.comunesArea += f.area;
+      }
+    }
+  }
+
+  /* Aplicar: subconjuntos por pieza (no indexados; unir() desindexa igual). */
+  const subconjunto = (g, lista, uvNuevo = null) => {
+    const P = g.attributes.position, N = g.attributes.normal, U = g.attributes.uv;
+    const n = lista.length * 3;
+    const pos = new Float32Array(n * 3), nor = N ? new Float32Array(n * 3) : null, uv = (U || uvNuevo) ? new Float32Array(n * 2) : null;
+    let k = 0;
+    for (const t of lista) for (let cc = 0; cc < 3; cc++) {
+      const vi = indice(g, t, cc);
+      pos[3 * k] = P.getX(vi); pos[3 * k + 1] = P.getY(vi); pos[3 * k + 2] = P.getZ(vi);
+      if (nor) { nor[3 * k] = N.getX(vi); nor[3 * k + 1] = N.getY(vi); nor[3 * k + 2] = N.getZ(vi); }
+      if (uv) { if (uvNuevo) { const q = uvPlana(uvNuevo, pos[3 * k], pos[3 * k + 2]); uv[2 * k] = q[0]; uv[2 * k + 1] = q[1]; } else { uv[2 * k] = U.getX(vi); uv[2 * k + 1] = U.getY(vi); } }
+      k++;
+    }
+    const s = new THREE.BufferGeometry();
+    s.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    if (nor) s.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+    if (uv) s.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    return s;
+  };
+  const afectadas = new Set([...quitar.keys(), ...mover.keys()]);
+  let nuevas = 0;
+  for (const p of afectadas) {
+    const g = p.geometria; const n = trisDe(g);
+    const q = quitar.get(p) || new Set(), m = mover.get(p) || new Map();
+    const conservar = []; const porDestino = new Map();
+    for (let t = 0; t < n; t++) {
+      if (q.has(t)) continue;
+      const dest = m.get(t);
+      if (!dest) { conservar.push(t); continue; }
+      let l = porDestino.get(dest); if (!l) { l = []; porDestino.set(dest, l); } l.push(t);
+    }
+    p.geometria = subconjunto(g, conservar);
+    p.geometria.computeBoundingBox(); p.caja = p.geometria.boundingBox.clone();
+    for (const [dest, lista] of porDestino) {
+      const s = subconjunto(g, lista, uvDe[dest.getName()]);
+      s.computeBoundingBox();
+      piezas.push({ ...p, material: dest, geometria: s, caja: s.boundingBox.clone(), origen: 'suelos' });
+      nuevas++;
+    }
+  }
+  /* Suelos generados: el polígono triangulado a la cota, mirando arriba. */
+  for (const gen of generados) {
+    const contorno = gen.poligono.map(([x, z]) => new THREE.Vector2(x, z));
+    let tris;
+    try { tris = THREE.ShapeUtils.triangulateShape(contorno, []); } catch (e) { log(`AVISO: no se triangula el suelo de ${gen.id}: ${e.message}`); continue; }
+    const pos = [], nor = [], uv = [];
+    const y = gen.y + 0.002;
+    for (const tri of tris) {
+      // sentido antihorario visto desde +y: en (x, z) el producto vectorial negativo
+      const [i, j, k] = tri; const P = [contorno[i], contorno[j], contorno[k]];
+      const cruz = (P[1].x - P[0].x) * (P[2].y - P[0].y) - (P[2].x - P[0].x) * (P[1].y - P[0].y);
+      const orden = cruz < 0 ? [0, 1, 2] : [0, 2, 1];
+      for (const o of orden) { pos.push(P[o].x, y, P[o].y); nor.push(0, 1, 0); const q = uvPlana(uvDe[MAT_PARQUET], P[o].x, P[o].y); uv.push(q[0], q[1]); }
+    }
+    const s = new THREE.BufferGeometry();
+    s.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
+    s.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(nor), 3));
+    s.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uv), 2));
+    s.computeBoundingBox();
+    const cen = s.boundingBox.getCenter(new THREE.Vector3());
+    piezas.push({ cat: 'envolvente', clase: 'envolvente', material: matParquet, familia: 'suelo generado', geometria: s, caja: s.boundingBox.clone(), plataforma: plataformaDe(cen.x, cen.z), origen: 'suelos' });
+  }
+  log(`suelos: ${resumen.ok} viviendas con parquet; remapeadas a parquet ${resumen.remapeadas.length} [${resumen.remapeadas.join(' ')}]; regeneradas ${resumen.regeneradas.length} [${resumen.regeneradas.join(' ')}]; zonas comunes a porcelánico: ${resumen.comunes} caras, ${resumen.comunesArea.toFixed(0)} m²; piezas nuevas ${nuevas + generados.length}`);
+}
+
 /* ─────────────────────────── 3. Materiales de salida ─────────────────────────── */
 /* Los documentos de salida nacen como copia del original para conservar
    materiales y texturas; después se vacían de nodos y se rellenan con las

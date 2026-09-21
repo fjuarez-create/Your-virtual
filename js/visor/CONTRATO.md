@@ -344,6 +344,26 @@ Tres avisos de Fran con capturas, y lo que se decidió:
   Las caras traseras siguen en gris claro mate, como siempre. Si cambia el
   modelo o `data/cortes.json`, hay que regenerar las tapas.
 
+## Vidrio y suelos (añadido el 21-sep-2026)
+
+- **Vidrio siempre vidrio.** Se retira el estor de las vendidas
+  (edificio.setVentanas): el vidrio de una vendida es como el de cualquier
+  otra, de día y de noche; solo se distingue en que no se enciende. El paño
+  de una ventana se asigna a la vivienda que lo tiene entre su suelo y su
+  techo (antes, el paño alto de una ventana de suelo a techo podía irse a la
+  de arriba).
+- **Suelos.** El modelo traía el suelo de cada vivienda en dos capas (vinilo
+  a cota y tarima 10 cm más abajo), a 27 viviendas les faltaba el vinilo, 12
+  áticos iban en otro roble y los pasillos de las plantas altas en vinilo.
+  Lo arregla el pipeline (`tools/build_serenea.mjs`, etapa 2c «Suelos»):
+  por vivienda, la capa superior de acabado que cubre su polígono pasa a
+  vinilo; sin capa que lo cubra, se genera un suelo de vinilo con el
+  polígono; fuera de las viviendas, el vinilo a la cota del suelo pasa al
+  porcelánico de las zonas comunes de la planta baja (Tile_Interior_05). Las
+  UV se rehacen planas con la escala de cada material. Comprobado sobre el
+  fichero resultante: 166 de 166 viviendas con vinilo en su capa superior y
+  0 m² de vinilo en zonas comunes.
+
 ## Dos motores, una interfaz (añadido el 17-sep-2026)
 
 `window.apolo` lo puede dar `visor/main.js` (three.js, lo de arriba) o
