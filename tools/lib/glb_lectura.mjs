@@ -32,28 +32,40 @@ export async function abrirGLB(ruta) {
     for (let k = 0; k < a.count; k++) for (let c = 0; c < n; c++) out[k * n + c] = dv[LEER[T.name]]((a.byteOffset || 0) + k * stride + c * T.BYTES_PER_ELEMENT, true);
     return { datos: out, n, normalizado: !!a.normalized, tipo: T };
   }
-  const porMalla = new Map();
-  function recorrer(ni, esc, tr) {
-    const nd = j.nodes[ni]; const s = nd.scale || [1, 1, 1], t = nd.translation || [0, 0, 0];
-    if (nd.matrix) throw new Error('nodo con matrix: no previsto');
-    const e2 = [esc[0] * s[0], esc[1] * s[1], esc[2] * s[2]], t2 = [tr[0] + esc[0] * t[0], tr[1] + esc[1] * t[1], tr[2] + esc[2] * t[2]];
-    if (nd.mesh != null) porMalla.set(nd.mesh, { esc: e2, tr: t2, nombre: nd.name || '' });
-    for (const c of nd.children || []) recorrer(c, e2, t2);
+  /* Matriz de mundo por nodo (4×4, columnas como en glTF). Los GLB del
+     pipeline traen escala+traslación; los de SketchUp, `matrix`. Una malla
+     instanciada en varios nodos se registra una vez por nodo. */
+  const mul = (A, B) => { const C = new Array(16).fill(0); for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) for (let k = 0; k < 4; k++) C[c * 4 + r] += A[k * 4 + r] * B[c * 4 + k]; return C; };
+  const local = (nd) => {
+    if (nd.matrix) return nd.matrix;
+    const s = nd.scale || [1, 1, 1], t = nd.translation || [0, 0, 0], q = nd.rotation || [0, 0, 0, 1];
+    const [x, y, z, w] = q; const xx = x * x, yy = y * y, zz = z * z, xy = x * y, xz = x * z, yz = y * z, wx = w * x, wy = w * y, wz = w * z;
+    return [(1 - 2 * (yy + zz)) * s[0], 2 * (xy + wz) * s[0], 2 * (xz - wy) * s[0], 0,
+            2 * (xy - wz) * s[1], (1 - 2 * (xx + zz)) * s[1], 2 * (yz + wx) * s[1], 0,
+            2 * (xz + wy) * s[2], 2 * (yz - wx) * s[2], (1 - 2 * (xx + yy)) * s[2], 0,
+            t[0], t[1], t[2], 1];
+  };
+  const instancias = []; // { mesh, M, nombre, ruta }
+  function recorrer(ni, M, ruta) {
+    const nd = j.nodes[ni]; const M2 = mul(M, local(nd)); const r2 = nd.name ? [...ruta, nd.name] : ruta;
+    if (nd.mesh != null) instancias.push({ mesh: nd.mesh, M: M2, nombre: nd.name || '', ruta: r2 });
+    for (const c of nd.children || []) recorrer(c, M2, r2);
   }
-  for (const r of j.scenes[0].nodes) recorrer(r, [1, 1, 1], [0, 0, 0]);
+  const I4 = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+  for (const r of j.scenes[0].nodes) recorrer(r, I4, []);
 
   /* Triángulos [[x,y,z]×3] de las primitivas cuyo material cumple `filtro`
      (fn(nombre) → bool). Con `porPrimitiva` devuelve { material, nodo, triangulos }. */
   function triangulos(filtro = () => true, { porPrimitiva = false, conUV = false } = {}) {
     const salida = [];
-    j.meshes.forEach((m, mi) => {
-      const tf = porMalla.get(mi); if (!tf) return;
+    for (const inst of instancias) {
+      const m = j.meshes[inst.mesh]; const M = inst.M; const tf = inst;
       for (const p of m.primitives) {
         const nombre = j.materials[p.material]?.name ?? '';
-        if (!filtro(nombre)) continue;
+        if (!filtro(nombre, inst)) continue;
         const pos = accesor(p.attributes.POSITION); const idx = p.indices != null ? accesor(p.indices).datos : null;
         const norm = pos.normalizado ? (pos.tipo === Int16Array ? 32767 : (pos.tipo === Int8Array ? 127 : 1)) : 1;
-        const v = (k) => [(pos.datos[3 * k] / norm) * tf.esc[0] + tf.tr[0], (pos.datos[3 * k + 1] / norm) * tf.esc[1] + tf.tr[1], (pos.datos[3 * k + 2] / norm) * tf.esc[2] + tf.tr[2]];
+        const v = (k) => { const x = pos.datos[3 * k] / norm, y = pos.datos[3 * k + 1] / norm, z = pos.datos[3 * k + 2] / norm; return [M[0] * x + M[4] * y + M[8] * z + M[12], M[1] * x + M[5] * y + M[9] * z + M[13], M[2] * x + M[6] * y + M[10] * z + M[14]]; };
         const ntri = (idx ? idx.length : pos.datos.length / 3) / 3;
         const lista = porPrimitiva ? [] : salida;
         const uvA = conUV && p.attributes.TEXCOORD_0 != null ? accesor(p.attributes.TEXCOORD_0) : null;
@@ -65,9 +77,9 @@ export async function abrirGLB(ruta) {
           lista.push([v(i0), v(i1), v(i2)]);
           if (uvs) uvs.push([uvDe(i0), uvDe(i1), uvDe(i2)]);
         }
-        if (porPrimitiva) salida.push({ material: nombre, nodo: tf.nombre, triangulos: lista, uvs });
+        if (porPrimitiva) salida.push({ material: nombre, nodo: tf.nombre, ruta: tf.ruta, triangulos: lista, uvs });
       }
-    });
+    }
     return salida;
   }
   return { json: j, triangulos, materiales: j.materials.map((m) => m.name) };

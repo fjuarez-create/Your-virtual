@@ -334,6 +334,78 @@ for (const grupo of nodosExtra) {
   for (const [k, v] of [...familias].sort((a, b) => b[1].tris - a[1].tris).slice(0, 40)) console.log(`   ${Math.round(v.tris).toString().padStart(8)}  ${String(v.n).padStart(4)}x  ${v.cat.padEnd(11)} ${k.slice(0, 80)}`);
 }
 
+/* ─────────────────────────── 2b2. Hojas opacas de las ventanas ─────────────────────────── */
+/* En la familia de ventanas "UNIK_VEN_Val 2H abatible + 1H fija inferior"
+   una de las hojas lleva el material de aluminio en vez de vidrio: en el
+   visor salía como un rectángulo gris opaco dentro de la ventana (Fran,
+   21-sep: "siempre va a ser de vidrio"). Regla geométrica, sin lista de
+   familias: un triángulo opaco de una carpintería, paralelo a un paño de
+   vidrio, a menos de 25 cm de su plano y con el centro dentro de la
+   extensión del paño, es una hoja de vidrio mal etiquetada y pasa a vidrio
+   (una pieza 'vidrio' más, con su nombre y su vivienda). Los perfiles del
+   marco no cumplen la condición: quedan fuera de la extensión del paño. */
+ajustarHojasOpacas();
+function ajustarHojasOpacas() {
+  const matVidrio = doc.getRoot().listMaterials().find((m) => /Vidrio claro/i.test(m.getName()));
+  if (!matVidrio) { log('AVISO: sin material de vidrio, no se revisan las hojas opacas'); return; }
+  const vertice = (g, vi, out) => { const P = g.attributes.position; out[0] = P.getX(vi); out[1] = P.getY(vi); out[2] = P.getZ(vi); return out; };
+  const indice = (g, t, c) => (g.index ? g.index.getX(3 * t + c) : 3 * t + c);
+  // paños: plano (eje delgado), extensión y caja
+  const panos = [];
+  for (const p of piezas) {
+    if (p.cat !== 'vidrio') continue;
+    const b = p.caja; const dims = [b.max.x - b.min.x, b.max.y - b.min.y, b.max.z - b.min.z];
+    const eje = dims.indexOf(Math.min(...dims)); if (dims[eje] > 0.1) continue;
+    const mn = [b.min.x, b.min.y, b.min.z], mx = [b.max.x, b.max.y, b.max.z];
+    if (Math.max(...dims) < 0.3) continue; // no es un paño
+    panos.push({ eje, plano: (mn[eje] + mx[eje]) / 2, mn, mx });
+  }
+  const CEL = 1; const rej = new Map();
+  for (const q of panos) for (let i = Math.floor((q.mn[0] - 0.3) / CEL); i <= Math.floor((q.mx[0] + 0.3) / CEL); i++) for (let j = Math.floor((q.mn[1] - 0.3) / CEL); j <= Math.floor((q.mx[1] + 0.3) / CEL); j++) for (let k = Math.floor((q.mn[2] - 0.3) / CEL); k <= Math.floor((q.mx[2] + 0.3) / CEL); k++) { const key = `${i},${j},${k}`; let l = rej.get(key); if (!l) { l = []; rej.set(key, l); } l.push(q); }
+  const a = [0, 0, 0], b = [0, 0, 0], c = [0, 0, 0];
+  let hojas = 0, tris = 0; const familias = new Map();
+  const nuevas = [];
+  for (const p of piezas) {
+    if (p.cat !== 'carpinteria' || /Vidrio/i.test(p.material?.getName() || '')) continue;
+    const g = p.geometria; const n = trisDe(g); const mover = [];
+    for (let t = 0; t < n; t++) {
+      vertice(g, indice(g, t, 0), a); vertice(g, indice(g, t, 1), b); vertice(g, indice(g, t, 2), c);
+      const cx = (a[0] + b[0] + c[0]) / 3, cy = (a[1] + b[1] + c[1]) / 3, cz = (a[2] + b[2] + c[2]) / 3;
+      const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
+      const nn = [uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx]; const L = Math.hypot(...nn); if (L < 1e-9) continue;
+      if (L / 2 < 0.02) continue; // perfiles y tornillería
+      const centro = [cx, cy, cz];
+      let hoja = false;
+      for (const q of rej.get(`${Math.floor(cx / CEL)},${Math.floor(cy / CEL)},${Math.floor(cz / CEL)}`) || []) {
+        if (Math.abs(nn[q.eje]) / L < 0.9) continue;                   // no paralelo al paño
+        if (Math.abs(centro[q.eje] - q.plano) > 0.25) continue;        // lejos de su plano
+        let dentro = true;
+        for (let d = 0; d < 3; d++) if (d !== q.eje && (centro[d] < q.mn[d] + 0.03 || centro[d] > q.mx[d] - 0.03)) dentro = false;
+        if (dentro) { hoja = true; break; }
+      }
+      if (hoja) mover.push(t);
+    }
+    if (!mover.length) continue;
+    hojas++; tris += mover.length;
+    familias.set(p.familia, (familias.get(p.familia) || 0) + 1);
+    // subconjuntos: la hoja a vidrio, el resto se queda
+    const conjunto = new Set(mover);
+    const partir = (lista) => {
+      const P = g.attributes.position, N = g.attributes.normal, U = g.attributes.uv; const m = lista.length * 3;
+      const pos = new Float32Array(m * 3), nor = N ? new Float32Array(m * 3) : null, uv = U ? new Float32Array(m * 2) : null; let k = 0;
+      for (const t of lista) for (let cc = 0; cc < 3; cc++) { const vi = indice(g, t, cc); pos[3 * k] = P.getX(vi); pos[3 * k + 1] = P.getY(vi); pos[3 * k + 2] = P.getZ(vi); if (nor) { nor[3 * k] = N.getX(vi); nor[3 * k + 1] = N.getY(vi); nor[3 * k + 2] = N.getZ(vi); } if (uv) { uv[2 * k] = U.getX(vi); uv[2 * k + 1] = U.getY(vi); } k++; }
+      const s = new THREE.BufferGeometry(); s.setAttribute('position', new THREE.BufferAttribute(pos, 3)); if (nor) s.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); if (uv) s.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); s.computeBoundingBox(); return s;
+    };
+    const resto = []; for (let t = 0; t < n; t++) if (!conjunto.has(t)) resto.push(t);
+    const gHoja = partir(mover);
+    p.geometria = partir(resto); p.caja = p.geometria.boundingBox.clone();
+    const cen = gHoja.boundingBox.getCenter(new THREE.Vector3());
+    nuevas.push({ cat: 'vidrio', clase: 'envolvente', material: matVidrio, familia: p.familia, geometria: gHoja, caja: gHoja.boundingBox.clone(), plataforma: plataformaDe(cen.x, cen.z), origen: 'hojas' });
+  }
+  piezas.push(...nuevas);
+  log(`hojas opacas de ventana pasadas a vidrio: ${hojas} piezas, ${tris} triángulos; familias: ${[...familias].map(([f, n]) => `${f.slice(0, 50)} ×${n}`).join(' · ')}`);
+}
+
 /* ─────────────────────────── 2c. Suelos ─────────────────────────── */
 /* Parquet en todas las viviendas y porcelánico en las zonas comunes (Fran,
    21-sep-2026). El modelo trae el suelo de cada vivienda en DOS capas: el
