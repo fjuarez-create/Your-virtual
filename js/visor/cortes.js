@@ -327,19 +327,36 @@ function yminMobiliario(mesh, caja) {
   return m[2] != null ? parseFloat(`${m[1]}.${m[2]}`) : parseInt(m[1], 10) / 100;
 }
 
-/* Caras traseras como TAPA del corte: lo que se ve por la boca de un muro
-   cortado en un modelo sin tapas es su cara interior. Se pinta plana, de un
-   gris oscuro sin luz ni reflejos (el «poché» de una sección de arquitectura),
-   así el muro se lee macizo y con tapa en vez de hueco y blanco por dentro
-   (aviso de Fran, 21-sep: «lo que queda fatal es que se vea blanco»). Va al
-   final del shader, después de la luz del interior y de la atenuación, para
-   que nada la aclare. Se encadena con el onBeforeCompile que ya tenga el
-   material (grano, CSM) y se distingue en la clave del programa. */
+/* Caras traseras. Dos casos:
+
+   · MUROS Y TABIQUES (ES_MURO: pintura interior, hormigón, monocapa,
+     travertino y alicatado): lo que se ve por la boca de un muro cortado en
+     un modelo sin tapas es su cara interior. Se pinta como TAPA: plana, gris
+     oscuro sin luz ni reflejos (el «poché» de una sección de arquitectura),
+     así el muro se lee macizo en vez de hueco y blanco por dentro. Solo
+     dentro de la franja de la planta cortada (tapaCorte en el GLSL): fuera
+     de ahí, y con el edificio entero, una cara trasera es una cara suelta del
+     modelo y se ilumina como la delantera. Va al final del shader, después
+     de la luz del interior y de la atenuación, para que nada la aclare.
+   · TODO LO DEMÁS (mobiliario, puertas, lacados, aluminio…): gris claro
+     mate, como siempre. Fran (21-sep): «lo único que debe mostrar lo negro
+     son los cortes en muros y tabiques»; la primera versión ennegrecía
+     puertas, sillas y armarios, que tienen caras traseras a la vista que no
+     son ningún corte.
+
+   Se encadena con el onBeforeCompile que ya tenga el material (grano, CSM,
+   atenuación) y se distingue en la clave del programa. La variante de tapa
+   necesita el GLSL de atenuarPorCota (uniformes y tapaCorte), así que
+   prepararMaterial aplica antes la atenuación por cota. */
+const ES_MURO = /Pintura interior|Hormigon|Monocapa|Travertino|Alicatado/i;
 const COLOR_TAPA = 'vec3(0.105, 0.099, 0.092)'; // lineal; con AgX sale un gris oscuro cálido (~#3c3936 en pantalla)
+const COLOR_TRASERA = 'vec3(0.74, 0.72, 0.68)';
 function oscurecerTraseras(material) {
   if (!material || material.userData.carasOscuras || material.userData.sinTraseras) return;
   material.userData.carasOscuras = true;
   material.side = THREE.DoubleSide;
+  const tapa = ES_MURO.test(material.name || '') && !!material.userData.atenuacionCorte;
+  material.userData.tapaCorte = tapa;
   const previo = material.onBeforeCompile;
   const clavePrevia = material.customProgramCacheKey?.bind(material);
   const textoPrevio = previo ? previo.toString() : '';
@@ -349,15 +366,24 @@ function oscurecerTraseras(material) {
       .replace('#include <roughnessmap_fragment>',
         '#include <roughnessmap_fragment>\n  if (!gl_FrontFacing) roughnessFactor = 1.0;')
       .replace('#include <metalnessmap_fragment>',
-        '#include <metalnessmap_fragment>\n  if (!gl_FrontFacing) metalnessFactor = 0.0;')
-      .replace('#include <opaque_fragment>',
-        `if (!gl_FrontFacing) outgoingLight = ${COLOR_TAPA};\n  #include <opaque_fragment>`);
+        '#include <metalnessmap_fragment>\n  if (!gl_FrontFacing) metalnessFactor = 0.0;');
+    if (tapa) {
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <opaque_fragment>',
+          `if (!gl_FrontFacing && tapaCorte(vPosMundoCorte)) outgoingLight = mix(${COLOR_TAPA}, vec3(1.0, 0.0, 1.0), uDepurarTapa);\n  #include <opaque_fragment>`);
+    } else {
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <color_fragment>',
+          `#include <color_fragment>\n  if (!gl_FrontFacing) diffuseColor.rgb = ${COLOR_TRASERA};`)
+        .replace('#include <lights_fragment_end>',
+          '#include <lights_fragment_end>\n  if (!gl_FrontFacing) { reflectedLight.directSpecular = vec3(0.0); reflectedLight.indirectSpecular = vec3(0.0); }');
+    }
   };
   /* three usa el texto de onBeforeCompile como clave del programa; con el
      envoltorio todas serían iguales, así que se añade el texto del hook
      interior (grano, CSM…) para no compartir shader entre materiales
      distintos. */
-  material.customProgramCacheKey = () => `${clavePrevia ? clavePrevia() : ''}|${textoPrevio}|traseras`;
+  material.customProgramCacheKey = () => `${clavePrevia ? clavePrevia() : ''}|${textoPrevio}|${tapa ? 'tapa' : 'traseras'}`;
   material.needsUpdate = true;
 }
 
@@ -405,6 +431,19 @@ const GLSL_ATENUACION = /* glsl */`
   float atenuacionCorte(vec3 p) {
     float suelo = uSuelos[celdaCorte(p)];
     return uAtenuacion * (1.0 - smoothstep(suelo - 0.6, suelo - 0.15, p.y));
+  }
+  /* Tapa del corte (ver oscurecerTraseras): una cara trasera de un muro o
+     tabique solo es «el interior de un muro cortado» si hay una planta
+     cortada, el punto cae dentro de la huella del edificio y en la franja de
+     la planta activa (entre su suelo, con el canto del forjado, y su cota de
+     corte). Fuera de ahí una cara trasera es una cara suelta del modelo y se
+     pinta como cualquier otra. */
+  uniform float uDepurarTapa;    // 1: la tapa sale magenta (comprobaciones)
+  bool tapaCorte(vec3 p) {
+    if (uAtenuacion <= 0.0) return false;
+    if (p.x < uHuella.x || p.x > uHuella.z || p.z < uHuella.y || p.z > uHuella.w) return false;
+    int c = celdaCorte(p);
+    return p.y > uSuelos[c] - 0.35 && p.y < uTechos[c] + 0.05;
   }
   /* 1 dentro de la vivienda seccionada: por encima de su suelo y por debajo
      del plano de corte, que es por donde pasaría el techo que el corte se ha
@@ -480,6 +519,7 @@ function crearUniformesAtenuacion() {
     uHuella: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) },
     uRecorteViv: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) },
     uRecorteVivY: { value: 1e6 },
+    uDepurarTapa: { value: 0 },
   };
 }
 const HOLGURA_RECORTE_VIV = 0.35; // m alrededor del polígono: los muros de borde lo pisan
@@ -836,8 +876,8 @@ export function crearCortes(ctx, edificio, opciones = {}) {
     if (!m || !m.color) return;
     if (!m.userData.baseColor) m.userData.baseColor = m.color.clone();
     if (m.userData.baseEnv == null) m.userData.baseEnv = m.envMapIntensity ?? 1;
-    if (carasOscuras) oscurecerTraseras(m);
     if (atenuacionPorCota) atenuarPorCota(m, uniformesAtenuacion);
+    if (carasOscuras) oscurecerTraseras(m); // después: la tapa usa el GLSL de la atenuación
   }
   function materialesDe(objeto) {
     const mats = new Set();
