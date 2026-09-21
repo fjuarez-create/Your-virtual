@@ -335,7 +335,7 @@ function yminMobiliario(mesh, caja) {
    final del shader, después de la luz del interior y de la atenuación, para
    que nada la aclare. Se encadena con el onBeforeCompile que ya tenga el
    material (grano, CSM) y se distingue en la clave del programa. */
-const COLOR_TAPA = 'vec3(0.052, 0.049, 0.046)'; // lineal; con AgX sale un gris oscuro cálido
+const COLOR_TAPA = 'vec3(0.105, 0.099, 0.092)'; // lineal; con AgX sale un gris oscuro cálido (~#3c3936 en pantalla)
 function oscurecerTraseras(material) {
   if (!material || material.userData.carasOscuras || material.userData.sinTraseras) return;
   material.userData.carasOscuras = true;
