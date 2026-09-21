@@ -806,26 +806,28 @@ export function crearCortes(ctx, edificio, opciones = {}) {
   }
 
   /* Sombras con el mismo recorte que el color: a cada malla del edificio (y
-     a sus clones y al mobiliario) se le da un MeshDepthMaterial propio con el
+     a sus clones y al mobiliario) se le da un MeshDepthMaterial con el
      descarte por cota. three le copia por objeto los planos de recorte de su
-     material (clipShadows), así que basta uno por número de planos: si se
-     compartiera entre mallas con distinto número, three recompilaría el
-     programa a cada cambio. Sin esto, los muros que el corte de la vivienda
-     abierta descarta seguían echando sombra. */
-  const materialesSombra = new Map(); // nº de planos → MeshDepthMaterial
-  function materialSombraDe(nPlanos) {
-    let m = materialesSombra.get(nPlanos);
+     material (clipShadows) y guarda su estado por material, así que, como
+     hace three con su propio material de profundidad, hay uno por juego de
+     planos (el Plane horizontal de cada tramo, o la lista de cinco), y uno
+     para las mallas sin planos. Sin esto, los muros que el corte de la
+     vivienda abierta descarta seguían echando sombra. */
+  const materialesSombra = new Map(); // juego de planos (o 0) → MeshDepthMaterial
+  function materialSombraDe(planos) {
+    const clave = !planos || !planos.length ? 0 : (planos.length === 1 ? planos[0] : planos);
+    let m = materialesSombra.get(clave);
     if (!m) {
       m = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
       recortarAuxiliar(m, uniformesAtenuacion);
-      materialesSombra.set(nPlanos, m);
+      materialesSombra.set(clave, m);
     }
     return m;
   }
   function sombraRecortada(mesh) {
     if (!atenuacionPorCota || !mesh?.isMesh) return;
     const m = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
-    mesh.customDepthMaterial = materialSombraDe(m?.clippingPlanes?.length || 0);
+    mesh.customDepthMaterial = materialSombraDe(m?.clippingPlanes);
   }
 
   /* Color y entorno de referencia (atenuación por niveles), caras traseras
