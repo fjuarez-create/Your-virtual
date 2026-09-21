@@ -166,6 +166,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 import * as THREE from 'three';
 import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg';
+import { seccionar, triangularPoligonos, ES_MURO } from 'app/visor/tapas.js';
 
 export const DURACION = 0.8;
 const TECHO_CORTADOR = 200;   // el cortador sube hasta aquí: nada del edificio llega
@@ -327,63 +328,40 @@ function yminMobiliario(mesh, caja) {
   return m[2] != null ? parseFloat(`${m[1]}.${m[2]}`) : parseInt(m[1], 10) / 100;
 }
 
-/* Caras traseras. Dos casos:
-
-   · MUROS Y TABIQUES (ES_MURO: pintura interior, hormigón, monocapa,
-     travertino y alicatado): lo que se ve por la boca de un muro cortado en
-     un modelo sin tapas es su cara interior. Se pinta como TAPA: plana, gris
-     oscuro sin luz ni reflejos (el «poché» de una sección de arquitectura),
-     así el muro se lee macizo en vez de hueco y blanco por dentro. Solo
-     dentro de la franja de la planta cortada (tapaCorte en el GLSL): fuera
-     de ahí, y con el edificio entero, una cara trasera es una cara suelta del
-     modelo y se ilumina como la delantera. Va al final del shader, después
-     de la luz del interior y de la atenuación, para que nada la aclare.
-   · TODO LO DEMÁS (mobiliario, puertas, lacados, aluminio…): gris claro
-     mate, como siempre. Fran (21-sep): «lo único que debe mostrar lo negro
-     son los cortes en muros y tabiques»; la primera versión ennegrecía
-     puertas, sillas y armarios, que tienen caras traseras a la vista que no
-     son ningún corte.
-
-   Se encadena con el onBeforeCompile que ya tenga el material (grano, CSM,
-   atenuación) y se distingue en la clave del programa. La variante de tapa
-   necesita el GLSL de atenuarPorCota (uniformes y tapaCorte), así que
-   prepararMaterial aplica antes la atenuación por cota. */
-const ES_MURO = /Pintura interior|Hormigon|Monocapa|Travertino|Alicatado/i;
-const COLOR_TAPA = 'vec3(0.105, 0.099, 0.092)'; // lineal; con AgX sale un gris oscuro cálido (~#3c3936 en pantalla)
+/* Caras traseras en gris claro mate: lo que se ve por la boca del corte en
+   un modelo sin tapas es la cara interior del muro, y así se distingue de la
+   exterior sin oscurecer nada. Las TAPAS de verdad (gris oscuro plano, solo
+   en muros y tabiques cortados) son geometría: ver tapas.js y mostrarTapas.
+   Pintar de oscuro las caras traseras se probó y se descartó (21-sep): el
+   modelo tiene caras sueltas y normales invertidas, y salían negros paños de
+   pared, puertas, sillas y armarios. Se encadena con el onBeforeCompile que
+   ya tenga el material (grano, CSM, atenuación) y se distingue en la clave
+   del programa. */
 const COLOR_TRASERA = 'vec3(0.74, 0.72, 0.68)';
 function oscurecerTraseras(material) {
   if (!material || material.userData.carasOscuras || material.userData.sinTraseras) return;
   material.userData.carasOscuras = true;
   material.side = THREE.DoubleSide;
-  const tapa = ES_MURO.test(material.name || '') && !!material.userData.atenuacionCorte;
-  material.userData.tapaCorte = tapa;
   const previo = material.onBeforeCompile;
   const clavePrevia = material.customProgramCacheKey?.bind(material);
   const textoPrevio = previo ? previo.toString() : '';
   material.onBeforeCompile = function (shader, r) {
     if (previo) previo.call(this, shader, r);
     shader.fragmentShader = shader.fragmentShader
+      .replace('#include <color_fragment>',
+        `#include <color_fragment>\n  if (!gl_FrontFacing) diffuseColor.rgb = ${COLOR_TRASERA};`)
       .replace('#include <roughnessmap_fragment>',
         '#include <roughnessmap_fragment>\n  if (!gl_FrontFacing) roughnessFactor = 1.0;')
       .replace('#include <metalnessmap_fragment>',
-        '#include <metalnessmap_fragment>\n  if (!gl_FrontFacing) metalnessFactor = 0.0;');
-    if (tapa) {
-      shader.fragmentShader = shader.fragmentShader
-        .replace('#include <opaque_fragment>',
-          `if (!gl_FrontFacing && tapaCorte(vPosMundoCorte)) outgoingLight = mix(${COLOR_TAPA}, vec3(1.0, 0.0, 1.0), uDepurarTapa);\n  #include <opaque_fragment>`);
-    } else {
-      shader.fragmentShader = shader.fragmentShader
-        .replace('#include <color_fragment>',
-          `#include <color_fragment>\n  if (!gl_FrontFacing) diffuseColor.rgb = ${COLOR_TRASERA};`)
-        .replace('#include <lights_fragment_end>',
-          '#include <lights_fragment_end>\n  if (!gl_FrontFacing) { reflectedLight.directSpecular = vec3(0.0); reflectedLight.indirectSpecular = vec3(0.0); }');
-    }
+        '#include <metalnessmap_fragment>\n  if (!gl_FrontFacing) metalnessFactor = 0.0;')
+      .replace('#include <lights_fragment_end>',
+        '#include <lights_fragment_end>\n  if (!gl_FrontFacing) { reflectedLight.directSpecular = vec3(0.0); reflectedLight.indirectSpecular = vec3(0.0); }');
   };
   /* three usa el texto de onBeforeCompile como clave del programa; con el
      envoltorio todas serían iguales, así que se añade el texto del hook
      interior (grano, CSM…) para no compartir shader entre materiales
      distintos. */
-  material.customProgramCacheKey = () => `${clavePrevia ? clavePrevia() : ''}|${textoPrevio}|${tapa ? 'tapa' : 'traseras'}`;
+  material.customProgramCacheKey = () => `${clavePrevia ? clavePrevia() : ''}|${textoPrevio}|traseras`;
   material.needsUpdate = true;
 }
 
@@ -432,19 +410,7 @@ const GLSL_ATENUACION = /* glsl */`
     float suelo = uSuelos[celdaCorte(p)];
     return uAtenuacion * (1.0 - smoothstep(suelo - 0.6, suelo - 0.15, p.y));
   }
-  /* Tapa del corte (ver oscurecerTraseras): una cara trasera de un muro o
-     tabique solo es «el interior de un muro cortado» si hay una planta
-     cortada, el punto cae dentro de la huella del edificio y en la franja de
-     la planta activa (entre su suelo, con el canto del forjado, y su cota de
-     corte). Fuera de ahí una cara trasera es una cara suelta del modelo y se
-     pinta como cualquier otra. */
-  uniform float uDepurarTapa;    // 1: la tapa sale magenta (comprobaciones)
-  bool tapaCorte(vec3 p) {
-    if (uAtenuacion <= 0.0) return false;
-    if (p.x < uHuella.x || p.x > uHuella.z || p.z < uHuella.y || p.z > uHuella.w) return false;
-    int c = celdaCorte(p);
-    return p.y > uSuelos[c] - 0.35 && p.y < uTechos[c] + 0.05;
-  }
+
   /* 1 dentro de la vivienda seccionada: por encima de su suelo y por debajo
      del plano de corte, que es por donde pasaría el techo que el corte se ha
      llevado (ver setInterior). Fuera de esa franja vale 0, así que la calle,
@@ -519,7 +485,6 @@ function crearUniformesAtenuacion() {
     uHuella: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) },
     uRecorteViv: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) },
     uRecorteVivY: { value: 1e6 },
-    uDepurarTapa: { value: 0 },
   };
 }
 const HOLGURA_RECORTE_VIV = 0.35; // m alrededor del polígono: los muros de borde lo pisan
@@ -586,7 +551,8 @@ const aMapa = (v) => (v instanceof Map ? new Map(v) : new Map(Object.entries(v |
 
 export function crearCortes(ctx, edificio, opciones = {}) {
   const { url = 'data/cortes.json', luz = null, tapasCSG = true, tapasStencil = true, carasOscuras = false,
-    csg = true, atenuacionPorCota = false, sombraFantasma = false, sombraMobiliario = false } = opciones;
+    csg = true, atenuacionPorCota = false, sombraFantasma = false, sombraMobiliario = false,
+    tapasUrl = 'data/tapas_serenea.json' } = opciones;
   let suelos = aMapa(opciones.suelos); // clave de planta → [cota del suelo por tramo]
   const { scene } = ctx;
   const uniformesAtenuacion = crearUniformesAtenuacion();
@@ -629,6 +595,116 @@ export function crearCortes(ctx, edificio, opciones = {}) {
   const atenuacion = new Map();    // clave nivel → { valor, objetivo }
   const fantasmas = [];            // losas del nivel superior que solo proyectan sombra
   const trans = { activa: false, t: 0, desde: [], hasta: [], resolver: null, clave: null };
+
+  /* ── Tapas geométricas (ver js/visor/tapas.js) ──
+     Las de cada planta vienen precalculadas (tools/tapas_serenea.mjs →
+     data/tapas_serenea.json: por cajón, polígonos planos a su cota) y se
+     cargan al cortar la primera planta; una malla por planta, visible con el
+     estado final del corte. Las de la vivienda abierta se calculan al abrirla
+     (setRecorteVivienda), porque ese corte va a otra cota. Material plano,
+     gris oscuro sin luz ni reflejos (el poché de una sección), con el mismo
+     descarte por cota que el resto del edificio. */
+  const tapasGeo = { datos: null, carga: null, mallas: new Map(), vivienda: null, alzar: 0.01 };
+  const materialTapa = new THREE.MeshStandardMaterial({
+    color: 0x000000, emissive: new THREE.Color(0.105, 0.099, 0.092), roughness: 1, metalness: 0, name: 'tapa_corte',
+  });
+  materialTapa.userData = { sinTraseras: true, sinInterior: true, baseColor: new THREE.Color(0), baseEnv: 0 };
+  if (atenuacionPorCota) atenuarPorCota(materialTapa, uniformesAtenuacion); // el recorte de la vivienda abierta también corta tapas
+  cortes.materialTapa = materialTapa;
+  cortes.tapasGeo = tapasGeo;
+  function mallaTapas(posiciones, nombre) {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(posiciones, 3));
+    const n = new Float32Array(posiciones.length);
+    for (let i = 1; i < n.length; i += 3) n[i] = 1;
+    g.setAttribute('normal', new THREE.BufferAttribute(n, 3));
+    const m = new THREE.Mesh(g, materialTapa);
+    m.name = nombre;
+    m.castShadow = false; m.receiveShadow = false;
+    m.raycast = () => {};
+    m.visible = false;
+    grupo.add(m);
+    return m;
+  }
+  function cargarTapas() {
+    if (tapasGeo.carga || !tapasUrl) return tapasGeo.carga;
+    tapasGeo.carga = fetch(tapasUrl)
+      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+      .then((d) => {
+        tapasGeo.datos = d; tapasGeo.alzar = d.alzar ?? 0.01;
+        if (aplicada && aplicada !== 'all' && !trans.activa) mostrarTapas(aplicada);
+        return d;
+      })
+      .catch((e) => { console.warn('[cortes] sin tapas:', e); return null; });
+    return tapasGeo.carga;
+  }
+  function tapasDe(clave) {
+    let m = tapasGeo.mallas.get(clave);
+    if (m) return m;
+    const p = tapasGeo.datos?.plantas?.[clave];
+    if (!p) return null;
+    const escala = tapasGeo.datos.unidad === 'mm' ? 0.001 : 1;
+    const trozos = []; let total = 0;
+    for (const c of p.cajones) {
+      const polis = []; const a = c.poligonos;
+      for (let i = 0; i < a.length;) {
+        const n = a[i++]; const q = [];
+        for (let k = 0; k < n; k++, i += 2) q.push([a[i] * escala, a[i + 1] * escala]);
+        polis.push(q);
+      }
+      const { posiciones } = triangularPoligonos(polis, c.y + tapasGeo.alzar);
+      trozos.push(posiciones); total += posiciones.length;
+    }
+    const pos = new Float32Array(total); let o = 0;
+    for (const t of trozos) { pos.set(t, o); o += t.length; }
+    m = mallaTapas(pos, `tapas-${clave}`);
+    tapasGeo.mallas.set(clave, m);
+    return m;
+  }
+  /* Enseña las tapas de una planta (null: ninguna). Si los datos aún no han
+     llegado, se enseñan al llegar. */
+  function mostrarTapas(clave) {
+    for (const [k, m] of tapasGeo.mallas) m.visible = k === clave;
+    if (!clave) return;
+    if (!tapasGeo.datos) { cargarTapas(); return; }
+    const m = tapasDe(clave);
+    if (m) m.visible = true;
+  }
+  /* Triángulos de muro (ES_MURO) de lo que se ve ahora (la variante
+     precortada o la envolvente) que cruzan el plano y = cota, en mundo. */
+  function* triangulosMuro(cota) {
+    const fuente = [];
+    const variante = aplicada ? cortes.variantes.get(aplicada) : null;
+    if (variante && variante.visible) variante.traverse((o) => { if (o.isMesh && o.visible) fuente.push(o); });
+    else for (const p of piezas) if (!p.esMob && !p.esTapa && p.mesh.visible) fuente.push(p.mesh);
+    const v = new THREE.Vector3();
+    const caja = new THREE.Box3();
+    for (const mesh of fuente) {
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      if (!mats.some((m) => m && ES_MURO.test(m.name || ''))) continue;
+      const g = mesh.geometry; const pos = g.getAttribute('position'); if (!pos) continue;
+      if (!g.boundingBox) g.computeBoundingBox();
+      caja.copy(g.boundingBox).applyMatrix4(mesh.matrixWorld);
+      if (caja.min.y > cota || caja.max.y < cota) continue;
+      const idx = g.index; const M = mesh.matrixWorld;
+      const total = idx ? idx.count : pos.count;
+      const grupos = g.groups.length ? g.groups : [{ start: 0, count: total, materialIndex: 0 }];
+      const leer = (i) => { v.fromBufferAttribute(pos, i).applyMatrix4(M); return [v.x, v.y, v.z]; };
+      for (const gr of grupos) {
+        const m = mats[gr.materialIndex] || mats[0];
+        if (!m || !ES_MURO.test(m.name || '')) continue;
+        const fin = Math.min(gr.start + gr.count, total);
+        for (let i = gr.start; i + 2 < fin; i += 3) {
+          const a = leer(idx ? idx.getX(i) : i);
+          const b = leer(idx ? idx.getX(i + 1) : i + 1);
+          const c = leer(idx ? idx.getX(i + 2) : i + 2);
+          const arriba = (a[1] > cota) + (b[1] > cota) + (c[1] > cota);
+          if (arriba === 0 || arriba === 3) continue;
+          yield [a, b, c];
+        }
+      }
+    }
+  }
 
   // Planos por tramo: [x ≥ x0, x ≤ x1, z ≥ z0, z ≤ z1, y ≤ cota]. Un fragmento
   // se descarta cuando queda en el lado negativo de CUALQUIERA de ellos.
@@ -1154,6 +1230,7 @@ export function crearCortes(ctx, edificio, opciones = {}) {
     cortes.alturas = cotas ? cotas.slice() : cortes.tramos.map(() => cortes.techo);
     for (const [i] of cortes.tramos.entries()) planos[i][HORIZONTAL].constant = cortes.alturas[i]; // los clones del mobiliario los usan
     actualizarUniformesCorte(clave);
+    mostrarTapas(cotas ? clave : null);
     /* Sin CSG y sin variante todavía: el recorte por planos se queda en su
        cota final hasta que registrarVariante traiga el fichero. */
     cortes.provisional = !!(cotas && !variante && !csg);
@@ -1219,6 +1296,8 @@ export function crearCortes(ctx, edificio, opciones = {}) {
       sueloFranja = cotasDebajo(clave);   // franja del mobiliario que proyecta sombra
       fijarObjetivosAtenuacion(clave);
       actualizarUniformesCorte(clave);
+      mostrarTapas(null); // vuelven con el estado final (aplicarFinal)
+      if (clave !== 'all') cargarTapas();
       // una transición nueva interrumpe la anterior: se parte de lo que se ve ahora
       if (trans.activa && trans.resolver) { const r = trans.resolver; trans.resolver = null; r(anterior); }
       const hasta = cotasDe(clave) || cortes.tramos.map(() => cortes.techo);
@@ -1261,6 +1340,10 @@ export function crearCortes(ctx, edificio, opciones = {}) {
       }
       for (const m of materialesSombra.values()) m.dispose();
       materialesSombra.clear();
+      for (const m of tapasGeo.mallas.values()) { grupo.remove(m); m.geometry.dispose(); }
+      tapasGeo.mallas.clear();
+      if (tapasGeo.vivienda) { grupo.remove(tapasGeo.vivienda); tapasGeo.vivienda.geometry.dispose(); tapasGeo.vivienda = null; }
+      materialTapa.dispose();
       for (const mapa of [...cache.values(), ...[...parciales.values()].map((x) => x.mapa)]) {
         for (const m of mapa.values()) m?.geometry.dispose();
       }
@@ -1322,9 +1405,20 @@ export function crearCortes(ctx, edificio, opciones = {}) {
        Ver recortadoCorte en el GLSL. */
     setRecorteVivienda(caja, cota) {
       const u = uniformesAtenuacion;
+      if (tapasGeo.vivienda) { grupo.remove(tapasGeo.vivienda); tapasGeo.vivienda.geometry.dispose(); tapasGeo.vivienda = null; }
       if (!caja || !Number.isFinite(cota)) { u.uRecorteViv.value.set(1e9, 1e9, -1e9, -1e9); u.uRecorteVivY.value = 1e6; return; }
       u.uRecorteViv.value.set(caja.min.x - HOLGURA_RECORTE_VIV, caja.min.z - HOLGURA_RECORTE_VIV, caja.max.x + HOLGURA_RECORTE_VIV, caja.max.z + HOLGURA_RECORTE_VIV);
       u.uRecorteVivY.value = cota + 0.02;
+      /* Tapas de lo que este recorte corta: los muros de los cajones más
+         altos, seccionados a la cota de la vivienda (tapas.js). Solo entra lo
+         que cruza el plano; lo que ya acaba en él (la planta de la vivienda)
+         tiene su tapa precalculada. Van 5 mm por debajo del umbral del
+         descarte, que se lleva las tapas precalculadas de más arriba. */
+      const t0 = performance.now();
+      const stats = {};
+      const { posiciones } = seccionar(triangulosMuro(cota), cota, { alzar: 0.015, stats });
+      if (posiciones.length) { tapasGeo.vivienda = mallaTapas(posiciones, 'tapas-vivienda'); tapasGeo.vivienda.visible = true; }
+      cortes.tiempos.tapasVivienda = { ms: Math.round(performance.now() - t0), ...stats };
     },
 
     /* Techo devuelto y luces encendidas dentro de la vivienda (ver arriba).

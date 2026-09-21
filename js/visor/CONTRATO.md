@@ -324,11 +324,25 @@ Tres avisos de Fran con capturas, y lo que se decidió:
 - **Vidrios de la vivienda abierta.** Sin tinte ninguno: `REALCE` ya no tiene
   `abierta` y `repintar` no tiñe la vivienda que está abierta. El realce de
   estado queda para el hover y la selección desde fuera.
-- **Tapas de los muros cortados.** El modelo no tiene tapas; por la boca del
-  corte se ve la cara interior del muro. `oscurecerTraseras` la pinta ahora
-  PLANA, gris oscuro sin luz ni reflejos (`COLOR_TAPA`, al final del shader,
-  después de la luz del interior), como el poché de una sección: el muro se
-  lee macizo. Nunca blanco.
+- **Tapas de los muros cortados.** El modelo no tiene tapas; por la boca
+  del corte se veía la cara interior del muro, blanca. Pintar de oscuro las
+  caras traseras se probó y se descartó: el modelo tiene caras sueltas y
+  normales invertidas, y salían negros paños de pared, puertas, sillas y
+  armarios. Las tapas son ahora GEOMETRÍA (`js/visor/tapas.js`): la sección
+  de los muros a la cota de corte, calculada por pares de caras paralelas
+  enfrentadas a menos de medio metro (solo materiales de muro y tabique,
+  `ES_MURO`); una cara suelta o invertida no tiene pareja y no produce tapa,
+  nunca una falsa. Las de cada planta las precalcula
+  `node tools/tapas_serenea.mjs` a partir de `assets/serenea/apolo_envolvente.glb`
+  y `data/cortes.json` → `data/tapas_serenea.json` (por cajón, polígonos
+  planos a su cota, en mm; ~700 KB); cortes.js lo carga al cortar la primera
+  planta y enseña la malla de la planta con el estado final del corte. Las
+  de la vivienda abierta, que corta a otra cota los muros de los cajones
+  más altos, se calculan al abrirla (`setRecorteVivienda`, unas decenas de
+  ms). Material plano gris oscuro sin luz ni reflejos (`cortes.materialTapa`,
+  el poché de una sección), con el mismo descarte por cota que el edificio.
+  Las caras traseras siguen en gris claro mate, como siempre. Si cambia el
+  modelo o `data/cortes.json`, hay que regenerar las tapas.
 
 ## Dos motores, una interfaz (añadido el 17-sep-2026)
 

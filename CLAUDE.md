@@ -14,6 +14,10 @@ de Unreal 5.8 aparte que se entrega como ejecutable para la oficina de ventas.
 - El rendimiento en iPhone es requisito del visor web.
 - `unreal.html` (la interfaz para el ejecutable de Unreal) se genera con
   `node tools/unreal_html.mjs` y se commitea generada; no se edita a mano.
+- `data/tapas_serenea.json` (tapas de los muros cortados, por planta) se
+  genera con `node tools/tapas_serenea.mjs` a partir de
+  `assets/serenea/apolo_envolvente.glb` y `data/cortes.json`, y se commitea
+  generado; hay que regenerarlo cuando cambie el modelo o los cortes.
 - `gestion/` tiene que seguir siendo PHP 5.6 (el hosting corre 7.0.33; el
   guardián `.github/scripts/comprobar-php56.sh` lo vigila en el deploy).
 - Desde el entorno de desarrollo en la nube no hay salida a
