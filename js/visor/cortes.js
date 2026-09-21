@@ -606,7 +606,7 @@ export function crearCortes(ctx, edificio, opciones = {}) {
      descarte por cota que el resto del edificio. */
   const tapasGeo = { datos: null, carga: null, mallas: new Map(), vivienda: null, alzar: 0.01 };
   const materialTapa = new THREE.MeshStandardMaterial({
-    color: 0x000000, emissive: new THREE.Color(0.105, 0.099, 0.092), roughness: 1, metalness: 0, name: 'tapa_corte',
+    color: 0x000000, emissive: new THREE.Color(0.045, 0.0425, 0.040), roughness: 1, metalness: 0, name: 'tapa_corte', // gris oscuro cálido: ~#4e4b49 en pantalla, a plena luz y sin oclusión
   });
   materialTapa.userData = { sinTraseras: true, sinInterior: true, baseColor: new THREE.Color(0), baseEnv: 0 };
   if (atenuacionPorCota) atenuarPorCota(materialTapa, uniformesAtenuacion); // el recorte de la vivienda abierta también corta tapas
