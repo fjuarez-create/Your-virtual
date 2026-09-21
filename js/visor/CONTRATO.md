@@ -352,6 +352,21 @@ Tres avisos de Fran con capturas, y lo que se decidió:
   de una ventana se asigna a la vivienda que lo tiene entre su suelo y su
   techo (antes, el paño alto de una ventana de suelo a techo podía irse a la
   de arriba).
+- **Ventanas opacas del modelo.** Dos defectos del modelo hacían que
+  algunos paños se vieran como un rectángulo gris opaco, y los corrige el
+  pipeline sin listas a mano, por geometría: (a) en la familia de ventanas
+  «UNIK_VEN_Val 2H abatible + 1H fija» una hoja lleva el material de
+  aluminio (etapa 2b2: un triángulo opaco de carpintería, paralelo a un paño
+  y con el centro dentro de él, pasa a vidrio: 70 hojas); (b) en la familia
+  «VEN-X_Acristalamiento» el acristalamiento viene además como una placa de
+  1–4 cm de canto con el material de la pintura interior (en SketchUp,
+  caras de la etiqueta A-GLAZ pintadas como el muro), pegada por delante o
+  por detrás del paño (etapa 2b3: a cada triángulo de obra paralelo a un
+  paño vertical y a menos de 5 cm de su plano se le recorta el rectángulo
+  de la ventana y se descarta lo de dentro, porque el paño ya es el vidrio;
+  lo de fuera sigue siendo muro: 74 ventanas). Comprobación sobre el fichero
+  resultante: ningún paño con una cara opaca paralela que le tape más del
+  30 % a menos de 25 cm (`vidrio.total` = 964).
 - **Suelos.** El modelo traía el suelo de cada vivienda en dos capas (vinilo
   a cota y tarima 10 cm más abajo), a 27 viviendas les faltaba el vinilo, 12
   áticos iban en otro roble y los pasillos de las plantas altas en vinilo.

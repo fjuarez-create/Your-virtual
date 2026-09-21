@@ -406,6 +406,109 @@ function ajustarHojasOpacas() {
   log(`hojas opacas de ventana pasadas a vidrio: ${hojas} piezas, ${tris} triángulos; familias: ${[...familias].map(([f, n]) => `${f.slice(0, 50)} ×${n}`).join(' · ')}`);
 }
 
+/* ─────────────────────────── 2b3. Caras de obra pegadas al vidrio ─────────────────────────── */
+/* En 74 paños (familia "VEN-X_Acristalamiento", fachadas norte de T1/T3/T5
+   y patios de T0/T6) el acristalamiento viene además como una placa de
+   1–4 cm de canto con el material de la pintura interior: en SketchUp son
+   caras de la etiqueta A-GLAZ pintadas como el muro, y el paño se veía como
+   un rectángulo gris opaco (Fran, 21-sep: "el plano del vidrio son dos
+   caras y una es opaca… poner las dos caras de vidrio"). Esas caras no
+   siempre acaban en el hueco (algunas siguen como muro más allá de la
+   ventana), así que no se convierten enteras a vidrio: a cada triángulo de
+   obra paralelo a un paño vertical y a menos de 5 cm de su plano se le
+   recorta el rectángulo de la ventana (la unión de los paños de ese plano
+   que se tocan, con 4 cm de margen) y se descarta lo de dentro —el paño ya
+   es el vidrio— dejando lo de fuera como muro. */
+ajustarCarasPegadasAlVidrio();
+function ajustarCarasPegadasAlVidrio() {
+  const ES_OBRA_OPACA = /Pintura interior|Monocapa|Hormig|Alicatado|Travertino|Lacado|Yeso|Escayola/i;
+  const DIST = 0.05, MARGEN = 0.04, UNION = 0.25, PARALELO = 0.97;
+  const indice = (g, t, c) => (g.index ? g.index.getX(3 * t + c) : 3 * t + c);
+  // 1. paños verticales como rectángulos (u, v) en su plano
+  const panos = [];
+  for (const p of piezas) {
+    if (p.cat !== 'vidrio') continue;
+    const b = p.caja; const dims = [b.max.x - b.min.x, b.max.y - b.min.y, b.max.z - b.min.z];
+    const eje = dims.indexOf(Math.min(...dims));
+    if (eje === 1 || dims[eje] > 0.1 || Math.max(...dims) < 0.3) continue;
+    const mn = [b.min.x, b.min.y, b.min.z], mx = [b.max.x, b.max.y, b.max.z];
+    const ejes = eje === 0 ? [2, 1] : [0, 1];
+    panos.push({ eje, ejes, plano: (mn[eje] + mx[eje]) / 2, u0: mn[ejes[0]], u1: mx[ejes[0]], v0: mn[ejes[1]], v1: mx[ejes[1]] });
+  }
+  // 2. ventanas: paños del mismo plano (±5 cm) que se tocan (a < 25 cm)
+  const ventanas = [];
+  for (const q of panos) {
+    const w = ventanas.find((v) => v.eje === q.eje && Math.abs(v.plano - q.plano) < DIST && q.u0 < v.u1 + UNION && q.u1 > v.u0 - UNION && q.v0 < v.v1 + UNION && q.v1 > v.v0 - UNION);
+    if (!w) { ventanas.push({ ...q, n: 1 }); continue; }
+    w.plano = (w.plano * w.n + q.plano) / (w.n + 1); w.n++;
+    w.u0 = Math.min(w.u0, q.u0); w.u1 = Math.max(w.u1, q.u1); w.v0 = Math.min(w.v0, q.v0); w.v1 = Math.max(w.v1, q.v1);
+  }
+  for (const w of ventanas) {
+    w.u0 -= MARGEN; w.u1 += MARGEN; w.v0 -= MARGEN; w.v1 += MARGEN;
+    w.centro = [0, 0, 0]; w.centro[w.eje] = w.plano; w.centro[w.ejes[0]] = (w.u0 + w.u1) / 2; w.centro[w.ejes[1]] = (w.v0 + w.v1) / 2;
+  }
+  const CEL = 1; const rej = new Map();
+  const cajaDe = (w) => { const mn = [0, 0, 0], mx = [0, 0, 0]; mn[w.eje] = w.plano - DIST; mx[w.eje] = w.plano + DIST; mn[w.ejes[0]] = w.u0; mx[w.ejes[0]] = w.u1; mn[w.ejes[1]] = w.v0; mx[w.ejes[1]] = w.v1; return { mn, mx }; };
+  for (const w of ventanas) { const { mn, mx } = cajaDe(w); for (let i = Math.floor(mn[0] / CEL); i <= Math.floor(mx[0] / CEL); i++) for (let j = Math.floor(mn[1] / CEL); j <= Math.floor(mx[1] / CEL); j++) for (let k = Math.floor(mn[2] / CEL); k <= Math.floor(mx[2] / CEL); k++) { const key = `${i},${j},${k}`; let l = rej.get(key); if (!l) { l = []; rej.set(key, l); } l.push(w); } }
+  // 3. recorte de polígonos convexos con atributos (Sutherland–Hodgman por semiplanos)
+  const lerp = (A, B, t) => ({ p: A.p.map((x, i) => x + (B.p[i] - x) * t), n: A.n ? A.n.map((x, i) => x + (B.n[i] - x) * t) : null, uv: A.uv ? A.uv.map((x, i) => x + (B.uv[i] - x) * t) : null });
+  const recortar = (poly, f) => { const out = []; for (let i = 0; i < poly.length; i++) { const A = poly[i], B = poly[(i + 1) % poly.length]; const fa = f(A), fb = f(B); if (fa >= 0) out.push(A); if ((fa >= 0) !== (fb >= 0)) out.push(lerp(A, B, fa / (fa - fb))); } return out.length >= 3 ? out : []; };
+  const area2D = (poly, ejes) => { let s = 0; for (let i = 0; i < poly.length; i++) { const A = poly[i].p, B = poly[(i + 1) % poly.length].p; s += A[ejes[0]] * B[ejes[1]] - B[ejes[0]] * A[ejes[1]]; } return Math.abs(s) / 2; };
+  /* polígono menos rectángulo = izquierda ∪ derecha ∪ (centro ∩ abajo) ∪ (centro ∩ arriba) */
+  const restar = (poly, w) => {
+    const u = (V) => V.p[w.ejes[0]], v = (V) => V.p[w.ejes[1]];
+    const centro = recortar(recortar(poly, (V) => u(V) - w.u0), (V) => w.u1 - u(V));
+    const trozos = [recortar(poly, (V) => w.u0 - u(V)), recortar(poly, (V) => u(V) - w.u1), recortar(centro, (V) => w.v0 - v(V)), recortar(centro, (V) => v(V) - w.v1)];
+    return trozos.filter((q) => q.length >= 3 && area2D(q, w.ejes) > 1e-6);
+  };
+  let piezasTocadas = 0, trisRecortados = 0, areaQuitada = 0; const ventanasTocadas = new Set();
+  const a = [0, 0, 0], b = [0, 0, 0], c = [0, 0, 0];
+  for (const p of piezas) {
+    if (p.cat !== 'envolvente' || !ES_OBRA_OPACA.test(p.material?.getName() || '')) continue;
+    const g = p.geometria; const P = g.attributes.position, N = g.attributes.normal, U = g.attributes.uv; const n = trisDe(g);
+    const b0 = p.caja; if (!ventanas.some((w) => { const { mn, mx } = cajaDe(w); return mn[0] < b0.max.x && mx[0] > b0.min.x && mn[1] < b0.max.y && mx[1] > b0.min.y && mn[2] < b0.max.z && mx[2] > b0.min.z; })) continue;
+    const vertice = (vi) => ({ p: [P.getX(vi), P.getY(vi), P.getZ(vi)], n: N ? [N.getX(vi), N.getY(vi), N.getZ(vi)] : null, uv: U ? [U.getX(vi), U.getY(vi)] : null });
+    const salida = []; // triángulos [V, V, V] de la pieza rehecha
+    let tocada = false;
+    for (let t = 0; t < n; t++) {
+      const ia = indice(g, t, 0), ib = indice(g, t, 1), ic = indice(g, t, 2);
+      a[0] = P.getX(ia); a[1] = P.getY(ia); a[2] = P.getZ(ia); b[0] = P.getX(ib); b[1] = P.getY(ib); b[2] = P.getZ(ib); c[0] = P.getX(ic); c[1] = P.getY(ic); c[2] = P.getZ(ic);
+      const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
+      const nn = [uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx]; const L = Math.hypot(...nn);
+      const tri = () => [vertice(ia), vertice(ib), vertice(ic)];
+      if (L < 1e-9) { salida.push(tri()); continue; }
+      const mn = [Math.min(a[0], b[0], c[0]), Math.min(a[1], b[1], c[1]), Math.min(a[2], b[2], c[2])], mx = [Math.max(a[0], b[0], c[0]), Math.max(a[1], b[1], c[1]), Math.max(a[2], b[2], c[2])];
+      const afectan = [];
+      const vistas = new Set();
+      for (let i = Math.floor(mn[0] / CEL); i <= Math.floor(mx[0] / CEL); i++) for (let j = Math.floor(mn[1] / CEL); j <= Math.floor(mx[1] / CEL); j++) for (let k = Math.floor(mn[2] / CEL); k <= Math.floor(mx[2] / CEL); k++) for (const w of rej.get(`${i},${j},${k}`) || []) {
+        if (vistas.has(w)) continue; vistas.add(w);
+        if (Math.abs(nn[w.eje]) / L < PARALELO) continue;                 // no paralelo al paño
+        /* Distancia del plano del triángulo al centro de la ventana (no del
+           centro del triángulo al plano del paño: la fachada norte está girada
+           1,2° y un triángulo de 4 m deriva 8 cm de punta a punta). */
+        if (Math.abs(nn[0] * (w.centro[0] - a[0]) + nn[1] * (w.centro[1] - a[1]) + nn[2] * (w.centro[2] - a[2])) / L > DIST) continue;
+        if (mn[w.ejes[0]] >= w.u1 || mx[w.ejes[0]] <= w.u0 || mn[w.ejes[1]] >= w.v1 || mx[w.ejes[1]] <= w.v0) continue; // no toca el hueco
+        afectan.push(w);
+      }
+      if (!afectan.length) { salida.push(tri()); continue; }
+      let trozos = [tri()]; const areaAntes = L / 2;
+      for (const w of afectan) { trozos = trozos.flatMap((q) => restar(q, w)); ventanasTocadas.add(w); }
+      tocada = true; trisRecortados++;
+      let areaDespues = 0;
+      for (const q of trozos) { areaDespues += area2D(q, afectan[0].ejes); for (let i = 1; i + 1 < q.length; i++) salida.push([q[0], q[i], q[i + 1]]); }
+      areaQuitada += Math.max(0, areaAntes - areaDespues);
+    }
+    if (!tocada) continue;
+    piezasTocadas++;
+    const m = salida.length * 3;
+    const pos = new Float32Array(m * 3), nor = N ? new Float32Array(m * 3) : null, uv = U ? new Float32Array(m * 2) : null; let k = 0;
+    for (const tri of salida) for (const V of tri) { pos[3 * k] = V.p[0]; pos[3 * k + 1] = V.p[1]; pos[3 * k + 2] = V.p[2]; if (nor) { nor[3 * k] = V.n[0]; nor[3 * k + 1] = V.n[1]; nor[3 * k + 2] = V.n[2]; } if (uv) { uv[2 * k] = V.uv[0]; uv[2 * k + 1] = V.uv[1]; } k++; }
+    const s = new THREE.BufferGeometry(); s.setAttribute('position', new THREE.BufferAttribute(pos, 3)); if (nor) s.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); if (uv) s.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); s.computeBoundingBox();
+    p.geometria = s; p.caja = s.boundingBox.clone();
+  }
+  log(`caras de obra pegadas al vidrio: ${trisRecortados} triángulos recortados en ${piezasTocadas} piezas, ${areaQuitada.toFixed(1)} m² quitados en ${ventanasTocadas.size} ventanas (de ${ventanas.length})`);
+}
+
 /* ─────────────────────────── 2c. Suelos ─────────────────────────── */
 /* Parquet en todas las viviendas y porcelánico en las zonas comunes (Fran,
    21-sep-2026). El modelo trae el suelo de cada vivienda en DOS capas: el
