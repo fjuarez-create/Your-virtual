@@ -116,6 +116,68 @@ class OcultarInvisiblesPass extends Pass {
   }
 }
 
+/* ───────────── G-buffer y profundidad sin scene.overrideMaterial ─────────────
+   Con `scene.overrideMaterial`, three dibuja TODAS las mallas con ese material
+   e ignora los planos de recorte y los discards del material propio de cada
+   una. La oclusión ambiental, los reflejos, el desenfoque de movimiento y el
+   bokeh, que leen esa profundidad, «veían» la geometría que el corte ya no
+   pinta: por encima de la planta seccionada quedaban fantasmas de puertas y
+   armarios (no la pieza, sino su oclusión). Aquí, durante la pasada, a cada
+   malla se le pone una VARIANTE del material auxiliar (normales o
+   profundidad) con SUS planos de recorte y, si su material lleva el recorte
+   por cota de cortes.js (userData.atenuacionCorte), ese mismo descarte
+   (`recortar`, que da cortes.materialAuxiliar). Las variantes se comparten por
+   juego de planos (el mismo Plane de cada tramo para todos los clones de ese
+   tramo), así que son unas pocas decenas como mucho. El fondo se quita
+   mientras tanto: con override tampoco aportaba nada al G-buffer. */
+function crearIntercambio(base) {
+  let recortar = null;
+  const variantes = new Map(); // clave de planos → Map(conRecorte → material)
+  const guardados = [];        // [malla, material original, …]
+  const claveDe = (planos) => (planos.length === 1 ? planos[0] : planos);
+  function varianteDe(mesh) {
+    const m = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
+    if (!m) return base;
+    const planos = Array.isArray(m.clippingPlanes) && m.clippingPlanes.length ? m.clippingPlanes : null;
+    const conRecorte = !!(recortar && m.userData && m.userData.atenuacionCorte);
+    if (!planos && !conRecorte) return base;
+    const clave = planos ? claveDe(planos) : base;
+    let porClave = variantes.get(clave);
+    if (!porClave) { porClave = new Map(); variantes.set(clave, porClave); }
+    let v = porClave.get(conRecorte);
+    if (!v) {
+      v = base.clone();
+      if (planos) { v.clippingPlanes = planos; v.clipIntersection = !!m.clipIntersection; }
+      if (conRecorte) recortar(v);
+      porClave.set(conRecorte, v);
+    }
+    return v;
+  }
+  return {
+    setRecorte(fn) { recortar = typeof fn === 'function' ? fn : null; },
+    /* Dibuja la escena en `destino` con las variantes puestas, y lo deja todo
+       como estaba. Sustituye a scene.overrideMaterial = base. */
+    render(renderer, scene, camera) {
+      const fondo = scene.background;
+      scene.background = null;
+      scene.traverse((o) => {
+        if (!o.isMesh || !o.visible) return;
+        guardados.push(o, o.material);
+        o.material = varianteDe(o);
+      });
+      try { renderer.render(scene, camera); } finally {
+        for (let i = 0; i < guardados.length; i += 2) guardados[i].material = guardados[i + 1];
+        guardados.length = 0;
+        scene.background = fondo;
+      }
+    },
+    dispose() {
+      for (const porClave of variantes.values()) for (const v of porClave.values()) if (v !== base) v.dispose();
+      variantes.clear();
+    },
+  };
+}
+
 /* ───────────────────────── Desenfoque de movimiento ───────────────────────── */
 
 /* Velocidad (m/s) a partir de la cual el desenfoque ya no crece más. Un vuelo
@@ -333,6 +395,32 @@ export function crearPost(ctx, luz, opciones = {}) {
   });
   gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, radiusExponent: 1, rings: 2, samples: CALIDADES.alta.aoDenoise });
   }
+  /* El G-buffer se dibuja con variantes por malla, no con override (ver
+     crearIntercambio). Se sustituye el método de la instancia: el original
+     solo se usa para este material. */
+  const intercambioNormales = gtao ? crearIntercambio(gtao.normalMaterial) : null;
+  if (gtao) {
+    const originalRenderOverride = gtao._renderOverride.bind(gtao);
+    gtao._renderOverride = function (renderer, overrideMaterial, renderTarget, clearColor, clearAlpha) {
+      if (overrideMaterial !== this.normalMaterial) return originalRenderOverride(renderer, overrideMaterial, renderTarget, clearColor, clearAlpha);
+      renderer.getClearColor(this._originalClearColor);
+      const alpha0 = renderer.getClearAlpha();
+      const auto0 = renderer.autoClear;
+      renderer.setRenderTarget(renderTarget);
+      renderer.autoClear = false;
+      clearColor = overrideMaterial.clearColor || clearColor;
+      clearAlpha = overrideMaterial.clearAlpha || clearAlpha;
+      if (clearColor !== undefined && clearColor !== null) {
+        renderer.setClearColor(clearColor);
+        renderer.setClearAlpha(clearAlpha || 0.0);
+        renderer.clear();
+      }
+      intercambioNormales.render(renderer, this.scene, this.camera);
+      renderer.autoClear = auto0;
+      renderer.setClearColor(this._originalClearColor);
+      renderer.setClearAlpha(alpha0);
+    };
+  }
 
   /* El G-buffer de GTAO es la única fuente de profundidad y normales de la
      cadena; ver la cabecera del fichero. */
@@ -381,9 +469,37 @@ export function crearPost(ctx, luz, opciones = {}) {
      (0,00025 → a 12 m del foco, 0,003 de UV, ~6 px a 1080p: la vivienda
      enfocada y sus vecinas siguen nítidas; el fondo a 100 m llega al tope). */
   const bokeh = ligero ? null : new BokehPass(scene, camera, { focus: 40, aperture: 0.00025, maxblur: 0.01 });
+  const intercambioBokeh = bokeh?._materialDepth ? crearIntercambio(bokeh._materialDepth) : null;
   if (bokeh) {
     bokeh.enabled = false;
     if (bokeh._materialDepth) bokeh._materialDepth.side = THREE.DoubleSide; // misma razón que el G-buffer
+    /* Su profundidad, también con variantes por malla (ver crearIntercambio):
+       es el render() de BokehPass de three r185 sin scene.overrideMaterial. */
+    if (intercambioBokeh) bokeh.render = function (renderer, writeBuffer, readBuffer) {
+      renderer.getClearColor(this._oldClearColor);
+      const alpha0 = renderer.getClearAlpha();
+      const auto0 = renderer.autoClear;
+      renderer.autoClear = false;
+      renderer.setClearColor(0xffffff);
+      renderer.setClearAlpha(1.0);
+      renderer.setRenderTarget(this._renderTargetDepth);
+      renderer.clear();
+      intercambioBokeh.render(renderer, this.scene, this.camera);
+      this.uniforms.tColor.value = readBuffer.texture;
+      this.uniforms.nearClip.value = this.camera.near;
+      this.uniforms.farClip.value = this.camera.far;
+      if (this.renderToScreen) {
+        renderer.setRenderTarget(null);
+        this._fsQuad.render(renderer);
+      } else {
+        renderer.setRenderTarget(writeBuffer);
+        renderer.clear();
+        this._fsQuad.render(renderer);
+      }
+      renderer.setClearColor(this._oldClearColor);
+      renderer.setClearAlpha(alpha0);
+      renderer.autoClear = auto0;
+    };
   }
 
   /* En el móvil no había NINGÚN antialiasing: el lienzo va a DPR bajo (ver
@@ -567,10 +683,19 @@ export function crearPost(ctx, luz, opciones = {}) {
       if (ssr) ssr.selects = Array.isArray(mallas) && mallas.length ? mallas : null;
     },
 
+    /** fn(material) → el mismo material con el descarte por cota de cortes.js
+        (cortes.materialAuxiliar), para el G-buffer y el bokeh. */
+    setRecorte(fn) {
+      intercambioNormales?.setRecorte(fn);
+      intercambioBokeh?.setRecorte(fn);
+    },
+
     dispose() {
       if (!activo) return;
       activo = false;
       ocultar.restaurar();
+      intercambioNormales?.dispose();
+      intercambioBokeh?.dispose();
       for (const p of composer.passes) p.dispose?.();
       composer.dispose();
     },

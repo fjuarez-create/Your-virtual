@@ -305,6 +305,31 @@ el salto de cámara del arranque. El puente de
 Unreal retira la portada en `listo` y no vuela: la cámara la lleva la
 aplicación.
 
+## Corte limpio (añadido el 21-sep-2026)
+
+Tres avisos de Fran con capturas, y lo que se decidió:
+
+- **Fantasmas por encima del corte.** No era geometría sino su oclusión
+  ambiental, sus reflejos, su desenfoque y su sombra: el G-buffer de GTAO y
+  la profundidad del bokeh se dibujaban con `scene.overrideMaterial`, y con
+  override three ignora los planos de recorte y los discards del material
+  propio de cada malla. Ahora post.js dibuja esas dos pasadas con una
+  VARIANTE por malla del material auxiliar (`crearIntercambio`) que lleva sus
+  planos de recorte y, si su material tiene el recorte por cota,
+  el mismo descarte (`cortes.materialAuxiliar`, que main enchufa con
+  `post.setRecorte`). Las sombras van por el mismo camino: cada malla del
+  edificio, sus clones y el mobiliario llevan un `customDepthMaterial` con
+  ese descarte (`sombraRecortada` en cortes.js), y los clones ya recortaban
+  su sombra por planos (`clipShadows`).
+- **Vidrios de la vivienda abierta.** Sin tinte ninguno: `REALCE` ya no tiene
+  `abierta` y `repintar` no tiñe la vivienda que está abierta. El realce de
+  estado queda para el hover y la selección desde fuera.
+- **Tapas de los muros cortados.** El modelo no tiene tapas; por la boca del
+  corte se ve la cara interior del muro. `oscurecerTraseras` la pinta ahora
+  PLANA, gris oscuro sin luz ni reflejos (`COLOR_TAPA`, al final del shader,
+  después de la luz del interior), como el poché de una sección: el muro se
+  lee macizo. Nunca blanco.
+
 ## Dos motores, una interfaz (añadido el 17-sep-2026)
 
 `window.apolo` lo puede dar `visor/main.js` (three.js, lo de arriba) o

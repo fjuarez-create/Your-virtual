@@ -327,12 +327,15 @@ function yminMobiliario(mesh, caja) {
   return m[2] != null ? parseFloat(`${m[1]}.${m[2]}`) : parseInt(m[1], 10) / 100;
 }
 
-/* Caras traseras en gris claro: lo que se ve por la boca del corte en modelos
-   sin tapas. Se encadena con el onBeforeCompile que
-   ya tenga el material (grano, CSM) y se distingue en la clave del programa. */
-/* Gris claro, no negro: el cliente no quiere ver nada oscuro por la boca del
-   corte; basta con que la cara interior se distinga de la exterior. */
-const COLOR_TRASERA = 'vec3(0.74, 0.72, 0.68)';
+/* Caras traseras como TAPA del corte: lo que se ve por la boca de un muro
+   cortado en un modelo sin tapas es su cara interior. Se pinta plana, de un
+   gris oscuro sin luz ni reflejos (el «poché» de una sección de arquitectura),
+   así el muro se lee macizo y con tapa en vez de hueco y blanco por dentro
+   (aviso de Fran, 21-sep: «lo que queda fatal es que se vea blanco»). Va al
+   final del shader, después de la luz del interior y de la atenuación, para
+   que nada la aclare. Se encadena con el onBeforeCompile que ya tenga el
+   material (grano, CSM) y se distingue en la clave del programa. */
+const COLOR_TAPA = 'vec3(0.052, 0.049, 0.046)'; // lineal; con AgX sale un gris oscuro cálido
 function oscurecerTraseras(material) {
   if (!material || material.userData.carasOscuras || material.userData.sinTraseras) return;
   material.userData.carasOscuras = true;
@@ -343,14 +346,12 @@ function oscurecerTraseras(material) {
   material.onBeforeCompile = function (shader, r) {
     if (previo) previo.call(this, shader, r);
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <color_fragment>',
-        `#include <color_fragment>\n  if (!gl_FrontFacing) diffuseColor.rgb = ${COLOR_TRASERA};`)
       .replace('#include <roughnessmap_fragment>',
         '#include <roughnessmap_fragment>\n  if (!gl_FrontFacing) roughnessFactor = 1.0;')
       .replace('#include <metalnessmap_fragment>',
         '#include <metalnessmap_fragment>\n  if (!gl_FrontFacing) metalnessFactor = 0.0;')
-      .replace('#include <lights_fragment_end>',
-        '#include <lights_fragment_end>\n  if (!gl_FrontFacing) { reflectedLight.directSpecular = vec3(0.0); reflectedLight.indirectSpecular = vec3(0.0); }');
+      .replace('#include <opaque_fragment>',
+        `if (!gl_FrontFacing) outgoingLight = ${COLOR_TAPA};\n  #include <opaque_fragment>`);
   };
   /* three usa el texto de onBeforeCompile como clave del programa; con el
      envoltorio todas serían iguales, así que se añade el texto del hook
@@ -508,6 +509,37 @@ function atenuarPorCota(material, uniformes) {
   };
   material.customProgramCacheKey = () => `${clavePrevia ? clavePrevia() : ''}|${textoPrevio}|atenuacion${material.userData.sinInterior ? '|sinint' : ''}`;
   material.needsUpdate = true;
+}
+
+/* Materiales AUXILIARES (normales y profundidad del G-buffer de post.js, la
+   profundidad del bokeh y la de los mapas de sombra): el mismo descarte por
+   cota que atenuarPorCota, sin color ni luz. Sin esto la oclusión ambiental,
+   los reflejos, el desenfoque de movimiento, el bokeh y las sombras «veían»
+   la geometría que el color ya no pinta, y por encima del corte quedaban
+   fantasmas de puertas y armarios: no la pieza, sino su oclusión y su sombra
+   (aviso de Fran, 21-sep). Los materiales de normales y profundidad no
+   pasan por worldpos_vertex, así que la posición de mundo se toma tras
+   project_vertex, con `transformed` ya definitivo. */
+function recortarAuxiliar(material, uniformes) {
+  if (!material || material.userData.recorteAuxiliar) return material;
+  material.userData.recorteAuxiliar = true;
+  const previo = material.onBeforeCompile;
+  material.onBeforeCompile = function (shader, r) {
+    if (previo) previo.call(this, shader, r);
+    Object.assign(shader.uniforms, uniformes);
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\n  varying vec3 vPosMundoCorte;')
+      .replace('#include <project_vertex>', '#include <project_vertex>\n  vPosMundoCorte = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    /* El fragmento de MeshNormalMaterial no incluye <common>: se ancla en
+       las declaraciones de los planos de recorte, que llevan los tres. */
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <clipping_planes_pars_fragment>', `#include <clipping_planes_pars_fragment>\n${GLSL_ATENUACION}`)
+      .replace('#include <clipping_planes_fragment>',
+        '#include <clipping_planes_fragment>\n  if (recortadoCorte(vPosMundoCorte)) discard;');
+  };
+  material.customProgramCacheKey = () => 'recorteAuxiliar';
+  material.needsUpdate = true;
+  return material;
 }
 
 const aMapa = (v) => (v instanceof Map ? new Map(v) : new Map(Object.entries(v || {})));
@@ -759,6 +791,7 @@ export function crearCortes(ctx, edificio, opciones = {}) {
         const esLosa = mesh.material === byCat.slab || /__slab$/.test(mesh.name);
         piezas.push({ mesh, clave, nivel: info, caja, tramos, principal, esTapa, esMob, esLosa, ymin: yminMobiliario(mesh, caja),
           visibleBase: mesh.visible, clones: new Map(), estencil: new Map(), brush: null });
+        if (!esTapa) sombraRecortada(mesh);
         if (!esTapa && !esMob) { techo = Math.max(techo, caja.max.y); info.minY = Math.min(info.minY, caja.min.y); }
       }
     }
@@ -770,6 +803,29 @@ export function crearCortes(ctx, edificio, opciones = {}) {
     // mobiliario aparte (opciones.mobiliario y registrarMobiliario): nunca se corta, solo se oculta por cota
     for (const mob of [opciones.mobiliario, ...mobiliarioPendiente]) if (mob) registrarPiezasMobiliario(mob);
     mobiliarioPendiente.length = 0;
+  }
+
+  /* Sombras con el mismo recorte que el color: a cada malla del edificio (y
+     a sus clones y al mobiliario) se le da un MeshDepthMaterial propio con el
+     descarte por cota. three le copia por objeto los planos de recorte de su
+     material (clipShadows), así que basta uno por número de planos: si se
+     compartiera entre mallas con distinto número, three recompilaría el
+     programa a cada cambio. Sin esto, los muros que el corte de la vivienda
+     abierta descarta seguían echando sombra. */
+  const materialesSombra = new Map(); // nº de planos → MeshDepthMaterial
+  function materialSombraDe(nPlanos) {
+    let m = materialesSombra.get(nPlanos);
+    if (!m) {
+      m = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
+      recortarAuxiliar(m, uniformesAtenuacion);
+      materialesSombra.set(nPlanos, m);
+    }
+    return m;
+  }
+  function sombraRecortada(mesh) {
+    if (!atenuacionPorCota || !mesh?.isMesh) return;
+    const m = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
+    mesh.customDepthMaterial = materialSombraDe(m?.clippingPlanes?.length || 0);
   }
 
   /* Color y entorno de referencia (atenuación por niveles), caras traseras
@@ -803,6 +859,7 @@ export function crearCortes(ctx, edificio, opciones = {}) {
       piezas.push(p);
       nuevas.push(p);
       for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) prepararMaterial(m);
+      sombraRecortada(mesh);
     }
     return nuevas;
   }
@@ -824,6 +881,7 @@ export function crearCortes(ctx, edificio, opciones = {}) {
     clon.layers.mask = pieza.mesh.layers.mask;
     clon.visible = false;
     if (luz) luz.aplicarMaterial(mat);
+    sombraRecortada(clon);
     grupo.add(clon);
     pieza.clones.set(i, clon);
     return clon;
@@ -1154,10 +1212,13 @@ export function crearCortes(ctx, edificio, opciones = {}) {
       if (trans.resolver) { const r = trans.resolver; trans.resolver = null; r(cortes.planta); }
       for (const p of piezas) {
         p.mesh.visible = p.visibleBase;
+        p.mesh.customDepthMaterial = undefined;
         for (const c of p.clones.values()) c.material.dispose();
         p.brush?.geometry.dispose();
         p.fantasma?.material.dispose();
       }
+      for (const m of materialesSombra.values()) m.dispose();
+      materialesSombra.clear();
       for (const mapa of [...cache.values(), ...[...parciales.values()].map((x) => x.mapa)]) {
         for (const m of mapa.values()) m?.geometry.dispose();
       }
@@ -1186,9 +1247,18 @@ export function crearCortes(ctx, edificio, opciones = {}) {
     registrarVariante(clave, objeto) {
       if (!objeto) return;
       for (const m of materialesDe(objeto)) prepararMaterial(m);
+      objeto.traverse((o) => sombraRecortada(o));
       objeto.visible = false;
       cortes.variantes.set(clave, objeto);
       if (aplicada === clave && !trans.activa) aplicarFinal(clave);
+    },
+
+    /* Un material auxiliar (normales, profundidad) con el mismo descarte por
+       cota que el color; post.js lo usa para el G-buffer y el bokeh en vez de
+       scene.overrideMaterial (ver recortarAuxiliar). Devuelve el mismo
+       material. Sin atenuación por cota no hay recorte que copiar. */
+    materialAuxiliar(material) {
+      return atenuacionPorCota ? recortarAuxiliar(material, uniformesAtenuacion) : material;
     },
 
     registrarMobiliario(objeto) {

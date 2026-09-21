@@ -209,7 +209,7 @@ const IBL_TRAZADO = { dia: 0.5, manana: 0.7, atardecer: 0.8, noche: 1.6 };
 /* Intensidad emisiva del vidrio teñido. Dentro de la vivienda (abierta) el
    tinte casi desaparece: a 1,4 las ventanas eran paneles verdes opacos y lo
    que se quiere ver ahí es el vidrio; el estado ya lo dice la ficha. */
-const REALCE = { hover: 0.9, seleccion: 1.4, abierta: 0.12 };
+const REALCE = { hover: 0.9, seleccion: 1.4 }; // la vivienda abierta no se tiñe (ver repintar)
 const ELEVACION_VIVIENDA = 36;    // ver cabecera: la vivienda centrada y vista desde arriba
 const AZIMUT_VIVIENDA = { sur: 22, norte: 158 };
 
@@ -875,7 +875,11 @@ function repintar() {
   const hover = edificio.viviendas.get(apolo.hover);
   const sel = edificio.viviendas.get(apolo.selected);
   if (hover && hover !== sel && !atenuada(hover.id)) tenirVidrios(hover, REALCE.hover);
-  if (sel && !atenuada(sel.id)) tenirVidrios(sel, sel.id === edificio.abierta ? REALCE.abierta : REALCE.seleccion);
+  /* Vivienda ABIERTA (se ha entrado, ficha visible): el vidrio sin tinte
+     ninguno, del color normal, como el de cualquier otra vivienda (Fran,
+     21-sep, por tercera vez). El realce de estado queda para hover y para la
+     selección desde fuera. */
+  if (sel && !atenuada(sel.id) && sel.id !== edificio.abierta) tenirVidrios(sel, REALCE.seleccion);
   edificio.pintar({ hover: hover?.id ?? null, seleccionada: sel?.id ?? null, atenuada });
   /* Con una vivienda enfocada la cámara está a 10 m: las cartelas vecinas,
      de 3,2 m, taparían media pantalla. Solo queda la suya. */
@@ -1339,6 +1343,7 @@ async function arrancar() {
   });
   cortes.setInterior(interiorDe(apolo.momento));
   cortes.preparar(); // los hooks de material se añaden antes del primer fotograma con edificio
+  post.setRecorte((m) => cortes.materialAuxiliar(m)); // el G-buffer y el bokeh cortan como el color
   actualizarReflectantes();
   repintar();
 
