@@ -114,7 +114,7 @@ export const ALTURA_VIVIENDA = 2.7;      // m; alto de la caja de encuadre
 export const ALTURA_CARTELA = 1.2;       // m sobre y1
 /* Estor bajado de las vendidas (ver setVentanas): cuánto se oscurece el
    vidrio, cuánto reflejo pierde y cuánto se cierra. */
-export const ESTOR = { color: 0.35, reflejo: 0.25, opacidad: 0.3 };
+export const ESTOR = { color: 1, reflejo: 1, opacidad: 0 }; // sin estor: el vidrio de una vendida es vidrio (ver setVentanas)
 /* Vendida: la vivienda se apaga de verdad. El prisma no pinta un velo gris
    encima —eso se veía como una caja negra semitransparente en cuanto la
    cámara bajaba— sino que MULTIPLICA lo que hay detrás por LUZ_VENDIDA, así
@@ -586,7 +586,13 @@ export async function cargarEdificio(ctx, slot, opciones = {}) {
       // criba barata por caja ampliada antes de la distancia exacta
       if (x < v.caja.min.x - DISTANCIA_VIDRIO || x > v.caja.max.x + DISTANCIA_VIDRIO || z < v.caja.min.z - DISTANCIA_VIDRIO || z > v.caja.max.z + DISTANCIA_VIDRIO) continue;
       const d = distanciaAPoligono(v.poligono, x, z);
-      if (d <= DISTANCIA_VIDRIO && d < dMejor) { dMejor = d; mejor = v; }
+      if (d > DISTANCIA_VIDRIO) continue;
+      /* Las viviendas van apiladas con la misma huella: el paño alto de una
+         ventana de suelo a techo cae en el rango de la de arriba con la misma
+         distancia, y se lo llevaba la primera de la lista. Primero la que lo
+         tiene entre su suelo y su techo; la distancia solo desempata. */
+      const suyo = y >= v.y0 - 0.05 && y <= v.y1 + 0.05 ? 0 : 10;
+      if (d + suyo < dMejor) { dMejor = d + suyo; mejor = v; }
     }
     if (!mejor) { vidrio.comunes++; continue; }
     if (!mejor.vidrio) {
@@ -678,21 +684,20 @@ export async function cargarEdificio(ctx, slot, opciones = {}) {
       const f = factor === true ? 1 : (factor === false ? 0 : (+factor || 0));
       edificio.ventanas = f;
       const cerrado = f > 1.5;   // de noche
+      /* Sin estor (Fran, 21-sep): el vidrio de una vendida es vidrio como
+         el de cualquier otra, de día y de noche; lo único que la distingue
+         es que no se enciende. El estor bajado (vidrio oscuro, opaco y mate)
+         se veía como un rectángulo gris opaco en la ventana. */
       for (const v of viviendas.values()) {
         const vendida = edificio.estadoDe(v.id) === 'vendida';
         const on = f > 0 && !vendida;
         for (const m of v.vidrios) {
           m.emissiveIntensity = on ? INTENSIDAD_VENTANA * f : 0;
           const base = m.userData.baseColor;
-          if (base) m.color.copy(base).multiplyScalar(vendida ? ESTOR.color : 1);
-          if (m.userData.baseEnv !== undefined) {
-            m.envMapIntensity = m.userData.baseEnv * (vendida ? ESTOR.reflejo : (on && cerrado ? 0.3 : 1));
-          }
-          if (m.userData.baseOpacity !== undefined) {
-            const extra = vendida ? ESTOR.opacidad : (on && cerrado ? 0.32 : 0);
-            m.opacity = Math.min(1, m.userData.baseOpacity + extra);
-          }
-          m.roughness = vendida ? 0.35 : (on && cerrado ? 0.12 : 0.05);
+          if (base) m.color.copy(base);
+          if (m.userData.baseEnv !== undefined) m.envMapIntensity = m.userData.baseEnv * (on && cerrado ? 0.3 : 1);
+          if (m.userData.baseOpacity !== undefined) m.opacity = Math.min(1, m.userData.baseOpacity + (on && cerrado ? 0.32 : 0));
+          m.roughness = on && cerrado ? 0.12 : 0.05;
         }
       }
     },
