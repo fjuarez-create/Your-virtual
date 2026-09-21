@@ -185,7 +185,94 @@ def reponer_prismas():
             "encontrados": encontrados}
 
 
-# -------------------------------------------------------------------- 3. todo
+# ------------------------------------------------- 3. vidrios que no exporta
+
+TAG_VIDRIO = "apolo:vidrio_anadido"
+PLANO = "/Engine/BasicShapes/Plane"
+MAT_VIDRIO = "/Game/Apolo/Materiales/MI_Apolo_Vidrio"
+ANCHO_HOJA_CM = 76.0   # hoja de 800 mm menos el retranqueo del marco
+ALTO_HOJA_CM = 186.0   # hoja de 2000 mm, idem
+MARGEN_CM = 10.0       # holgura al buscar si ya hay un acristalamiento
+
+
+def _caja(actor):
+    b = actor.get_actor_bounds(False)
+    return b  # (origin, extent)
+
+
+def _solapan(o1, e1, o2, e2):
+    for i in ("x", "y", "z"):
+        if abs(getattr(o1, i) - getattr(o2, i)) > getattr(e1, i) + getattr(e2, i):
+            return False
+    return True
+
+
+def reponer_vidrios():
+    """Crea el vidrio de las ventanas a las que Datasmith no se lo exporta.
+
+    El componente `UNIK_VEN_Pal-N_NHAbatible` sale de SketchUp **sin panel de
+    vidrio**: su malla solo trae la ranura del aluminio y no hay ningún actor
+    `Acristalamiento` en el hueco. En SketchUp se ve bien, así que es la
+    exportación la que se lo deja. Sin esto, esas ventanas se ven como paneles
+    ciegos.
+
+    Los planos que crea llevan el tag `apolo:vidrio_anadido`, así que son
+    reconocibles y se borran y rehacen en cada pasada. Si algún día el
+    componente se arregla en SketchUp, esta función dejará de crear nada por sí
+    sola: al detectar un acristalamiento en el hueco, se lo salta.
+    """
+    subsistema = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
+    actores = subsistema.get_all_level_actors()
+
+    # fuera los de la pasada anterior, para no duplicar
+    previos = [a for a in actores if a.actor_has_tag(TAG_VIDRIO)]
+    for p in previos:
+        subsistema.destroy_actor(p)
+
+    ventanas, acristalamientos = [], []
+    for a in actores:
+        if a.actor_has_tag(TAG_VIDRIO):
+            continue
+        et = a.get_actor_label()
+        if et.startswith("UNIK_VEN_Pal") and "Manilla" not in et:
+            ventanas.append(a)
+        elif "Acristalamiento" in et:
+            acristalamientos.append(a)
+
+    cajas = [a.get_actor_bounds(False) for a in acristalamientos]
+
+    plano = unreal.EditorAssetLibrary.load_asset(PLANO)
+    material = unreal.EditorAssetLibrary.load_asset(MAT_VIDRIO)
+    if plano is None or material is None:
+        _aviso("no encuentro el plano o el material de vidrio")
+        return {"creados": 0, "ya_tenian": 0}
+
+    creados = ya_tenian = 0
+    for w in ventanas:
+        origen, extent = w.get_actor_bounds(False)
+        holgura = unreal.Vector(extent.x + MARGEN_CM, extent.y + MARGEN_CM,
+                                extent.z + MARGEN_CM)
+        if any(_solapan(origen, holgura, o, e) for (o, e) in cajas):
+            ya_tenian += 1
+            continue
+
+        rot = unreal.Rotator(-90.0, 0.0, w.get_actor_rotation().yaw)
+        nuevo = subsistema.spawn_actor_from_object(plano, origen, rot)
+        if nuevo is None:
+            continue
+        nuevo.set_actor_label("VIDRIO_ANADIDO")
+        nuevo.tags = [TAG_VIDRIO]
+        nuevo.set_actor_scale3d(unreal.Vector(ANCHO_HOJA_CM / 100.0,
+                                              ALTO_HOJA_CM / 100.0, 1.0))
+        for comp in nuevo.get_components_by_class(unreal.StaticMeshComponent):
+            comp.set_material(0, material)
+        creados += 1
+
+    return {"creados": creados, "ya_tenian": ya_tenian,
+            "borrados_previos": len(previos)}
+
+
+# -------------------------------------------------------------------- 4. todo
 
 def reponer(guardar=True, silencioso=False):
     """Repone materiales y prismas. Es seguro llamarlo siempre.
@@ -199,7 +286,8 @@ def reponer(guardar=True, silencioso=False):
     """
     mat = reponer_materiales()
     pri = reponer_prismas()
-    hubo_cambios = bool(mat["cambiados"] or pri["ocultados"])
+    vid = reponer_vidrios()
+    hubo_cambios = bool(mat["cambiados"] or pri["ocultados"] or vid["creados"])
 
     if guardar and hubo_cambios:
         unreal.get_editor_subsystem(unreal.LevelEditorSubsystem).save_current_level()
@@ -209,6 +297,8 @@ def reponer(guardar=True, silencioso=False):
             mat["cambiados"], mat["ya_estaban"]))
         _log("prismas: {0} ocultados, {1} ya estaban ocultos, {2} encontrados".format(
             pri["ocultados"], pri["ya_estaban"], pri["encontrados"]))
+        _log("vidrios de ventana: {0} creados, {1} ventanas ya lo traian".format(
+            vid["creados"], vid["ya_tenian"]))
         if hubo_cambios:
             _aviso("habia cosas sueltas y se han repuesto. Si no venias de un "
                    "reimport, probablemente el editor se cayo antes de guardar.")
