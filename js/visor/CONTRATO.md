@@ -362,11 +362,15 @@ Tres avisos de Fran con capturas, y lo que se decidió:
   1–4 cm de canto con el material de la pintura interior (en SketchUp,
   caras de la etiqueta A-GLAZ pintadas como el muro), pegada por delante o
   por detrás del paño (etapa 2b3: a cada triángulo de obra paralelo a un
-  paño vertical y a menos de 5 cm de su plano se le recorta el rectángulo
-  de la ventana y se descarta lo de dentro, porque el paño ya es el vidrio;
-  lo de fuera sigue siendo muro: 74 ventanas). Comprobación sobre el fichero
-  resultante: ningún paño con una cara opaca paralela que le tape más del
-  30 % a menos de 25 cm (`vidrio.total` = 964).
+  paño vertical y a menos de 5 cm de su plano, medido en el centro de la
+  ventana porque la fachada sur está girada 1,2°, se le recorta el
+  rectángulo de la ventana y se descarta lo de dentro, porque el paño ya es
+  el vidrio; lo de fuera sigue siendo muro: 225 triángulos en 78 ventanas).
+  Comprobación sobre el fichero resultante: ningún paño con una cara opaca
+  paralela que le tape más del 30 % a menos de 25 cm (antes 82; con el
+  umbral al 5 % solo quedan 5 paños con perfiles de aluminio del marco), y
+  en el visor los paños de la fachada sur de T3/T5, del patio de T0 y de la
+  fachada oeste dejan ver el interior (`vidrio.total` = 964).
 - **Suelos.** El modelo traía el suelo de cada vivienda en dos capas (vinilo
   a cota y tarima 10 cm más abajo), a 27 viviendas les faltaba el vinilo, 12
   áticos iban en otro roble y los pasillos de las plantas altas en vinilo.
