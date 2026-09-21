@@ -44,7 +44,7 @@ export async function abrirGLB(ruta) {
 
   /* Triángulos [[x,y,z]×3] de las primitivas cuyo material cumple `filtro`
      (fn(nombre) → bool). Con `porPrimitiva` devuelve { material, nodo, triangulos }. */
-  function triangulos(filtro = () => true, { porPrimitiva = false } = {}) {
+  function triangulos(filtro = () => true, { porPrimitiva = false, conUV = false } = {}) {
     const salida = [];
     j.meshes.forEach((m, mi) => {
       const tf = porMalla.get(mi); if (!tf) return;
@@ -56,11 +56,16 @@ export async function abrirGLB(ruta) {
         const v = (k) => [(pos.datos[3 * k] / norm) * tf.esc[0] + tf.tr[0], (pos.datos[3 * k + 1] / norm) * tf.esc[1] + tf.tr[1], (pos.datos[3 * k + 2] / norm) * tf.esc[2] + tf.tr[2]];
         const ntri = (idx ? idx.length : pos.datos.length / 3) / 3;
         const lista = porPrimitiva ? [] : salida;
+        const uvA = conUV && p.attributes.TEXCOORD_0 != null ? accesor(p.attributes.TEXCOORD_0) : null;
+        const uvs = uvA ? [] : null;
+        const normUV = uvA && uvA.normalizado ? (uvA.tipo === Int16Array ? 32767 : uvA.tipo === Uint16Array ? 65535 : uvA.tipo === Int8Array ? 127 : uvA.tipo === Uint8Array ? 255 : 1) : 1;
+        const uvDe = (k) => [uvA.datos[2 * k] / normUV, uvA.datos[2 * k + 1] / normUV];
         for (let t = 0; t < ntri; t++) {
           const i0 = idx ? idx[3 * t] : 3 * t, i1 = idx ? idx[3 * t + 1] : 3 * t + 1, i2 = idx ? idx[3 * t + 2] : 3 * t + 2;
           lista.push([v(i0), v(i1), v(i2)]);
+          if (uvs) uvs.push([uvDe(i0), uvDe(i1), uvDe(i2)]);
         }
-        if (porPrimitiva) salida.push({ material: nombre, nodo: tf.nombre, triangulos: lista });
+        if (porPrimitiva) salida.push({ material: nombre, nodo: tf.nombre, triangulos: lista, uvs });
       }
     });
     return salida;

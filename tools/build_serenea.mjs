@@ -437,7 +437,12 @@ function ajustarSuelos(viviendas) {
     const dentro = caras.filter((f) => f.y >= v.y0 - 0.3 && f.y <= v.y0 + 0.3 && f.x >= minX && f.x <= maxX && f.z >= minZ && f.z <= maxZ && dentroPoli(v.poligono, f.x, f.z));
     // capas por altura entre −15 y +25 cm: alturas ordenadas, agrupadas cuando distan menos de 6 cm
     const capas = agruparCapas(dentro.filter((f) => f.y >= v.y0 - 0.15 && f.y <= v.y0 + 0.25));
-    const alturas = capas.filter((l) => l.area >= 0.85 * Ap).map((l) => l.h).sort((x, y) => y - x);
+    /* La capa tiene que estar a la cota de la vivienda: el shader del corte
+       (cortes.js) trata como interior la franja desde el suelo hacia arriba,
+       y un suelo 10 cm por debajo queda fuera de ella (sol y cielo a pleno,
+       sin las luces de dentro: salía pálido y azulado). Una capa más baja
+       se sustituye por un suelo nuevo a la cota. */
+    const alturas = capas.filter((l) => l.area >= 0.85 * Ap && l.h >= v.y0 - 0.05).map((l) => l.h).sort((x, y) => y - x);
     if (alturas.length) {
       const capa = capas.find((l) => l.h === alturas[0]);
       const ajenas = capa.caras.filter((f) => !ES_PARQUET.test(f.mat));
