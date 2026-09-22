@@ -448,12 +448,14 @@ function crearPrismas(grupo, unitsById, capaCartelas, datosViviendas, fovCamara 
    encendidas. El shader mira en qué vivienda cae cada fragmento y le suma la
    lámpara de dentro; la tabla es lo único que cambia con los estados, así
    que encender o apagar una vivienda no toca la textura grande (2,5 MB).
-   El polígono se ensancha 12 cm para que la cara interior de sus muros, que
-   está justo en el borde, caiga dentro; el muro es opaco, así que lo que se
-   cuele al vecino no se ve. Fran, 22-sep: las libres y reservadas se ven
-   desde fuera "como si tuvieran las luces encendidas", también de día. */
+   El shader no mira la celda de la superficie sino la de 30 cm por delante
+   de ella (cortes.js, luzVivienda), así que el polígono va casi justo: solo
+   4 cm de holgura por el paso de la rejilla. Con 12 cm la fachada se
+   encendía alrededor de las ventanas cuyo vidrio está en la línea del
+   polígono. Fran, 22-sep: las libres y reservadas se ven desde fuera "como
+   si tuvieran las luces encendidas", también de día. */
 const VOLUMEN_PASO = { xz: 0.25, y: 0.5 };
-const VOLUMEN_HOLGURA = 0.12;
+const VOLUMEN_HOLGURA = 0.04;
 function crearVolumenViviendas(viviendas) {
   const lista = [...viviendas.values()];
   if (!lista.length || lista.length > 255) return null;

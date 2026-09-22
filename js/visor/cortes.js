@@ -395,9 +395,17 @@ const GLSL_ATENUACION = /* glsl */`
   uniform sampler2D uLuzVivLut;
   uniform vec3 uLuzVivColor;
   uniform float uCorteActivo;    // rampa del corte (0 con el edificio entero): solo entonces manda la franja
-  float luzVivienda(vec3 p) {
+  /* Se mira 30 cm POR DELANTE de la superficie (hacia quien la mira, que es
+     lo que dice `normal` en el fragmento con doble cara): una superficie se
+     enciende si el espacio que tiene delante es de una vivienda encendida.
+     Así la cara interior del muro de fachada se enciende con su vivienda, la
+     cara exterior de ese mismo muro (delante tiene la calle) no, y el
+     tabique entre una libre y una vendida se enciende solo por el lado de la
+     libre. Fran, 22-sep: la fachada salía con placas claras alrededor de
+     algunas ventanas porque el volumen las alcanzaba. */
+  float luzVivienda(vec3 p, vec3 n) {
     if (uLuzVivColor.r + uLuzVivColor.g + uLuzVivColor.b <= 0.0) return 0.0;
-    vec3 q = (p - uVolOrigen) * uVolEscala;
+    vec3 q = (p + n * 0.3 - uVolOrigen) * uVolEscala;
     if (any(lessThan(q, vec3(0.0))) || any(greaterThan(q, vec3(1.0)))) return 0.0;
     float id = texture(uVolViv, q).r;
     if (id <= 0.0) return 0.0;
@@ -495,9 +503,9 @@ const GLSL_LUZ_VIV = [
   /* Con el edificio entero uSuelos/uTechos se quedan como estaban y enCorte
      vale 1 en toda la huella: por eso la franja solo descuenta con la rampa
      del corte activa. */
-  'float enViv = luzVivienda(vPosMundoCorte) * (1.0 - enCorte * uCorteActivo);',
+  'vec3 nViv = inverseTransformDirection(normal, viewMatrix);',
+  'float enViv = luzVivienda(vPosMundoCorte, nViv) * (1.0 - enCorte * uCorteActivo);',
   'if (enViv > 0.0) {',
-  '  vec3 nViv = inverseTransformDirection(normal, viewMatrix);',
   '  vec3 luzViv = uLuzVivColor * (0.55 + 0.45 * (nViv.y * 0.5 + 0.5));',
   '  reflectedLight.indirectDiffuse += luzViv * BRDF_Lambert(material.diffuseColor) * enViv;',
   '}',

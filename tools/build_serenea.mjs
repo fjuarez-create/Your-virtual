@@ -423,11 +423,22 @@ function ajustarHojasOpacas() {
    obra paralelo a un paño vertical y a menos de 5 cm de su plano se le
    recorta el rectángulo de la ventana (la unión de los paños de ese plano
    que se tocan, con 4 cm de margen) y se descarta lo de dentro —el paño ya
-   es el vidrio— dejando lo de fuera como muro. */
+   es el vidrio— dejando lo de fuera como muro.
+
+   Y lo que queda de esas caras en el lado de FUERA del vidrio es fachada:
+   pasa al monocapa (Fran, 22-sep: "eso es monocapa"; salían placas claras
+   alrededor de las ventanas). El lado de fuera se sabe por los polígonos de
+   vivienda: 35 cm hacia un lado del paño hay vivienda y hacia el otro no. */
+const VIVIENDAS = (() => { const r = path.join(RAIZ, 'data', 'viviendas_serenea.json'); return fs.existsSync(r) ? JSON.parse(fs.readFileSync(r, 'utf8')).viviendas : null; })();
+const MAT_MONOCAPA = 'APOLO V6 | Monocapa blanco roto 5pct calido';
 ajustarCarasPegadasAlVidrio();
 function ajustarCarasPegadasAlVidrio() {
   const ES_OBRA_OPACA = /Pintura interior|Monocapa|Hormig|Alicatado|Travertino|Lacado|Yeso|Escayola/i;
-  const DIST = 0.05, MARGEN = 0.04, UNION = 0.25, PARALELO = 0.97;
+  const DIST = 0.05, MARGEN = 0.04, UNION = 0.25, PARALELO = 0.97, CERCA = 3;
+  const matMonocapa = materialPorNombre(doc, MAT_MONOCAPA) || null;
+  const dentroPoli = (poli, x, z) => { let d = false; for (let i = 0, j = poli.length - 1; i < poli.length; j = i++) { const [xi, zi] = poli[i], [xj, zj] = poli[j]; if (((zi > z) !== (zj > z)) && (x < (xj - xi) * (z - zi) / (zj - zi) + xi)) d = !d; } return d; };
+  const lista = VIVIENDAS ? Object.values(VIVIENDAS) : [];
+  const enVivienda = (x, y, z) => lista.some((v) => y >= v.y0 - 0.3 && y <= v.y0 + 3 && dentroPoli(v.poligono, x, z));
   const indice = (g, t, c) => (g.index ? g.index.getX(3 * t + c) : 3 * t + c);
   // 1. paños verticales como rectángulos (u, v) en su plano
   const panos = [];
@@ -451,6 +462,10 @@ function ajustarCarasPegadasAlVidrio() {
   for (const w of ventanas) {
     w.u0 -= MARGEN; w.u1 += MARGEN; w.v0 -= MARGEN; w.v1 += MARGEN;
     w.centro = [0, 0, 0]; w.centro[w.eje] = w.plano; w.centro[w.ejes[0]] = (w.u0 + w.u1) / 2; w.centro[w.ejes[1]] = (w.v0 + w.v1) / 2;
+    /* hacia dónde está la calle: +1 / −1 sobre el eje del paño, 0 si no se sabe */
+    const mas = [...w.centro], menos = [...w.centro]; mas[w.eje] += 0.35; menos[w.eje] -= 0.35;
+    const vm = enVivienda(...mas), vn = enVivienda(...menos);
+    w.fuera = vn && !vm ? 1 : (vm && !vn ? -1 : 0);
   }
   const CEL = 1; const rej = new Map();
   const cajaDe = (w) => { const mn = [0, 0, 0], mx = [0, 0, 0]; mn[w.eje] = w.plano - DIST; mx[w.eje] = w.plano + DIST; mn[w.ejes[0]] = w.u0; mx[w.ejes[0]] = w.u1; mn[w.ejes[1]] = w.v0; mx[w.ejes[1]] = w.v1; return { mn, mx }; };
@@ -466,14 +481,23 @@ function ajustarCarasPegadasAlVidrio() {
     const trozos = [recortar(poly, (V) => w.u0 - u(V)), recortar(poly, (V) => u(V) - w.u1), recortar(centro, (V) => w.v0 - v(V)), recortar(centro, (V) => v(V) - w.v1)];
     return trozos.filter((q) => q.length >= 3 && area2D(q, w.ejes) > 1e-6);
   };
-  let piezasTocadas = 0, trisRecortados = 0, areaQuitada = 0; const ventanasTocadas = new Set();
+  let piezasTocadas = 0, trisRecortados = 0, areaQuitada = 0, trisFachada = 0, areaFachada = 0; const ventanasTocadas = new Set();
   const a = [0, 0, 0], b = [0, 0, 0], c = [0, 0, 0];
+  const geometriaDeTris = (lista, N, U) => {
+    const m = lista.length * 3;
+    const pos = new Float32Array(m * 3), nor = N ? new Float32Array(m * 3) : null, uv = U ? new Float32Array(m * 2) : null; let k = 0;
+    for (const tri of lista) for (const V of tri) { pos[3 * k] = V.p[0]; pos[3 * k + 1] = V.p[1]; pos[3 * k + 2] = V.p[2]; if (nor) { nor[3 * k] = V.n[0]; nor[3 * k + 1] = V.n[1]; nor[3 * k + 2] = V.n[2]; } if (uv) { uv[2 * k] = V.uv[0]; uv[2 * k + 1] = V.uv[1]; } k++; }
+    const s = new THREE.BufferGeometry(); s.setAttribute('position', new THREE.BufferAttribute(pos, 3)); if (nor) s.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); if (uv) s.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); s.computeBoundingBox();
+    return s;
+  };
   for (const p of piezas) {
     if (p.cat !== 'envolvente' || !ES_OBRA_OPACA.test(p.material?.getName() || '')) continue;
+    const esMonocapa = p.material === matMonocapa;
     const g = p.geometria; const P = g.attributes.position, N = g.attributes.normal, U = g.attributes.uv; const n = trisDe(g);
-    const b0 = p.caja; if (!ventanas.some((w) => { const { mn, mx } = cajaDe(w); return mn[0] < b0.max.x && mx[0] > b0.min.x && mn[1] < b0.max.y && mx[1] > b0.min.y && mn[2] < b0.max.z && mx[2] > b0.min.z; })) continue;
+    const b0 = p.caja; if (!ventanas.some((w) => { const { mn, mx } = cajaDe(w); return mn[0] < b0.max.x + CERCA && mx[0] > b0.min.x - CERCA && mn[1] < b0.max.y + CERCA && mx[1] > b0.min.y - CERCA && mn[2] < b0.max.z + CERCA && mx[2] > b0.min.z - CERCA; })) continue;
     const vertice = (vi) => ({ p: [P.getX(vi), P.getY(vi), P.getZ(vi)], n: N ? [N.getX(vi), N.getY(vi), N.getZ(vi)] : null, uv: U ? [U.getX(vi), U.getY(vi)] : null });
     const salida = []; // triángulos [V, V, V] de la pieza rehecha
+    const fachada = []; // los que pasan al monocapa
     let tocada = false;
     for (let t = 0; t < n; t++) {
       const ia = indice(g, t, 0), ib = indice(g, t, 1), ic = indice(g, t, 2);
@@ -483,35 +507,45 @@ function ajustarCarasPegadasAlVidrio() {
       const tri = () => [vertice(ia), vertice(ib), vertice(ic)];
       if (L < 1e-9) { salida.push(tri()); continue; }
       const mn = [Math.min(a[0], b[0], c[0]), Math.min(a[1], b[1], c[1]), Math.min(a[2], b[2], c[2])], mx = [Math.max(a[0], b[0], c[0]), Math.max(a[1], b[1], c[1]), Math.max(a[2], b[2], c[2])];
-      const afectan = [];
+      const afectan = []; let cerca = null;
       const vistas = new Set();
-      for (let i = Math.floor(mn[0] / CEL); i <= Math.floor(mx[0] / CEL); i++) for (let j = Math.floor(mn[1] / CEL); j <= Math.floor(mx[1] / CEL); j++) for (let k = Math.floor(mn[2] / CEL); k <= Math.floor(mx[2] / CEL); k++) for (const w of rej.get(`${i},${j},${k}`) || []) {
+      for (let i = Math.floor((mn[0] - CERCA) / CEL); i <= Math.floor((mx[0] + CERCA) / CEL); i++) for (let j = Math.floor((mn[1] - CERCA) / CEL); j <= Math.floor((mx[1] + CERCA) / CEL); j++) for (let k = Math.floor((mn[2] - CERCA) / CEL); k <= Math.floor((mx[2] + CERCA) / CEL); k++) for (const w of rej.get(`${i},${j},${k}`) || []) {
         if (vistas.has(w)) continue; vistas.add(w);
         if (Math.abs(nn[w.eje]) / L < PARALELO) continue;                 // no paralelo al paño
         /* Distancia del plano del triángulo al centro de la ventana (no del
            centro del triángulo al plano del paño: la fachada norte está girada
            1,2° y un triángulo de 4 m deriva 8 cm de punta a punta). */
         if (Math.abs(nn[0] * (w.centro[0] - a[0]) + nn[1] * (w.centro[1] - a[1]) + nn[2] * (w.centro[2] - a[2])) / L > DIST) continue;
+        if (mn[w.ejes[0]] >= w.u1 + CERCA || mx[w.ejes[0]] <= w.u0 - CERCA || mn[w.ejes[1]] >= w.v1 + CERCA || mx[w.ejes[1]] <= w.v0 - CERCA) continue; // lejos del hueco
+        if (!cerca || w.fuera) cerca = cerca?.fuera ? cerca : w;          // en el plano y cerca: candidata a fachada
         if (mn[w.ejes[0]] >= w.u1 || mx[w.ejes[0]] <= w.u0 || mn[w.ejes[1]] >= w.v1 || mx[w.ejes[1]] <= w.v0) continue; // no toca el hueco
         afectan.push(w);
       }
-      if (!afectan.length) { salida.push(tri()); continue; }
+      /* ¿Lado de fuera del vidrio? El centro del triángulo respecto al plano
+         del paño, en el sentido de la calle; la cara coincidente (0 mm) cuenta
+         como de fuera. */
+      const w0 = afectan.find((w) => w.fuera) || cerca;
+      const cx = (a[0] + b[0] + c[0]) / 3, cy = (a[1] + b[1] + c[1]) / 3, cz = (a[2] + b[2] + c[2]) / 3;
+      const exterior = !!(matMonocapa && !esMonocapa && w0 && w0.fuera && ([cx, cy, cz][w0.eje] - w0.plano) * w0.fuera > -0.008);
+      const destino = exterior ? fachada : salida;
+      if (!afectan.length) { if (exterior) { tocada = true; trisFachada++; areaFachada += L / 2; } destino.push(tri()); continue; }
       let trozos = [tri()]; const areaAntes = L / 2;
       for (const w of afectan) { trozos = trozos.flatMap((q) => restar(q, w)); ventanasTocadas.add(w); }
       tocada = true; trisRecortados++;
       let areaDespues = 0;
-      for (const q of trozos) { areaDespues += area2D(q, afectan[0].ejes); for (let i = 1; i + 1 < q.length; i++) salida.push([q[0], q[i], q[i + 1]]); }
+      for (const q of trozos) { areaDespues += area2D(q, afectan[0].ejes); for (let i = 1; i + 1 < q.length; i++) destino.push([q[0], q[i], q[i + 1]]); }
       areaQuitada += Math.max(0, areaAntes - areaDespues);
+      if (exterior) { trisFachada++; areaFachada += areaDespues; }
     }
     if (!tocada) continue;
     piezasTocadas++;
-    const m = salida.length * 3;
-    const pos = new Float32Array(m * 3), nor = N ? new Float32Array(m * 3) : null, uv = U ? new Float32Array(m * 2) : null; let k = 0;
-    for (const tri of salida) for (const V of tri) { pos[3 * k] = V.p[0]; pos[3 * k + 1] = V.p[1]; pos[3 * k + 2] = V.p[2]; if (nor) { nor[3 * k] = V.n[0]; nor[3 * k + 1] = V.n[1]; nor[3 * k + 2] = V.n[2]; } if (uv) { uv[2 * k] = V.uv[0]; uv[2 * k + 1] = V.uv[1]; } k++; }
-    const s = new THREE.BufferGeometry(); s.setAttribute('position', new THREE.BufferAttribute(pos, 3)); if (nor) s.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); if (uv) s.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); s.computeBoundingBox();
-    p.geometria = s; p.caja = s.boundingBox.clone();
+    p.geometria = geometriaDeTris(salida, N, U); p.caja = p.geometria.boundingBox.clone();
+    if (fachada.length) {
+      const s = geometriaDeTris(fachada, N, U);
+      piezas.push({ ...p, material: matMonocapa, geometria: s, caja: s.boundingBox.clone(), origen: 'fachada' });
+    }
   }
-  log(`caras de obra pegadas al vidrio: ${trisRecortados} triángulos recortados en ${piezasTocadas} piezas, ${areaQuitada.toFixed(1)} m² quitados en ${ventanasTocadas.size} ventanas (de ${ventanas.length})`);
+  log(`caras de obra pegadas al vidrio: ${trisRecortados} triángulos recortados en ${piezasTocadas} piezas, ${areaQuitada.toFixed(1)} m² quitados en ${ventanasTocadas.size} ventanas (de ${ventanas.length}); al monocapa por dar a la calle: ${trisFachada} triángulos, ${areaFachada.toFixed(1)} m²${matMonocapa ? '' : ' (AVISO: sin material de monocapa)'}`);
 }
 
 /* ─────────────────────────── 2c. Suelos ─────────────────────────── */
@@ -536,13 +570,16 @@ function ajustarCarasPegadasAlVidrio() {
    destino, medida en sus propias caras. */
 const RUTA_VIVIENDAS = path.join(RAIZ, 'data', 'viviendas_serenea.json');
 const MAT_PARQUET = 'APOLO V3 | Vinilo roble natural claro';
-const MAT_PORCELANICO = 'Tile_Interior_05_1K';
+/* Fran, 22-sep: el pavimento de las zonas comunes es siempre el PAMESA
+   Wells Ivory (el damero Tile_Interior_05 que traía el modelo en portales y
+   pasillos era otro material). */
+const MAT_PORCELANICO = 'APOLO V6 | PAMESA WELLS Ivory 120x60';
 /* El roble de los áticos llega como "V6_Aticos_Acabado_interior_roble" (tras
    dedup() en el fichero final se llama "V4_Roble_claro_detalle"). */
-const ES_ACABADO_SUELO = /Vinilo|Tarima|V4_Roble|Acabado_interior|Monocapa|Pavimento interior|Tile_Interior/i;
+const ES_ACABADO_SUELO = /Vinilo|Tarima|V4_Roble|Acabado_interior|Monocapa|Pavimento interior|Tile_Interior|WELLS/i;
 const ES_MADERA_INTERIOR = /Vinilo|V4_Roble|Acabado_interior/i; // lo que en zonas comunes pasa a porcelánico
 const ES_PARQUET = /Vinilo/i;
-if (fs.existsSync(RUTA_VIVIENDAS)) ajustarSuelos(JSON.parse(fs.readFileSync(RUTA_VIVIENDAS, 'utf8')).viviendas);
+if (VIVIENDAS) ajustarSuelos(VIVIENDAS);
 else log('AVISO: sin data/viviendas_serenea.json, no se ajustan los suelos');
 
 function ajustarSuelos(viviendas) {
@@ -656,6 +693,19 @@ function ajustarSuelos(viviendas) {
       }
     }
   }
+  /* Fran, 22-sep: el damero (Tile_Interior_05) de portales y pasillos pasa al
+     Wells, que es el pavimento de todas las zonas comunes; y las terrazas
+     (las de los áticos y las pequeñas de patio) también van en Wells en vez
+     de la tarima de madera. La tarima que cae DENTRO del polígono de una
+     vivienda es la capa oculta bajo el vinilo y se deja como está. */
+  const vs = Object.values(viviendas);
+  resumen.damero = 0; resumen.terrazas = 0; resumen.terrazasArea = 0;
+  for (const f of caras) {
+    if (/Tile_Interior/i.test(f.mat)) { marcar(mover, f, matPorcelanico); resumen.damero++; continue; }
+    if (!/Tarima exterior/i.test(f.mat)) continue;
+    if (vs.some((v) => f.y >= v.y0 - 0.6 && f.y <= v.y0 + 0.6 && dentroPoli(v.poligono, f.x, f.z))) continue;
+    marcar(mover, f, matPorcelanico); resumen.terrazas++; resumen.terrazasArea += f.area;
+  }
 
   /* Aplicar: subconjuntos por pieza (no indexados; unir() desindexa igual). */
   const subconjunto = (g, lista, uvNuevo = null) => {
@@ -719,7 +769,7 @@ function ajustarSuelos(viviendas) {
     const cen = s.boundingBox.getCenter(new THREE.Vector3());
     piezas.push({ cat: 'envolvente', clase: 'envolvente', material: matParquet, familia: 'suelo generado', geometria: s, caja: s.boundingBox.clone(), plataforma: plataformaDe(cen.x, cen.z), origen: 'suelos' });
   }
-  log(`suelos: ${resumen.ok} viviendas con parquet; remapeadas a parquet ${resumen.remapeadas.length} [${resumen.remapeadas.join(' ')}]; regeneradas ${resumen.regeneradas.length} [${resumen.regeneradas.join(' ')}]; zonas comunes a porcelánico: ${resumen.comunes} caras, ${resumen.comunesArea.toFixed(0)} m²; piezas nuevas ${nuevas + generados.length}`);
+  log(`suelos: ${resumen.ok} viviendas con parquet; remapeadas a parquet ${resumen.remapeadas.length} [${resumen.remapeadas.join(' ')}]; regeneradas ${resumen.regeneradas.length} [${resumen.regeneradas.join(' ')}]; zonas comunes a Wells: ${resumen.comunes} caras, ${resumen.comunesArea.toFixed(0)} m²; damero a Wells: ${resumen.damero} caras; terrazas a Wells: ${resumen.terrazas} caras, ${resumen.terrazasArea.toFixed(0)} m²; piezas nuevas ${nuevas + generados.length}`);
 }
 
 /* ─────────────────────────── 3. Materiales de salida ─────────────────────────── */
