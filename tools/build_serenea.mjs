@@ -180,6 +180,11 @@ const strip = (s) => s.replace(/-\d+-3D(_\d+)?$/, '').replace(/#\d+(_\d+)?$/, ''
 function categoriaFamilia(nombre, materiales, { directo = false } = {}) {
   const n = nombre;
   if (directo) return 'envolvente';
+  /* Las puertas EXTERIORES (rejas de los portales, garajes, gimnasio,
+     instalaciones y CT: familia UNIK_PUE_Rej-*) son fachada, no mobiliario:
+     el visor no dibuja el mobiliario con el edificio entero (cortes.js,
+     mostrarMobiliario) y los portales salían abiertos (Fran, 22-sep). */
+  if (/PUE_Rej[-_]/i.test(n)) return 'envolvente';
   if (/PUE[-_]|_PUE_|PCF|Puerta/i.test(n)) return 'puerta';
   if (/Acristalamiento|VEN[-_]|_VEN_/i.test(n)) return 'carpinteria'; // vidrio o carpintería, según el material de cada primitiva
   if (/Escalera/i.test(n)) return 'escalera';
