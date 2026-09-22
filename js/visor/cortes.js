@@ -394,6 +394,7 @@ const GLSL_ATENUACION = /* glsl */`
   uniform vec3 uVolEscala;
   uniform sampler2D uLuzVivLut;
   uniform vec3 uLuzVivColor;
+  uniform float uCorteActivo;    // rampa del corte (0 con el edificio entero): solo entonces manda la franja
   float luzVivienda(vec3 p) {
     if (uLuzVivColor.r + uLuzVivColor.g + uLuzVivColor.b <= 0.0) return 0.0;
     vec3 q = (p - uVolOrigen) * uVolEscala;
@@ -491,7 +492,10 @@ const GLSL_INTERIOR = [
    (userData.sinLuzViv), que se vería lechoso. */
 const GLSL_LUZ_VIV = [
   '',
-  'float enViv = luzVivienda(vPosMundoCorte) * (1.0 - enCorte);',
+  /* Con el edificio entero uSuelos/uTechos se quedan como estaban y enCorte
+     vale 1 en toda la huella: por eso la franja solo descuenta con la rampa
+     del corte activa. */
+  'float enViv = luzVivienda(vPosMundoCorte) * (1.0 - enCorte * uCorteActivo);',
   'if (enViv > 0.0) {',
   '  vec3 nViv = inverseTransformDirection(normal, viewMatrix);',
   '  vec3 luzViv = uLuzVivColor * (0.55 + 0.45 * (nViv.y * 0.5 + 0.5));',
@@ -522,6 +526,7 @@ function crearUniformesAtenuacion() {
     uVolEscala: { value: new THREE.Vector3() },
     uLuzVivLut: { value: null },
     uLuzVivColor: { value: new THREE.Color(0, 0, 0) },
+    uCorteActivo: { value: 0 },
   };
 }
 const HOLGURA_RECORTE_VIV = 0.35; // m alrededor del polígono: los muros de borde lo pisan
@@ -863,6 +868,7 @@ export function crearCortes(ctx, edificio, opciones = {}) {
     uniformesAtenuacion.uLuzVivColor.value.copy(COLOR_INTERIOR.viviendas).multiplyScalar(interior.viviendas);
     const f = atenuacionPorCota ? atenCota.valor : (cortes.planta !== 'all' ? 1 : 0);
     const u = uniformesAtenuacion;
+    u.uCorteActivo.value = f;
     u.uSolInterior.value = interior.sol * f;
     u.uCieloInterior.value = interior.cielo * f;
     /* Las luces de dentro entran con la misma rampa que el corte: en 'all' se
