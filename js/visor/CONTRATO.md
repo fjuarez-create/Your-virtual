@@ -405,7 +405,20 @@ del edificio y del mobiliario:
   la luz del corte. El vidrio no la lleva (`userData.sinLuzViv`).
 - Intensidad y color por momento en `luz.js` (`interior.viviendas`,
   `interior.colorViviendas`), que llegan por `cortes.setInterior` como el
-  resto de la luz interior.
+  resto de la luz interior. Calibrado con capturas desde la calle con
+  libres y vendidas alternas: a 0,6 no se distinguía, a 2,0 se leen las
+  encendidas desde 60 m y a 3,2 de cerca ya casi queman; queda 2,6 de día,
+  2,2 al atardecer y 1,2 de noche (ahí el vidrio se cierra y manda el
+  emisivo de la ventana).
+- El vidrio de la encendida deja ver más (`VIDRIO_ENCENDIDA` en
+  edificio.setVentanas: reflejo del entorno × 0,5 y 0,12 menos de cuerpo);
+  el de la vendida no cambia. Con el edificio entero el mobiliario no se
+  dibuja (cortes.mostrarMobiliario), así que lo que se ve dentro son
+  paramentos y suelos.
+- Las puertas exteriores (rejas de portales, garajes, gimnasio,
+  instalaciones y CT: familia UNIK_PUE_Rej-*) van en la envolvente desde el
+  22-sep, precisamente porque el mobiliario no se dibuja con el edificio
+  entero y los portales salían abiertos.
 
 ## Dos motores, una interfaz (añadido el 17-sep-2026)
 
