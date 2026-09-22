@@ -107,7 +107,7 @@ export const MOMENTOS = {
        si no el cielo se va a blanco. */
     ibl: 0.08, fondo: 0.075, solMax: 45, noche: 0,
     nubes: 0.66, nubesAlto: 30, nubesMax: 5,
-    interior: { sol: 0.90, cielo: 0.50, lampara: 0.52, ventana: 0.44, rebote: 0.15, colorVentana: 0xffe8cf },
+    interior: { sol: 0.90, cielo: 0.50, lampara: 0.52, ventana: 0.44, rebote: 0.15, colorVentana: 0xffe8cf, viviendas: 0.60, colorViviendas: 0xffe4c4 },
     grado: { contraste: 1.16, saturacion: 1.12, negros: 0.040 },
   },
   dia: {
@@ -141,7 +141,7 @@ export const MOMENTOS = {
        al fondo: la iluminación la lleva `ibl`. */
     ibl: 0.07, fondo: 0.055, solMax: 50, noche: 0,
     nubes: 0.72, nubesAlto: 30, nubesMax: 8,
-    interior: { sol: 0.92, cielo: 0.55, lampara: 0.54, ventana: 0.50, rebote: 0.16, colorVentana: 0xfff6e8 },
+    interior: { sol: 0.92, cielo: 0.55, lampara: 0.54, ventana: 0.50, rebote: 0.16, colorVentana: 0xfff6e8, viviendas: 0.60, colorViviendas: 0xffe4c4 },
     grado: { contraste: 1.18, saturacion: 1.12, negros: 0.042 },
   },
   atardecer: {
@@ -163,7 +163,7 @@ export const MOMENTOS = {
     bloom: 0.14, umbral: 4.6, bloomRadio: 0.32, hdri: false, luces: true, ventana: 1.0,
     ibl: 0.20, fondo: 0.32, solMax: 30, noche: 0,
     nubes: 0.70, nubesAlto: 34, nubesMax: 2.0,
-    interior: { sol: 0.80, cielo: 0.38, lampara: 0.60, ventana: 0.40, rebote: 0.18, colorVentana: 0xffa863 },
+    interior: { sol: 0.80, cielo: 0.38, lampara: 0.60, ventana: 0.40, rebote: 0.18, colorVentana: 0xffa863, viviendas: 0.55, colorViviendas: 0xffdcb0 },
     grado: { contraste: 1.14, saturacion: 1.14, negros: 0.030 },
   },
   noche: {
@@ -200,7 +200,7 @@ export const MOMENTOS = {
        pantalla (unas 5× a 1080p) cada una se convierte en una mancha; las
        estrellas nítidas del raster son los Points de crearCieloNocturno. */
     resplandor: 0xffa869, resplandorInt: 0.10, estrellas: 0.022,
-    interior: { sol: 0, cielo: 0, lampara: 0.40, ventana: 0.08, rebote: 0.12, colorVentana: 0xc3d4ff },
+    interior: { sol: 0, cielo: 0, lampara: 0.40, ventana: 0.08, rebote: 0.12, colorVentana: 0xc3d4ff, viviendas: 0.45, colorViviendas: 0xffd9a0 },
     /* Saturación casi a raya: de noche subirla convierte el resplandor cálido
        del horizonte en un filtro sepia sobre el barrio entero. El contraste
        sube un poco, que es lo que da profundidad sin cerrar los interiores. */

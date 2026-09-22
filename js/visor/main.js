@@ -1342,6 +1342,7 @@ async function arrancar() {
     sombraMobiliario: !MOVIL,
   });
   cortes.setInterior(interiorDe(apolo.momento));
+  cortes.setVolumenViviendas(edificio.volumenViviendas); // luz de dentro de las viviendas encendidas
   cortes.preparar(); // los hooks de material se añaden antes del primer fotograma con edificio
   post.setRecorte((m) => cortes.materialAuxiliar(m)); // el G-buffer y el bokeh cortan como el color
   actualizarReflectantes();

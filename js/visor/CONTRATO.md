@@ -383,6 +383,30 @@ Tres avisos de Fran con capturas, y lo que se decidió:
   fichero resultante: 166 de 166 viviendas con vinilo en su capa superior y
   0 m² de vinilo en zonas comunes.
 
+## Luz de dentro de las viviendas encendidas (añadido el 22-sep-2026)
+
+Fran: las viviendas libres y reservadas se ven desde fuera "como si
+tuvieran las luces encendidas", también de día y en las vistas de edificio
+y conjunto; las vendidas no. No es el prisma multiplicativo de la planta
+seccionada (ese solo se dibuja en la planta que se mira, porque apilados
+se multiplican), sino una luz sumada en el shader de todos los materiales
+del edificio y del mobiliario:
+
+- `edificio.crearVolumenViviendas`: textura 3D de bytes con el índice de
+  vivienda por celda de 25 × 50 × 25 cm (polígono ensanchado 12 cm, del
+  suelo a 2,7 m), y una tabla de 256 entradas índice → intensidad que
+  `edificio.pintar` reescribe con los estados (encendida = ni vendida, ni
+  atenuada, ni la que se está visitando). `edificio.volumenViviendas`.
+- `cortes.setVolumenViviendas(vol)` engancha las dos texturas a los
+  uniformes compartidos; `luzVivienda(p)` en GLSL_ATENUACION mira la celda y
+  la tabla, y GLSL_LUZ_VIV suma la lámpara del techo (el suelo la recibe
+  entera, los paramentos a medias) a `indirectDiffuse`, multiplicada por
+  `1 − enCorte` para que dentro de la franja de la planta seccionada mande
+  la luz del corte. El vidrio no la lleva (`userData.sinLuzViv`).
+- Intensidad y color por momento en `luz.js` (`interior.viviendas`,
+  `interior.colorViviendas`), que llegan por `cortes.setInterior` como el
+  resto de la luz interior.
+
 ## Dos motores, una interfaz (añadido el 17-sep-2026)
 
 `window.apolo` lo puede dar `visor/main.js` (three.js, lo de arriba) o

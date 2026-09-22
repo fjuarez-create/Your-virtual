@@ -387,6 +387,21 @@ const GLSL_ATENUACION = /* glsl */`
   uniform vec4 uHuella;          // x0, z0, x1, z1 de la planta del edificio
   uniform vec4 uRecorteViv;      // x0, z0, x1, z1 de la vivienda abierta (vacío: 1e9, 1e9, -1e9, -1e9)
   uniform float uRecorteVivY;    // su cota de corte
+  /* Luz de dentro de las viviendas encendidas (edificio.crearVolumenViviendas):
+     índice de vivienda por celda y tabla índice → intensidad. */
+  uniform highp sampler3D uVolViv;
+  uniform vec3 uVolOrigen;
+  uniform vec3 uVolEscala;
+  uniform sampler2D uLuzVivLut;
+  uniform vec3 uLuzVivColor;
+  float luzVivienda(vec3 p) {
+    if (uLuzVivColor.r + uLuzVivColor.g + uLuzVivColor.b <= 0.0) return 0.0;
+    vec3 q = (p - uVolOrigen) * uVolEscala;
+    if (any(lessThan(q, vec3(0.0))) || any(greaterThan(q, vec3(1.0)))) return 0.0;
+    float id = texture(uVolViv, q).r;
+    if (id <= 0.0) return 0.0;
+    return texture(uLuzVivLut, vec2(id * (255.0 / 256.0) + 0.5 / 256.0, 0.5)).r;
+  }
   int celdaCorte(vec3 p) {
     float col = step(uBordesX.x, p.x) + step(uBordesX.y, p.x) + step(uBordesX.z, p.x);
     float fila = uFilasZ > 1.5 ? step(uBordeZ, p.z) : 0.0;
@@ -466,6 +481,23 @@ const GLSL_INTERIOR = [
   '  reflectedLight.indirectDiffuse += luzCorte * BRDF_Lambert(material.diffuseColor) * enCorte;',
   '}',
 ].join('\n  ');
+/* Y lo que se inyecta dentro de una vivienda ENCENDIDA con el edificio
+   entero (Fran, 22-sep: la libre y la reservada se ven desde fuera "como si
+   tuvieran las luces encendidas", también de día). Solo la lámpara del
+   techo, que es lo que enciende un salón visto desde la calle: el suelo la
+   recibe entera y los paramentos a medias, sin tocar el sol ni el cielo que
+   ya entran por el hueco. Dentro de la franja de la planta seccionada no
+   actúa (allí ya está la luz del corte) y el vidrio no la lleva
+   (userData.sinLuzViv), que se vería lechoso. */
+const GLSL_LUZ_VIV = [
+  '',
+  'float enViv = luzVivienda(vPosMundoCorte) * (1.0 - enCorte);',
+  'if (enViv > 0.0) {',
+  '  vec3 nViv = inverseTransformDirection(normal, viewMatrix);',
+  '  vec3 luzViv = uLuzVivColor * (0.55 + 0.45 * (nViv.y * 0.5 + 0.5));',
+  '  reflectedLight.indirectDiffuse += luzViv * BRDF_Lambert(material.diffuseColor) * enViv;',
+  '}',
+].join('\n  ');
 const SUELO_BAJO_CORTE = 1.5;        // m; respaldo sin datos de vivienda (p1/p2/ático)
 const SUELO_BAJO_CORTE_BAJA = 2.2;   // m; respaldo en la planta más baja
 function crearUniformesAtenuacion() {
@@ -485,6 +517,11 @@ function crearUniformesAtenuacion() {
     uHuella: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) },
     uRecorteViv: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) },
     uRecorteVivY: { value: 1e6 },
+    uVolViv: { value: null },
+    uVolOrigen: { value: new THREE.Vector3() },
+    uVolEscala: { value: new THREE.Vector3() },
+    uLuzVivLut: { value: null },
+    uLuzVivColor: { value: new THREE.Color(0, 0, 0) },
   };
 }
 const HOLGURA_RECORTE_VIV = 0.35; // m alrededor del polígono: los muros de borde lo pisan
@@ -510,9 +547,9 @@ function atenuarPorCota(material, uniformes) {
         '#include <lights_fragment_end>'
         + '\n  reflectedLight.indirectSpecular *= 1.0 - 0.75 * atCorte;'
         + '\n  reflectedLight.indirectDiffuse *= 1.0 - 0.25 * atCorte;'
-        + (material.userData.sinInterior ? '' : GLSL_INTERIOR));
+        + (material.userData.sinInterior ? '' : GLSL_INTERIOR + (material.userData.sinLuzViv ? '' : GLSL_LUZ_VIV)));
   };
-  material.customProgramCacheKey = () => `${clavePrevia ? clavePrevia() : ''}|${textoPrevio}|atenuacion${material.userData.sinInterior ? '|sinint' : ''}`;
+  material.customProgramCacheKey = () => `${clavePrevia ? clavePrevia() : ''}|${textoPrevio}|atenuacion${material.userData.sinInterior ? '|sinint' : ''}${material.userData.sinLuzViv ? '|sinluzviv' : ''}`;
   material.needsUpdate = true;
 }
 
@@ -818,9 +855,12 @@ export function crearCortes(ctx, edificio, opciones = {}) {
      interior, que es la "muy buena iluminación interior" de una vivienda que
      sí tiene techo. No hay geometría nueva ni una sola sombra más que
      calcular, y fuera de la franja no cambia ni un píxel. */
-  const interior = { sol: 0, cielo: 0, lampara: 0, ventana: 0, rebote: 0 };
-  const COLOR_INTERIOR = { lampara: new THREE.Color(), ventana: new THREE.Color(), rebote: new THREE.Color() };
+  const interior = { sol: 0, cielo: 0, lampara: 0, ventana: 0, rebote: 0, viviendas: 0 };
+  const COLOR_INTERIOR = { lampara: new THREE.Color(), ventana: new THREE.Color(), rebote: new THREE.Color(), viviendas: new THREE.Color() };
   function aplicarInterior() {
+    /* La luz de las viviendas encendidas no va con la rampa del corte: se ve
+       con el edificio entero y el shader ya la apaga dentro de la franja. */
+    uniformesAtenuacion.uLuzVivColor.value.copy(COLOR_INTERIOR.viviendas).multiplyScalar(interior.viviendas);
     const f = atenuacionPorCota ? atenCota.valor : (cortes.planta !== 'all' ? 1 : 0);
     const u = uniformesAtenuacion;
     u.uSolInterior.value = interior.sol * f;
@@ -1424,19 +1464,30 @@ export function crearCortes(ctx, edificio, opciones = {}) {
     /* Techo devuelto y luces encendidas dentro de la vivienda (ver arriba).
        Los colores van en espacio LINEAL: son irradiancia, no pintura. */
     setInterior(cfg = {}) {
-      const { sol = 0, cielo = 0, lampara = 0, ventana = 0, rebote = 0,
-        colorLampara = 0xffe6c8, colorVentana = 0xffffff, colorRebote = 0xd8d2c6,
+      const { sol = 0, cielo = 0, lampara = 0, ventana = 0, rebote = 0, viviendas = 0,
+        colorLampara = 0xffe6c8, colorVentana = 0xffffff, colorRebote = 0xd8d2c6, colorViviendas = 0xffe4c4,
         dir = null } = cfg;
       interior.sol = THREE.MathUtils.clamp(sol, 0, 1);
       interior.cielo = THREE.MathUtils.clamp(cielo, 0, 1);
       interior.lampara = Math.max(0, lampara);
       interior.ventana = Math.max(0, ventana);
       interior.rebote = Math.max(0, rebote);
+      interior.viviendas = Math.max(0, viviendas);
       COLOR_INTERIOR.lampara.setHex(colorLampara);
       COLOR_INTERIOR.ventana.setHex(colorVentana);
       COLOR_INTERIOR.rebote.setHex(colorRebote);
+      COLOR_INTERIOR.viviendas.setHex(colorViviendas);
       if (dir) uniformesAtenuacion.uVentanaDir.value.set(dir.x, 0, dir.z).normalize();
       aplicarInterior();
+    },
+
+    /* Volumen de viviendas de edificio.crearVolumenViviendas ({ textura, lut,
+       origen, escala }): sin él, luzVivienda() devuelve 0 y nada cambia. */
+    setVolumenViviendas(vol) {
+      const u = uniformesAtenuacion;
+      u.uVolViv.value = vol?.textura || null;
+      u.uLuzVivLut.value = vol?.lut || null;
+      if (vol) { u.uVolOrigen.value.copy(vol.origen); u.uVolEscala.value.copy(vol.escala); }
     },
 
     preparar,

@@ -242,7 +242,7 @@ export function crearVidrioFisico() {
     ior: 1.52, reflectivity: 0.62, specularIntensity: 1,
     emissive: EMISIVO_VENTANA, emissiveIntensity: 0,
   });
-  m.userData = { baseOpacity: m.opacity, baseEnv: m.envMapIntensity, baseColor: m.color.clone(), sinTraseras: true };
+  m.userData = { baseOpacity: m.opacity, baseEnv: m.envMapIntensity, baseColor: m.color.clone(), sinTraseras: true, sinLuzViv: true };
   return m;
 }
 
@@ -438,6 +438,76 @@ function crearPrismas(grupo, unitsById, capaCartelas, datosViviendas, fovCamara 
   return { viviendas, plantas, suelos };
 }
 
+/* ── Volumen de viviendas para la luz interior (cortes.js, luzVivienda) ──
+   Una textura 3D de bytes con el índice de vivienda (1…166; 0 = fuera) por
+   celda de 25 × 50 × 25 cm sobre la caja de todas las viviendas, y una tabla
+   de 256 entradas (índice → intensidad 0…1) que dice cuáles están
+   encendidas. El shader mira en qué vivienda cae cada fragmento y le suma la
+   lámpara de dentro; la tabla es lo único que cambia con los estados, así
+   que encender o apagar una vivienda no toca la textura grande (2,5 MB).
+   El polígono se ensancha 12 cm para que la cara interior de sus muros, que
+   está justo en el borde, caiga dentro; el muro es opaco, así que lo que se
+   cuele al vecino no se ve. Fran, 22-sep: las libres y reservadas se ven
+   desde fuera "como si tuvieran las luces encendidas", también de día. */
+const VOLUMEN_PASO = { xz: 0.25, y: 0.5 };
+const VOLUMEN_HOLGURA = 0.12;
+function crearVolumenViviendas(viviendas) {
+  const lista = [...viviendas.values()];
+  if (!lista.length || lista.length > 255) return null;
+  let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const v of lista) {
+    for (const [x, z] of v.poligono) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
+    y0 = Math.min(y0, v.y0); y1 = Math.max(y1, v.y0 + ALTURA_VIVIENDA);
+  }
+  const H = VOLUMEN_HOLGURA + 0.3;
+  x0 -= H; z0 -= H; x1 += H; z1 += H; y0 -= 0.5; y1 += 0.5;
+  const nx = Math.ceil((x1 - x0) / VOLUMEN_PASO.xz), ny = Math.ceil((y1 - y0) / VOLUMEN_PASO.y), nz = Math.ceil((z1 - z0) / VOLUMEN_PASO.xz);
+  const datos = new Uint8Array(nx * ny * nz);
+  const ids = [null];
+  const t0 = performance.now();
+  for (const v of lista) {
+    const indice = ids.push(v.id) - 1;
+    let px0 = Infinity, px1 = -Infinity, pz0 = Infinity, pz1 = -Infinity;
+    for (const [x, z] of v.poligono) { px0 = Math.min(px0, x); px1 = Math.max(px1, x); pz0 = Math.min(pz0, z); pz1 = Math.max(pz1, z); }
+    const i0 = Math.max(0, Math.floor((px0 - VOLUMEN_HOLGURA - x0) / VOLUMEN_PASO.xz)), i1 = Math.min(nx - 1, Math.floor((px1 + VOLUMEN_HOLGURA - x0) / VOLUMEN_PASO.xz));
+    const k0 = Math.max(0, Math.floor((pz0 - VOLUMEN_HOLGURA - z0) / VOLUMEN_PASO.xz)), k1 = Math.min(nz - 1, Math.floor((pz1 + VOLUMEN_HOLGURA - z0) / VOLUMEN_PASO.xz));
+    const j0 = Math.max(0, Math.floor((v.y0 - 0.05 - y0) / VOLUMEN_PASO.y)), j1 = Math.min(ny - 1, Math.floor((v.y0 + ALTURA_VIVIENDA - y0) / VOLUMEN_PASO.y));
+    for (let k = k0; k <= k1; k++) {
+      const z = z0 + (k + 0.5) * VOLUMEN_PASO.xz;
+      for (let i = i0; i <= i1; i++) {
+        const x = x0 + (i + 0.5) * VOLUMEN_PASO.xz;
+        if (distanciaAPoligono(v.poligono, x, z) > VOLUMEN_HOLGURA) continue;
+        for (let j = j0; j <= j1; j++) datos[i + nx * (j + ny * k)] = indice;
+      }
+    }
+  }
+  const textura = new THREE.Data3DTexture(datos, nx, ny, nz);
+  textura.format = THREE.RedFormat;
+  textura.type = THREE.UnsignedByteType;
+  textura.minFilter = THREE.NearestFilter;
+  textura.magFilter = THREE.NearestFilter;
+  textura.unpackAlignment = 1;
+  textura.needsUpdate = true;
+  const lut = new THREE.DataTexture(new Uint8Array(256), 256, 1, THREE.RedFormat, THREE.UnsignedByteType);
+  lut.minFilter = THREE.NearestFilter;
+  lut.magFilter = THREE.NearestFilter;
+  lut.unpackAlignment = 1;
+  lut.needsUpdate = true;
+  console.info(`[edificio] volumen de viviendas ${nx}×${ny}×${nz} celdas en ${(performance.now() - t0).toFixed(0)} ms`);
+  return {
+    textura, lut, ids, celdas: [nx, ny, nz],
+    origen: new THREE.Vector3(x0, y0, z0),
+    escala: new THREE.Vector3(1 / (nx * VOLUMEN_PASO.xz), 1 / (ny * VOLUMEN_PASO.y), 1 / (nz * VOLUMEN_PASO.xz)),
+    /* `intensidad(id)` → 0…1 por vivienda; solo reescribe la tabla. */
+    encender(intensidad) {
+      const d = lut.image.data;
+      for (let i = 1; i < ids.length; i++) d[i] = Math.round(255 * THREE.MathUtils.clamp(+intensidad(ids[i]) || 0, 0, 1));
+      lut.needsUpdate = true;
+    },
+    dispose() { textura.dispose(); lut.dispose(); },
+  };
+}
+
 /* Box3 de las mallas visibles de un objeto (Box3.setFromObject no distingue
    nodos ocultos). */
 function cajaVisible(objeto) {
@@ -572,6 +642,7 @@ export async function cargarEdificio(ctx, slot, opciones = {}) {
 
   /* ── Vidrio por vivienda: el centro del nombre contra las huellas ── */
   const vidrioBase = [...materiales.values()].find((m) => ES_MATERIAL_VIDRIO.test(m.name)) || null;
+  if (vidrioBase) vidrioBase.userData.sinLuzViv = true; // el vidrio no recibe la lámpara de dentro (se vería lechoso)
   const vidrio = { total: 0, asignados: 0, comunes: 0, viviendasConVidrio: 0, sinVidrio: [], ms: 0 };
   const tVidrio = performance.now();
   const candidatas = [...viviendas.values()];
@@ -600,7 +671,7 @@ export async function cargarEdificio(ctx, slot, opciones = {}) {
       mat.name = `vidrio-${mejor.id}`;
       mat.emissive.setHex(EMISIVO_VENTANA);
       mat.emissiveIntensity = 0;
-      mat.userData = { baseOpacity: mat.opacity, baseEnv: mat.envMapIntensity, baseColor: mat.color.clone(), unitId: mejor.id, sinTraseras: true };
+      mat.userData = { baseOpacity: mat.opacity, baseEnv: mat.envMapIntensity, baseColor: mat.color.clone(), unitId: mejor.id, sinTraseras: true, sinLuzViv: true };
       if (luz) luz.aplicarMaterial(mat);
       mejor.vidrio = mat;
       mejor.vidrios.push(mat);
@@ -632,8 +703,10 @@ export async function cargarEdificio(ctx, slot, opciones = {}) {
      ni prisma ni cartela; estorbarían justo lo que se ha ido a ver. */
   let abierta = null;
 
+  const volumenViviendas = crearVolumenViviendas(viviendas);
+
   const edificio = {
-    grupo, envolvente, niveles, viviendas, estados, pickables, vidrio, units: listaUnits, unitsById,
+    grupo, envolvente, niveles, viviendas, estados, pickables, vidrio, units: listaUnits, unitsById, volumenViviendas,
     materiales, definicionCortes, rutas, suelos, datosViviendas, saneado,
     variantes: new Map(),
     mobiliario: null,
@@ -762,6 +835,10 @@ export async function cargarEdificio(ctx, slot, opciones = {}) {
         v.label.visible = marcable && estado === 'disponible';
         v.labelR.visible = marcable && estado === 'reservada';
       }
+      /* Luz de dentro (ver crearVolumenViviendas): encendida en la libre y la
+         reservada, apagada en la vendida, en la atenuada y en la que se está
+         visitando (esa ya lleva la luz de la planta seccionada). */
+      volumenViviendas?.encender((id) => (edificio.estadoDe(id) !== 'vendida' && id !== abierta && !(atenuada && atenuada(id))) ? 1 : 0);
     },
 
     /* Nivel de luces de la escena: 0 de día, 1 al atardecer, 2 de noche.
@@ -913,6 +990,7 @@ export async function cargarEdificio(ctx, slot, opciones = {}) {
         for (const x of Array.isArray(m) ? m : [m]) mats.add(x);
       });
       for (const m of mats) { for (const t of texturasDe(m)) t.dispose(); m.dispose(); }
+      volumenViviendas?.dispose();
       viviendas.clear();
       pickables.length = 0;
       materiales.clear();
