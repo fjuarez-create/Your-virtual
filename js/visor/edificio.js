@@ -115,6 +115,9 @@ export const ALTURA_CARTELA = 1.2;       // m sobre y1
 /* Estor bajado de las vendidas (ver setVentanas): cuánto se oscurece el
    vidrio, cuánto reflejo pierde y cuánto se cierra. */
 export const ESTOR = { color: 1, reflejo: 1, opacidad: 0 }; // sin estor: el vidrio de una vendida es vidrio (ver setVentanas)
+/* Vidrio de la vivienda encendida de día y al atardecer (ver setVentanas):
+   factor sobre el reflejo del entorno y suma a la opacidad base (0,52). */
+export const VIDRIO_ENCENDIDA = { reflejo: 0.5, cuerpo: -0.12 };
 /* Vendida: la vivienda se apaga de verdad. El prisma no pinta un velo gris
    encima —eso se veía como una caja negra semitransparente en cuanto la
    cámara bajaba— sino que MULTIPLICA lo que hay detrás por LUZ_VENDIDA, así
@@ -764,12 +767,18 @@ export async function cargarEdificio(ctx, slot, opciones = {}) {
       for (const v of viviendas.values()) {
         const vendida = edificio.estadoDe(v.id) === 'vendida';
         const on = f > 0 && !vendida;
+        /* Con la luz de dentro dada (Fran, 22-sep; ver crearVolumenViviendas)
+           el vidrio de la libre y la reservada deja ver más: menos reflejo y
+           algo menos de cuerpo. Es como se lee desde la calle una habitación
+           con la luz encendida: el reflejo del cielo sigue ahí, pero lo que
+           manda es lo de dentro. La vendida conserva su vidrio de siempre. */
+        const encendida = !vendida && !(on && cerrado);
         for (const m of v.vidrios) {
           m.emissiveIntensity = on ? INTENSIDAD_VENTANA * f : 0;
           const base = m.userData.baseColor;
           if (base) m.color.copy(base);
-          if (m.userData.baseEnv !== undefined) m.envMapIntensity = m.userData.baseEnv * (on && cerrado ? 0.3 : 1);
-          if (m.userData.baseOpacity !== undefined) m.opacity = Math.min(1, m.userData.baseOpacity + (on && cerrado ? 0.32 : 0));
+          if (m.userData.baseEnv !== undefined) m.envMapIntensity = m.userData.baseEnv * (on && cerrado ? 0.3 : (encendida ? VIDRIO_ENCENDIDA.reflejo : 1));
+          if (m.userData.baseOpacity !== undefined) m.opacity = Math.min(1, m.userData.baseOpacity + (on && cerrado ? 0.32 : (encendida ? VIDRIO_ENCENDIDA.cuerpo : 0)));
           m.roughness = on && cerrado ? 0.12 : 0.05;
         }
       }
