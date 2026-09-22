@@ -378,10 +378,24 @@ Tres avisos de Fran con capturas, y lo que se decidió:
   por vivienda, la capa superior de acabado que cubre su polígono pasa a
   vinilo; sin capa que lo cubra, se genera un suelo de vinilo con el
   polígono; fuera de las viviendas, el vinilo a la cota del suelo pasa al
-  porcelánico de las zonas comunes de la planta baja (Tile_Interior_05). Las
-  UV se rehacen planas con la escala de cada material. Comprobado sobre el
-  fichero resultante: 166 de 166 viviendas con vinilo en su capa superior y
-  0 m² de vinilo en zonas comunes.
+  porcelánico de las zonas comunes. Las UV se rehacen planas con la escala
+  de cada material. Comprobado sobre el fichero resultante: 166 de 166
+  viviendas con vinilo en su capa superior y 0 m² de vinilo en zonas
+  comunes.
+- **Zonas comunes y terrazas en PAMESA Wells Ivory (Fran, 22-sep).** El
+  pavimento de las zonas comunes es siempre el Wells (el damero
+  Tile_Interior_05 que traía el modelo en portales y pasillos era otro
+  material: sus 651 caras horizontales pasan a Wells), y las terrazas (las
+  de los áticos y las pequeñas de patio) también van en Wells en vez de la
+  tarima de madera: toda tarima exterior horizontal fuera del polígono de
+  una vivienda (5.849 caras, 4.317 m²); la que cae dentro es la capa oculta
+  bajo el vinilo y no se toca.
+- **Placas claras en fachada (Fran, 22-sep).** Lo que queda de las caras de
+  pintura pegadas al vidrio (etapa 2b3) en el lado de la calle es fachada y
+  pasa al monocapa (370 triángulos, 194 m²); el lado de la calle se sabe por
+  los polígonos de vivienda (35 cm hacia un lado del paño hay vivienda,
+  hacia el otro no). Además la luz de dentro ya no alcanza el exterior (ver
+  «Luz de dentro»).
 
 ## Luz de dentro de las viviendas encendidas (añadido el 22-sep-2026)
 
@@ -393,16 +407,21 @@ se multiplican), sino una luz sumada en el shader de todos los materiales
 del edificio y del mobiliario:
 
 - `edificio.crearVolumenViviendas`: textura 3D de bytes con el índice de
-  vivienda por celda de 25 × 50 × 25 cm (polígono ensanchado 12 cm, del
+  vivienda por celda de 25 × 50 × 25 cm (polígono con 4 cm de holgura, del
   suelo a 2,7 m), y una tabla de 256 entradas índice → intensidad que
   `edificio.pintar` reescribe con los estados (encendida = ni vendida, ni
   atenuada, ni la que se está visitando). `edificio.volumenViviendas`.
 - `cortes.setVolumenViviendas(vol)` engancha las dos texturas a los
-  uniformes compartidos; `luzVivienda(p)` en GLSL_ATENUACION mira la celda y
-  la tabla, y GLSL_LUZ_VIV suma la lámpara del techo (el suelo la recibe
-  entera, los paramentos a medias) a `indirectDiffuse`, multiplicada por
-  `1 − enCorte` para que dentro de la franja de la planta seccionada mande
-  la luz del corte. El vidrio no la lleva (`userData.sinLuzViv`).
+  uniformes compartidos; `luzVivienda(p, n)` en GLSL_ATENUACION mira la
+  celda 30 cm POR DELANTE de la superficie (hacia quien la mira: la cara
+  interior del muro de fachada se enciende con su vivienda, la exterior
+  tiene delante la calle y no; el tabique entre una libre y una vendida se
+  enciende solo por el lado de la libre), y GLSL_LUZ_VIV suma la lámpara del
+  techo (el suelo la recibe entera, los paramentos a medias) a
+  `indirectDiffuse`, multiplicada por `1 − enCorte · uCorteActivo` para que
+  dentro de la franja de la planta seccionada mande la luz del corte (con
+  el edificio entero enCorte vale 1 en toda la huella, de ahí la rampa). El
+  vidrio no la lleva (`userData.sinLuzViv`).
 - Intensidad y color por momento en `luz.js` (`interior.viviendas`,
   `interior.colorViviendas`), que llegan por `cortes.setInterior` como el
   resto de la luz interior. Calibrado con capturas desde la calle con

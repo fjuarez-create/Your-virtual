@@ -396,7 +396,7 @@ const GLSL_ATENUACION = /* glsl */`
   uniform vec3 uLuzVivColor;
   uniform float uCorteActivo;    // rampa del corte (0 con el edificio entero): solo entonces manda la franja
   /* Se mira 30 cm POR DELANTE de la superficie (hacia quien la mira, que es
-     lo que dice `normal` en el fragmento con doble cara): una superficie se
+     lo que dice la normal del fragmento con doble cara): una superficie se
      enciende si el espacio que tiene delante es de una vivienda encendida.
      Así la cara interior del muro de fachada se enciende con su vivienda, la
      cara exterior de ese mismo muro (delante tiene la calle) no, y el
