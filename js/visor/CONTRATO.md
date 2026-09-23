@@ -396,6 +396,15 @@ Tres avisos de Fran con capturas, y lo que se decidió:
   los polígonos de vivienda (35 cm hacia un lado del paño hay vivienda,
   hacia el otro no). Además la luz de dentro ya no alcanza el exterior (ver
   «Luz de dentro»).
+- **Faldones de cubierta (Fran, 23-sep).** Salían faldones de otro color:
+  la luz de dentro miraba "por delante" con la normal del vértice, y el
+  modelo trae normales invertidas en muchos faldones, con lo que delante
+  caía dentro del ático y la cubierta se encendía. La normal se orienta
+  ahora hacia la cámara con la geometría (`cameraPosition`), no con el
+  vértice. En el pipeline (etapa 2b4) los retales inclinados de pintura
+  interior por encima del ático + 2 m pasan al monocapa (605 triángulos,
+  32 m²): todos los faldones, por las dos caras, van en monocapa como el
+  resto.
 
 ## Luz de dentro de las viviendas encendidas (añadido el 22-sep-2026)
 
