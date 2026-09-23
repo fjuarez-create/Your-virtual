@@ -503,7 +503,12 @@ const GLSL_LUZ_VIV = [
   /* Con el edificio entero uSuelos/uTechos se quedan como estaban y enCorte
      vale 1 en toda la huella: por eso la franja solo descuenta con la rampa
      del corte activa. */
+  /* La normal, orientada hacia la cámara con la geometría y no con lo que
+     diga el vértice: el modelo trae normales invertidas en muchos faldones y
+     paños, y con ellas "delante" caía dentro del ático y la cubierta se
+     encendía (Fran, 23-sep: faldones de otro color). */
   'vec3 nViv = inverseTransformDirection(normal, viewMatrix);',
+  'if (dot(nViv, cameraPosition - vPosMundoCorte) < 0.0) nViv = -nViv;',
   'float enViv = luzVivienda(vPosMundoCorte, nViv) * (1.0 - enCorte * uCorteActivo);',
   'if (enViv > 0.0) {',
   '  vec3 luzViv = uLuzVivColor * (0.55 + 0.45 * (nViv.y * 0.5 + 0.5));',

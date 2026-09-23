@@ -548,6 +548,50 @@ function ajustarCarasPegadasAlVidrio() {
   log(`caras de obra pegadas al vidrio: ${trisRecortados} triángulos recortados en ${piezasTocadas} piezas, ${areaQuitada.toFixed(1)} m² quitados en ${ventanasTocadas.size} ventanas (de ${ventanas.length}); al monocapa por dar a la calle: ${trisFachada} triángulos, ${areaFachada.toFixed(1)} m²${matMonocapa ? '' : ' (AVISO: sin material de monocapa)'}`);
 }
 
+/* ─────────────────────────── 2b4. Faldones de cubierta ─────────────────────────── */
+/* Fran, 23-sep: los faldones de la cubierta inclinada tienen que ir todos
+   con el mismo material. El modelo los trae en monocapa salvo 25 m² de
+   retales en pintura interior: toda cara inclinada (0,15 < ny < 0,97) de
+   obra que quede por encima del suelo del ático + 2 m pasa al monocapa. */
+ajustarCubiertas();
+function ajustarCubiertas() {
+  const matMonocapa = materialPorNombre(doc, MAT_MONOCAPA); if (!matMonocapa) { log('AVISO: sin material de monocapa, no se homogeneizan las cubiertas'); return; }
+  const indice = (g, t, c) => (g.index ? g.index.getX(3 * t + c) : 3 * t + c);
+  const aticos = cortes.plantas.atico || [];
+  const techoAtico = (x, z) => { const c = aticos.find((q) => x >= q.x0 && x < q.x1 && z >= q.z0 && z < q.z1); return c ? c.y - 1.35 + 2.0 : Infinity; };
+  let tris = 0, area = 0, piezasTocadas = 0; const nuevas = [];
+  for (const p of piezas) {
+    if (p.cat !== 'envolvente' || p.material === matMonocapa || !/Pintura interior|Hormig|Yeso|Escayola/i.test(p.material?.getName() || '')) continue;
+    const g = p.geometria; const P = g.attributes.position, N = g.attributes.normal, U = g.attributes.uv; const n = trisDe(g);
+    if (p.caja.max.y < Math.min(...aticos.map((q) => q.y - 1.35 + 2.0))) continue;
+    const mover = [];
+    for (let t = 0; t < n; t++) {
+      const ia = indice(g, t, 0), ib = indice(g, t, 1), ic = indice(g, t, 2);
+      const a = [P.getX(ia), P.getY(ia), P.getZ(ia)], b = [P.getX(ib), P.getY(ib), P.getZ(ib)], c = [P.getX(ic), P.getY(ic), P.getZ(ic)];
+      const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
+      const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx; const L = Math.hypot(nx, ny, nz); if (L < 1e-9) continue;
+      const incl = Math.abs(ny) / L; if (incl < 0.15 || incl > 0.97) continue;
+      const cx = (a[0] + b[0] + c[0]) / 3, cy = (a[1] + b[1] + c[1]) / 3, cz = (a[2] + b[2] + c[2]) / 3;
+      if (cy < techoAtico(cx, cz)) continue;
+      mover.push(t); area += L / 2;
+    }
+    if (!mover.length) continue;
+    piezasTocadas++; tris += mover.length;
+    const conjunto = new Set(mover);
+    const partir = (lista) => {
+      const m = lista.length * 3; const pos = new Float32Array(m * 3), nor = N ? new Float32Array(m * 3) : null, uv = U ? new Float32Array(m * 2) : null; let k = 0;
+      for (const t of lista) for (let cc = 0; cc < 3; cc++) { const vi = indice(g, t, cc); pos[3 * k] = P.getX(vi); pos[3 * k + 1] = P.getY(vi); pos[3 * k + 2] = P.getZ(vi); if (nor) { nor[3 * k] = N.getX(vi); nor[3 * k + 1] = N.getY(vi); nor[3 * k + 2] = N.getZ(vi); } if (uv) { uv[2 * k] = U.getX(vi); uv[2 * k + 1] = U.getY(vi); } k++; }
+      const s = new THREE.BufferGeometry(); s.setAttribute('position', new THREE.BufferAttribute(pos, 3)); if (nor) s.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); if (uv) s.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); s.computeBoundingBox(); return s;
+    };
+    const resto = []; for (let t = 0; t < n; t++) if (!conjunto.has(t)) resto.push(t);
+    const s = partir(mover);
+    p.geometria = partir(resto); p.caja = p.geometria.boundingBox.clone();
+    nuevas.push({ ...p, material: matMonocapa, geometria: s, caja: s.boundingBox.clone(), origen: 'cubierta' });
+  }
+  piezas.push(...nuevas);
+  log(`faldones de cubierta al monocapa: ${tris} triángulos, ${area.toFixed(1)} m² en ${piezasTocadas} piezas`);
+}
+
 /* ─────────────────────────── 2c. Suelos ─────────────────────────── */
 /* Parquet en todas las viviendas y porcelánico en las zonas comunes (Fran,
    21-sep-2026). El modelo trae el suelo de cada vivienda en DOS capas: el
