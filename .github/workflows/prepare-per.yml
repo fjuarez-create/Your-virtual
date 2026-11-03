@@ -1,0 +1,115 @@
+name: Locate root domain FTP access
+
+on:
+  push:
+    branches: [codex/verify-hosting-access-20261103]
+    paths: [.github/workflows/prepare-per.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Find root domain access and prepare PER folder
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_SERVER_DIR: ${{ secrets.FTP_SERVER_DIR }}
+        run: |
+          python3 - <<'PY'
+          import os, ssl, ftplib, io, uuid, urllib.parse, urllib.request
+          required = ("FTP_SERVER", "FTP_USERNAME", "FTP_PASSWORD")
+          if any(not os.environ.get(k) for k in required):
+              raise SystemExit("RESULT: configured FTP credentials missing")
+          server = os.environ["FTP_SERVER"].strip()
+          parsed = urllib.parse.urlsplit(server if "://" in server else "//" + server)
+          ftp = ftplib.FTP_TLS(context=ssl.create_default_context(), timeout=20)
+          stage = "connect"
+          try:
+              ftp.connect(parsed.hostname, parsed.port or 21)
+              ftp.auth()
+              stage = "login"
+              ftp.login(os.environ["FTP_USERNAME"], os.environ["FTP_PASSWORD"])
+              ftp.prot_c()
+              print("PASS: authenticated FTP access", flush=True)
+              initial = ftp.pwd()
+              ftp.cwd("..")
+              parent = ftp.pwd()
+              print("SCOPE: parent directory accessible=" + str(parent != initial), flush=True)
+              ftp.cwd(initial)
+              configured = os.environ.get("FTP_SERVER_DIR", "").strip()
+              candidates = [configured or initial, initial, parent, "/", "/httpdocs",
+                            "/public_html", "/www", "/htdocs", "/unikdi.com",
+                            "/unikdi.com/httpdocs", "/www/unikdi.com",
+                            parent.rstrip("/") + "/httpdocs",
+                            parent.rstrip("/") + "/unikdi.com/httpdocs"]
+              visited = set()
+              root = None
+              def http_matches(path, payload):
+                  for base in ("https://unikdi.com/", "https://www.unikdi.com/"):
+                      try:
+                          with urllib.request.urlopen(base + path, timeout=12) as response:
+                              host = urllib.parse.urlsplit(response.url).hostname
+                              if host in ("unikdi.com", "www.unikdi.com") and response.read(4096) == payload:
+                                  return True
+                      except Exception:
+                          pass
+                  return False
+              def probe(prefix=""):
+                  filename = "codex-access-check-" + uuid.uuid4().hex + ".txt"
+                  payload = ("Temporary UNIK hosting verification " + uuid.uuid4().hex + "\n").encode()
+                  attempted = False
+                  try:
+                      attempted = True
+                      ftp.storbinary("STOR " + filename, io.BytesIO(payload))
+                      received = io.BytesIO()
+                      ftp.retrbinary("RETR " + filename, received.write)
+                      if received.getvalue() != payload:
+                          raise RuntimeError("FTP content mismatch")
+                      return http_matches(prefix + filename, payload)
+                  finally:
+                      if attempted:
+                          try:
+                              ftp.delete(filename)
+                          except ftplib.error_perm as exc:
+                              if not str(exc).startswith("550"):
+                                  raise
+              stage = "identify root domain document directory"
+              for candidate in candidates:
+                  try:
+                      ftp.cwd(initial)
+                      ftp.cwd(candidate)
+                      actual = ftp.pwd()
+                  except ftplib.error_perm:
+                      continue
+                  if actual in visited:
+                      continue
+                  visited.add(actual)
+                  print("CHECK: accessible candidate " + str(len(visited)), flush=True)
+                  try:
+                      matched = probe()
+                  except ftplib.error_perm:
+                      print("INFO: candidate is not writable", flush=True)
+                      continue
+                  if matched:
+                      root = actual
+                      print("PASS: verified document directory for unikdi.com: " + root, flush=True)
+                      break
+              if root is None:
+                  print("RESULT: root domain not reachable with this FTP account; /per was not created", flush=True)
+              else:
+                  print("RESULT: root domain accessible; confirmed directory: " + root, flush=True)
+          
+          except Exception as exc:
+              print("FAIL: " + stage + " (" + type(exc).__name__ + ")", flush=True)
+              raise SystemExit(1)
+          finally:
+              try:
+                  ftp.quit()
+              except Exception:
+                  ftp.close()
+          PY
