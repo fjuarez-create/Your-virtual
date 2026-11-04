@@ -1343,6 +1343,8 @@ function programarSync() {
 }
 
 let sincronizando = null;
+/** Marca del relleno de una vez (ver sincronizar). Cambiarla obliga a otro. */
+const RELLENO = 'relleno-tandas-2026-11';
 
 /** Sube lo pendiente y baja lo que haya cambiado en el servidor. */
 export async function sincronizar({ forzar = false } = {}) {
@@ -1366,15 +1368,37 @@ export async function sincronizar({ forzar = false } = {}) {
         // Un servidor viejo no conoce la ruta: sin sello, nada que acatar.
       }
       await empujar();
-      await tirar();
+      // El relleno de una vez: hasta noviembre de 2026 una bajada por
+      // tandas podía saltarse filas (ver cambios() en el servidor), y
+      // un dispositivo que sincronizó desde cero en esos meses —la web
+      // de Andrea— tiene huecos que ninguna bajada incremental va a
+      // tapar. Una sola vez por dispositivo se vuelve a bajar todo
+      // desde el principio: lo que ya está se funde sin daño, lo que
+      // faltaba aparece. La cola de subida no se toca.
+      const relleno = await db.meta.get(RELLENO);
+      if (!relleno) {
+        // Se apunta ANTES de empezar: si la bajada se corta a medias
+        // (cerrar la pestaña, quedarse sin cobertura), la siguiente
+        // sigue desde la marca que dejó guardada el servidor en vez de
+        // volver a arrancar de cero cada vez.
+        await db.meta.set(RELLENO, 'en marcha');
+        await db.meta.del('ultimoSync');
+      }
+      const alDia = await tirar();
+      if (alDia && relleno !== 'hecho') await db.meta.set(RELLENO, 'hecho');
+      // La marca de «hasta dónde he bajado» la pone el servidor con sus
+      // propios datos (fusionarTanda); aquí solo se anota la hora para
+      // la cinta. Pisarla con el reloj del móvil perdía cambios cuando
+      // el móvil iba adelantado respecto al hosting.
       estadoSync.ultimo = ahora();
-      await db.meta.set('ultimoSync', estadoSync.ultimo);
-      // Con los datos ya al día: primero el blindaje de medios viejos
-      // (Blobs a bytes) y luego la purga de la época de pruebas. Ninguno
-      // bloquea la sincronización y ambos actúan una vez por dispositivo.
+      // Primero el blindaje de medios viejos (Blobs a bytes) y luego la
+      // purga de la época de pruebas, esta SOLO con los datos ya al
+      // día: a media bajada una tarea puede estar aquí antes que su
+      // foto, y la purga la fusilaría. Ninguno bloquea la
+      // sincronización y ambos actúan una vez por dispositivo.
       blindarMediosGuardados()
         .catch(() => {})
-        .then(() => purgarSinFotografia())
+        .then(() => (alDia ? purgarSinFotografia() : 0))
         .catch(() => {});
     } catch (e) {
       estadoSync.error = e.status === 401 ? 'sesion' : 'red';
@@ -1528,15 +1552,21 @@ async function empujar() {
   }
 }
 
+/** Baja los cambios por tandas: se pide otra mientras el servidor diga
+    que quedan más. Devuelve si quedó TODO bajado. Con muchísimo que
+    traer se para a las 25 tandas sin darlo por completo, y la
+    siguiente sincronización sigue desde la marca guardada. */
 async function tirar() {
-  // El servidor devuelve los cambios por tandas; se pide otra mientras
-  // diga que quedan más y la marca de tiempo siga avanzando (si no
-  // avanzara, pedir otra vez traería exactamente lo mismo).
   for (let vuelta = 0; vuelta < 25; vuelta++) {
     const desde = (await db.meta.get('ultimoSync')) || '';
     const r = await fusionarTanda(desde);
-    if (!r || !r.mas || r.ahora === desde) return;
+    if (!r) return false;
+    if (!r.mas) return true;
+    // Si la marca no avanzara, pedir otra vez traería exactamente lo
+    // mismo: se corta aquí, pero sin dar la bajada por completa.
+    if (r.ahora === desde) return false;
   }
+  return false;
 }
 
 /**
@@ -1621,8 +1651,15 @@ async function fusionarTanda(desde) {
     const fusionados = [];
     for (const remoto of r.medios) {
       const local = await db.get('medios', remoto.id);
-      if (local && local.blob && !remoto.borrada) {
-        fusionados.push({ ...local, ...normalizarMedio(remoto), blob: local.blob });
+      // El fichero que ya está en el dispositivo se queda: la foto es
+      // la vista del listado, y volver a bajarla del servidor es gasto
+      // de datos. Desde el blindaje vive en «bytes» (los Blobs son de
+      // antes), y mirar solo el blob la tiraba en cada fusión.
+      if (local && !remoto.borrada && (local.blob || local.bytes)) {
+        fusionados.push({
+          ...local, ...normalizarMedio(remoto),
+          blob: local.blob || null, bytes: local.bytes || null,
+        });
       } else if (!local || remoto.actualizado >= local.actualizado) {
         fusionados.push({ ...normalizarMedio(remoto), blob: null });
       }

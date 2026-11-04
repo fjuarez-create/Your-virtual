@@ -1902,18 +1902,58 @@ function cambios(): void
     // enteras, si una tuviera la fecha más alta empujaría la marca por
     // delante de tareas que se quedaron fuera del tope de esta tanda, y
     // esas ya no se pedirían nunca.
-    $marca = $desde;
-    foreach ([$listas, $tareas, $comentarios, $medios, $mensajes, $lecturas] as $conjunto) {
-        foreach ($conjunto as $fila) {
-            if ($fila['actualizado'] > $marca) {
-                $marca = $fila['actualizado'];
+    //
+    // Y la MISMA trampa la tenían las tablas entre sí (lo cazó Andrea
+    // en noviembre de 2026, sincronizando la web desde cero): los
+    // repasos se cortaban en 500 —hasta el 30 de octubre— pero las
+    // fotos y los comentarios no se cortaban y llegaban hasta hoy, la
+    // marca saltaba a hoy, y la siguiente tanda se saltaba los repasos
+    // de en medio: faltaban viviendas enteras. Por eso, cuando alguna
+    // tabla se corta, la marca es la de la tabla cortada que MENOS
+    // avanzó: la siguiente tanda vuelve a pedir desde ahí y nada se
+    // queda en el hueco (lo que se repita se funde sin daño).
+    $conjuntos = [
+        'listas' => $listas, 'tareas' => $tareas, 'comentarios' => $comentarios,
+        'medios' => $medios, 'mensajes' => $mensajes, 'lecturas' => $lecturas,
+    ];
+    $frontera = null;
+    foreach ($conjuntos as $filas) {
+        if (count($filas) >= TOPE_CAMBIOS) {
+            $ultimo = (string) $filas[count($filas) - 1]['actualizado'];
+            if ($frontera === null || $ultimo < $frontera) {
+                $frontera = $ultimo;
             }
         }
     }
+    $hayMas = $frontera !== null;
 
-    $hayMas = count($listas) >= TOPE_CAMBIOS || count($tareas) >= TOPE_CAMBIOS
-        || count($comentarios) >= TOPE_CAMBIOS || count($medios) >= TOPE_CAMBIOS
-        || count($mensajes) >= TOPE_CAMBIOS || count($lecturas) >= TOPE_CAMBIOS;
+    if ($frontera === null) {
+        $marca = $desde;
+        foreach ($conjuntos as $filas) {
+            foreach ($filas as $fila) {
+                if ($fila['actualizado'] > $marca) {
+                    $marca = $fila['actualizado'];
+                }
+            }
+        }
+    } elseif ($frontera > $desde) {
+        $marca = $frontera;
+    } else {
+        // La frontera es la propia marca pedida (menor no puede ser:
+        // traer() pide desde ella): más de un tope de filas con la
+        // MISMA marca, y la frontera no avanzaría nunca. Se sirven
+        // todas las filas de esa marca en cada tabla cortada —sin
+        // tope, que son las que son: unos cientos como mucho, de un
+        // barrido en bloque— y la siguiente tanda arranca un
+        // milisegundo después.
+        foreach ($conjuntos as $tabla => $filas) {
+            if (count($filas) >= TOPE_CAMBIOS) {
+                $conjuntos[$tabla] = traer_marca($tabla, $desde);
+            }
+        }
+        [$listas, $tareas, $comentarios, $medios, $mensajes, $lecturas] = array_values($conjuntos);
+        $marca = un_milisegundo_despues($desde);
+    }
 
     responder([
         'personas'    => array_map('persona_salida', $personas),
@@ -1940,6 +1980,27 @@ function marca_de_arranque(): string
     } catch (Throwable $e) {
         return '';
     }
+}
+
+/** Todas las filas con EXACTAMENTE esa marca, sin tope (ver cambios). */
+function traer_marca(string $tabla, string $marca): array
+{
+    $stmt = bd()->prepare("SELECT * FROM {$tabla} WHERE actualizado = ? ORDER BY id ASC");
+    $stmt->execute([$marca]);
+    return $stmt->fetchAll();
+}
+
+/** «2026-10-30T10:08:12.345Z» → «2026-10-30T10:08:12.346Z». */
+function un_milisegundo_despues(string $iso): string
+{
+    $d = DateTimeImmutable::createFromFormat('Y-m-d\\TH:i:s.v\\Z', $iso, new DateTimeZone('UTC'));
+    if (!$d) {
+        // No puede pasar: iso() solo deja entrar marcas con este
+        // formato. Si pasara, mejor un error con nombre en el registro
+        // que una bajada atascada en silencio en esa marca para siempre.
+        throw new RuntimeException("Marca ilegible: {$iso}");
+    }
+    return $d->modify('+1 millisecond')->format('Y-m-d\\TH:i:s.v\\Z');
 }
 
 function traer(string $tabla, string $desde): array
