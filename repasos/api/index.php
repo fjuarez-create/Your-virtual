@@ -1121,8 +1121,8 @@ function guardar_tareas(): void
         // comprueban aquí también. Quien no verifica:
         //
         //   - no puede poner «verificada» ni «rechazada»
-        //   - no puede reescribir la descripción, el gremio ni la
-        //     estancia de una tarea que ya existe
+        //   - no puede reescribir la descripción ni la estancia de
+        //     una tarea que ya existe
         //
         // Lo segundo es lo que hace que un acta sea un acta: si el que
         // tiene que arreglarla puede además cambiar lo que se le pidió,
@@ -1130,6 +1130,13 @@ function guardar_tareas(): void
         // petición entera —que dejaría la app sin sincronizar y sin
         // saber por qué— se conserva lo que hay guardado y se deja pasar
         // el resto, que sí es suyo: el estado y las fotos.
+        //
+        // El OFICIO sí se deja pasar a todo el mundo (lo abrió Fran en
+        // noviembre de 2026): la contrata se encuentra remates de
+        // fachada apuntados en «Pintura» y tiene que poder
+        // recategorizarlos. Cambiar el gremio no cambia lo que se pidió
+        // —el remate es el mismo— y el móvil deja nota en el hilo de
+        // quién lo cambió y de qué a qué.
         // Borrar es la forma más definitiva de editar, así que va con el
         // mismo permiso.
         $borrada = booleano($t, 'borrada') ? 1 : 0;
@@ -1147,7 +1154,6 @@ function guardar_tareas(): void
         if (!$decide) {
             if ($fila) {
                 $texto = (string) $fila['texto'];
-                $oficio = (string) ($fila['oficio'] ?? 'general');
                 $zona = (string) ($fila['zona'] ?? '');
                 $fechaLimite = $fila['fecha_limite'] ?? null;
                 $borrada = (int) ($fila['borrada'] ?? 0);

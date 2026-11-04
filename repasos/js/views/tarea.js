@@ -16,7 +16,7 @@ import {
 } from '../catalog.js';
 import * as store from '../store.js';
 import * as media from '../media.js';
-import { cabecera, hojaBienHecho, hojaFotoAcciones, cuandoTarea, menuTarjeta } from '../piezas.js';
+import { cabecera, hojaBienHecho, hojaFotoAcciones, cuandoTarea, menuTarjeta, hojaOficios } from '../piezas.js';
 import { alCompletar, nombreCorto } from '../frases.js';
 import { ir, refrescar, conFiltros, filtrosDeRuta } from '../app.js';
 import { fotosDe, soltarFotos } from '../pendientes.js';
@@ -111,6 +111,14 @@ export async function render({ listaId, tareaId }) {
     u ? h('span.d-chip.tarea', null, u.nombre) : null,
     t.zona ? h('span.d-chip.tarea', null, t.zona) : null,
     h('span.d-chip.tarea', null, o.nombre),
+    // El lápiz del oficio, a la derecha de su chip y para todo el
+    // mundo: la contrata se encuentra remates de fachada apuntados en
+    // «Pintura» y tiene que poder recategorizarlos de un toque, sin
+    // pasar por editar (lo pidió Fran para Sofía, noviembre de 2026).
+    h('button.d-lapiz-oficio', {
+      'aria-label': 'Cambiar de oficio',
+      onclick: () => cambiarOficio(t),
+    }, icon('edit')),
     // La fecha límite solo si la hay, y solo para mirarla.
     t.fechaLimite ? h('span.d-chip.tarea.fecha', null, icon('calendario'), diaYMes(t.fechaLimite)) : null,
   );
@@ -769,6 +777,26 @@ async function reponerFoto(t) {
     return;
   }
   await guardarFotos(t, origen);
+}
+
+/**
+ * Cambiar el oficio de un repaso de un toque: la hoja de oficios de
+ * siempre, se guarda al elegir, y queda una nota automática en el hilo
+ * con el antes y el después. La nota no es adorno: es lo que permite
+ * a la DF ver quién recategorizó qué, sin tener que fiarse de nadie.
+ */
+async function cambiarOficio(t) {
+  const antes = oficio(t.oficio);
+  const elegido = await hojaOficios(t.oficio, { titulo: 'Cambiar de oficio' });
+  if (!elegido || elegido === 'todos' || elegido === t.oficio) return;
+  const despues = oficio(elegido);
+  await store.actualizarTarea(t.id, { oficio: elegido });
+  await store.añadirComentario(t.id, {
+    texto: `Oficio cambiado: ${antes.nombre} → ${despues.nombre}`,
+    tipo: 'nota',
+  });
+  toast(`Ahora es ${despues.nombre}`);
+  refrescar();
 }
 
 async function menuTarea(t, listaId, suya) {

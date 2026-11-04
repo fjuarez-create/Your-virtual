@@ -2927,7 +2927,19 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 .pantalla-diseno .d-caja { min-height: 112px; border-radius: 16px; }
 .d-foto-tarea .d-foto-papelera { position: absolute; right: 12px; bottom: 12px; }
 
-.d-chips-tarea { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 4px; }
+.d-chips-tarea { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0 4px; }
+/* El lápiz del oficio: botón redondo negro con el lápiz en blanco, a
+   la derecha del chip del oficio y a su altura. Lo eligió Fran entre
+   tres (noviembre de 2026): suelto, no fundido con el chip ni como
+   insignia, para que con guantes sea un objetivo de 40 px. */
+.d-lapiz-oficio {
+  width: 40px; height: 40px; border-radius: 999px; flex: none;
+  background: var(--d-tinta); color: #fff;
+  display: grid; place-items: center;
+  transition: transform var(--pulsa-sale) var(--sal-estandar);
+}
+.d-lapiz-oficio svg { width: 20px; height: 20px; }
+.d-lapiz-oficio:active { transform: scale(0.92); transition-duration: 0s; }
 /* La fecha límite, en oscuro y solo para mirarla. */
 .d-chip.tarea.fecha { background: #454545; color: #fff; gap: 8px; }
 .d-chip.tarea.fecha svg { width: 20px; height: 20px; }
