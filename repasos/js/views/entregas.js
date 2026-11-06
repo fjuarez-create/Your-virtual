@@ -112,7 +112,7 @@ export async function render() {
     }
   };
 
-  /* ═══ MES: la rejilla con los mini-chips ═══ */
+  /* ═══ MES: la rejilla tipo Google Calendar, con una barra por villa ═══ */
   const pintarMes = () => {
     const { a, m } = E.partes(fecha);
     const primero = new Date(a, m - 1, 1, 12);
@@ -127,17 +127,20 @@ export async function render() {
       const iso = E.isoDe(d);
       const fuera = d.getMonth() !== primero.getMonth();
       const eventos = porDia.get(iso) || [];
-      // Una villa, un chip: con revisión y firma el mismo día saldría
-      // «09 09 +2» y taparía a las demás casas.
+      // Una villa, una barra: con revisión y firma el mismo día saldría
+      // «Villa 09» dos veces y taparía a las demás casas. La villa va
+      // como palabra («Villa 07»; en los móviles estrechos, «V 07») para
+      // que no se confunda con el número del día.
       const vistas = new Set();
       const villas = eventos.filter((e) => !vistas.has(e.villa) && vistas.add(e.villa));
-      const chips = villas.slice(0, 2).map((e) => h('span.d-minichip', { class: E.HITOS[e.tipo].chip }, e.villa));
-      if (villas.length > 2) chips.push(h('span.d-minichip.mas', null, `+${villas.length - 2}`));
+      const barras = villas.slice(0, 2).map((e) => h('span.d-barra', { class: E.HITOS[e.tipo].chip },
+        'V', h('span.d-barra-palabra', null, 'illa'), ` ${e.villa}`));
+      if (villas.length > 2) barras.push(h('span.d-barra.mas', null, `+${villas.length - 2}`));
       celdas.push(h('button.dia', {
         class: [fuera ? 'fuera' : '', iso === hoy ? 'hoy' : ''].filter(Boolean).join(' '),
         'aria-label': `${E.fechaConDia(iso)}${iso === hoy ? ', hoy' : ''}${eventos.length ? `, ${eventos.length === 1 ? '1 hito' : `${eventos.length} hitos`}` : ''}. Abrir el día`,
         onclick: () => abrirDia(iso),
-      }, h('span.num', null, String(d.getDate())), ...chips));
+      }, h('span.num', null, String(d.getDate())), ...barras));
       cursor.setDate(cursor.getDate() + 1);
       // Seis semanas de rejilla, pero si la sexta es toda del mes
       // siguiente, sobra.
@@ -147,12 +150,12 @@ export async function render() {
     const hayIncidencias = hitos.some((x) => x.tipo === 'incidencia');
     return h('div.d-cal-carta', null,
       h('div.d-calendario', null, ...celdas),
-      // La leyenda con un relleno neutro («nº»): solo se lee el color.
+      // La leyenda: una barrita de cada color.
       h('div.d-cal-leyenda', null,
-        h('span', null, h('span.d-minichip.firma', null, 'nº'), 'Firma'),
-        h('span', null, h('span.d-minichip.revision', null, 'nº'), 'Revisión'),
-        h('span', null, h('span.d-minichip.revisada', null, 'nº'), 'Revisada'),
-        hayIncidencias ? h('span', null, h('span.d-minichip.incidencia', null, 'nº'), 'Incidencias') : null,
+        h('span', null, h('span.d-barra.firma'), 'Firma'),
+        h('span', null, h('span.d-barra.revision'), 'Revisión'),
+        h('span', null, h('span.d-barra.revisada'), 'Revisada'),
+        hayIncidencias ? h('span', null, h('span.d-barra.incidencia'), 'Incidencias') : null,
       ),
     );
   };

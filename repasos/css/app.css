@@ -3492,34 +3492,57 @@ body.es-taller::before {
 }
 .d-cal-sub { margin: 4px 0 0; text-align: center; font-size: 14px; color: var(--d-gris); min-height: 18px; }
 
-/* ── MES: la tarjeta blanca con la rejilla ── */
-.d-cal-carta { background: #fff; border-radius: var(--d-radio); padding: 12px; margin-top: 12px; }
-.d-cal-carta .d-calendario { padding: 0; overflow: visible; flex: none; row-gap: 2px; }
+/* ── MES: la rejilla tipo Google Calendar (la opción 3, la que eligió
+   Fran el 6-11-2026 entre tres): líneas entre días y semanas, el número
+   del día pequeño arriba a la izquierda y cada villa como una barra de
+   color con su nombre entero («Villa 07»). Así el día es una cifra y la
+   villa una palabra, y no se confunden. ── */
+.d-cal-carta { background: #fff; border-radius: var(--d-radio); padding: 0 0 12px; margin-top: 12px; overflow: hidden; }
+.d-cal-carta .d-calendario { padding: 0; overflow: visible; flex: none; row-gap: 0; column-gap: 0; }
 .d-cal-carta .d-calendario .dia {
-  aspect-ratio: auto; min-height: 62px; border-radius: 10px;
-  display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start;
-  gap: 3px; padding: 4px 3px 5px; font-size: 13px; color: var(--d-gris);
+  aspect-ratio: auto; min-height: 72px; border-radius: 0;
+  display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start;
+  gap: 2px; padding: 4px 3px 5px; font-size: 13px; color: var(--d-gris);
+  border-right: 1px solid #e6e6e6; border-bottom: 1px solid #e6e6e6;
 }
-/* La cabecera Lu…Do lleva la MISMA caja que el número del día (la
-   pastilla de 22 px pegada a la izquierda), para que cada letra caiga
-   justo encima de su columna de números. */
+.d-cal-carta .d-calendario .dia:nth-child(7n) { border-right: 0; }
+/* La cabecera Lu…Do, encima de su columna, sin línea a la derecha. */
 .d-cal-carta .d-calendario .dia.cabecera {
-  min-height: 0; height: 28px; padding: 0 3px 4px;
+  min-height: 0; height: 30px; padding: 0 3px; border-right: 0;
+  justify-content: center; align-items: flex-start;
   font-size: 13px; color: var(--d-gris); font-weight: 400;
 }
 .d-cal-carta .d-calendario .dia.fuera { color: #d9d9d9; }
 .d-cal-carta .d-calendario .dia.hoy { color: var(--d-gris); }
 .d-cal-carta .d-calendario .dia.elegido { background: var(--d-gris-suave); }
 .d-cal-carta .dia .num {
-  height: 22px; min-width: 22px; padding: 0 5px; border-radius: 999px;
-  display: grid; place-items: center; line-height: 1;
+  align-self: flex-start; height: 20px; min-width: 20px; padding: 0; margin-bottom: 2px;
+  border-radius: 999px; display: grid; place-items: center; line-height: 1;
+  font-size: 12px; font-weight: 400;
 }
-/* Hoy: un aro negro, sin relleno. El beige se reserva para «revisión». */
-.d-cal-carta .dia.hoy .num {
-  box-shadow: inset 0 0 0 1.5px var(--d-tinta); color: var(--d-tinta); font-weight: 500;
+.d-cal-carta .dia.cabecera .num { font-size: 13px; margin: 0; }
+/* Hoy: círculo negro con el número en blanco. */
+.d-cal-carta .dia.hoy .num { background: var(--d-tinta); color: #fff; font-weight: 500; }
+/* La barra de cada villa en la rejilla del mes. */
+.d-barra {
+  display: block; width: 100%; height: 16px; border-radius: 4px;
+  font-size: 11px; line-height: 16px; font-weight: 500; padding: 0 5px;
+  text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
 }
-/* El mini-chip del número de villa. Dígitos tabulares y ancho fijo:
-   «07» y «15» miden lo mismo y los nombres quedan en columna. */
+.d-barra.firma { background: var(--d-tinta); color: #fff; }
+.d-barra.revision { background: var(--d-beige); color: var(--d-tinta); }
+.d-barra.revisada { background: var(--d-verde-suave); color: var(--d-verde); }
+.d-barra.incidencia { background: var(--d-rojo); color: #fff; }
+.d-barra.mas { background: none; color: var(--d-gris); padding: 0 2px; }
+/* En los móviles más estrechos «Villa 07» no cabe en la celda: se
+   queda en «V 07», que sigue siendo una palabra y no una cifra. */
+@media (max-width: 420px) {
+  .d-cal-carta .d-barra { padding: 0 3px; }
+  .d-cal-carta .d-barra .d-barra-palabra { display: none; }
+}
+/* El mini-chip del número de villa (Semana y Día). Dígitos tabulares y
+   ancho fijo: «07» y «15» miden lo mismo y los nombres quedan en columna. */
 .d-minichip {
   display: inline-flex; align-items: center; justify-content: center; flex: none;
   border-radius: 999px; font-size: 11px; line-height: 16px; padding: 1px 6px; font-weight: 500;
@@ -3532,9 +3555,10 @@ body.es-taller::before {
 .d-minichip.mas { background: var(--d-gris-suave); color: var(--d-gris); }
 .d-cal-leyenda {
   display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
-  margin: 12px 4px 0; font-size: 13px; color: var(--d-gris);
+  margin: 12px 16px 0; font-size: 13px; color: var(--d-gris);
 }
 .d-cal-leyenda span { display: inline-flex; align-items: center; gap: 6px; }
+.d-cal-leyenda .d-barra { display: inline-block; width: 26px; height: 12px; border-radius: 3px; }
 
 /* ── SEMANA: dentro de la tarjeta del día, una fila por hito ── */
 .d-actas-dias.entregas { margin-top: 12px; }

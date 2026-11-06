@@ -29,6 +29,7 @@ return array (
       'firma' => '2026-11-10',
       'revision' => '2026-11-06',
       'revisionHora' => '',
+      'revisadaEn' => '2026-11-06T17:00:00.000Z',
     ),
     2 => 
     array (
@@ -37,6 +38,7 @@ return array (
       'firma' => '',
       'revision' => '2026-11-06',
       'revisionHora' => '',
+      'revisadaEn' => '2026-11-06T17:00:00.000Z',
     ),
     3 => 
     array (
@@ -69,6 +71,7 @@ return array (
       'firma' => '2026-11-10',
       'revision' => '2026-11-06',
       'revisionHora' => '',
+      'revisadaEn' => '2026-11-06T17:00:00.000Z',
     ),
     7 => 
     array (
@@ -85,6 +88,7 @@ return array (
       'firma' => '2026-11-10',
       'revision' => '2026-11-06',
       'revisionHora' => '',
+      'revisadaEn' => '2026-11-06T17:00:00.000Z',
     ),
     9 => 
     array (
