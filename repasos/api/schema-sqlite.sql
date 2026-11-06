@@ -65,6 +65,7 @@ CREATE TABLE IF NOT EXISTS tareas (
   oficio            TEXT NOT NULL DEFAULT 'general',
   zona              TEXT NOT NULL DEFAULT '',
   fecha_limite TEXT DEFAULT NULL,
+  prioridad TEXT NOT NULL DEFAULT 'alta',
   orden             INTEGER NOT NULL DEFAULT 0,
   portada_id        TEXT,
   estado_por        TEXT,

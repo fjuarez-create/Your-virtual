@@ -8,7 +8,7 @@
    ═══════════════════════════════════════════════════════════════ */
 import * as db from './db.js';
 import * as api from './api.js';
-import { puedeVerificar, hecha, esperandoVisto, rebotada, enObra, OFICIO_POR_DEFECTO, FASE_UNICA } from './catalog.js';
+import { puedeVerificar, hecha, esperandoVisto, rebotada, enObra, OFICIO_POR_DEFECTO, FASE_UNICA, PRIORIDAD_POR_DEFECTO, esPrioridad, prioridadDe } from './catalog.js';
 
 /* ─── Identificadores y sellos de tiempo ──────────────────────── */
 export function nuevoId() {
@@ -315,7 +315,7 @@ export async function tarea(id) {
   return t && !t.borrada ? t : null;
 }
 
-export async function crearTarea({ listaId, texto, oficio = OFICIO_POR_DEFECTO, zona = '', fechaLimite = null, autor = null }) {
+export async function crearTarea({ listaId, texto, oficio = OFICIO_POR_DEFECTO, zona = '', fechaLimite = null, prioridad = PRIORIDAD_POR_DEFECTO, autor = null }) {
   const hermanas = await tareasDeLista(listaId);
   const quien = autor || usuario;
   const t = {
@@ -325,6 +325,9 @@ export async function crearTarea({ listaId, texto, oficio = OFICIO_POR_DEFECTO, 
     oficio: oficio || OFICIO_POR_DEFECTO,
     zona: zona || '',
     fechaLimite: fechaLimite || null,
+    // Siempre un valor válido: la obligación de elegirla vive en los
+    // formularios, y aquí ningún repaso nace sin prioridad.
+    prioridad: esPrioridad(prioridad) ? prioridad : PRIORIDAD_POR_DEFECTO,
     estado: 'pendiente',
     orden: hermanas.length ? Math.max(...hermanas.map((x) => x.orden || 0)) + 1 : 1,
     portadaId: null,
@@ -397,6 +400,21 @@ export async function cambiarEstado(tareaId, nuevo, nota = {}) {
     });
   }
   return actualizada;
+}
+
+/**
+ * Alta o media. Solo la dirección facultativa, y el servidor lo hace
+ * cumplir también: a quien no decide le conserva la guardada. Sin nota
+ * en el hilo, a diferencia del oficio: la DF va a bajar a media decenas
+ * de repasos de una tacada y cada toque no es un hecho que contar.
+ */
+export async function cambiarPrioridad(tareaId, nueva) {
+  if (!esPrioridad(nueva)) throw new Error('Prioridad desconocida.');
+  if (!puedeVerificar(usuario)) throw new Error('Solo la dirección facultativa cambia la prioridad.');
+  const t = await db.get('tareas', tareaId);
+  if (!t) return null;
+  if (prioridadDe(t) === nueva) return t;
+  return actualizarTarea(tareaId, { prioridad: nueva });
 }
 
 /* Las dos reglas que sostienen todo esto —completar y verificar exigen
@@ -1699,6 +1717,7 @@ const normalizarTarea = (t) => ({
   ...t, orden: Number(t.orden) || 0, borrada: bool(t.borrada), rechazada: bool(t.rechazada),
   zona: typeof t.zona === 'string' ? t.zona : '',
   fechaLimite: t.fechaLimite || null,
+  prioridad: esPrioridad(t.prioridad) ? t.prioridad : PRIORIDAD_POR_DEFECTO,
 });
 const normalizarComentario = (c) => ({ ...c, borrada: bool(c.borrada) });
 const normalizarMensaje = (m) => ({ ...m, borrada: bool(m.borrada) });

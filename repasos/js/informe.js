@@ -9,7 +9,7 @@
    ═══════════════════════════════════════════════════════════════ */
 import { h, icon, fechaLarga, hora, toast } from './ui.js';
 import * as store from './store.js';
-import { unidad, promocion, estado, enObra } from './catalog.js';
+import { unidad, promocion, estado, enObra, prioridadDe } from './catalog.js';
 
 export async function informe(lista, { abrirImpresion = false } = {}) {
   const tareas = await store.tareasDeLista(lista.id);
@@ -40,7 +40,9 @@ export async function informe(lista, { abrirImpresion = false } = {}) {
         url ? h('img', { src: url, alt: '' }) : h('span', null, 'Sin foto'),
       ),
       h('div.inf-txt', null,
-        h('div.inf-num', null, `${i + 1}. `, h('span', { class: 'inf-estado ' + t.estado }, e.nombre)),
+        h('div.inf-num', null, `${i + 1}. `,
+          h('span', { class: 'inf-estado prioridad ' + prioridadDe(t) }, prioridadDe(t) === 'alta' ? 'Alta' : 'Media'),
+          h('span', { class: 'inf-estado ' + t.estado }, e.nombre)),
         h('p', null, t.texto || 'Sin descripción.'),
         extras.length ? h('p.inf-extras', null, 'Material adicional: ' + extras.join(', ') + '.') : null,
         t.estado !== 'pendiente' && t.estadoPor

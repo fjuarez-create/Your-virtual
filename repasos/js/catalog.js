@@ -220,6 +220,31 @@ export function estado(id) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   La prioridad de un repaso
+   Dos y solo dos, decidido por Fran en noviembre de 2026: «alta», la
+   vivienda no debería entregarse sin arreglarlo (andamios, fachada,
+   instalaciones empotradas: lo que no se arregla con el comprador ya
+   viviendo); y «media», lo que sí se puede arreglar después. No hay
+   «baja» a propósito: suena a que no se le da importancia.
+   Alta es la de nacimiento: la llevan todos los repasos de antes del
+   campo y los que lleguen de un móvil que aún no lo conozca. Solo la
+   dirección facultativa la cambia; el servidor lo hace cumplir.
+   ═══════════════════════════════════════════════════════════════ */
+export const PRIORIDADES = [
+  { id: 'alta', nombre: 'Alta' },
+  { id: 'media', nombre: 'Media' },
+];
+export const PRIORIDAD_POR_DEFECTO = 'alta';
+export const esPrioridad = (id) => PRIORIDADES.some((p) => p.id === id);
+/** La prioridad de un repaso, con la red de los de antes: alta. Los
+    chips y los filtros pasan todos por aquí; nadie lee t.prioridad a
+    pelo, que un repaso viejo caería en «media» por accidente. */
+export const prioridadDe = (t) => (esPrioridad(t?.prioridad) ? t.prioridad : PRIORIDAD_POR_DEFECTO);
+export function prioridad(id) {
+  return PRIORIDADES.find((p) => p.id === id) || PRIORIDADES[0];
+}
+
+/* ═══════════════════════════════════════════════════════════════
    Usuarios: contraseña, permisos y roles
    ═══════════════════════════════════════════════════════════════ */
 

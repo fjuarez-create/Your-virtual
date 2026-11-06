@@ -22,8 +22,9 @@ declare(strict_types=1);
     de la 13, un móvil sincronizó en mitad del despliegue —esquema.php
     ya nuevo, schema.sql todavía viejo— y la migración selló la 13 sin
     la tabla de adjuntos. Los CREATE son IF NOT EXISTS: repasarlos no
-    toca un dato. */
-const ESQUEMA_VERSION = 14;
+    toca un dato.
+    La 15 añade la prioridad de los repasos (alta o media). */
+const ESQUEMA_VERSION = 15;
 
 /**
  * Campos que tienen que existir, por tabla, con el tipo que usa MySQL.
@@ -49,6 +50,11 @@ const ESQUEMA_CAMPOS = [
         // Para cuándo tiene que estar arreglado. Vacío = sin fecha:
         // el campo es opcional en el diseño y en la obra.
         'fecha_limite' => 'VARCHAR(32) DEFAULT NULL',
+        // Alta o media; lo decidió Fran en noviembre de 2026 (no hay
+        // «baja»: suena a que no se le da importancia). Los repasos de
+        // antes del campo se quedan en alta y la dirección facultativa
+        // los va bajando a media uno a uno.
+        'prioridad'    => "VARCHAR(10) NOT NULL DEFAULT 'alta'",
     ],
     'listas' => [
         // Vacío = se muestra el nombre de la vivienda. Solo se guarda

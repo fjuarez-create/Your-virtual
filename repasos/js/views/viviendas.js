@@ -34,7 +34,10 @@ export async function render({ promoId, desdeTab = false }) {
 
   // Los filtros vienen en la dirección, si es que se venía filtrando
   // (los banners de la home mandan aquí con el estado ya puesto).
-  let { estado: filtroEstado, oficio: oficioId } = filtrosDeRuta();
+  // La prioridad viaja también, pero aquí no filtra: el resumen por
+  // vivienda no la cuenta, y quitarla al pasar por esta pantalla haría
+  // que al volver a una villa «se le quitara sola». Se lleva en silencio.
+  let { estado: filtroEstado, oficio: oficioId, prioridad } = filtrosDeRuta();
   // Y el conmutador: inacabadas de serie, que es donde está el trabajo.
   let vista = 'inacabadas';
 
@@ -62,7 +65,7 @@ export async function render({ promoId, desdeTab = false }) {
         total,
         pct: total ? Math.round((100 * hechas) / total) : 0,
         alPinchar: () => ir(conFiltros(`#/p/${promoId}/v/${u.id.split(':')[1]}`,
-          { estado: filtroEstado, oficio: oficioId })),
+          { estado: filtroEstado, oficio: oficioId, prioridad })),
       });
     }));
     if (!visibles.length) {
@@ -94,7 +97,7 @@ export async function render({ promoId, desdeTab = false }) {
     if (piezas.length) {
       piezas.push(h('button.d-filtro-quitar', {
         'aria-label': 'Quitar los filtros',
-        onclick: () => { filtroEstado = 'todas'; oficioId = 'todos'; cambio(); },
+        onclick: () => { filtroEstado = 'todas'; oficioId = 'todos'; prioridad = 'todas'; cambio(); },
       }, icon('x')));
     }
     filtros.replaceChildren(...piezas);
@@ -110,7 +113,7 @@ export async function render({ promoId, desdeTab = false }) {
     return cara;
   };
 
-  const cambio = () => { anotarFiltros({ estado: filtroEstado, oficio: oficioId }); pintar(); };
+  const cambio = () => { anotarFiltros({ estado: filtroEstado, oficio: oficioId, prioridad }); pintar(); };
 
   /* ─── El conmutador y la bola de filtros ─── */
   const conmutador = h('div.d-selector', null,

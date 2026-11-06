@@ -849,6 +849,9 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 .inf-estado.resuelta { background: rgba(63, 125, 90, 0.14); color: var(--ok); }
 .inf-estado.rechazada { background: var(--rojo-soft); color: var(--rojo); }
 .inf-estado.verificada { background: var(--ink); color: #fff; }
+.inf-estado.prioridad { margin-right: 6px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.inf-estado.prioridad.alta { background: #db3e32; color: #fff; }
+.inf-estado.prioridad.media { background: #064d2d; color: #fff; }
 .inf-txt p { font-size: 14px; line-height: 1.5; white-space: pre-wrap; }
 .inf-extras { font-size: 12px; color: var(--muted); margin-top: 6px; }
 .inf-pie { margin-top: 26px; font-size: 11px; color: var(--muted); line-height: 1.5; }
@@ -2933,16 +2936,45 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
    tres (noviembre de 2026): suelto, no fundido con el chip ni como
    insignia, para que con guantes sea un objetivo de 40 px. */
 .d-lapiz-oficio {
-  width: 40px; height: 40px; border-radius: 999px; flex: none;
+  /* 44, como los chips de su fila: Fran pidió unificar alturas al
+     poner al lado el chip de prioridad (noviembre de 2026). */
+  width: 44px; height: 44px; border-radius: 999px; flex: none;
   background: var(--d-tinta); color: #fff;
   display: grid; place-items: center;
   transition: transform var(--pulsa-sale) var(--sal-estandar);
 }
-.d-lapiz-oficio svg { width: 20px; height: 20px; }
+.d-lapiz-oficio svg { width: 22px; height: 22px; }
 .d-lapiz-oficio:active { transform: scale(0.92); transition-duration: 0s; }
 /* La fecha límite, en oscuro y solo para mirarla. */
 .d-chip.tarea.fecha { background: #454545; color: #fff; gap: 8px; }
 .d-chip.tarea.fecha svg { width: 20px; height: 20px; }
+
+/* ─── La prioridad: rojo «Alta», verde «Media», macizos, con las
+   medidas del chip de la tarjeta (44 px). Es el modelo que eligió Fran
+   para todas las pantallas (noviembre de 2026). Los colores van en
+   duro y no por variable: el chip vive también en el parte, que es del
+   diseño viejo. La regla con descendiente pesa más que los tonos de
+   «Por cerrar», que ponen en blanco los chips de la tarjeta. ── */
+.d-chip.tarea.prioridad, .d-tarea-fila .d-chip.tarea.prioridad { font-weight: 500; white-space: nowrap; }
+.d-chip.tarea.prioridad.alta, .d-tarea-fila .d-chip.tarea.prioridad.alta { background: #db3e32; color: #fff; }
+.d-chip.tarea.prioridad.media, .d-tarea-fila .d-chip.tarea.prioridad.media { background: #064d2d; color: #fff; }
+button.d-chip.tarea.prioridad {
+  border: 0; cursor: pointer; font-family: inherit;
+  transition: transform var(--pulsa-sale) var(--sal-estandar);
+}
+button.d-chip.tarea.prioridad:active { transform: scale(0.94); transition-duration: 0s; }
+/* La pareja para elegir: la elegida maciza, la otra hueca con borde. */
+.d-pareja-prioridad { display: flex; align-items: center; gap: 8px; }
+.d-pareja-prioridad .d-chip.tarea.prioridad[aria-pressed='false'] { background: #fff; box-shadow: inset 0 0 0 1.5px currentColor; }
+.d-pareja-prioridad .d-chip.tarea.prioridad.alta[aria-pressed='false'] { color: #db3e32; }
+.d-pareja-prioridad .d-chip.tarea.prioridad.media[aria-pressed='false'] { color: #064d2d; }
+.d-pareja-rotulo { font-size: 16px; color: var(--d-gris); margin-right: 4px; white-space: nowrap; }
+.d-chips-tarea + .d-pareja-prioridad { margin: 8px 0 4px; }
+/* En el parte, los chips del filtro de prioridad se tiñen al marcarse. */
+.chips.filtro .chip.prioridad-alta[aria-pressed='true'] { background: #db3e32; color: #fff; box-shadow: none; }
+.chips.filtro .chip.prioridad-media[aria-pressed='true'] { background: #064d2d; color: #fff; box-shadow: none; }
+/* Dos selectores seguidos en la hoja de filtros: sin doble aire. */
+.d-carta-selector-caja + .d-carta-selector-caja { padding-top: 0; }
 
 /* Los dos botones de la dirección facultativa: verde da por bueno,
    rojo devuelve a la obra. */

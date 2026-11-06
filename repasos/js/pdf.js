@@ -17,7 +17,7 @@
    signos de apertura del castellano.
    ═══════════════════════════════════════════════════════════════ */
 
-import { estado, oficio, OFICIOS, ZONAS } from './catalog.js';
+import { estado, oficio, OFICIOS, ZONAS, prioridadDe } from './catalog.js';
 import { TIPOGRAFIAS_PDF } from './tipografiaPdf.js';
 
 const A4 = { ancho: 595.28, alto: 841.89 };
@@ -124,6 +124,7 @@ const COLOR = {
   verdeSuave: [0.878, 0.937, 0.906],
   rojo: [0.396, 0.114, 0.090],       // #651d17
   rojoSuave: [0.984, 0.918, 0.910],
+  rojoVivo: [0.859, 0.243, 0.196],   // #db3e32, el de la prioridad alta en pantalla
   ambar: [0.408, 0.235, 0.012],      // #683c03
   ambarSuave: [0.996, 0.957, 0.902],
   papel: [1, 1, 1],
@@ -897,6 +898,10 @@ export function hojaDeReparto({
      largo y no caben todos, se van cayendo los de menos sustancia. */
   const chipsDe = (t) => {
     const lista = [];
+    // La prioridad la primera: los chips se caen por el final cuando no
+    // caben, y esta es la que nunca debe caerse.
+    const alta = prioridadDe(t) === 'alta';
+    lista.push({ texto: alta ? 'ALTA' : 'MEDIA', tam: 7, fondo: alta ? COLOR.rojoVivo : COLOR.verde, color: COLOR.papel });
     const sitio = comoAgrupar === 'oficio' ? t.zona : (oficio(t.oficio)?.corto || oficio(t.oficio)?.nombre);
     if (sitio) lista.push({ texto: sitio, tam: 8 });
     if (t.estado && t.estado !== 'pendiente' && t.estado !== 'verificada') {
@@ -984,8 +989,8 @@ export function hojaDeReparto({
     let xChip = x + ANCHO_COL - chips.reduce((s, ch) => s + anchoChip(ch) + 4, -4);
     for (const ch of chips) {
       const a = anchoChip(ch);
-      pag.pastilla(xChip, yy - 12.5, a, 15, 7.5, COLOR.beigeSuave);
-      pag.texto(xChip + 6.5, yy - 7.5, ch.texto, { tam: ch.tam, color: [0.4, 0.37, 0.31], fuente: 'haas' });
+      pag.pastilla(xChip, yy - 12.5, a, 15, 7.5, ch.fondo || COLOR.beigeSuave);
+      pag.texto(xChip + 6.5, yy - 7.5, ch.texto, { tam: ch.tam, color: ch.color || [0.4, 0.37, 0.31], fuente: 'haas' });
       xChip += a + 4;
     }
     yy -= 17;

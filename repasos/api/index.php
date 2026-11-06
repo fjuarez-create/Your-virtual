@@ -39,6 +39,11 @@ const MIMES = [
 
 /** Máximo de registros por tabla y tanda en la bajada de cambios. */
 const TOPE_CAMBIOS = 500;
+/* Las dos prioridades de un repaso. Alta es la de nacimiento: la
+   vivienda no debería entregarse sin arreglarlo. Media, lo que se puede
+   arreglar con el comprador ya viviendo. Decidido por Fran en
+   noviembre de 2026; «baja» no existe a propósito. */
+const PRIORIDADES = ['alta', 'media'];
 
 /** Cuántos días vive el audio de una reunión (decidido por Fran). */
 const GRABACION_DIAS_AUDIO = 30;
@@ -1103,6 +1108,12 @@ function guardar_tareas(): void
     }
     // Quién es a efectos de permisos, una vez y no por tarea.
     $decide = (bool) $yo['verifica'] || $yo['rol'] === 'admin';
+    // La red para la ventana del despliegue: este fichero puede llegar
+    // al servidor unos segundos antes que lib/esquema.php, que es quien
+    // añade la columna. Mientras no esté, se guarda sin ella (la base
+    // la rellena con alta en cuanto aparezca) en vez de reventar cada
+    // subida con un error de columna desconocida.
+    $hayPrioridad = in_array('prioridad', esquema_columnas(bd(), 'tareas'), true);
 
     $guardadas = 0;
     foreach ($entrada as $t) {
@@ -1116,6 +1127,10 @@ function guardar_tareas(): void
         $oficio = texto($t, 'oficio', 30, 'general') ?: 'general';
         $zona = texto($t, 'zona', 40);
         $fechaLimite = isset($t['fechaLimite']) && $t['fechaLimite'] ? iso($t['fechaLimite']) : null;
+        // Vacío = no vino o no vale (un móvil con la app de antes del
+        // campo): más abajo se resuelve contra lo guardado, nunca se
+        // escribe vacío.
+        $prioridad = in_array($t['prioridad'] ?? '', PRIORIDADES, true) ? $t['prioridad'] : '';
 
         // El navegador no es de fiar, así que los dos permisos se
         // comprueban aquí también. Quien no verifica:
@@ -1123,6 +1138,8 @@ function guardar_tareas(): void
         //   - no puede poner «verificada» ni «rechazada»
         //   - no puede reescribir la descripción ni la estancia de
         //     una tarea que ya existe
+        //   - no puede tocar la prioridad: la pone y la cambia solo la
+        //     dirección facultativa, también en los repasos nuevos
         //
         // Lo segundo es lo que hace que un acta sea un acta: si el que
         // tiene que arreglarla puede además cambiar lo que se le pidió,
@@ -1147,7 +1164,8 @@ function guardar_tareas(): void
         // Se relee dentro del bucle y se vacía cada vuelta a
         // propósito: dejar la fila de la tarea anterior colgando
         // aquí acabaría escribiendo el texto de una en otra.
-        $previo = bd()->prepare('SELECT estado, estado_por, estado_en, rechazada, texto, oficio, zona, fecha_limite, borrada FROM tareas WHERE id = ?');
+        $previo = bd()->prepare('SELECT estado, estado_por, estado_en, rechazada, texto, oficio, zona, fecha_limite, '
+            . ($hayPrioridad ? 'prioridad, ' : '') . 'borrada FROM tareas WHERE id = ?');
         $previo->execute([$t['id']]);
         $fila = $previo->fetch() ?: null;
 
@@ -1158,6 +1176,9 @@ function guardar_tareas(): void
                 $fechaLimite = $fila['fecha_limite'] ?? null;
                 $borrada = (int) ($fila['borrada'] ?? 0);
             }
+            // Quien no decide no fija prioridad: se queda la guardada, y
+            // un repaso nuevo nace en alta.
+            $prioridad = $fila ? (string) ($fila['prioridad'] ?? 'alta') : 'alta';
             if (in_array($estado, ['verificada', 'rechazada'], true)) {
                 // Lo que ya hubiera decidido un verificador no lo deshace
                 // quien no puede; y si no había nada, se queda en
@@ -1166,6 +1187,13 @@ function guardar_tareas(): void
                 $estado = in_array($guardado, ['verificada', 'rechazada'], true) ? $guardado : 'resuelta';
                 $rechazada = $estado === 'rechazada' ? 1 : 0;
             }
+        }
+
+        // Sin prioridad en lo que llega (app de antes del campo, o un
+        // valor raro): se conserva la guardada, que puede ser una
+        // «media» que la DF puso a mano; si no hay nada guardado, alta.
+        if ($prioridad === '') {
+            $prioridad = $fila ? (string) ($fila['prioridad'] ?? 'alta') : 'alta';
         }
 
         // El estado lleva su propio reloj: `estado_en` es el sello de
@@ -1193,6 +1221,7 @@ function guardar_tareas(): void
             'oficio'            => $oficio,
             'zona'              => $zona,
             'fecha_limite'      => $fechaLimite,
+            'prioridad'         => $prioridad,
             'orden'             => entero($t, 'orden'),
             'portada_id'        => es_uuid($t['portadaId'] ?? null) ? $t['portadaId'] : null,
             'estado_por'        => $estadoPor,
@@ -1204,6 +1233,9 @@ function guardar_tareas(): void
             'creado_por'        => es_uuid($t['creadoPor'] ?? null) ? $t['creadoPor'] : null,
             'creado_por_nombre' => texto($t, 'creadoPorNombre', 120, 'Sin identificar'),
         ];
+        if (!$hayPrioridad) {
+            unset($registro['prioridad']);
+        }
         if (upsert('tareas', $registro)) {
             $guardadas++;
         }
@@ -2042,6 +2074,9 @@ function tarea_salida(array $f): array
         'estado' => $f['estado'], 'oficio' => (string) ($f['oficio'] ?? 'general'),
         'zona' => (string) ($f['zona'] ?? ''),
         'fechaLimite' => $f['fecha_limite'] ?? null,
+        // Con red por si se sirve una fila antes de que la migración
+        // haya añadido la columna: alta, como las de siempre.
+        'prioridad' => in_array($f['prioridad'] ?? '', PRIORIDADES, true) ? $f['prioridad'] : 'alta',
         'orden' => (int) $f['orden'], 'portadaId' => $f['portada_id'],
         'estadoPor' => $f['estado_por'], 'estadoEn' => $f['estado_en'],
         'rechazada' => (int) ($f['rechazada'] ?? 0) === 1,

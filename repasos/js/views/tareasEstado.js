@@ -17,6 +17,7 @@
 import { h, icon, toast } from '../ui.js';
 import {
   PROMOCIONES, promocion, unidad, unidades, oficio, estado, ESTADOS, OFICIOS, hecha,
+  puedeVerificar, prioridadDe,
 } from '../catalog.js';
 import * as store from '../store.js';
 import {
@@ -88,7 +89,25 @@ export async function render({ promoId, estadoId = 'resuelta' }) {
 
   let filtroVivienda = '';
   let filtroOficios = [];
+  let filtroPrioridad = 'todas';
   let orden = 'reciente';
+
+  // La DF cambia la prioridad tocando el chip de la tarjeta, sin abrir
+  // el repaso (lo mismo que en la ficha de la villa).
+  const verifica = puedeVerificar(store.sesion());
+  const cambiarPrio = async (t, nueva) => {
+    const antes = prioridadDe(t);
+    try {
+      await store.cambiarPrioridad(t.id, nueva);
+      t.prioridad = nueva;
+      pintar();
+      toast(nueva === 'alta' ? 'Ahora es prioridad alta' : 'Ahora es prioridad media', '',
+        { detalle: 'Toca para deshacer', alTocar: () => cambiarPrio(t, antes) });
+    } catch (e) {
+      toast(e.message, 'err');
+    }
+  };
+  const conPrioridad = (x) => filtroPrioridad === 'todas' || prioridadDe(x.tarea) === filtroPrioridad;
 
   /* ─── Qué se ve con lo que hay puesto ─── */
   // La vista-suma usa el MISMO listón que la tarjeta de portada
@@ -101,6 +120,7 @@ export async function render({ promoId, estadoId = 'resuelta' }) {
     let lista = deEsteEstado();
     if (filtroVivienda) lista = lista.filter((x) => x.unidadId === filtroVivienda);
     if (filtroOficios.length) lista = lista.filter((x) => filtroOficios.includes(x.tarea.oficio));
+    lista = lista.filter(conPrioridad);
     return ordenar(lista);
   };
   const ordenar = (lista) => {
@@ -120,12 +140,14 @@ export async function render({ promoId, estadoId = 'resuelta' }) {
   const viviendasLibres = () => {
     const conTareas = new Set(deEsteEstado()
       .filter((x) => !filtroOficios.length || filtroOficios.includes(x.tarea.oficio))
+      .filter(conPrioridad)
       .map((x) => x.unidadId));
     return unidades(promoId).filter((u) => conTareas.has(u.id)).map((u) => ({ id: u.id, nombre: u.nombre }));
   };
   const oficiosLibres = () => {
     const conTareas = new Set(deEsteEstado()
       .filter((x) => !filtroVivienda || x.unidadId === filtroVivienda)
+      .filter(conPrioridad)
       .map((x) => x.tarea.oficio));
     return OFICIOS.filter((o) => conTareas.has(o.id));
   };
@@ -138,7 +160,8 @@ export async function render({ promoId, estadoId = 'resuelta' }) {
     onclick: () => menuFlotante((cerrar) => [VISTA_SUMA, ...ESTADOS].map((e) => {
       const n = todas.filter((x) => enLaVista(x.tarea, e.id)
         && (!filtroVivienda || x.unidadId === filtroVivienda)
-        && (!filtroOficios.length || filtroOficios.includes(x.tarea.oficio))).length;
+        && (!filtroOficios.length || filtroOficios.includes(x.tarea.oficio))
+        && conPrioridad(x)).length;
       return filaMenu('listaChecks', `${e.plural} (${n})`, () => { cerrar(); cambiarEstado(e.id); });
     }), { conX: true }),
   }, h('span'), icon('caretAbajo'));
@@ -151,10 +174,12 @@ export async function render({ promoId, estadoId = 'resuelta' }) {
         oficios: filtroOficios,
         viviendas: viviendasLibres(),
         oficiosLibres: oficiosLibres(),
+        prioridad: filtroPrioridad,
       });
       if (!r) return;
       filtroVivienda = r.vivienda;
       filtroOficios = r.oficios;
+      filtroPrioridad = r.prioridad || 'todas';
       pintar();
     },
   }, icon('cursores'));
@@ -187,10 +212,11 @@ export async function render({ promoId, estadoId = 'resuelta' }) {
     const piezas = [];
     if (filtroVivienda) piezas.push(h('span.pastilla', null, unidad(filtroVivienda)?.nombre || 'Vivienda'));
     for (const id of filtroOficios) piezas.push(h('span.pastilla', null, oficio(id).nombre));
+    if (filtroPrioridad !== 'todas') piezas.push(h('span.pastilla', null, `Prioridad ${filtroPrioridad}`));
     if (piezas.length) {
       piezas.push(h('button.quitar', {
         'aria-label': 'Quitar los filtros',
-        onclick: () => { filtroVivienda = ''; filtroOficios = []; pintar(); },
+        onclick: () => { filtroVivienda = ''; filtroOficios = []; filtroPrioridad = 'todas'; pintar(); },
       }, icon('x')));
     }
     filtros.replaceChildren(...piezas);
@@ -208,15 +234,20 @@ export async function render({ promoId, estadoId = 'resuelta' }) {
       const u = unidad(x.unidadId);
       const o = oficio(x.tarea.oficio);
       return tarjetaTarea({
-        cuando: cuandoTarea(x.cuando),
+        // La villa va en la línea de la fecha y no en un chip: con la
+        // prioridad delante, cuatro chips no caben en la tarjeta y el
+        // último se metía debajo de la bola de la foto.
+        cuando: `${u?.nombre || 'Vivienda'} · ${cuandoTarea(x.cuando)}`,
         quien: x.quien ? store.persona(null, x.quien) : null,
         titulo: x.tarea.texto || 'Sin descripción',
         villa: u?.nombre || 'Vivienda',
-        // Con tres chips el oficio va en corto («Puertas», no «Puertas
-        // de paso y entrada»): el nombre entero desborda la tarjeta.
+        // El oficio en corto («Puertas», no «Puertas de paso y
+        // entrada»): el nombre entero desborda la tarjeta.
         chips: mezclada
-          ? [u?.nombre || 'Vivienda', o?.corto, estado(x.tarea.estado).nombre].filter(Boolean)
-          : null,
+          ? [o?.corto, estado(x.tarea.estado).nombre].filter(Boolean)
+          : [o?.corto].filter(Boolean),
+        prioridad: prioridadDe(x.tarea),
+        alCambiarPrioridad: verifica ? (v) => cambiarPrio(x.tarea, v) : null,
         tono: !mezclada ? null
           : x.tarea.estado === 'rechazada' ? 'rechazada'
             : x.tarea.estado === 'resuelta' ? 'completada' : null,
@@ -252,11 +283,11 @@ export async function render({ promoId, estadoId = 'resuelta' }) {
       Ahora todo va en el flujo: título, subtítulo y el botón abajo,
       empujado por el propio alto de la caja. */
   const pantallaVacia = () => {
-    const hayFiltros = !!filtroVivienda || filtroOficios.length > 0;
+    const hayFiltros = !!filtroVivienda || filtroOficios.length > 0 || filtroPrioridad !== 'todas';
     const v = VACIO[estadoId];
     const [titulo, frase, rotulo, accion] = hayFiltros
       ? ['Ningún repaso con estos filtros', 'Prueba a quitar alguno para ver el resto.',
-        'Quitar los filtros', () => { filtroVivienda = ''; filtroOficios = []; pintar(); }]
+        'Quitar los filtros', () => { filtroVivienda = ''; filtroOficios = []; filtroPrioridad = 'todas'; pintar(); }]
       : [v.titulo, v.frase, v.salida.rotulo, () => cambiarEstado(v.salida.estado)];
     return [
       h('div.d-vacio', null,

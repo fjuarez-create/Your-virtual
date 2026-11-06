@@ -19,13 +19,14 @@ import {
 } from '../ui.js';
 import {
   promocion, unidad, FASE_UNICA, OFICIO_POR_DEFECTO, OFICIOS, ZONAS, oficio, puedeCrearLista,
+  esPrioridad,
 } from '../catalog.js';
 import * as store from '../store.js';
 import * as api from '../api.js';
 import * as grabadora from '../recorrido.js';
 import {
   cabecera, hojaOficios, hojaZonas, hojaBienHecho, ctaAccion, ctaCancelar,
-  menuFlotante, filaMenu, filaMenuFichero,
+  menuFlotante, filaMenu, filaMenuFichero, parejaPrioridad,
 } from '../piezas.js';
 import { alCerrarRecorrido, nombreCorto } from '../frases.js';
 import { juntaFotos } from '../ajustesLocales.js';
@@ -408,6 +409,12 @@ export async function render({ promoId, unidadId, seguir = false }) {
         absorbida: !!v.absorbida,
         extras: Array.isArray(v.extras) ? v.extras.slice() : [],
         confianza: v.confianza || null, sinFoto: false,
+        // En el recorrido la prioridad nace puesta —la de la IA, o alta
+        // si no hubo IA o el recorrido es de antes del campo— para que
+        // no bloquee «Crear repaso» en cada ficha. Lo tocado a mano no
+        // se pisa después.
+        prioridad: esPrioridad(v.prioridad) ? v.prioridad : 'alta',
+        prioridadTocada: !!v.prioridadTocada,
       };
     });
     const porMarca = new Map(fichas.map((f) => [String(f.marca.id), f]));
@@ -428,6 +435,7 @@ export async function render({ promoId, unidadId, seguir = false }) {
           tocado: f.tocado, zonaTocada: f.zonaTocada,
           fuera: f.fuera, guardada: f.guardada, confianza: f.confianza,
           absorbida: f.absorbida, extras: f.extras,
+          prioridad: f.prioridad, prioridadTocada: f.prioridadTocada,
         }));
         try { await store.guardarRecorrido(rec); } catch { /* al siguiente cambio */ }
       };
@@ -662,6 +670,13 @@ export async function render({ promoId, unidadId, seguir = false }) {
       };
       pintarGremio();
 
+      /* La prioridad: la puso la IA y se cambia de un toque. Sin
+         contagio a las fichas siguientes: cada remate tiene la suya. */
+      const selPrioridad = parejaPrioridad((v) => {
+        f.prioridad = v; f.prioridadTocada = true;
+        apuntar();
+      }, f.prioridad, { rotulo: 'Prioridad' });
+
       /* La descripción: 400 caracteres como mucho, y la caja mide lo
          que mide el texto —ni sobra blanco ni se corta—. Lo que la caja
          no ocupa se lo queda la foto de abajo. */
@@ -751,6 +766,7 @@ export async function render({ promoId, unidadId, seguir = false }) {
         h('div.d-rec-villa', null, u.nombre),
         selZona,
         selGremio,
+        selPrioridad,
         texto,
         h('div.d-rec-pie.apilado', null, guardarBtn, descartarBtn),
         // Cuando ya está todo cerrado, el remate se puede dar desde
@@ -882,7 +898,7 @@ export async function render({ promoId, unidadId, seguir = false }) {
         lista = await store.crearLista({ unidadId, promoId, fase: FASE_UNICA });
         for (const { f, fotosVivas } of conVida) {
           const t = await store.crearTarea({
-            listaId: lista.id, texto: f.texto.trim(), oficio: f.oficio, zona: f.zona,
+            listaId: lista.id, texto: f.texto.trim(), oficio: f.oficio, zona: f.zona, prioridad: f.prioridad,
           });
           // Todas las fotos vivas del remate, no solo la principal.
           for (const m of fotosVivas) {
@@ -1044,6 +1060,9 @@ export async function render({ promoId, unidadId, seguir = false }) {
           if (!f) continue;
           const t = String(ficha.texto || '').trim();
           f.confianza = ficha.confianza || null;
+          // La prioridad de la IA vale aunque la ficha venga sin texto
+          // (el molde la exige igual); lo tocado a mano no se pisa.
+          if (!f.prioridadTocada && esPrioridad(ficha.prioridad)) f.prioridad = ficha.prioridad;
           if (!t) continue;
           f.texto = t;
           // Lo redactado cuenta como decidido: el contagio de gremios
@@ -1135,7 +1154,7 @@ export async function render({ promoId, unidadId, seguir = false }) {
         h('p.d-epigrafe', { style: { margin: '0 0 4px' } }, 'Que las escriba solas'),
         h('p.sub', { style: { marginTop: '4px' } },
           'Se escucha lo que dijiste, se miran las fotos y sale un repaso de cada '
-          + 'una con su estancia y su gremio. Un solo toque.'),
+          + 'una con su estancia, su gremio y su prioridad. Un solo toque.'),
         h('div', { style: { marginTop: '10px' } }, campo),
         aviso,
         boton,

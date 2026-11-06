@@ -11,6 +11,7 @@ import * as store from './store.js';
 import * as api from './api.js';
 import {
   unidad, oficio, estado, rebotada, imagenDeOficio, ESTADOS, OFICIOS, ZONAS, PLANTAS,
+  PRIORIDADES, esPrioridad,
 } from './catalog.js';
 import { ir, conFiltros } from './app.js';
 
@@ -385,6 +386,27 @@ export function filtroEstado(alCambiar, inicial = 'todas') {
   const chips = h('div.chips.filtro', null,
     ...[['todas', 'Todas'], ...ESTADOS.map((e) => [e.id, e.plural])].map(([id, txt]) =>
       h('button.chip.accent', {
+        'aria-pressed': id === activo ? 'true' : 'false',
+        onclick: (e) => {
+          if (activo === id) return;
+          activo = id;
+          [...chips.children].forEach((c) => c.setAttribute('aria-pressed', c === e.currentTarget ? 'true' : 'false'));
+          alCambiar(activo);
+        },
+      }, txt)),
+  );
+  return chips;
+}
+
+/** Los chips de prioridad del parte: Todas, Alta y Media, un solo
+    activo. Los dos de color se tiñen al marcarse, como el chip de la
+    tarjeta, para que se lea igual en todas partes. */
+export function filtroPrioridad(alCambiar, inicial = 'todas') {
+  let activo = esPrioridad(inicial) ? inicial : 'todas';
+  const chips = h('div.chips.filtro', null,
+    ...[['todas', 'Todas'], ...PRIORIDADES.map((p) => [p.id, p.nombre])].map(([id, txt]) =>
+      h('button.chip', {
+        class: id === 'todas' ? 'accent' : `prioridad-${id}`,
         'aria-pressed': id === activo ? 'true' : 'false',
         onclick: (e) => {
           if (activo === id) return;
@@ -1323,7 +1345,49 @@ export function cuandoCorto(iso) {
  * sin entrar. Por eso ocupa el mismo sitio que el anillo de avance en
  * la otra tarjeta, que es donde el ojo ya sabe que hay algo.
  */
-export function tarjetaTarea({ cuando, quien, titulo, villa, oficioObj, foto, chips = null, tono = null, alPinchar }) {
+/* ═══ La prioridad en pantalla ═══════════════════════════════════
+   El chip macizo —rojo «Alta», verde «Media»— con las medidas del chip
+   de la tarjeta (44 px, redondo del todo), que es el que eligió Fran
+   entre tres maquetas en noviembre de 2026 y el que se repite igual en
+   todas las pantallas. */
+
+/** El chip de lectura. Con `alTocar`, la DF lo toca y pasa a la otra
+    prioridad sin abrir el repaso: el toque no sube a la tarjeta. */
+export function chipPrioridad(valor, { alTocar = null } = {}) {
+  const id = esPrioridad(valor) ? valor : 'alta';
+  const texto = PRIORIDADES.find((p) => p.id === id).nombre;
+  if (!alTocar) return h('span.d-chip.tarea.prioridad', { class: id }, texto);
+  return h('button.d-chip.tarea.prioridad', {
+    class: id,
+    type: 'button',
+    'aria-label': `Prioridad ${texto.toLowerCase()}: tocar para cambiarla`,
+    onclick: (ev) => { ev.stopPropagation(); ev.preventDefault(); alTocar(id === 'alta' ? 'media' : 'alta'); },
+  }, texto);
+}
+
+/** La pareja para elegir: se toca la que se quiere y queda maciza; la
+    otra, hueca con su borde. Sin valor inicial las dos van huecas (el
+    formulario obliga a tocar una). `nodo.poner(v)` repinta desde fuera. */
+export function parejaPrioridad(alCambiar, inicial = null, { rotulo = '' } = {}) {
+  let valor = esPrioridad(inicial) ? inicial : null;
+  const botones = PRIORIDADES.map((p) => h('button.d-chip.tarea.prioridad', {
+    class: p.id,
+    type: 'button',
+    'aria-pressed': valor === p.id ? 'true' : 'false',
+    onclick: () => { if (valor === p.id) return; nodo.poner(p.id); alCambiar(p.id); },
+  }, p.nombre));
+  const nodo = h('div.d-pareja-prioridad', null,
+    rotulo ? h('span.d-pareja-rotulo', null, rotulo) : null,
+    ...botones);
+  nodo.poner = (v) => {
+    valor = esPrioridad(v) ? v : null;
+    botones.forEach((b, i) => b.setAttribute('aria-pressed', valor === PRIORIDADES[i].id ? 'true' : 'false'));
+  };
+  nodo.valor = () => valor;
+  return nodo;
+}
+
+export function tarjetaTarea({ cuando, quien, titulo, villa, oficioObj, foto, chips = null, tono = null, prioridad = null, alCambiarPrioridad = null, alPinchar }) {
   const bola = h('span.d-tarjeta-foto');
   if (foto) {
     bola.style.backgroundImage = `url("${foto}")`;
@@ -1347,6 +1411,9 @@ export function tarjetaTarea({ cuando, quien, titulo, villa, oficioObj, foto, ch
     // Dentro de una, la casa ya la dice el título de la pantalla y lo
     // que hace falta saber es en qué habitación está el remate.
     h('div.d-tarjeta-pie', null,
+      // La prioridad va la primera: es lo que decide si la casa se
+      // entrega o no, y por eso se lee antes que la habitación.
+      prioridad ? chipPrioridad(prioridad, { alTocar: alCambiarPrioridad }) : null,
       (chips || [villa, oficioObj?.nombre]).filter(Boolean)
         .map((c) => h('span.d-chip.tarea', null, c)),
     ),
@@ -1355,8 +1422,8 @@ export function tarjetaTarea({ cuando, quien, titulo, villa, oficioObj, foto, ch
 }
 
 /**
- * La hoja «Filtrar tareas»: arriba la vivienda —una sola— y debajo los
- * oficios, que se marcan varios.
+ * La hoja «Filtrar tareas»: arriba la vivienda —una sola— y la
+ * prioridad —una sola—, y debajo los oficios, que se marcan varios.
  *
  * Solo se ofrece lo que existe. Si no queda nada de pladur, pladur no
  * sale: un filtro que lleva a una lista vacia es una promesa rota, y en
@@ -1367,12 +1434,14 @@ export function tarjetaTarea({ cuando, quien, titulo, villa, oficioObj, foto, ch
  * @param {string[]} p.oficios     ids de oficio marcados
  * @param {Array} p.viviendas      [{id, nombre}] con tareas en este estado
  * @param {Array} p.oficiosLibres  [{id, nombre}] con tareas en este estado
- * @returns {Promise<{vivienda: string, oficios: string[]}|null>} null si se cierra
+ * @param {string} p.prioridad     'todas', 'alta' o 'media'
+ * @returns {Promise<{vivienda: string, oficios: string[], prioridad: string}|null>} null si se cierra
  */
-export function hojaFiltroTareas({ vivienda = '', oficios = [], viviendas = [], oficiosLibres = [], conVivienda = true }) {
+export function hojaFiltroTareas({ vivienda = '', oficios = [], viviendas = [], oficiosLibres = [], conVivienda = true, prioridad = 'todas' }) {
   return new Promise((resolve) => {
     let elegida = vivienda;
     const marcados = new Set(oficios);
+    let prioridadElegida = esPrioridad(prioridad) ? prioridad : 'todas';
 
     const rotuloVivienda = () => viviendas.find((v) => v.id === elegida)?.nombre || 'Todas las viviendas';
     const selector = h('button.d-carta-selector', {
@@ -1382,14 +1451,27 @@ export function hojaFiltroTareas({ vivienda = '', oficios = [], viviendas = [], 
       ], { conX: true }),
     }, h('span', null, rotuloVivienda()), icon('caretAbajo'));
 
-    const boton = h('button', { onclick: () => { cerrar(); resolve({ vivienda: elegida, oficios: [...marcados] }); } }, 'Aplicar filtros');
+    // La prioridad, con el mismo selector que la vivienda: un valor,
+    // un selector; varios valores, círculos (la regla de esta hoja).
+    const rotuloPrioridad = () => (prioridadElegida === 'todas'
+      ? 'Cualquier prioridad'
+      : `Prioridad ${PRIORIDADES.find((p) => p.id === prioridadElegida).nombre.toLowerCase()}`);
+    const selectorPrioridad = h('button.d-carta-selector', {
+      onclick: () => menuFlotante((cerrar) => [
+        filaMenu(null, 'Cualquier prioridad', () => { cerrar(); prioridadElegida = 'todas'; refrescar(); }),
+        ...PRIORIDADES.map((p) => filaMenu(null, `Prioridad ${p.nombre.toLowerCase()}`, () => { cerrar(); prioridadElegida = p.id; refrescar(); })),
+      ], { conX: true }),
+    }, h('span', null, rotuloPrioridad()), icon('caretAbajo'));
+
+    const boton = h('button', { onclick: () => { cerrar(); resolve({ vivienda: elegida, oficios: [...marcados], prioridad: prioridadElegida }); } }, 'Aplicar filtros');
 
     const refrescar = () => {
       selector.querySelector('span').textContent = rotuloVivienda();
+      selectorPrioridad.querySelector('span').textContent = rotuloPrioridad();
       // Se puede aplicar cuando hay algo que aplicar, y tambien cuando
       // se quita todo teniendo filtros puestos: quitarlos es aplicar.
-      const hayAlgo = !!elegida || marcados.size > 0;
-      const habia = !!vivienda || oficios.length > 0;
+      const hayAlgo = !!elegida || marcados.size > 0 || prioridadElegida !== 'todas';
+      const habia = !!vivienda || oficios.length > 0 || (esPrioridad(prioridad) && prioridad !== 'todas');
       boton.disabled = !hayAlgo && !habia;
       lista.querySelectorAll('.d-marcable-circulo').forEach((c) => {
         c.classList.toggle('marcado', marcados.has(c.dataset.oficio));
@@ -1422,6 +1504,7 @@ export function hojaFiltroTareas({ vivienda = '', oficios = [], viviendas = [], 
       // y una fila que dice «Todas las viviendas» ahí solo invita a
       // salirse de la casa que estás repasando sin querer.
       conVivienda ? h('div.d-carta-selector-caja', null, selector) : null,
+      h('div.d-carta-selector-caja', null, selectorPrioridad),
       lista,
       h('div.d-carta-pie', null, boton),
     );

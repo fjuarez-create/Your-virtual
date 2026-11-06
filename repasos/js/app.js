@@ -11,7 +11,7 @@ import * as api from './api.js';
 import { borrarBase } from './db.js';
 import { hayFotosSinMandar } from './pendientes.js';
 import { hayGrabacionEnMarcha } from './grabadora.js';
-import { fijarPlantas } from './catalog.js';
+import { fijarPlantas, esPrioridad } from './catalog.js';
 
 /* ─── Rutas ───────────────────────────────────────────────────── */
 const RUTAS = [
@@ -77,14 +77,18 @@ export function ir(ruta, { reemplazar = false } = {}) {
 /** Lee el filtro de la dirección actual. */
 export function filtrosDeRuta() {
   const p = new URLSearchParams(location.hash.split('?')[1] || '');
-  return { estado: p.get('estado') || 'todas', oficio: p.get('oficio') || 'todos' };
+  // La prioridad se valida al leerla: una dirección escrita a mano con
+  // un valor raro dejaría la lista vacía con el chip «Todas» marcado.
+  const prioridad = p.get('prioridad');
+  return { estado: p.get('estado') || 'todas', oficio: p.get('oficio') || 'todos', prioridad: esPrioridad(prioridad) ? prioridad : 'todas' };
 }
 
 /** Pega el filtro a una ruta. Lo que no filtra no se escribe. */
-export function conFiltros(ruta, { estado = 'todas', oficio = 'todos' } = {}) {
+export function conFiltros(ruta, { estado = 'todas', oficio = 'todos', prioridad = 'todas' } = {}) {
   const p = new URLSearchParams();
   if (estado && estado !== 'todas') p.set('estado', estado);
   if (oficio && oficio !== 'todos') p.set('oficio', oficio);
+  if (prioridad && prioridad !== 'todas') p.set('prioridad', prioridad);
   const q = p.toString();
   return q ? `${ruta}?${q}` : ruta;
 }

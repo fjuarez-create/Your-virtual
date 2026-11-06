@@ -4,11 +4,15 @@
 import { h, icon, sheet, toast, confirmSheet, emptyState, fechaCorta, hora } from '../ui.js';
 import {
   unidad, estado, promocion, enObra, ESTADOS, OFICIOS, ZONAS, oficio, OFICIO_POR_DEFECTO,
+  puedeVerificar, prioridadDe, esPrioridad,
 } from '../catalog.js';
 import * as store from '../store.js';
 import * as media from '../media.js';
 import * as api from '../api.js';
-import { cabeceraDentro, barraSync, filtroEstado, filtroOficio, ctaAccion, ctaCancelar, entregarFichero } from '../piezas.js';
+import {
+  cabeceraDentro, barraSync, filtroEstado, filtroOficio, filtroPrioridad, ctaAccion, ctaCancelar,
+  entregarFichero, chipPrioridad, parejaPrioridad,
+} from '../piezas.js';
 import { usaIA, ordenPdf } from '../ajustesLocales.js';
 import { ir, refrescar, conFiltros, filtrosDeRuta, anotarFiltros } from '../app.js';
 import { informe } from '../informe.js';
@@ -39,16 +43,33 @@ export async function render({ listaId }) {
   // Los mismos dos filtros que en las otras tres pantallas, y llegan
   // puestos si se venía filtrando desde fuera. Aquí lo que se filtra son
   // tareas, así que el valor del chip es el estado tal cual.
-  let { estado: filtro, oficio: oficioId } = filtrosDeRuta();
+  let { estado: filtro, oficio: oficioId, prioridad: prioridadId } = filtrosDeRuta();
   const listado = h('div.stack');
   const contador = h('p.contador');
 
-  const cambio = () => { anotarFiltros({ estado: filtro, oficio: oficioId }); pintar(); };
+  const cambio = () => { anotarFiltros({ estado: filtro, oficio: oficioId, prioridad: prioridadId }); pintar(); };
+
+  // La prioridad la cambia la DF tocando el chip de la fila, sin abrir
+  // el repaso: lo pidió Fran para repasar una villa entera de seguido.
+  const verifica = puedeVerificar(store.sesion());
+  const cambiarPrio = async (t, nueva) => {
+    const antes = prioridadDe(t);
+    try {
+      await store.cambiarPrioridad(t.id, nueva);
+      t.prioridad = nueva;
+      pintar();
+      toast(nueva === 'alta' ? 'Ahora es prioridad alta' : 'Ahora es prioridad media', '',
+        { detalle: 'Toca para deshacer', alTocar: () => cambiarPrio(t, antes) });
+    } catch (e) {
+      toast(e.message, 'err');
+    }
+  };
 
   const pintar = () => {
     const visibles = tareas.filter((t) =>
       (filtro === 'todas' || t.estado === filtro)
-      && (oficioId === 'todos' || (t.oficio || OFICIO_POR_DEFECTO) === oficioId));
+      && (oficioId === 'todos' || (t.oficio || OFICIO_POR_DEFECTO) === oficioId)
+      && (prioridadId === 'todas' || prioridadDe(t) === prioridadId));
     listado.replaceChildren();
     if (!visibles.length) {
       listado.append(h('p.sub.center', { style: { padding: '26px 0' } },
@@ -56,7 +77,8 @@ export async function render({ listaId }) {
     } else {
       visibles.forEach((t) => listado.append(
         tarjetaTarea(t, tareas.indexOf(t) + 1, portadas.get(t.id), tipos.get(t.id), listaId,
-          { estado: filtro, oficio: oficioId })));
+          { estado: filtro, oficio: oficioId, prioridad: prioridadId },
+          verifica ? (v) => cambiarPrio(t, v) : null)));
     }
     contador.textContent = visibles.length === tareas.length
       ? `${tareas.length} ${tareas.length === 1 ? 'repaso' : 'repasos'}`
@@ -64,6 +86,7 @@ export async function render({ listaId }) {
   };
 
   const chips = filtroEstado((v) => { filtro = v; cambio(); }, filtro);
+  const chipsPrioridad = filtroPrioridad((v) => { prioridadId = v; cambio(); }, prioridadId);
   const selector = filtroOficio((v) => { oficioId = v; cambio(); }, oficioId);
   pintar();
 
@@ -98,6 +121,7 @@ export async function render({ listaId }) {
       }, icon('documento'), 'Hoja PDF para la puerta') : null,
 
       conteo.total ? chips : null,
+      conteo.total ? chipsPrioridad : null,
       conteo.total ? selector : null,
       conteo.total ? contador : null,
       tareas.length ? listado : emptyState('camera', 'Lista vacía',
@@ -108,7 +132,7 @@ export async function render({ listaId }) {
 }
 
 /* ─── Tarjeta de tarea ────────────────────────────────────────── */
-function tarjetaTarea(t, numero, urlPortada, tipos, listaId, filtros = null) {
+function tarjetaTarea(t, numero, urlPortada, tipos, listaId, filtros = null, alCambiarPrioridad = null) {
   const e = estado(t.estado);
   const thumb = urlPortada
     ? h('div.thumb', { style: { backgroundImage: `url("${urlPortada}")` } }, etiquetaNumero(numero), marcasMedios(tipos))
@@ -124,6 +148,10 @@ function tarjetaTarea(t, numero, urlPortada, tipos, listaId, filtros = null) {
     h('div.body', null,
       h('p.txt', null, t.texto || 'Sin descripción'),
       h('div.meta', null,
+        // La prioridad la primera, con el chip de 44 px de todas las
+        // pantallas: aquí convive con las etiquetas pequeñas del parte,
+        // y es a propósito, para que se lea a la primera.
+        chipPrioridad(prioridadDe(t), { alTocar: alCambiarPrioridad }),
         h('span.tag', { class: e.tag }, e.nombre),
         // Delante del nombre de quien la movió: en una villa con cuatro
         // baños, saber en cuál es importa más que saber quién la tocó.
@@ -167,6 +195,9 @@ async function proponer(imagen) {
       texto: String(f.texto || '').trim(),
       oficio: OFICIOS.some((o) => o.id === f.oficio) ? f.oficio : null,
       zona: f.zona || '',
+      // La IA la decide con el criterio de la obra; si no la trae, la
+      // hoja sale sin ella y obliga a tocarla.
+      prioridad: esPrioridad(f.prioridad) ? f.prioridad : null,
     };
   } catch {
     return null;
@@ -248,7 +279,7 @@ export async function nuevaTarea(listaId) {
   ultimoOficio = datos.oficio;
 
   const t = await store.crearTarea({
-    listaId, texto: datos.texto, oficio: datos.oficio, zona: datos.zona,
+    listaId, texto: datos.texto, oficio: datos.oficio, zona: datos.zona, prioridad: datos.prioridad,
   });
   for (const img of preparadas) {
     await store.añadirMedio(t.id, {
@@ -264,10 +295,12 @@ export async function nuevaTarea(listaId) {
 let ultimoOficio = null;
 
 /**
- * Texto, fotos, oficio y estancia. El oficio es obligatorio: de él tiran
- * los filtros de las pantallas de actas y de viviendas, y una tarea sin
- * gremio sería invisible al buscar por gremio. Por eso el botón de
- * guardar no se activa hasta elegirlo.
+ * Texto, fotos, oficio, prioridad y estancia. El oficio es obligatorio:
+ * de él tiran los filtros de las pantallas de actas y de viviendas, y
+ * una tarea sin gremio sería invisible al buscar por gremio. Por eso el
+ * botón de guardar no se activa hasta elegirlo. La prioridad también:
+ * decide si la casa se entrega o no, y la pone quien está delante del
+ * remate (o la IA, si miró la foto; entonces llega ya marcada).
  *
  * La estancia NO lo es. Sirve para encontrar el remate dentro de la
  * casa, no para clasificar el trabajo, y hay tareas que no están en
@@ -279,6 +312,11 @@ function hojaTexto(imagenes, oficioPrevio, propuesta = null) {
   return sheet((cerrar) => {
     let elegido = oficioPrevio || null;
     let zona = propuesta?.zona && ZONAS.includes(propuesta.zona) ? propuesta.zona : '';
+    // La prioridad la elige solo la dirección facultativa: a la
+    // constructora no se le pide (el servidor pondría alta de todas
+    // formas) y su repaso nace en alta.
+    const decidePrioridad = puedeVerificar(store.sesion());
+    let prioridad = !decidePrioridad ? 'alta' : esPrioridad(propuesta?.prioridad) ? propuesta.prioridad : null;
 
     const texto = h('textarea.textarea', {
       placeholder: 'Qué hay que hacer aquí…',
@@ -305,6 +343,9 @@ function hojaTexto(imagenes, oficioPrevio, propuesta = null) {
       }, o.corto)),
     );
 
+    // La prioridad: un toque en la que sea, sin desmarcar (no es opcional).
+    const prioridades = parejaPrioridad((v) => { prioridad = v; validar(); }, prioridad);
+
     // La estancia se puede quitar volviendo a tocar el chip puesto: es
     // opcional, y sin eso un toque por error no habría manera de
     // deshacerlo sin cerrar la hoja y empezar de nuevo.
@@ -319,23 +360,24 @@ function hojaTexto(imagenes, oficioPrevio, propuesta = null) {
       }, z)),
     );
 
-    // Las tres cosas son obligatorias: foto, descripción y oficio. La
-    // pista dice cuál falta, y solo una a la vez: una lista de tres
-    // reproches se lee como una regañina.
+    // Las cuatro cosas son obligatorias: foto, descripción, oficio y
+    // prioridad. La pista dice cuál falta, y solo una a la vez: una
+    // lista de reproches se lee como una regañina.
     const validar = () => {
       const hayFoto = imagenes.length > 0;
       const hayTexto = texto.value.trim().length > 0;
-      const vale = hayFoto && hayTexto && !!elegido;
+      const vale = hayFoto && hayTexto && !!elegido && !!prioridad;
       guardar.disabled = !vale;
       pista.textContent = !hayFoto ? 'Este repaso necesita al menos una foto.'
         : !hayTexto ? 'Escribe qué hay que hacer aquí.'
         : !elegido ? 'Elige el oficio para poder guardar.'
+        : !prioridad ? 'Marca si la prioridad es alta o media.'
         : '';
       return vale;
     };
     texto.addEventListener('input', validar);
     guardar.addEventListener('click', () => validar()
-      && cerrar({ texto: texto.value.trim(), oficio: elegido, zona }));
+      && cerrar({ texto: texto.value.trim(), oficio: elegido, zona, prioridad }));
 
     const previsualizacion = imagenes.length
       ? h('div.rail', null, imagenes.map((im) =>
@@ -351,6 +393,8 @@ function hojaTexto(imagenes, oficioPrevio, propuesta = null) {
       texto,
       h('p.eyebrow', { style: { marginTop: '14px' } }, 'Oficio'),
       rejilla,
+      decidePrioridad ? h('p.eyebrow', { style: { marginTop: '14px' } }, 'Prioridad') : null,
+      decidePrioridad ? prioridades : null,
       h('p.eyebrow', { style: { marginTop: '14px' } }, 'Estancia · opcional'),
       estancias,
       pista,

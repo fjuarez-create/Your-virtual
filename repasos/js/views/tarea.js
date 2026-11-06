@@ -12,11 +12,14 @@
 import { h, icon, sheet, toast, confirmSheet, openViewer, fechaCorta, hora, pesoLegible } from '../ui.js';
 import {
   ZONAS, OFICIOS, estado, oficio, unidad, rebotada, puedeVerificar, imagenDeOficio,
-  TOPE_FOTOS_TAREA, TOPE_FOTOS_VERIFICACION,
+  TOPE_FOTOS_TAREA, TOPE_FOTOS_VERIFICACION, prioridadDe,
 } from '../catalog.js';
 import * as store from '../store.js';
 import * as media from '../media.js';
-import { cabecera, hojaBienHecho, hojaFotoAcciones, cuandoTarea, menuTarjeta, hojaOficios } from '../piezas.js';
+import {
+  cabecera, hojaBienHecho, hojaFotoAcciones, cuandoTarea, menuTarjeta, hojaOficios,
+  parejaPrioridad, chipPrioridad,
+} from '../piezas.js';
 import { alCompletar, nombreCorto } from '../frases.js';
 import { ir, refrescar, conFiltros, filtrosDeRuta } from '../app.js';
 import { fotosDe, soltarFotos } from '../pendientes.js';
@@ -300,6 +303,13 @@ export async function render({ listaId, tareaId }) {
 
       caja,
       chips,
+      // La prioridad, debajo de los chips y con su rótulo. La DF la
+      // cambia de un toque (la pareja); la constructora solo la ve.
+      verifica
+        ? parejaPrioridad((v) => cambiarPrioridad(t, v), prioridadDe(t), { rotulo: 'Prioridad' })
+        : h('div.d-pareja-prioridad', null,
+            h('span.d-pareja-rotulo', null, 'Prioridad'),
+            chipPrioridad(prioridadDe(t))),
 
       h('p.d-epigrafe', null, 'Descripción'),
       h('div.d-caja', null, t.texto || 'Sin descripción.'),
@@ -785,6 +795,19 @@ async function reponerFoto(t) {
  * con el antes y el después. La nota no es adorno: es lo que permite
  * a la DF ver quién recategorizó qué, sin tener que fiarse de nadie.
  */
+/** Alta o media, de un toque, solo la DF. Sin nota en el hilo: no es un
+    hecho de la obra, es la DF ordenando su propia lista. */
+async function cambiarPrioridad(t, nueva) {
+  try {
+    await store.cambiarPrioridad(t.id, nueva);
+    toast(nueva === 'alta' ? 'Ahora es prioridad alta' : 'Ahora es prioridad media');
+    refrescar();
+  } catch (e) {
+    toast(e.message, 'err');
+    refrescar();
+  }
+}
+
 async function cambiarOficio(t) {
   const antes = oficio(t.oficio);
   const elegido = await hojaOficios(t.oficio, { titulo: 'Cambiar de oficio' });

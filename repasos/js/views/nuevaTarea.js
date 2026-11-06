@@ -11,12 +11,12 @@
    una inspección es exactamente eso, alguien que pasó por la casa y
    dejó apuntado lo que vio. */
 import { h, icon, toast, openViewer } from '../ui.js';
-import { promocion, unidad, unidades, oficio as oficioDe } from '../catalog.js';
+import { promocion, unidad, unidades, oficio as oficioDe, puedeVerificar } from '../catalog.js';
 import * as store from '../store.js';
 import * as media from '../media.js';
 import {
   cabecera, hojaZonas, hojaOficios, hojaFecha, hojaFotoAcciones, menuFlotante, filaMenu,
-  bandeja, caraDeGremio,
+  bandeja, caraDeGremio, parejaPrioridad,
 } from '../piezas.js';
 import { ir } from '../app.js';
 
@@ -121,6 +121,13 @@ export async function render({ promoId, unidadId }) {
   let zona = '';
   let gremio = null;
   let fechaLimite = null;
+  // Sin valor hasta que se toca: es obligatoria, como la estancia y el
+  // oficio, y precargar «alta» dejaría guardar sin pensarlo. Solo la
+  // dirección facultativa la elige: a la constructora no se le pide
+  // (el servidor pondría alta de todas formas) y su repaso nace en alta.
+  const verifica = puedeVerificar(store.sesion());
+  let prioridad = verifica ? null : 'alta';
+  const selPrioridad = parejaPrioridad((v) => { prioridad = v; repasar(); });
 
   const campo = (rotulo, obligatorio, pastilla) => h('div.d-campo', null,
     h('label.d-campo-rotulo', null, rotulo, obligatorio ? h('span.req', null, '*') : null),
@@ -177,13 +184,13 @@ export async function render({ promoId, unidadId }) {
   area.addEventListener('change', () => apuntar());
 
   /* ─── Guardar ─── */
-  // La foto es obligatoria, como los otros cuatro campos. Una tarea sin
+  // La foto es obligatoria, como los otros cinco campos. Una tarea sin
   // foto obliga a quien la lee a fiarse de una frase, y quien la escribe
   // estaba delante del remate: la foto es lo único que no se puede
   // reconstruir después.
   const guardarBtn = h('button.d-boton-negro', { disabled: true }, 'Guardar repaso');
   const repasar = () => {
-    guardarBtn.disabled = !(zona && gremio && area.value.trim() && fotos.length);
+    guardarBtn.disabled = !(zona && gremio && prioridad && area.value.trim() && fotos.length);
     botonMas.disabled = fotos.length >= TOPE;
   };
 
@@ -198,6 +205,7 @@ export async function render({ promoId, unidadId }) {
         oficio: gremio,
         zona,
         fechaLimite,
+        prioridad,
       });
       for (const f of fotos) {
         await store.añadirMedio(t.id, { tipo: 'imagen', blob: f.blob, mime: f.mime, ancho: f.ancho, alto: f.alto });
@@ -228,6 +236,7 @@ export async function render({ promoId, unidadId }) {
       campo('Vivienda', true, selVilla),
       campo('Zona o estancia', true, selZona),
       campo('Oficio o subcontrata', true, selGremio),
+      verifica ? campo('Prioridad', true, selPrioridad) : null,
       campo('Fecha límite', false, selFecha),
       campo('Descripción', true, area),
 

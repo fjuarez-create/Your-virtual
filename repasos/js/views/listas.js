@@ -12,7 +12,7 @@
    las tres visitas salió cada cosa. Las actas siguen existiendo —son
    la firma de quién vio qué y cuándo— y viven en el menú de arriba. */
 import { h, icon, toast, avatar, fechaCorta, hora } from '../ui.js';
-import { promocion, unidad, oficio, estado as estadoDe, puedeCrearLista } from '../catalog.js';
+import { promocion, unidad, oficio, estado as estadoDe, puedeCrearLista, puedeVerificar, prioridadDe } from '../catalog.js';
 import * as store from '../store.js';
 import {
   cabecera, tarjetaActa, tarjetaTarea, cuandoTarea, cuandoCorto, bannerAvance, bannerMordido,
@@ -51,8 +51,25 @@ export async function render({ promoId, unidadId }) {
 
   // El filtro llega puesto desde la lista de viviendas; la estancia es
   // un vistazo de dentro de la casa y no viaja en la dirección.
-  let { estado, oficio: oficioId } = filtrosDeRuta();
+  let { estado, oficio: oficioId, prioridad } = filtrosDeRuta();
   let estancia = '';
+
+  // La prioridad la cambia la DF tocando el chip de la tarjeta, sin
+  // abrir el repaso: así se repasa una villa entera de seguido, que es
+  // lo que va a hacer la dirección facultativa con las que ya existen.
+  const verifica = puedeVerificar(store.sesion());
+  const cambiarPrio = async (t, nueva) => {
+    const antes = prioridadDe(t);
+    try {
+      await store.cambiarPrioridad(t.id, nueva);
+      t.prioridad = nueva;
+      pintar();
+      toast(nueva === 'alta' ? 'Ahora es prioridad alta' : 'Ahora es prioridad media', '',
+        { detalle: 'Toca para deshacer', alTocar: () => cambiarPrio(t, antes) });
+    } catch (e) {
+      toast(e.message, 'err');
+    }
+  };
 
   /* ─── La lista de repasos ───
      Lo que queda por hacer va en la tarjeta grande del diseño: foto,
@@ -68,7 +85,7 @@ export async function render({ promoId, unidadId }) {
     h('p.d-epigrafe', null, 'Repasos verificados'), verificados);
 
   const pintar = () => {
-    const visibles = tareas.filter((t) => encaja(t, estado, oficioId, estancia));
+    const visibles = tareas.filter((t) => encaja(t, estado, oficioId, estancia, prioridad));
     const abiertas = visibles.filter((t) => t.estado !== 'verificada');
     const hechas2 = visibles.filter((t) => t.estado === 'verificada');
 
@@ -78,8 +95,12 @@ export async function render({ promoId, unidadId }) {
       titulo: t.texto || 'Sin descripción',
       // Aquí la casa ya la dice el título de la pantalla: los dos
       // chips son la habitación y el oficio, que es lo que distingue
-      // un remate de otro dentro de la misma villa.
-      chips: [t.zona, oficio(t.oficio)?.nombre],
+      // un remate de otro dentro de la misma villa. El oficio va en
+      // corto: con el chip de prioridad delante, «Puertas de paso y
+      // entrada» se metía debajo de la bola de la foto.
+      chips: [t.zona, oficio(t.oficio)?.corto || oficio(t.oficio)?.nombre],
+      prioridad: prioridadDe(t),
+      alCambiarPrioridad: verifica ? (v) => cambiarPrio(t, v) : null,
       oficioObj: oficio(t.oficio),
       foto: portadas.get(t.id) || null,
       alPinchar: () => ir(`#/l/${t.listaId}/t/${t.id}`),
@@ -117,10 +138,13 @@ export async function render({ promoId, unidadId }) {
     if (estado && estado !== 'todas') {
       piezas.push(h('span.d-filtro-pildora', null, estadoDe(estado)?.plural || estado));
     }
+    if (prioridad && prioridad !== 'todas') {
+      piezas.push(h('span.d-filtro-pildora', null, `Prioridad ${prioridad}`));
+    }
     if (piezas.length) {
       piezas.push(h('button.d-filtro-quitar', {
         'aria-label': 'Quitar los filtros',
-        onclick: () => { estado = 'todas'; oficioId = 'todos'; cambio(); },
+        onclick: () => { estado = 'todas'; oficioId = 'todos'; prioridad = 'todas'; cambio(); },
       }, icon('x')));
     }
     filtros.replaceChildren(...piezas);
@@ -128,7 +152,7 @@ export async function render({ promoId, unidadId }) {
     desplegable.classList.toggle('puesto', !!estancia);
     desplegable.querySelector('span').textContent = estancia || 'Seleccionar estancia';
   };
-  const cambio = () => { anotarFiltros({ estado, oficio: oficioId }); pintar(); };
+  const cambio = () => { anotarFiltros({ estado, oficio: oficioId, prioridad }); pintar(); };
 
   const desplegable = h('button.d-desplegable', {
     onclick: async () => {
@@ -150,9 +174,11 @@ export async function render({ promoId, unidadId }) {
         oficios: oficiosElegidos(oficioId),
         oficiosLibres: hay.map((id) => oficio(id)).sort((a, b) => a.nombre.localeCompare(b.nombre)),
         conVivienda: false,
+        prioridad,
       });
       if (!r) return;
       oficioId = r.oficios.length ? r.oficios.join(',') : 'todos';
+      prioridad = r.prioridad || 'todas';
       cambio();
     },
   }, icon('cursores'));
@@ -222,7 +248,7 @@ export async function render({ promoId, unidadId }) {
     const extra = actas.length ? h('div.d-menu-extra', null,
       h('p.d-epigrafe', null, 'Partes de la vivienda'),
       h('div.stack', { style: { gap: '8px' } },
-        ...actas.map((a) => tarjetaActa(a, { dentroDeVivienda: true, filtros: { estado, oficio: oficioId } }))),
+        ...actas.map((a) => tarjetaActa(a, { dentroDeVivienda: true, filtros: { estado, oficio: oficioId, prioridad } }))),
     ) : null;
     /* Las tres hojas posibles, cada una con su cuenta delante para
        saber qué te llevas antes de tocar. La de los filtros solo sale
@@ -230,12 +256,14 @@ export async function render({ promoId, unidadId }) {
        primera con otro nombre. */
     const vivas = tareas.filter((t) => t.estado !== 'verificada');
     const hechas9 = tareas.filter((t) => t.estado === 'verificada');
-    const conFiltro = vivas.filter((t) => encaja(t, estado, oficioId, estancia));
-    const hayFiltros = (estado && estado !== 'todas') || oficiosElegidos(oficioId).length > 0 || !!estancia;
+    const conFiltro = vivas.filter((t) => encaja(t, estado, oficioId, estancia, prioridad));
+    const hayFiltros = (estado && estado !== 'todas') || oficiosElegidos(oficioId).length > 0 || !!estancia
+      || (prioridad && prioridad !== 'todas');
     const fraseFiltros = [
       estancia,
       ...oficiosElegidos(oficioId).map((id) => oficio(id).nombre),
       estado && estado !== 'todas' ? estadoDe(estado)?.plural : '',
+      prioridad && prioridad !== 'todas' ? `Prioridad ${prioridad}` : '',
     ].filter(Boolean).join(' · ');
 
     const elegido = await menuTarjeta(u.nombre, [
@@ -313,7 +341,10 @@ export async function render({ promoId, unidadId }) {
       : null,
     contenido: [
       cabecera({
-        volver: () => ir(conFiltros('#/viviendas', filtrosDeRuta())),
+        // La prioridad se queda en la villa: la lista de viviendas no
+        // filtra por ella y llevársela escondida haría que la siguiente
+        // villa que se abriera saliera filtrada sin que nadie lo pidiera.
+        volver: () => ir(conFiltros('#/viviendas', { ...filtrosDeRuta(), prioridad: 'todas' })),
         titulo: u.nombre,
         menu,
       }),
@@ -359,8 +390,9 @@ function cuandoMensaje(iso) {
   return `${fechaCorta(iso)}, ${hora(iso)}`;
 }
 
-function encaja(t, estado, oficioId, estancia) {
+function encaja(t, estado, oficioId, estancia, prioridad = 'todas') {
   if (estado && estado !== 'todas' && t.estado !== estado) return false;
+  if (prioridad && prioridad !== 'todas' && prioridadDe(t) !== prioridad) return false;
   const elegidos = oficiosElegidos(oficioId);
   if (elegidos.length && !elegidos.includes(t.oficio)) return false;
   if (estancia && t.zona !== estancia) return false;

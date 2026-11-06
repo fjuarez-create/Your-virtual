@@ -212,6 +212,20 @@ LO QUE NO DEBES HACER:
 - No añadas tareas que no tengan foto, por mucho que se hayan
   mencionado.
 
+LA PRIORIDAD de cada ficha, solo «alta» o «media»:
+- «alta»: la vivienda no debería entregarse sin arreglarlo, porque
+  después sería muy complejo o invasivo: cualquier cosa que no se pueda
+  arreglar con el comprador ya viviendo dentro. Andamios, fachada,
+  cubierta, impermeabilización, estanqueidad, instalaciones empotradas
+  en pared o suelo, estructura, carpintería exterior, y cualquier
+  defecto que impida usar una estancia o afecte a la seguridad.
+- «media»: se puede arreglar después de la entrega sin molestia grave:
+  pintura, rodapiés, juntas y siliconas, ajustes de puertas y cajones,
+  remates vistos, limpiezas.
+- Ante la duda, «alta»: una alta de más se baja en un toque; una media
+  de menos deja sin arreglar algo que luego cuesta un andamio.
+- Las fichas con el texto vacío también llevan prioridad: pon «alta».
+
 LA CONFIANZA de cada ficha:
 - «alta»: lo que dijo señala a esa foto, o el defecto se ve sin lugar a
   dudas.
@@ -291,6 +305,13 @@ function claude_esquema(array $oficios, array $zonas = []): array
                         // encima, lo leído de una foto se mira dos veces.
                         'origen' => ['type' => 'string', 'enum' => ['dicho', 'foto']],
                         'confianza' => ['type' => 'string', 'enum' => ['alta', 'media', 'baja']],
+                        // Si la vivienda se puede entregar con esto sin
+                        // arreglar (media) o no (alta). Obligatoria y
+                        // sin hueco: aquí no vale «no sé», ante la duda
+                        // va alta y la DF la baja en un toque. No es la
+                        // confianza: aquello mide cuánto fiarse de la
+                        // ficha, esto cuánto importa el remate.
+                        'prioridad' => ['type' => 'string', 'enum' => ['alta', 'media']],
                         // Las OTRAS fotos del mismo remate. En un
                         // recorrido es normal sacar dos o tres de lo
                         // mismo —una de lejos para situarlo, otra de
@@ -299,7 +320,7 @@ function claude_esquema(array $oficios, array $zonas = []): array
                         // órdenes. Vacío cuando la foto va sola.
                         'con' => ['type' => 'array', 'items' => ['type' => 'string']],
                     ],
-                    'required' => ['id', 'texto', 'oficio', 'zona', 'origen', 'confianza', 'con'],
+                    'required' => ['id', 'texto', 'oficio', 'zona', 'origen', 'confianza', 'prioridad', 'con'],
                     'additionalProperties' => false,
                 ],
             ],
@@ -381,6 +402,16 @@ function claude_redactar(string $texto, array $marcas, array $oficios, array $fo
         error_log('UNIK repasos · Claude devolvió algo que no encaja: ' . substr($texto_salida, 0, 400));
         responder_error(502, 'La respuesta del modelo no se ha entendido. Vuelve a intentarlo.', 'respuesta-rara');
     }
+
+    // La prioridad nunca llega al móvil vacía ni rara, aunque el modelo
+    // de respaldo respete peor el molde: ante lo que no sea alta o
+    // media, alta.
+    foreach ($datos['fichas'] as &$ficha) {
+        if (is_array($ficha)) {
+            $ficha['prioridad'] = in_array($ficha['prioridad'] ?? '', ['alta', 'media'], true) ? $ficha['prioridad'] : 'alta';
+        }
+    }
+    unset($ficha);
 
     return [
         'fichas' => $datos['fichas'],
