@@ -11,21 +11,22 @@
    Villa 04 quiere saber qué queda por hacer en esa casa, no en cuál de
    las tres visitas salió cada cosa. Las actas siguen existiendo —son
    la firma de quién vio qué y cuándo— y viven en el menú de arriba. */
-import { h, icon, toast, avatar, fechaCorta, hora } from '../ui.js';
-import { promocion, unidad, oficio, estado as estadoDe, puedeCrearLista, puedeVerificar, prioridadDe } from '../catalog.js';
+import { h, icon, toast, avatar, fechaCorta, hora, sheet, confirmar } from '../ui.js';
+import { promocion, unidad, oficio, estado as estadoDe, puedeCrearLista, puedeVerificar, prioridadDe, puedePonerFechas } from '../catalog.js';
 import * as store from '../store.js';
 import {
   cabecera, tarjetaActa, tarjetaTarea, cuandoTarea, cuandoCorto, bannerAvance, bannerMordido,
-  hojaZonas, hojaFiltroTareas, caraDeGremio,
+  hojaZonas, hojaFiltroTareas, caraDeGremio, hojaFecha,
   avisoLocal, barraSync, menuFlotante, menuTarjeta, filaMenu, filaMenuFichero, bandeja,
   entregarFichero,
 } from '../piezas.js';
+import * as E from '../entregas.js';
 import { hojaDeReparto, nombreDeFichero, PROPORCION_FOTO_REPARTO } from '../pdf.js';
 import { ordenPdf } from '../ajustesLocales.js';
 import { jpegParaPdf } from '../media.js';
 import * as api from '../api.js';
 import { abrirMensaje } from '../mensajes.js';
-import { ir, conFiltros, filtrosDeRuta, anotarFiltros } from '../app.js';
+import { ir, conFiltros, filtrosDeRuta, anotarFiltros, refrescar } from '../app.js';
 
 /* Los tramos y sus frases viven en piezas.js, con el anillo: el color
    y la frase tienen que decir lo mismo en toda la app. */
@@ -40,6 +41,12 @@ export async function render({ promoId, unidadId }) {
   // El paseo grabado y todavía sin convertir en tareas, si lo hay: es
   // trabajo ya hecho que hasta ahora no se veía desde ninguna pantalla.
   const pendiente = await store.recorridoPendiente(unidadId);
+
+  // La entrega de esta casa: compradores, revisión con el cliente y
+  // firma. La situación sale de ahí y de los repasos post-entrega sin
+  // visto bueno (las incidencias).
+  const entrega = await store.entregaDeUnidad(unidadId);
+  const incidencias = (await store.incidenciasPorUnidad(promoId)).get(unidadId) || 0;
 
   // La foto de cada tarea, para las tarjetas grandes de la lista.
   const portadas = new Map();
@@ -322,6 +329,119 @@ export async function render({ promoId, unidadId }) {
     });
   };
 
+  /* ─── La entrega: la situación de la casa y la hoja de fechas ───
+     Debajo del avance, el banner mordido con lo que toca: próxima
+     revisión con el cliente (beige), revisada (verde suave), entregada
+     (negro) o entregada con incidencias (rojo). Quien pone fechas
+     —Ezequiel y el administrador— lo toca y abre la hoja; al resto
+     del equipo le lleva al calendario, o al parte post-entrega si ya
+     hay uno. */
+  const poneFechas = puedePonerFechas(store.sesion());
+  const bannerEntrega = () => {
+    const sit = E.situacion(entrega, { incidencias });
+    if (!sit && !poneFechas) return null;
+    const b = bannerMordido(sit ? {
+      clase: sit.clase, rotulo: sit.rotulo, cifra: sit.cifra,
+      icono: poneFechas ? 'calendario' : sit.icono,
+      alPinchar: () => (poneFechas ? hojaFechas() : irALaEntrega(sit)),
+    } : {
+      clase: 'beige', rotulo: 'Entrega', cifra: 'Sin fechas todavía', icono: 'calendario',
+      alPinchar: () => hojaFechas(),
+    });
+    b.classList.add('entrega');
+    b.setAttribute('aria-label', (sit ? sit.aria : 'Entrega sin fechas todavía')
+      + (poneFechas ? '. Tocar para poner o cambiar las fechas' : ''));
+    if (sit?.sub) {
+      b.querySelector('.d-banner-texto').append(
+        h('span.d-banner-sub', null, h('span.d-chip', { class: sit.sub.clase }, icon(sit.sub.icono), h('span', null, sit.sub.texto))),
+      );
+    }
+    return b;
+  };
+  const irALaEntrega = async (sit) => {
+    if (['incidencias', 'entregada', 'revisada'].includes(sit.clave)) {
+      const parte = await store.partePostDeUnidad(unidadId);
+      if (parte) { ir(`#/l/${parte.id}`); return; }
+    }
+    const dia = sit.clave === 'firma' || sit.clave === 'entregada' || sit.clave === 'incidencias'
+      ? entrega.firma
+      : sit.clave === 'revisada' && !entrega.revision && entrega.revisadaEn
+        ? E.isoDe(new Date(entrega.revisadaEn))   // el día en que se dio por hecha
+        : (entrega.revision || entrega.firma || E.hoyIso());
+    ir(`#/entregas?vista=dia&fecha=${dia}`);
+  };
+
+  /* La hoja de fechas: compradores, revisión (día y hora), firma y
+     «la revisión se ha hecho». Cada fila abre lo suyo y vuelve. */
+  const hojaFechas = async () => {
+    const e = entrega || {};
+    const fecha = (iso) => E.fechaConDia(iso, { mayus: true });
+    const filas = [
+      { id: 'compradores', icono: 'users', rotulo: 'Compradores', sub: e.compradores || 'Sin apuntar' },
+      { id: 'revision', icono: 'calendario', rotulo: 'Fecha de la revisión con el cliente',
+        sub: e.revision ? `${fecha(e.revision)}${e.revisionHora ? ` · ${e.revisionHora}` : ''}` : 'Sin fecha' },
+      { id: 'firma', icono: 'key', rotulo: 'Fecha de la firma', sub: e.firma ? fecha(e.firma) : 'Sin fecha' },
+      e.revisadaEn
+        ? { id: 'parte', icono: 'periodico', rotulo: 'Abrir el parte post-entrega',
+            sub: `Revisión hecha el ${E.fechaLarga(E.isoDe(new Date(e.revisadaEn)))}` }
+        : { id: 'hecha', icono: 'check', rotulo: 'La revisión se ha hecho', sub: 'Abre el parte post-entrega' },
+      e.revisadaEn ? { id: 'deshacer', icono: 'x', rotulo: 'La revisión no se ha hecho', sub: 'Quita la marca; los partes se quedan' } : null,
+    ];
+    const elegido = await menuTarjeta(`${u.nombre} · entrega`, filas, {
+      extra: h('span.d-menu-nota', null, 'Solo el comercial y el administrador ponen los compradores y las fechas. Al resto del equipo el banner le lleva al calendario de entregas.'),
+    });
+    if (!elegido) return;
+    try {
+      if (elegido === 'compradores') {
+        const nombres = await hojaCompradores(e.compradores || '');
+        if (nombres === null) return;
+        await store.fijarEntrega(unidadId, promoId, { compradores: nombres });
+        toast(nombres ? 'Compradores apuntados' : 'Compradores borrados');
+      } else if (elegido === 'revision') {
+        const v = await hojaFecha(e.revision ? E.partes(e.revision).fecha.toISOString() : null);
+        if (v === null) return;
+        const dia = v ? E.isoDe(new Date(v)) : '';
+        let horaNueva = e.revisionHora || '';
+        if (dia) {
+          // Cerrar la hoja de la hora sin elegir no tira la fecha que
+          // se acaba de escoger: se guarda con la hora que hubiera.
+          const hh = await hojaHora(horaNueva);
+          if (hh !== null) horaNueva = hh;
+        }
+        await store.fijarEntrega(unidadId, promoId, { revision: dia, revisionHora: dia ? horaNueva : '' });
+        toast(dia ? `Revisión el ${E.fechaConDia(dia)}${horaNueva ? ` a las ${horaNueva}` : ''}` : 'Revisión sin fecha', '', { icono: 'calendario' });
+      } else if (elegido === 'firma') {
+        const v = await hojaFecha(e.firma ? E.partes(e.firma).fecha.toISOString() : null);
+        if (v === null) return;
+        const dia = v ? E.isoDe(new Date(v)) : '';
+        await store.fijarEntrega(unidadId, promoId, { firma: dia });
+        toast(dia ? `Firma el ${E.fechaConDia(dia)}` : 'Firma sin fecha', '', { icono: 'key' });
+      } else if (elegido === 'hecha') {
+        const seguro = await confirmar({
+          titulo: '¿La revisión con el cliente se ha hecho?',
+          texto: 'Se abre el parte post-entrega para apuntar lo que haya visto el comprador, y al equipo le llega un aviso.',
+          ok: 'Sí, se ha hecho', icono: 'check', conservar: 'Todavía no', iconoConservar: 'clock',
+        });
+        if (!seguro) return;
+        const { lista } = await store.marcarRevisionHecha(unidadId, promoId);
+        toast('Revisión hecha · parte post-entrega abierto', '', { icono: 'check' });
+        ir(`#/l/${lista.id}`);
+        return;
+      } else if (elegido === 'parte') {
+        const parte = await store.partePostDeUnidad(unidadId);
+        if (parte) { ir(`#/l/${parte.id}`); return; }
+        toast('Esta vivienda no tiene parte post-entrega todavía', 'err');
+        return;
+      } else if (elegido === 'deshacer') {
+        await store.deshacerRevisionHecha(unidadId, promoId);
+        toast('La revisión vuelve a estar pendiente');
+      }
+      refrescar();
+    } catch (err) {
+      toast(err.message || 'No se ha podido guardar', 'err');
+    }
+  };
+
   pintar();
 
   return {
@@ -358,6 +478,10 @@ export async function render({ promoId, unidadId }) {
       // El PDF ya no vive aquí: se baja desde los tres puntos de
       // arriba. Esta banda solo informa, y el color lo lleva el anillo.
       bannerAvance(pct, { total }),
+
+      // La entrega: próxima revisión, revisada, entregada o con
+      // incidencias. Sale cuando hay fechas (o para quien las pone).
+      bannerEntrega(),
 
       h('p.d-epigrafe', null, 'Lista de repasos'),
       h('div.d-fila-selector', null, desplegable, bolaFiltros),
@@ -494,4 +618,45 @@ async function descargarVivienda(p, u, { tareas, ejecutadas = [], filtros = '', 
       alTocar: () => descargarVivienda(p, u, { tareas, ejecutadas, filtros, apellido }),
     });
   }
+}
+
+/* ─── Las dos hojas pequeñas de la entrega ─────────────────────── */
+/**
+ * Los compradores, a mano: «Juan y Pepe», «Familia Ortega». Resuelve
+ * con el texto (vacío para borrarlos) o null si se cierra sin tocar.
+ */
+function hojaCompradores(actual) {
+  return sheet((cerrar) => {
+    const campo = h('input', { type: 'text', placeholder: 'Nombres de los compradores', autocapitalize: 'words', value: actual });
+    const guardar = h('button.d-boton-negro', { onclick: () => cerrar(campo.value.trim()) }, 'Guardar');
+    campo.addEventListener('keydown', (e) => { if (e.key === 'Enter') cerrar(campo.value.trim()); });
+    setTimeout(() => campo.focus(), 350);
+    return [
+      h('h2.title', null, 'Compradores'),
+      h('p.hint', null, 'Como se les llama en la obra: «Juan y Pepe», «Familia Ortega».'),
+      h('div.d-hoja-campo', null, campo),
+      h('div.d-hoja-botones', null, guardar),
+    ];
+  }).then((v) => (v === undefined ? null : v));
+}
+
+/**
+ * La hora de la revisión, con el reloj del propio móvil. Resuelve con
+ * «HH:MM», con vacío si se quita la hora, o null si se cierra sin
+ * tocar.
+ */
+function hojaHora(actual) {
+  return sheet((cerrar) => {
+    const campo = h('input', { type: 'time', value: actual || '' });
+    const sinHora = h('button.d-boton-negro.claro', { onclick: () => cerrar('') }, 'Sin hora');
+    const guardar = h('button.d-boton-negro', {
+      onclick: () => cerrar(/^\d{2}:\d{2}$/.test(campo.value) ? campo.value : ''),
+    }, 'Guardar');
+    return [
+      h('h2.title', null, '¿A qué hora?'),
+      h('p.hint', null, 'La hora de la visita con el cliente. Se puede dejar sin hora.'),
+      h('div.d-hoja-campo', null, campo),
+      h('div.d-hoja-botones', null, sinHora, guardar),
+    ];
+  }).then((v) => (v === undefined ? null : v));
 }

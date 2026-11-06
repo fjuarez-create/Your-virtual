@@ -100,7 +100,9 @@ export async function render({ listaId }) {
       // lista de actas, lo primero que hay que reconocer es de qué casa
       // se está hablando. Y empieza por «ACTA» porque, si no, el acta y
       // la vivienda se llaman igual y no hay forma de saber dónde estás.
-      ...cabeceraDentro(lista.nombre || `PARTE ${(u?.nombre || '').toUpperCase()}`.trim(), {
+      // El parte post-entrega se llama igual en todas las casas: lleva
+      // la vivienda detrás, que si no no se sabe de cuál se habla.
+      ...cabeceraDentro(lista.fase === 'post' && u?.nombre ? `${lista.nombre} · ${u.nombre}` : (lista.nombre || `PARTE ${(u?.nombre || '').toUpperCase()}`.trim()), {
         volverA: conFiltros(`#/p/${lista.promoId}/v/${String(lista.unidadId).split(':')[1]}`, filtrosDeRuta()),
         sub: fechaCorta(lista.creado),
         acciones: [h('button.icon-btn', {

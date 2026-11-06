@@ -15,6 +15,7 @@ require __DIR__ . '/lib/auth.php';
 require __DIR__ . '/lib/claude.php';
 require __DIR__ . '/lib/oido.php';
 require __DIR__ . '/lib/voces.php';
+require_once __DIR__ . '/lib/entregas.php';   // «once»: la precarga también lo carga
 
 /**
  * Tipos admitidos y extensión con la que se guardan. Las funciones se
@@ -161,6 +162,28 @@ function despachar(string $metodo, array $p): void
     }
     if ($r0 === 'lecturas' && $metodo === 'POST') {
         guardar_lecturas();
+    }
+    if ($r0 === 'entregas' && $metodo === 'POST') {
+        guardar_entregas();
+    }
+
+    // Los avisos push: la clave pública para suscribirse, el alta y la
+    // baja de un móvil, y un aviso de prueba para ver que llega.
+    if ($r0 === 'push') {
+        $accion = $p[1] ?? '';
+        if ($accion === 'clave' && $metodo === 'GET') {
+            push_clave_publica();
+        }
+        if ($accion === 'suscripcion' && $metodo === 'POST') {
+            push_suscribir();
+        }
+        if ($accion === 'suscripcion' && $metodo === 'DELETE') {
+            push_baja();
+        }
+        if ($accion === 'prueba' && $metodo === 'POST') {
+            push_prueba();
+        }
+        responder_error(404, 'Ruta de avisos desconocida.');
     }
 
     if ($r0 === 'medios') {
@@ -739,7 +762,7 @@ function login(): void
         responder_error(429, 'Demasiados intentos. Espera unos minutos.', 'bloqueado');
     }
 
-    $stmt = bd()->prepare('SELECT id, nombre, email, rol, empresa, verifica, avatar, activo, password_hash FROM usuarios WHERE email = ?');
+    $stmt = bd()->prepare('SELECT * FROM usuarios WHERE email = ?');
     $stmt->execute([$email]);
     $u = $stmt->fetch();
 
@@ -797,16 +820,12 @@ function cambiar_password_propia(): void
 function listar_usuarios(): void
 {
     exigir_admin();
-    $filas = bd()->query(
-        'SELECT id, nombre, email, rol, empresa, verifica, avatar, activo, creado
-           FROM usuarios ORDER BY activo DESC, nombre ASC'
-    )->fetchAll();
-    foreach ($filas as &$f) {
-        $f['activo'] = (int) $f['activo'] === 1;
-        $f['verifica'] = (int) $f['verifica'] === 1;
-        $f['avatar'] = $f['avatar'] ?? '';
+    $filas = bd()->query('SELECT * FROM usuarios ORDER BY activo DESC, nombre ASC')->fetchAll();
+    $salida = [];
+    foreach ($filas as $f) {
+        $salida[] = usuario_salida($f) + ['activo' => (int) $f['activo'] === 1, 'creado' => $f['creado']];
     }
-    responder(['usuarios' => $filas]);
+    responder(['usuarios' => $salida]);
 }
 
 function crear_usuario(): void
@@ -818,6 +837,7 @@ function crear_usuario(): void
     $empresa = texto($d, 'empresa', 120);
     $rol = ($d['rol'] ?? 'usuario') === 'admin' ? 'admin' : 'usuario';
     $verifica = booleano($d, 'verifica');
+    $comercial = booleano($d, 'comercial');
 
     if (mb_strlen($nombre) < 3) {
         responder_error(400, 'El nombre es demasiado corto.', 'nombre');
@@ -845,18 +865,18 @@ function crear_usuario(): void
 
     $id = uuid();
     bd()->prepare(
-        'INSERT INTO usuarios (id, nombre, email, password_hash, rol, empresa, verifica, activo, creado, actualizado)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)'
+        'INSERT INTO usuarios (id, nombre, email, password_hash, rol, empresa, verifica, comercial, activo, creado, actualizado)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)'
     )->execute([
         $id, $nombre, $email, password_hash($password, PASSWORD_DEFAULT),
-        $rol, $empresa, $verifica ? 1 : 0, ahora_iso(), ahora_iso(),
+        $rol, $empresa, $verifica ? 1 : 0, $comercial ? 1 : 0, ahora_iso(), ahora_iso(),
     ]);
 
     // La contraseña en claro viaja una única vez, aquí, para que la app
     // pueda ofrecer el botón de compartirla. No se guarda en ningún sitio.
     responder(['usuario' => [
         'id' => $id, 'nombre' => $nombre, 'email' => $email, 'rol' => $rol,
-        'empresa' => $empresa, 'verifica' => $verifica, 'activo' => true,
+        'empresa' => $empresa, 'verifica' => $verifica, 'comercial' => $comercial, 'activo' => true,
     ], 'password' => $password], 201);
 }
 
@@ -897,6 +917,10 @@ function editar_usuario(string $id): void
     if (isset($d['verifica'])) {
         $campos[] = 'verifica = ?';
         $valores[] = booleano($d, 'verifica') ? 1 : 0;
+    }
+    if (isset($d['comercial'])) {
+        $campos[] = 'comercial = ?';
+        $valores[] = booleano($d, 'comercial') ? 1 : 0;
     }
     if (isset($d['rol'])) {
         if ($u['id'] === $yo['id'] && $d['rol'] !== 'admin') {
@@ -971,6 +995,8 @@ function usuario_salida(array $u): array
         'rol' => $u['rol'],
         'empresa' => $u['empresa'] ?? '',
         'verifica' => (int) ($u['verifica'] ?? 0) === 1,
+        // Quien pone las fechas de entrega (el comercial).
+        'comercial' => (int) ($u['comercial'] ?? 0) === 1,
         // Marca de cuándo se puso la foto: sirve de versión para que el
         // navegador no siga enseñando la anterior desde su caché.
         'avatar' => $u['avatar'] ?? '',
@@ -1926,6 +1952,8 @@ function cambios(): void
     $medios = traer('medios', $desde);
     $mensajes = traer('mensajes', $desde);
     $lecturas = traer('lecturas', $desde);
+    // Las entregas, si la base ya las tiene (ventana de despliegue).
+    $entregas = hay_entregas() ? traer('entregas', $desde) : [];
 
     // La marca siguiente sale de los propios datos, no del reloj del
     // servidor: así un desfase horario entre hosting y móvil no puede
@@ -1947,6 +1975,7 @@ function cambios(): void
     $conjuntos = [
         'listas' => $listas, 'tareas' => $tareas, 'comentarios' => $comentarios,
         'medios' => $medios, 'mensajes' => $mensajes, 'lecturas' => $lecturas,
+        'entregas' => $entregas,
     ];
     $frontera = null;
     foreach ($conjuntos as $filas) {
@@ -1983,7 +2012,7 @@ function cambios(): void
                 $conjuntos[$tabla] = traer_marca($tabla, $desde);
             }
         }
-        [$listas, $tareas, $comentarios, $medios, $mensajes, $lecturas] = array_values($conjuntos);
+        [$listas, $tareas, $comentarios, $medios, $mensajes, $lecturas, $entregas] = array_values($conjuntos);
         $marca = un_milisegundo_despues($desde);
     }
 
@@ -1995,6 +2024,7 @@ function cambios(): void
         'medios'      => array_map('medio_salida', $medios),
         'mensajes'    => array_map('mensaje_salida', $mensajes),
         'lecturas'    => array_map('lectura_salida', $lecturas),
+        'entregas'    => array_map('entrega_salida', $entregas),
         'ahora'       => $marca,
         'mas'         => $hayMas,
         // El sello del arranque viaja también en la tanda, de cinturón:

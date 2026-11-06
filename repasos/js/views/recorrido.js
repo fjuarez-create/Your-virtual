@@ -18,7 +18,7 @@ import {
   h, icon, toast, openViewer, sheet, fechaCorta, confirmar, pantallaTrabajando,
 } from '../ui.js';
 import {
-  promocion, unidad, FASE_UNICA, OFICIO_POR_DEFECTO, OFICIOS, ZONAS, oficio, puedeCrearLista,
+  promocion, unidad, OFICIO_POR_DEFECTO, OFICIOS, ZONAS, oficio, puedeCrearLista,
   esPrioridad,
 } from '../catalog.js';
 import * as store from '../store.js';
@@ -172,7 +172,7 @@ export async function render({ promoId, unidadId, seguir = false }) {
 
   /* ─── Abrir el acta sin grabar nada ─── */
   const actaSuelta = async () => {
-    const l = await store.crearLista({ unidadId, promoId, fase: FASE_UNICA });
+    const l = await store.crearLista({ unidadId, promoId });
     toast('Parte abierto · se firma con tu nombre y la fecha de hoy');
     ir('#/l/' + l.id);
   };
@@ -895,7 +895,7 @@ export async function render({ promoId, unidadId, seguir = false }) {
 
       let lista;
       try {
-        lista = await store.crearLista({ unidadId, promoId, fase: FASE_UNICA });
+        lista = await store.crearLista({ unidadId, promoId });
         for (const { f, fotosVivas } of conVida) {
           const t = await store.crearTarea({
             listaId: lista.id, texto: f.texto.trim(), oficio: f.oficio, zona: f.zona, prioridad: f.prioridad,

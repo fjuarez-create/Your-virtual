@@ -16,6 +16,7 @@ import {
   ordenPdf, ponerOrdenPdf, ORDENES_PDF,
 } from '../ajustesLocales.js';
 import { ir, refrescar, versionEsperando, aplicarVersionEsperando } from '../app.js';
+import * as push from '../push.js';
 
 export async function render() {
   const u = store.sesion();
@@ -23,6 +24,8 @@ export async function render() {
   const admin = store.esAdmin();
   const hayEjemplos = admin ? await ejemplos.cuantos() : 0;
   const relevo = await versionEsperando();
+  // Los avisos en este móvil: en qué punto están, para la fila.
+  const avisos = api.HAY_SERVIDOR && !u.local ? await push.estado() : 'no-soportado';
 
   // Si el servidor es viejo y todavía no conoce la ruta, la fila se
   // enseña igual como «sin poner»: es lo que hay, y al pulsarla dirá
@@ -81,6 +84,40 @@ export async function render() {
     refrescar();
     toast(`Los PDF saldrán ${ORDENES_PDF.find((o) => o.id === elegido).rotulo.toLowerCase()}`);
   };
+
+  /* Los avisos de entregas en este móvil: un interruptor que pide el
+     permiso al encenderlo y da de baja el móvil al apagarlo. Donde no
+     se puede —el iPhone en Safari sin poner la app en la pantalla de
+     inicio, un navegador que no los admite— se dice por qué. */
+  const casillaAvisos = h('input', {
+    type: 'checkbox', role: 'switch', checked: avisos === 'activados' || null,
+    disabled: ['denegados', 'instalar', 'no-soportado'].includes(avisos) || null,
+  });
+  casillaAvisos.addEventListener('change', async () => {
+    try {
+      if (casillaAvisos.checked) {
+        const r = await push.activar();
+        if (r === 'activados') toast('Avisos activados en este móvil', '', { icono: 'campana' });
+        else if (r === 'denegados') toast('El móvil tiene los avisos bloqueados', 'err');
+        else toast('No se ha dado el permiso', 'err');
+      } else {
+        await push.desactivar();
+        toast('Este móvil ya no recibirá avisos');
+      }
+    } catch (err) {
+      toast(err.message || 'No se han podido cambiar los avisos', 'err');
+    }
+    refrescar();
+  });
+  const subAvisos = {
+    activados: 'Te llegan las fechas de entrega y las revisiones con el cliente',
+    pendiente: 'Para que te lleguen las fechas de entrega',
+    pospuesto: 'Para que te lleguen las fechas de entrega',
+    apagados: 'Apagados en este móvil; enciéndelos cuando quieras',
+    denegados: 'Bloqueados en los ajustes del móvil: actívalos ahí',
+    instalar: 'En el iPhone solo llegan con la app en la pantalla de inicio',
+    'no-soportado': 'Este navegador no los admite',
+  }[avisos];
 
   return {
     sinTabs: true,
@@ -151,6 +188,19 @@ export async function render() {
         item('refresh', 'Poner la versión nueva',
           'La aplicación se recarga; lo que no esté mandado se pierde',
           () => ponerVersionNueva(relevo)),
+      ) : null,
+
+      api.HAY_SERVIDOR && !u.local ? h('div.d-grupo', null,
+        h('p.d-grupo-titulo', null, 'Avisos'),
+        item('campana', 'Avisos en este móvil', subAvisos, null, { derecha: casillaAvisos }),
+        avisos === 'activados' ? item('avionPapel', 'Enviarme un aviso de prueba', 'Para ver cómo llega', async () => {
+          try {
+            const r = await push.prueba();
+            toast(r.enviados ? `Enviado a ${r.enviados} de ${r.moviles} ${r.moviles === 1 ? 'móvil' : 'móviles'}` : 'El servicio de avisos no lo ha aceptado', r.enviados ? '' : 'err', { icono: 'campana' });
+          } catch (err) {
+            toast(err.message || 'No se ha podido enviar', 'err');
+          }
+        }) : null,
       ) : null,
 
       h('div.d-grupo', null,

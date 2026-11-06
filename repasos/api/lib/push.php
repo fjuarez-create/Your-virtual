@@ -121,12 +121,15 @@ function push_firma_cruda(string $der): string
  */
 function push_testigo(string $privadaPem, string $destino, int $ahora): string
 {
-    $cabecera = push_base64url(json_encode(['typ' => 'JWT', 'alg' => 'ES256']));
+    // Sin barras escapadas («https:\/\/…»): es JSON válido igual, pero
+    // ninguna librería de referencia lo emite así y no vale la pena
+    // darle a un servicio la ocasión de compararlo a lo bruto.
+    $cabecera = push_base64url(json_encode(['typ' => 'JWT', 'alg' => 'ES256'], JSON_UNESCAPED_SLASHES));
     $cuerpo = push_base64url(json_encode([
         'aud' => $destino,
         'exp' => $ahora + 12 * 3600,
         'sub' => PUSH_REMITENTE,
-    ]));
+    ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
     $clave = openssl_pkey_get_private($privadaPem);
     if ($clave === false) {
         throw new RuntimeException('Clave VAPID privada inválida');
@@ -151,7 +154,7 @@ function push_cifrar(string $texto, string $p256dh, string $auth, ?string $salPr
         throw new InvalidArgumentException('Suscripción push mal formada');
     }
     if (strlen($texto) > PUSH_TAMANO_REGISTRO - 16 - 1 - 100) {
-        throw new InvalidArgumentException('El aviso es demasiado largo');
+        throw new LengthException('El aviso es demasiado largo');
     }
 
     $claveServidor = $clavePrueba ?? openssl_pkey_new([
@@ -192,15 +195,20 @@ function push_enviar(array $suscripcion, array $carga, array $claves, int $ahora
     }
     $destino = 'https://' . $partes['host'] . (isset($partes['port']) ? ':' . $partes['port'] : '');
 
+    // Solo se da por caducada la suscripción cuando la culpa es suya
+    // (mal formada). Si falla la clave del servidor o el cifrado, la
+    // suscripción es buena y no se toca.
+    $testigo = push_testigo($claves['privada'], $destino, $ahora);
     try {
         $cuerpo = push_cifrar(
             json_encode($carga, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             (string)($suscripcion['p256dh'] ?? ''),
             (string)($suscripcion['auth'] ?? '')
         );
-        $testigo = push_testigo($claves['privada'], $destino, $ahora);
-    } catch (Throwable $e) {
+    } catch (InvalidArgumentException $e) {
         return ['codigo' => 0, 'caducada' => true, 'error' => $e->getMessage()];
+    } catch (Throwable $e) {
+        return ['codigo' => 0, 'caducada' => false, 'error' => $e->getMessage()];
     }
 
     $curl = curl_init($endpoint);
@@ -210,6 +218,8 @@ function push_enviar(array $suscripcion, array $carga, array $claves, int $ahora
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_CONNECTTIMEOUT => 5,
         CURLOPT_TIMEOUT => 10,
+        CURLOPT_PROTOCOLS => CURLPROTO_HTTPS,
+        CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTPS,
         CURLOPT_HTTPHEADER => [
             'Content-Type: application/octet-stream',
             'Content-Encoding: aes128gcm',
@@ -229,4 +239,105 @@ function push_enviar(array $suscripcion, array $carga, array $claves, int $ahora
         'caducada' => in_array($codigo, [404, 410], true),
         'error' => $error,
     ];
+}
+
+/**
+ * Varios avisos a la vez (uno por móvil), con curl_multi: diez móviles
+ * tardan lo que el más lento, no la suma. Devuelve, por id de
+ * suscripción, lo mismo que push_enviar().
+ */
+function push_enviar_varias(array $suscripciones, array $carga, array $claves, int $ahora): array
+{
+    $texto = json_encode($carga, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    // Un testigo por destino (Apple, Google, Mozilla…), ANTES de tocar
+    // ninguna suscripción: si la clave del servidor está mal, aquí se
+    // lanza y el reparto se aborta entero sin borrar ninguna fila. Lo
+    // único que da una suscripción por caducada es que ella misma esté
+    // mal formada.
+    $destinoDe = static function (array $s): ?string {
+        $partes = parse_url((string) ($s['endpoint'] ?? ''));
+        if (!$partes || ($partes['scheme'] ?? '') !== 'https' || empty($partes['host'])) {
+            return null;
+        }
+        return 'https://' . $partes['host'] . (isset($partes['port']) ? ':' . $partes['port'] : '');
+    };
+    $testigos = [];
+    foreach ($suscripciones as $s) {
+        $destino = $destinoDe($s);
+        if ($destino !== null && !isset($testigos[$destino])) {
+            $testigos[$destino] = push_testigo($claves['privada'], $destino, $ahora);
+        }
+    }
+    $resultados = [];
+    $multi = curl_multi_init();
+    $vivos = [];
+    foreach ($suscripciones as $s) {
+        $id = (string) ($s['id'] ?? '');
+        $endpoint = (string) ($s['endpoint'] ?? '');
+        $destino = $destinoDe($s);
+        if ($destino === null) {
+            $resultados[$id] = ['codigo' => 0, 'caducada' => true, 'error' => 'endpoint inválido'];
+            continue;
+        }
+        $testigo = $testigos[$destino];
+        try {
+            $cuerpo = push_cifrar($texto, (string) ($s['p256dh'] ?? ''), (string) ($s['auth'] ?? ''));
+        } catch (InvalidArgumentException $e) {
+            $resultados[$id] = ['codigo' => 0, 'caducada' => true, 'error' => $e->getMessage()];
+            continue;
+        } catch (Throwable $e) {
+            $resultados[$id] = ['codigo' => 0, 'caducada' => false, 'error' => $e->getMessage()];
+            continue;
+        }
+        $curl = curl_init($endpoint);
+        curl_setopt_array($curl, [
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => $cuerpo,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_CONNECTTIMEOUT => 5,
+            CURLOPT_TIMEOUT => 10,
+            CURLOPT_PROTOCOLS => CURLPROTO_HTTPS,
+            CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTPS,
+            CURLOPT_HTTPHEADER => [
+                'Content-Type: application/octet-stream',
+                'Content-Encoding: aes128gcm',
+                'Content-Length: ' . strlen($cuerpo),
+                'TTL: ' . PUSH_TTL,
+                'Urgency: normal',
+                'Authorization: vapid t=' . $testigo . ', k=' . $claves['publica'],
+            ],
+        ]);
+        curl_multi_add_handle($multi, $curl);
+        $vivos[$id] = $curl;
+    }
+
+    if ($vivos) {
+        do {
+            $estado = curl_multi_exec($multi, $enMarcha);
+            if ($enMarcha) {
+                curl_multi_select($multi, 1.0);
+            }
+        } while ($enMarcha && $estado === CURLM_OK);
+        // En modo multi curl_error() sale vacío: el motivo de cada
+        // fallo (tiempo agotado, TLS, DNS…) está en la cola de avisos
+        // del multi y hay que vaciarla. Sin esto, cuando en producción
+        // no llegara un aviso no habría ni una línea que dijera por qué.
+        $fallos = [];
+        while ($info = curl_multi_info_read($multi)) {
+            $fallos[spl_object_id($info['handle'])] = (int) $info['result'];
+        }
+        foreach ($vivos as $id => $curl) {
+            $codigo = (int) curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
+            $resultado = $fallos[spl_object_id($curl)] ?? CURLE_OK;
+            $resultados[$id] = [
+                'codigo' => $codigo,
+                'caducada' => in_array($codigo, [404, 410], true),
+                'error' => $resultado === CURLE_OK ? '' : curl_strerror($resultado) . " ({$resultado})",
+            ];
+            curl_multi_remove_handle($multi, $curl);
+            curl_close($curl);
+        }
+    }
+    curl_multi_close($multi);
+    return $resultados;
 }

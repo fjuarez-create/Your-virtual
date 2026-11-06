@@ -66,6 +66,7 @@ const ICONOS = {
   users: 'users-three',
   logout: 'sign-out',
   key: 'key',
+  campana: 'bell',   // los avisos push
   list: 'list',
 };
 

@@ -357,7 +357,12 @@ export function tarjetaActa({ lista, conteo, gente }, { dentroDeVivienda = false
   const porDefecto = dentroDeVivienda
     ? `Parte de ${fechaCorta(lista.creado)}`
     : `Parte ${u?.nombre || lista.unidadId}`;
-  const titulo = lista.nombre || porDefecto;
+  // El parte post-entrega lleva su nombre puesto al nacer; dentro de
+  // la vivienda se le añade la fecha, que es lo que lo distingue de
+  // otro parte post-entrega de otro día.
+  const titulo = lista.nombre
+    ? (dentroDeVivienda && lista.fase === 'post' ? `${lista.nombre} · ${fechaCorta(lista.creado)}` : lista.nombre)
+    : porDefecto;
 
   return h('button.acta', { onclick: () => ir(conFiltros('#/l/' + lista.id, filtros || {})) },
     grupoAvatares(gente.map((g) => store.persona(g.id, g.nombre)), { tam: 55 }),
@@ -1077,8 +1082,8 @@ export function tareaFila(t, { portada, donde, filtros = null } = {}) {
    LA CABECERA — una sola para toda la aplicación.
    ═══════════════════════════════════════════════════════════════ */
 
-/* El diámetro de todo lo redondo que va arriba: la cara, las tres bolas
-   de navegación, la flecha de volver y la de los tres puntos.
+/* El diámetro de todo lo redondo que va arriba: la cara, las bolas de
+   navegación, la flecha de volver y la de los tres puntos.
 
    Este número vive por duplicado, aquí y en --cab-bola del CSS, porque
    la cara la dibuja avatar() con las medidas puestas a mano en el
@@ -1086,6 +1091,13 @@ export function tareaFila(t, { portada, donde, filtros = null } = {}) {
    que cambiar el otro; los dos llevan la misma marca para encontrarse.
    ── GEMELO de --cab-bola en css/app.css ── */
 export const CAB_BOLA = 55;
+
+/* La cabecera de fuera lleva desde noviembre de 2026 CINCO bolas (la
+   quinta es el calendario de entregas), y a 55 no caben con la cara en
+   un iPhone de 390: ésas bajan a 48. Las de dentro —volver, título,
+   tres puntos— siguen a 55.
+   ── GEMELO de --cab-bola en .d-cab:not(.dentro), css/app.css ── */
+export const CAB_BOLA_FUERA = 48;
 
 /* En qué sección estaba la última cabecera de fuera que se pintó, para
    saber si el negro de la bola tiene que entrar fundido o ya estaba
@@ -1145,12 +1157,13 @@ export function cabecera({ seccion, volver, titulo = '', menu, derecha } = {}) {
         onclick: seccion === clave ? null : () => ir(adonde),
       }, icon(icono));
     return h('div.d-cab', null,
-      avatar(store.sesion(), { tam: CAB_BOLA, onclick: () => ir('#/ajustes') }),
+      avatar(store.sesion(), { tam: CAB_BOLA_FUERA, onclick: () => ir('#/ajustes') }),
       h('div.d-cab-menu', null,
         bola('inicio', 'brujula', 'Inicio', '#/'),
         bola('obra', 'grua', 'Reuniones de obra', '#/obra'),
         bola('viviendas', 'casa', 'Repasos de viviendas', '#/viviendas'),
         bola('listas', 'periodico', 'Partes', '#/listas'),
+        bola('entregas', 'calendario', 'Entregas', '#/entregas'),
       ),
     );
   }

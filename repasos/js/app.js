@@ -12,6 +12,7 @@ import { borrarBase } from './db.js';
 import { hayFotosSinMandar } from './pendientes.js';
 import { hayGrabacionEnMarcha } from './grabadora.js';
 import { fijarPlantas, esPrioridad } from './catalog.js';
+import * as push from './push.js';
 
 /* ─── Rutas ───────────────────────────────────────────────────── */
 const RUTAS = [
@@ -32,6 +33,7 @@ const RUTAS = [
   { patron: /^\/l\/([^/]+)\/t\/([^/]+)$/,     vista: () => import('./views/tarea.js'),        params: (m) => ({ listaId: m[1], tareaId: m[2] }) },
   { patron: /^\/tareas\/([^/]+)$/,           vista: () => import('./views/tareasEstado.js'), params: (m) => ({ estadoId: m[1] }) },
   { patron: /^\/listas$/,                     vista: () => import('./views/historial.js'),    params: () => ({}) },
+  { patron: /^\/entregas$/,                   vista: () => import('./views/entregas.js'),     params: () => ({}) },
   { patron: /^\/acta\/(\d{4}-\d{2}-\d{2})$/,   vista: () => import('./views/acta.js'),         params: (m) => ({ fecha: m[1] }) },
   { patron: /^\/ajustes$/,                    vista: () => import('./views/ajustes.js'),      params: () => ({}) },
   { patron: /^\/usuarios$/,                   vista: () => import('./views/usuarios.js'),     params: () => ({}) },
@@ -101,7 +103,18 @@ export function conFiltros(ruta, { estado = 'todas', oficio = 'todos', prioridad
  */
 export function anotarFiltros(filtros) {
   const base = location.hash.split('?')[0] || '#/';
-  history.replaceState(history.state, '', conFiltros(base, filtros));
+  anotarRuta(conFiltros(base, filtros));
+}
+
+/**
+ * Lo mismo con una dirección entera («#/entregas?vista=dia&fecha=…»).
+ * Se apunta también como ruta actual: si no, el siguiente repintado
+ * por sincronización la vería como una pantalla nueva y devolvería el
+ * desplazamiento arriba del todo.
+ */
+export function anotarRuta(hash) {
+  history.replaceState(history.state, '', hash);
+  rutaActual = hash.replace(/^#/, '') || '/';
 }
 
 /** Vuelve atrás sin salirse de la app si se entró por enlace directo. */
@@ -464,6 +477,15 @@ async function registrarServiceWorker() {
   // memoria es de la versión anterior, y a partir de ese momento todo
   // lo que se pida vendrá de la caché nueva: la mezcla otra vez. Se
   // engancha una sola vez, aquí, y no dentro de ningún manejador.
+  // Al tocar un aviso con la app ya abierta, el service worker dice
+  // adónde ir en vez de recargar (ver sw.js).
+  navigator.serviceWorker.addEventListener('message', (e) => {
+    if (e.data?.tipo === 'ir' && typeof e.data.ruta === 'string' && e.data.ruta.startsWith('#/')) ir(e.data.ruta);
+  });
+  // Si este móvil ya está apuntado a los avisos, se le recuerda al
+  // servidor con quién (en un móvil de obra entra hoy uno y mañana otro).
+  push.reafirmar();
+
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (saltandoVersion) location.reload();
     else if (!hayAlgoAMedias()) location.reload();

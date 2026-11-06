@@ -59,6 +59,7 @@ function filaUsuario(u, yo) {
       h('div.row-sub', null, [u.empresa, u.email].filter(Boolean).join(' · ')),
     ),
     u.verifica ? h('span.tag.accent', null, 'Verifica') : null,
+    u.comercial ? h('span.tag.accent', null, 'Comercial') : null,
     u.rol === 'admin' ? h('span.tag.ink', null, 'Admin') : null,
     !u.activo ? h('span.tag', null, 'Inactivo') : null,
     esYo ? null : chevron(),
@@ -81,6 +82,8 @@ function altaUsuario() {
     let rol = 'usuario';
     let verifica = false;
     let verificaTocado = false;
+    // El comercial: pone las fechas de entrega de cada vivienda.
+    let comercial = false;
 
     const chipsEmpresa = h('div.chips', null,
       EMPRESAS.map((e) => h('button.chip', {
@@ -104,6 +107,14 @@ function altaUsuario() {
         ev.currentTarget.setAttribute('aria-pressed', rol === 'admin' ? 'true' : 'false');
       },
     }, 'Administrador');
+
+    const chipComercial = h('button.chip.accent', {
+      'aria-pressed': 'false',
+      onclick: (ev) => {
+        comercial = !comercial;
+        ev.currentTarget.setAttribute('aria-pressed', comercial ? 'true' : 'false');
+      },
+    }, 'Comercial');
 
     const repintar = () => {
       const clave = contrasenaInicial(nombre.value, empresa.value);
@@ -131,8 +142,8 @@ function altaUsuario() {
       ),
 
       h('p.eyebrow', { style: { marginTop: '18px', marginBottom: '8px' } }, 'Permisos'),
-      h('div.chips', null, chipVerifica, chipAdmin),
-      h('p.hint', null, 'Sin «Puede verificar», el usuario solo podrá mover repasos entre pendiente y resuelto.'),
+      h('div.chips', null, chipVerifica, chipComercial, chipAdmin),
+      h('p.hint', null, 'Sin «Puede verificar», el usuario solo podrá mover repasos entre pendiente y resuelto. «Comercial» pone los compradores y las fechas de entrega de cada vivienda.'),
 
       aviso,
       h('button.btn.accent.full', {
@@ -143,7 +154,7 @@ function altaUsuario() {
             nombre: nombre.value.trim(),
             email: email.value.trim().toLowerCase(),
             empresa: empresa.value.trim(),
-            rol, verifica,
+            rol, verifica, comercial,
           };
           if (datos.nombre.length < 3) return fallo('Escribe el nombre completo.');
           if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(datos.email)) return fallo('El correo no es válido.');
@@ -285,6 +296,26 @@ function editarUsuario(u) {
             u.verifica
               ? 'Pasará a mover repasos solo entre pendiente y resuelto'
               : 'Podrá dar repasos por verificados y rechazarlos'),
+        ),
+      ),
+      // Las fechas de entrega las pone el comercial (Ezequiel). Es un
+      // permiso suelto, como el de verificar: el administrador lo da
+      // y lo quita aquí.
+      h('button.row', {
+        onclick: async () => {
+          await api.editarUsuario(u.id, { comercial: !u.comercial });
+          cerrar(true);
+          toast(u.comercial ? 'Ya no pone fechas de entrega' : 'Ya puede poner fechas de entrega');
+          refrescar();
+        },
+      },
+        h('div.row-lead', null, icon('calendario', 18)),
+        h('div.grow', null,
+          h('div.row-title', null, u.comercial ? 'Quitarle las fechas de entrega' : 'Dejarle poner fechas de entrega'),
+          h('div.row-sub', { style: { whiteSpace: 'normal' } },
+            u.comercial
+              ? 'Dejará de poder cambiar los compradores, la revisión y la firma'
+              : 'Es el comercial: pondrá los compradores, la revisión con el cliente y la firma'),
         ),
       ),
       h('button.row', {

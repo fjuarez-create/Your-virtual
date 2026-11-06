@@ -8,7 +8,10 @@
    ═══════════════════════════════════════════════════════════════ */
 import * as db from './db.js';
 import * as api from './api.js';
-import { puedeVerificar, hecha, esperandoVisto, rebotada, enObra, OFICIO_POR_DEFECTO, FASE_UNICA, PRIORIDAD_POR_DEFECTO, esPrioridad, prioridadDe } from './catalog.js';
+import {
+  puedeVerificar, hecha, esperandoVisto, rebotada, enObra, OFICIO_POR_DEFECTO, FASE_UNICA, FASE_POST,
+  PRIORIDAD_POR_DEFECTO, esPrioridad, prioridadDe, puedePonerFechas,
+} from './catalog.js';
 
 /* ─── Identificadores y sellos de tiempo ──────────────────────── */
 export function nuevoId() {
@@ -249,6 +252,147 @@ async function refrescarPendientes() {
 window.addEventListener('online', () => { estadoSync.online = true; avisar(); sincronizar(); });
 window.addEventListener('offline', () => { estadoSync.online = false; avisar(); });
 
+/* ═══════════════════════════════════════════════════════════════
+   Las entregas
+
+   La ficha de entrega de cada vivienda: los compradores, la revisión
+   con el cliente (día y hora), la firma y si la revisión ya se hizo.
+   Una por casa y con la clave de la casa, así que dos móviles sin
+   cobertura no pueden abrir dos fichas de la misma vivienda.
+
+   La ficha se funde HECHO A HECHO, no entera: los compradores, la
+   revisión (día y hora), la firma y la revisión hecha llevan cada uno
+   su sello —cuándo se tocó por última vez— y gana el sello más nuevo.
+   El comercial y el administrador tocan la misma ficha desde móviles
+   distintos, y con una sola marca para toda la fila el que subiera
+   el último pisaría lo del otro (pasó en el banco).
+
+   Las fechas son días sueltos («2026-11-18»), sin hora ni zona: la
+   firma es el 20 en Canarias y en Madrid. Solo la revisión lleva hora.
+
+   Las pone el comercial o el administrador; el servidor lo vuelve a
+   comprobar y firma la autoría de cada hecho con la sesión (o con
+   quien diga el móvil, si esa persona puede poner fechas).
+   ═══════════════════════════════════════════════════════════════ */
+
+/** Los hechos de la ficha: qué campos van juntos, su sello y su autor. */
+const HECHOS_ENTREGA = [
+  { sello: 'compradoresFijadosEn', campos: ['compradores'], autor: null },
+  { sello: 'revisionFijadaEn', campos: ['revision', 'revisionHora'], autor: 'revisionPor' },
+  { sello: 'firmaFijadaEn', campos: ['firma'], autor: 'firmaPor' },
+  { sello: 'revisadaFijadaEn', campos: ['revisadaEn'], autor: 'revisadaPor' },
+];
+
+/**
+ * Lo que baja del servidor contra lo que hay en el móvil: por cada
+ * hecho se queda el sello más nuevo. Lo local que todavía no ha subido
+ * (sello más nuevo que el del servidor) se conserva, que si no la
+ * bajada lo pisaría y la cola subiría después la ficha ya sin ello.
+ */
+function fusionarEntrega(local, remota) {
+  if (!local) return remota;
+  const r = { ...remota };
+  for (const h of HECHOS_ENTREGA) {
+    if ((remota[h.sello] || '') >= (local[h.sello] || '')) continue;
+    for (const c of h.campos) r[c] = local[c];
+    r[h.sello] = local[h.sello];
+    if (h.autor) { r[h.autor] = local[h.autor]; r[`${h.autor}Nombre`] = local[`${h.autor}Nombre`]; }
+  }
+  if ((local.actualizado || '') > (remota.actualizado || '')) r.actualizado = local.actualizado;
+  return r;
+}
+export async function entregaDeUnidad(unidadId) {
+  const e = await db.get('entregas', unidadId);
+  return e && !e.borrada ? e : null;
+}
+
+export async function entregasDePromo(promoId) {
+  return (await db.porIndice('entregas', 'promoId', promoId)).filter((e) => !e.borrada);
+}
+
+function entregaVacia(unidadId, promoId) {
+  return {
+    id: unidadId, unidadId, promoId,
+    compradores: '', revision: '', revisionHora: '', firma: '', revisadaEn: '',
+    compradoresFijadosEn: '',
+    revisionFijadaEn: '', revisionPor: null, revisionPorNombre: '',
+    firmaFijadaEn: '', firmaPor: null, firmaPorNombre: '',
+    revisadaFijadaEn: '', revisadaPor: null, revisadaPorNombre: '',
+    borrada: false,
+    creado: ahora(), actualizado: ahora(),
+    creadoPor: usuario?.id || 'local',
+    creadoPorNombre: usuario?.nombre || 'Sin identificar',
+  };
+}
+
+/**
+ * Cambia lo que se diga de la ficha —compradores, revisión, hora,
+ * firma, revisadaEn— y sella cada hecho que cambie con quién y cuándo.
+ * El cuándo lo pone el móvil (es quien sabe cuándo se tocó, aunque
+ * suba horas después); el quién lo vuelve a comprobar el servidor.
+ */
+export async function fijarEntrega(unidadId, promoId, cambios) {
+  if (!puedePonerFechas(usuario)) throw new Error('Las fechas de entrega las pone el comercial o el administrador.');
+  const previa = (await db.get('entregas', unidadId)) || entregaVacia(unidadId, promoId);
+  const cuando = ahora();
+  const nueva = { ...previa, ...cambios, borrada: false, actualizado: cuando };
+  // Una hora sin fecha no significa nada.
+  if (!nueva.revision) nueva.revisionHora = '';
+  for (const h of HECHOS_ENTREGA) {
+    if (h.campos.every((c) => (nueva[c] || '') === (previa[c] || ''))) continue;
+    nueva[h.sello] = cuando;
+    if (h.autor) {
+      nueva[h.autor] = usuario?.id || null;
+      nueva[`${h.autor}Nombre`] = usuario?.nombre || 'Sin identificar';
+    }
+  }
+  await db.put('entregas', nueva);
+  await encolar('entrega', unidadId);
+  return nueva;
+}
+
+/**
+ * «La revisión se ha hecho»: se sella la ficha y se abre el primer
+ * parte post-entrega, que es donde van las cosas que vio el comprador.
+ * Devuelve la ficha y el parte, para llevar a quien lo marca derecho a
+ * apuntarlas.
+ */
+export async function marcarRevisionHecha(unidadId, promoId) {
+  const entrega = await fijarEntrega(unidadId, promoId, { revisadaEn: ahora() });
+  const lista = await crearLista({ unidadId, promoId, fase: FASE_POST });
+  return { entrega, lista };
+}
+
+/** Marcada por error: se quita el sello. Los partes abiertos se quedan. */
+export async function deshacerRevisionHecha(unidadId, promoId) {
+  return fijarEntrega(unidadId, promoId, { revisadaEn: '' });
+}
+
+/**
+ * Los repasos de los partes post-entrega que aún no tienen el visto
+ * bueno, por vivienda: son las «incidencias» del banner rojo.
+ */
+export async function incidenciasPorUnidad(promoId) {
+  const post = (await db.getAll('listas')).filter((l) => !l.borrada && l.promoId === promoId && l.fase === FASE_POST);
+  if (!post.length) return new Map();
+  const casaDe = new Map(post.map((l) => [l.id, l.unidadId]));
+  const cuenta = new Map();
+  for (const t of await db.getAll('tareas')) {
+    if (t.borrada || !casaDe.has(t.listaId) || hecha(t)) continue;
+    const u = casaDe.get(t.listaId);
+    cuenta.set(u, (cuenta.get(u) || 0) + 1);
+  }
+  return cuenta;
+}
+
+/** El último parte post-entrega de una vivienda, si lo hay. */
+export async function partePostDeUnidad(unidadId) {
+  const post = (await db.porIndice('listas', 'unidadId', unidadId))
+    .filter((l) => !l.borrada && l.fase === FASE_POST)
+    .sort((a, b) => b.creado.localeCompare(a.creado));
+  return post[0] || null;
+}
+
 /* ─── Listas de repaso ────────────────────────────────────────── */
 export async function listasDeUnidad(unidadId) {
   const todas = await db.porIndice('listas', 'unidadId', unidadId);
@@ -265,8 +409,15 @@ export async function lista(id) {
  * usa la creación de datos de ejemplo; el trabajo de verdad lo firma
  * siempre quien tiene la sesión abierta.
  */
-export async function crearLista({ unidadId, promoId, fase = FASE_UNICA, nombre = '', autor = null }) {
+export async function crearLista({ unidadId, promoId, fase = null, nombre = '', autor = null }) {
   const quien = autor || usuario;
+  // Sin fase dicha, la decide la entrega: si la vivienda ya se revisó
+  // con el cliente, lo que se apunte desde ahora es parte post-entrega.
+  if (!fase) {
+    const entrega = await db.get('entregas', unidadId);
+    fase = entrega && !entrega.borrada && entrega.revisadaEn ? FASE_POST : FASE_UNICA;
+  }
+  if (fase === FASE_POST && !nombre) nombre = 'Parte post-entrega';
   const l = {
     id: nuevoId(),
     unidadId, promoId,
@@ -1276,6 +1427,20 @@ export async function datosHome(promoId) {
     }));
 
   muro.push(...generales);
+
+  // Los hechos de las entregas: quién fijó la revisión con el cliente,
+  // quién puso la firma y quién dio la revisión por hecha. Salen de la
+  // propia ficha —no se guardan aparte—, así que si Ezequiel cambia la
+  // fecha, el muro cuenta la fecha de ahora y no la de antes.
+  for (const e of (await db.porIndice('entregas', 'promoId', promoId)).filter((x) => !x.borrada)) {
+    const hecho = (clave, cuando, quien, quienId) => muro.push({
+      tipo: 'entrega', hecho: clave, entrega: e, unidadId: e.unidadId, estado: '',
+      cuando, quien: quien || 'Alguien', quienId: quienId || null, texto: '',
+    });
+    if (e.revision && e.revisionFijadaEn) hecho('revision', e.revisionFijadaEn, e.revisionPorNombre, e.revisionPor);
+    if (e.firma && e.firmaFijadaEn) hecho('firma', e.firmaFijadaEn, e.firmaPorNombre, e.firmaPor);
+    if (e.revisadaEn) hecho('revisada', e.revisadaEn, e.revisadaPorNombre, e.revisadaPor);
+  }
   muro.sort((a, b) => (b.cuando || '').localeCompare(a.cuando || ''));
 
   return {
@@ -1545,6 +1710,14 @@ async function empujar() {
       } else if (item.tipo === 'mensaje') {
         const m = await db.get('mensajes', item.id);
         if (m) await api.subirMensajes([sinBlobs(m)]);
+      } else if (item.tipo === 'entrega') {
+        // En el móvil de obra entra hoy uno y mañana otro: lo que dejó
+        // pendiente el comercial no lo manda la sesión del peón (el
+        // servidor le diría que no y se atascaría la cola). Se queda en
+        // espera hasta que entre alguien que pueda.
+        if (!puedePonerFechas(usuario)) continue;
+        const e = await db.get('entregas', item.id);
+        if (e) await api.subirEntregas([e]);
       } else if (item.tipo === 'lectura') {
         const l = await db.get('lecturas', item.id);
         // El servidor pone el usuario por su cuenta, así que solo hace
@@ -1598,7 +1771,7 @@ async function tirar() {
 async function acatarArranque(sello) {
   if (!sello) return false;
   if ((await db.meta.get('arranque')) === sello) return false;
-  for (const almacen of ['tareas', 'listas', 'comentarios', 'medios', 'mensajes', 'lecturas', 'outbox']) {
+  for (const almacen of ['tareas', 'listas', 'comentarios', 'medios', 'mensajes', 'lecturas', 'entregas', 'outbox']) {
     await db.vaciar(almacen);
   }
   await db.meta.del('ultimoSync');
@@ -1696,6 +1869,13 @@ async function fusionarTanda(desde) {
   // lectura o está o no está, y la que llega es la misma que la que
   // pudiera haber, así que se escribe y ya.
   if (r.lecturas?.length) await db.putVarios('lecturas', r.lecturas);
+  if (r.entregas?.length) {
+    const fusionadas = [];
+    for (const remota of r.entregas) {
+      fusionadas.push(fusionarEntrega(await db.get('entregas', remota.id), normalizarEntrega(remota)));
+    }
+    await db.putVarios('entregas', fusionadas);
+  }
 
   if (r.ahora) await db.meta.set('ultimoSync', r.ahora);
 
@@ -1703,7 +1883,7 @@ async function fusionarTanda(desde) {
   // la pantalla se repintaría con los datos de hace un momento y se
   // quedaría así hasta el siguiente cambio.
   if (r.listas?.length || r.tareas?.length || r.medios?.length || r.comentarios?.length
-      || r.mensajes?.length || r.lecturas?.length) {
+      || r.mensajes?.length || r.lecturas?.length || r.entregas?.length) {
     estadoSync.revision++;
   }
   return r;
@@ -1721,6 +1901,14 @@ const normalizarTarea = (t) => ({
 });
 const normalizarComentario = (c) => ({ ...c, borrada: bool(c.borrada) });
 const normalizarMensaje = (m) => ({ ...m, borrada: bool(m.borrada) });
+const normalizarEntrega = (e) => ({
+  ...e, borrada: bool(e.borrada),
+  compradores: typeof e.compradores === 'string' ? e.compradores : '',
+  revision: e.revision || '', revisionHora: e.revisionHora || '',
+  firma: e.firma || '', revisadaEn: e.revisadaEn || '',
+  compradoresFijadosEn: e.compradoresFijadosEn || '', revisionFijadaEn: e.revisionFijadaEn || '',
+  firmaFijadaEn: e.firmaFijadaEn || '', revisadaFijadaEn: e.revisadaFijadaEn || '',
+});
 const normalizarMedio = (m) => ({
   ...m, subido: true, borrada: bool(m.borrada),
   tam: Number(m.tam) || 0, ancho: Number(m.ancho) || 0,

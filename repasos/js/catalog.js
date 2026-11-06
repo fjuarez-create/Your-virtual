@@ -82,6 +82,16 @@ function slug(s) {
 export const FASE_UNICA = 'pre';
 
 /**
+ * …salvo una excepción, nacida en noviembre de 2026 con las entregas:
+ * cuando la vivienda ya se ha revisado con el cliente, lo que se
+ * apunta después es el PARTE POST-ENTREGA —las incidencias que vio el
+ * comprador— y se distingue por esta fase. Es lo que cuenta el banner
+ * rojo «Entregada con incidencias».
+ */
+export const FASE_POST = 'post';
+export const esPartePost = (lista) => lista?.fase === FASE_POST;
+
+/**
  * Los cuatro estados de una tarea, y el vocabulario de toda la app.
  *
  * El circuito tiene cuatro manos:
@@ -285,6 +295,15 @@ export function puedeVerificar(usuario) {
  * responde a las tareas de un acta, no la convoca.
  */
 export const puedeCrearLista = puedeVerificar;
+
+/**
+ * Quién pone los compradores y las fechas de entrega de una vivienda:
+ * el comercial (Ezequiel) y el administrador. Lo decidió Fran en
+ * noviembre de 2026. El resto del equipo las ve en el calendario.
+ */
+export function puedePonerFechas(usuario) {
+  return !!usuario && (usuario.comercial === true || usuario.rol === 'admin');
+}
 
 /**
  * Estados que puede poner un usuario concreto.

@@ -38,6 +38,8 @@ const CODIGO = [
   'js/tipografiaPdf.js',
   'js/ejemplos.js',
   'js/catalog.js',
+  'js/entregas.js',
+  'js/push.js',
   'js/informe.js',
   'js/pdf.js',
   'js/piezasObra.js',
@@ -55,6 +57,7 @@ const CODIGO = [
   'js/views/nuevaTarea.js',
   'js/views/tareasEstado.js',
   'js/views/historial.js',
+  'js/views/entregas.js',
   'js/views/acta.js',
   'js/views/ajustes.js',
   'js/views/usuarios.js',
@@ -153,6 +156,45 @@ self.addEventListener('activate', (e) => {
    nadie que lo mande, no pasa nada. */
 self.addEventListener('message', (e) => {
   if (e.data?.tipo === 'saltar-espera') self.skipWaiting();
+});
+
+/* ═══ Los avisos push ═══════════════════════════════════════════
+   El servidor manda { titulo, texto, ruta, etiqueta } cifrado para
+   este móvil (ver api/lib/push.php). Aquí solo se enseña y, al tocarlo,
+   se abre la app en esa ruta. La etiqueta agrupa los avisos de la misma
+   vivienda: el último sustituye al anterior en vez de apilarse. */
+self.addEventListener('push', (e) => {
+  let datos = {};
+  try { datos = e.data ? e.data.json() : {}; } catch { datos = { texto: e.data ? e.data.text() : '' }; }
+  const opciones = {
+    body: datos.texto || '',
+    icon: 'assets/icons/icon-192.png',
+    badge: 'assets/icons/icon-192.png',
+    lang: 'es',
+    data: { ruta: datos.ruta || '#/entregas' },
+  };
+  if (datos.etiqueta) { opciones.tag = String(datos.etiqueta); opciones.renotify = true; }
+  e.waitUntil(self.registration.showNotification(datos.titulo || 'UNIK Works', opciones));
+});
+
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  const ruta = e.notification.data?.ruta || '#/';
+  e.waitUntil((async () => {
+    const destino = new URL(ruta, self.registration.scope).href;
+    const ventanas = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    // Si la app ya está abierta, se trae delante y se le dice adónde ir;
+    // recargarla perdería lo que hubiera a medias.
+    for (const v of ventanas) {
+      // Solo las ventanas de ESTE ámbito: matchAll devuelve todas las
+      // del origen, y una copia en otra carpeta no es esta app.
+      if (!v.url.startsWith(self.registration.scope)) continue;
+      try { await v.focus(); } catch { /* algunos navegadores no dejan */ }
+      v.postMessage({ tipo: 'ir', ruta });
+      return;
+    }
+    await self.clients.openWindow(destino);
+  })());
 });
 
 self.addEventListener('fetch', (e) => {

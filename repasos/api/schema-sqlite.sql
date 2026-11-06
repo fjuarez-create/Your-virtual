@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
   rol           TEXT NOT NULL DEFAULT 'usuario',
   empresa       TEXT NOT NULL DEFAULT '',
   verifica      INTEGER NOT NULL DEFAULT 0,
+  comercial     INTEGER NOT NULL DEFAULT 0,
   avatar        TEXT NOT NULL DEFAULT '',
   activo        INTEGER NOT NULL DEFAULT 1,
   creado        TEXT NOT NULL,
@@ -245,3 +246,46 @@ CREATE TABLE IF NOT EXISTS adjuntos (
   creado_por_nombre TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS ix_adjuntos_reunion ON adjuntos (reunion_id);
+
+-- Las entregas: una fila por vivienda, con la clave de la vivienda.
+CREATE TABLE IF NOT EXISTS entregas (
+  id                   TEXT NOT NULL PRIMARY KEY,
+  unidad_id            TEXT NOT NULL,
+  promo_id             TEXT NOT NULL,
+  compradores          TEXT NOT NULL DEFAULT '',
+  revision             TEXT NOT NULL DEFAULT '',
+  revision_hora        TEXT NOT NULL DEFAULT '',
+  firma                TEXT NOT NULL DEFAULT '',
+  revisada_en          TEXT NOT NULL DEFAULT '',
+  compradores_fijados_en TEXT NOT NULL DEFAULT '',
+  revisada_fijada_en   TEXT NOT NULL DEFAULT '',
+  revision_fijada_en   TEXT NOT NULL DEFAULT '',
+  revision_por         TEXT,
+  revision_por_nombre  TEXT NOT NULL DEFAULT '',
+  firma_fijada_en      TEXT NOT NULL DEFAULT '',
+  firma_por            TEXT,
+  firma_por_nombre     TEXT NOT NULL DEFAULT '',
+  revisada_por         TEXT,
+  revisada_por_nombre  TEXT NOT NULL DEFAULT '',
+  borrada              INTEGER NOT NULL DEFAULT 0,
+  creado               TEXT NOT NULL,
+  actualizado          TEXT NOT NULL,
+  creado_por           TEXT,
+  creado_por_nombre    TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS ix_entregas_promo ON entregas (promo_id);
+CREATE INDEX IF NOT EXISTS ix_entregas_actualizado ON entregas (actualizado);
+
+-- Los móviles apuntados a los avisos push.
+CREATE TABLE IF NOT EXISTS suscripciones_push (
+  id          TEXT NOT NULL PRIMARY KEY,
+  usuario_id  TEXT,
+  endpoint    TEXT NOT NULL,
+  p256dh      TEXT NOT NULL,
+  auth        TEXT NOT NULL,
+  agente      TEXT NOT NULL DEFAULT '',
+  fallos      INTEGER NOT NULL DEFAULT 0,
+  creado      TEXT NOT NULL,
+  actualizado TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_suscripciones_usuario ON suscripciones_push (usuario_id);

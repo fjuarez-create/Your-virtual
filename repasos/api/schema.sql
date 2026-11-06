@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
   rol           VARCHAR(10)  NOT NULL DEFAULT 'usuario',
   empresa       VARCHAR(120) NOT NULL DEFAULT '',
   verifica      TINYINT(1)   NOT NULL DEFAULT 0,
+  comercial     TINYINT(1)   NOT NULL DEFAULT 0,   -- pone las fechas de entrega (Ezequiel)
   avatar        VARCHAR(24)  NOT NULL DEFAULT '',
   activo        TINYINT(1)   NOT NULL DEFAULT 1,
   creado        CHAR(24)     NOT NULL,
@@ -277,4 +278,61 @@ CREATE TABLE IF NOT EXISTS adjuntos (
   creado_por_nombre VARCHAR(120) NOT NULL DEFAULT '',
   PRIMARY KEY (id),
   KEY ix_adjuntos_reunion (reunion_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ═══ Las entregas ═══════════════════════════════════════════════
+-- Una fila por vivienda, con la misma clave que la vivienda
+-- (brassie:07): así dos móviles sin cobertura no pueden abrir dos
+-- fichas de la misma casa. Las fechas son días sueltos (AAAA-MM-DD),
+-- sin hora ni zona horaria, salvo la hora de la revisión. Cada hecho
+-- (compradores, revisión fijada, firma fijada, revisión hecha) lleva su
+-- propio sello —cuándo se tocó por última vez— y, menos los
+-- compradores, su autor, que es lo que lee el muro de actividad. Los
+-- sellos son los que mandan al fundir: el comercial y el administrador
+-- tocan la misma ficha desde móviles distintos, y una fila entera con
+-- una sola marca pisaría lo del otro.
+CREATE TABLE IF NOT EXISTS entregas (
+  id                   VARCHAR(80)  NOT NULL,
+  unidad_id            VARCHAR(80)  NOT NULL,
+  promo_id             VARCHAR(60)  NOT NULL,
+  compradores          VARCHAR(160) NOT NULL DEFAULT '',
+  revision             CHAR(10)     NOT NULL DEFAULT '',
+  revision_hora        CHAR(5)      NOT NULL DEFAULT '',
+  firma                CHAR(10)     NOT NULL DEFAULT '',
+  revisada_en          CHAR(24)     NOT NULL DEFAULT '',
+  compradores_fijados_en CHAR(24)   NOT NULL DEFAULT '',
+  revisada_fijada_en   CHAR(24)     NOT NULL DEFAULT '',
+  revision_fijada_en   CHAR(24)     NOT NULL DEFAULT '',
+  revision_por         CHAR(36)     DEFAULT NULL,
+  revision_por_nombre  VARCHAR(120) NOT NULL DEFAULT '',
+  firma_fijada_en      CHAR(24)     NOT NULL DEFAULT '',
+  firma_por            CHAR(36)     DEFAULT NULL,
+  firma_por_nombre     VARCHAR(120) NOT NULL DEFAULT '',
+  revisada_por         CHAR(36)     DEFAULT NULL,
+  revisada_por_nombre  VARCHAR(120) NOT NULL DEFAULT '',
+  borrada              TINYINT(1)   NOT NULL DEFAULT 0,
+  creado               CHAR(24)     NOT NULL,
+  actualizado          CHAR(24)     NOT NULL,
+  creado_por           CHAR(36)     DEFAULT NULL,
+  creado_por_nombre    VARCHAR(120) NOT NULL DEFAULT '',
+  PRIMARY KEY (id),
+  KEY ix_entregas_promo (promo_id),
+  KEY ix_entregas_actualizado (actualizado)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Los móviles apuntados a los avisos push. Una fila por navegador
+-- (el id es la huella del endpoint) y el último usuario que entró en
+-- él: sirve para no avisar a quien acaba de hacer el cambio.
+CREATE TABLE IF NOT EXISTS suscripciones_push (
+  id          CHAR(64)     NOT NULL,
+  usuario_id  CHAR(36)     DEFAULT NULL,
+  endpoint    TEXT         NOT NULL,
+  p256dh      VARCHAR(120) NOT NULL,
+  auth        VARCHAR(40)  NOT NULL,
+  agente      VARCHAR(255) NOT NULL DEFAULT '',
+  fallos      INT          NOT NULL DEFAULT 0,
+  creado      CHAR(24)     NOT NULL,
+  actualizado CHAR(24)     NOT NULL,
+  PRIMARY KEY (id),
+  KEY ix_suscripciones_usuario (usuario_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

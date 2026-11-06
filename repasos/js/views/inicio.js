@@ -21,6 +21,8 @@ import { PROMOCIONES, unidad, estado } from '../catalog.js';
 import { avisoLocal, barraSync, bannerMordido as banner, cabecera, tarjetaVilla, cuandoVilla } from '../piezas.js';
 import { tarjetaReunionViva } from '../piezasObra.js';
 import { ir, conFiltros, refrescar } from '../app.js';
+import * as E from '../entregas.js';
+import * as push from '../push.js';
 
 /* El saludo de cazar repasos se retiró en agosto de 2026, cuando la
    portada dejó de ser solo de repasos: desde entonces el que manda es
@@ -105,9 +107,75 @@ export async function render() {
 
   const pct = c.total ? Math.round((100 * c.hechas) / c.total) : 0;
 
+  /* ─── Las entregas: cuántas citas hay la semana que cuenta ───
+     Hasta el jueves se cuenta la semana en marcha; desde el viernes,
+     la que viene. El banner lleva a esa semana del calendario. */
+  const semana = E.semanaDePortada();
+  const hitos = E.hitosDe(await store.entregasDePromo(p.id), { incidencias: await store.incidenciasPorUnidad(p.id) });
+  const citas = E.hitosEntre(hitos, semana.desde, semana.hasta).length;
+
+  /* ─── Los avisos en este móvil: se ofrecen hasta que se activen ─── */
+  const avisos = await push.estado();
+  const bannerAvisos = avisos === 'pendiente' ? banner({
+    clase: 'beige',
+    rotulo: 'Avisos de entregas en este móvil',
+    cifra: 'Activar',
+    icono: 'campana',
+    alPinchar: async () => {
+      try {
+        const r = await push.activar();
+        if (r === 'activados') toast('Avisos activados en este móvil', '', { icono: 'campana' });
+        else if (r === 'denegados') toast('El móvil tiene los avisos bloqueados', 'err');
+        else toast('Se vuelve a ofrecer en unos días', '', { icono: 'campana' });
+      } catch (err) {
+        toast(err.message || 'No se han podido activar', 'err');
+      }
+      refrescar();
+    },
+  }) : null;
+
   /* ─── La actividad reciente ─── */
   const actividad = juntarRafagas(d.muro).slice(0, 14);
+  /* Lo que dice una nota de entrega: el chip y el texto con la fecha
+     destacada. Salen de la propia ficha (ver datosHome). */
+  const notaEntrega = (n) => {
+    const v = n.entrega;
+    if (n.hecho === 'revision') {
+      return {
+        chip: 'Revisión cliente',
+        texto: h('p.d-nota-texto', null, 'Ha fijado la revisión con el cliente para el ',
+          h('strong', null, E.fechaConDia(v.revision)), v.revisionHora ? ` · ${v.revisionHora}` : ''),
+      };
+    }
+    if (n.hecho === 'firma') {
+      return {
+        chip: 'Firma',
+        texto: h('p.d-nota-texto', null, 'Ha fijado la firma para el ', h('strong', null, E.fechaConDia(v.firma))),
+      };
+    }
+    return {
+      chip: 'Revisada',
+      texto: h('p.d-nota-texto', null, 'Ha dado por hecha la revisión con el cliente',
+        v.compradores ? ` (${v.compradores})` : '', '. Lo que quede va al parte post-entrega.'),
+    };
+  };
+
   const muro = h('div.d-muro', null, actividad.length ? actividad.map((n) => {
+    if (n.tipo === 'entrega') {
+      const nota = notaEntrega(n);
+      const nn = String(n.unidadId).split(':')[1];
+      return h('button.d-nota.pendiente', { onclick: () => ir(`#/p/${p.id}/v/${nn}`) },
+        h('div.d-nota-cab', null,
+          avatar(store.persona(n.quienId, n.quien), { tam: 36 }),
+          h('div.d-nota-quien', null,
+            h('div.d-nota-villa', null, unidad(n.unidadId)?.nombre || n.unidadId),
+            h('div.d-nota-cuando', null, cuandoMuro(n.quien, n.cuando)),
+          ),
+          h('span.d-nota-estado.d-chip-mini', null, nota.chip),
+        ),
+        nota.texto,
+      );
+    }
     const e = n.estado ? estado(n.estado) : null;
     const clase = n.estado === 'rechazada' ? 'rechazada'
       : n.estado === 'verificada' ? 'verificada'
@@ -165,6 +233,7 @@ export async function render() {
 
       h('h1.d-saludo', null, p.nombre),
       avisoLocal() || barraSync(),
+      bannerAvisos,
 
       // Desplegado a mano: el pintor no aplana listas anidadas.
       ...(obra && obra.ultima ? [
@@ -181,6 +250,17 @@ export async function render() {
           adonde: '#/obra',
         }),
       ] : []),
+
+      // Las entregas: la semana que cuenta, con sus citas. Lleva a esa
+      // semana del calendario, ya puesta.
+      h('p.d-epigrafe', null, 'Entregas'),
+      banner({
+        clase: 'negro',
+        rotulo: semana.rotulo,
+        cifra: citas,
+        icono: 'calendario',
+        adonde: `#/entregas?vista=semana&fecha=${semana.desde}`,
+      }),
 
       h('p.d-epigrafe', null, 'Pendiente de revisión por la DF'),
       banner({

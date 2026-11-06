@@ -73,6 +73,12 @@ function bd(): PDO
         // datos: compara una huella y se va.
         require_once __DIR__ . '/revision.php';
         revision_al_dia($pdo);
+
+        // Y la precarga de las entregas (compradores y firmas de la fase
+        // 1), si el despliegue dejó su fichero. Misma mecánica: huella en
+        // meta, y cuando ya está aplicada no toca la base de datos.
+        require_once __DIR__ . '/precarga.php';
+        precarga_entregas_al_dia($pdo);
     }
     return $pdo;
 }

@@ -1621,11 +1621,23 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
   --cab-hueco: 4px;   /* el aire entre una bola y la siguiente */
   --cab-aire: 8px;    /* el margen de arriba y el de abajo */
 }
+/* La de fuera lleva cinco bolas desde noviembre de 2026 (la quinta es
+   el calendario de entregas) y a 55 no caben con la cara: bajan a 48.
+   ── GEMELO de CAB_BOLA_FUERA en js/piezas.js ── */
+.d-cab:not(.dentro) { --cab-bola: 48px; }
+.d-cab:not(.dentro) .d-bola svg { width: 22px; height: 22px; }
 
 .d-cab {
   display: flex; align-items: center; gap: var(--cab-hueco);
   padding: var(--cab-aire) 0;
-  min-height: calc(var(--cab-bola) + var(--cab-aire) * 2);
+  /* La misma altura fuera (bolas de 48) y dentro (de 55): si no, al
+     entrar en una villa todo lo de debajo saltaría siete píxeles. */
+  min-height: calc(55px + var(--cab-aire) * 2);
+}
+/* En los móviles más estrechos (320) ni a 48 caben la cara y las cinco
+   bolas: bajan a 44 y se aprietan. */
+@media (max-width: 340px) {
+  .d-cab:not(.dentro) { --cab-bola: 44px; --cab-hueco: 2px; }
 }
 
 /* Todo lo redondo de la cabecera mide igual, venga de donde venga: la
@@ -3461,3 +3473,159 @@ body.es-taller::before {
   padding: 7px 12px; border-radius: 999px;
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
 }
+
+/* ═══ ENTREGAS: el calendario, la situación de la vivienda y el muro ═══
+   Noviembre de 2026. Una sección más de la app (quinta bola de la
+   cabecera): el mes en rejilla con el número de la villa por día, la
+   semana en tarjetas como las de Partes, y el día con una tarjeta
+   grande por visita. El idioma de color es el mismo en las tres y en
+   la ficha de la vivienda: negro = firma/entregada, beige = revisión
+   pendiente, verde suave = revisión hecha, rojo = con incidencias.  ═══ */
+.d-chip.negro { background: var(--d-tinta); color: #fff; }
+
+/* La fila del mes / la semana / el día con sus dos flechas redondas. */
+.d-cal-fila { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+.d-cal-fila .d-bola-filtros { color: var(--d-tinta); }
+.d-cal-fila .d-cal-titulo {
+  flex: 1; text-align: center; font-size: 20px; font-weight: 500;
+  letter-spacing: -.01em; color: var(--d-tinta);
+}
+.d-cal-sub { margin: 4px 0 0; text-align: center; font-size: 14px; color: var(--d-gris); min-height: 18px; }
+
+/* ── MES: la tarjeta blanca con la rejilla ── */
+.d-cal-carta { background: #fff; border-radius: var(--d-radio); padding: 12px; margin-top: 12px; }
+.d-cal-carta .d-calendario { padding: 0; overflow: visible; flex: none; row-gap: 2px; }
+.d-cal-carta .d-calendario .dia {
+  aspect-ratio: auto; min-height: 62px; border-radius: 10px;
+  display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start;
+  gap: 3px; padding: 4px 3px 5px; font-size: 13px; color: var(--d-gris);
+}
+/* La cabecera Lu…Do lleva la MISMA caja que el número del día (la
+   pastilla de 22 px pegada a la izquierda), para que cada letra caiga
+   justo encima de su columna de números. */
+.d-cal-carta .d-calendario .dia.cabecera {
+  min-height: 0; height: 28px; padding: 0 3px 4px;
+  font-size: 13px; color: var(--d-gris); font-weight: 400;
+}
+.d-cal-carta .d-calendario .dia.fuera { color: #d9d9d9; }
+.d-cal-carta .d-calendario .dia.hoy { color: var(--d-gris); }
+.d-cal-carta .d-calendario .dia.elegido { background: var(--d-gris-suave); }
+.d-cal-carta .dia .num {
+  height: 22px; min-width: 22px; padding: 0 5px; border-radius: 999px;
+  display: grid; place-items: center; line-height: 1;
+}
+/* Hoy: un aro negro, sin relleno. El beige se reserva para «revisión». */
+.d-cal-carta .dia.hoy .num {
+  box-shadow: inset 0 0 0 1.5px var(--d-tinta); color: var(--d-tinta); font-weight: 500;
+}
+/* El mini-chip del número de villa. Dígitos tabulares y ancho fijo:
+   «07» y «15» miden lo mismo y los nombres quedan en columna. */
+.d-minichip {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  border-radius: 999px; font-size: 11px; line-height: 16px; padding: 1px 6px; font-weight: 500;
+  white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+.d-minichip.firma { background: var(--d-tinta); color: #fff; }
+.d-minichip.revision { background: var(--d-beige); color: var(--d-tinta); }
+.d-minichip.revisada { background: var(--d-verde-suave); color: var(--d-verde); }
+.d-minichip.incidencia { background: var(--d-rojo); color: #fff; }
+.d-minichip.mas { background: var(--d-gris-suave); color: var(--d-gris); }
+.d-cal-leyenda {
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  margin: 12px 4px 0; font-size: 13px; color: var(--d-gris);
+}
+.d-cal-leyenda span { display: inline-flex; align-items: center; gap: 6px; }
+
+/* ── SEMANA: dentro de la tarjeta del día, una fila por hito ── */
+.d-actas-dias.entregas { margin-top: 12px; }
+.d-hitos { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.d-hito { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
+.d-hito .d-minichip { margin-top: 2px; font-size: 12px; padding: 1px 7px; min-width: 34px; }
+/* Sobre la tarjeta beige de «hoy», el chip beige de revisión se
+   fundiría con el fondo: se aclara, como hacen los chips de Partes. */
+.d-acta-dia.hoy .d-hito .d-minichip.revision { background: rgba(255, 255, 255, .6); }
+.d-hito-texto { flex: 1; min-width: 0; }
+.d-hito-nombres { font-size: 16px; line-height: 20px; color: var(--d-tinta); overflow-wrap: anywhere; }
+.d-hito-que { font-size: 13px; line-height: 17px; color: var(--d-gris); margin-top: 1px; }
+.d-acta-dia.pasado .d-hito-nombres { color: var(--d-gris); }
+
+/* ── DÍA: una tarjeta grande por hito ── */
+.d-dia-lista { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
+.d-dia-tarjeta { background: #fff; border-radius: var(--d-radio); padding: 16px; }
+.d-dia-cab { display: flex; align-items: center; gap: 10px; }
+.d-dia-cab .d-minichip { font-size: 13px; line-height: 18px; padding: 3px 10px; }
+.d-dia-hora { margin-left: auto; font-size: 15px; color: var(--d-gris); }
+.d-dia-titulo {
+  margin: 10px 0 0; font-size: 26px; line-height: 32px; font-weight: 500;
+  letter-spacing: -.015em; color: var(--d-tinta);
+}
+.d-dia-fila { display: flex; align-items: center; gap: 10px; margin-top: 10px; color: var(--d-tinta); font-size: 16px; }
+.d-dia-fila svg { width: 22px; height: 22px; flex: none; color: var(--d-beige-tinta); }
+.d-dia-fila.gris { font-size: 14px; color: var(--d-gris); margin-top: 8px; }
+.d-dia-fila.gris svg { width: 20px; height: 20px; }
+.d-dia-fila.verde { font-size: 14px; color: var(--d-verde); margin-top: 8px; }
+.d-dia-fila.verde svg { width: 20px; height: 20px; color: var(--d-verde); }
+.d-dia-fila.rojo { font-size: 14px; color: var(--d-rojo); margin-top: 8px; }
+.d-dia-fila.rojo svg { width: 20px; height: 20px; color: var(--d-rojo); }
+.d-dia-pie { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
+.d-dia-pie .d-dia-quien { flex: 1; min-width: 0; font-size: 13px; color: var(--d-gris); }
+.d-dia-bola {
+  width: 48px; height: 48px; flex: none; border-radius: 999px;
+  background: #fff; box-shadow: inset 0 0 0 1.5px var(--d-beige); color: var(--d-tinta);
+  display: grid; place-items: center;
+}
+.d-dia-bola svg { width: 24px; height: 24px; }
+/* Un día sin nada: lo dice y ofrece el salto al día anterior y al
+   siguiente con algo, para no pulsar la flecha seis veces. */
+.d-dia-vacio { background: #fff; border-radius: var(--d-radio); padding: 16px; margin-top: 12px; }
+.d-dia-nada { margin: 0; font-size: 16px; color: var(--d-gris); }
+.d-dia-saltos { margin-top: 12px; border-top: 1px solid var(--d-gris-suave); }
+.d-dia-salto {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  padding: 12px 0; border-bottom: 1px solid var(--d-gris-suave); min-width: 0;
+}
+.d-dia-salto:last-child { border-bottom: 0; padding-bottom: 2px; }
+.d-dia-salto svg { width: 20px; height: 20px; flex: none; color: var(--d-tinta); }
+.d-dia-salto-texto { flex: 1; min-width: 0; }
+.d-dia-salto-que { font-size: 12px; line-height: 16px; color: var(--d-gris); }
+.d-dia-salto-cuando { font-size: 15px; line-height: 20px; color: var(--d-tinta); }
+
+/* ── En la ficha de la vivienda: la situación de la entrega con el
+   mismo banner mordido. Cuatro colores, los del calendario. ── */
+.d-banner.verde-suave { --banner: var(--d-verde-suave); color: var(--d-verde); }
+.d-banner.verde-suave .d-banner-boton { color: var(--d-verde); }
+.d-banner.entrega .d-banner-cifra { font-size: 28px; line-height: 36px; }
+.d-banner-sub { display: block; margin-top: 10px; }
+.d-banner-sub .d-chip { padding: 7px 12px 7px 10px; font-size: 14px; gap: 7px; max-width: 100%; }
+.d-banner-sub .d-chip span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.d-banner-sub .d-chip svg { width: 18px; height: 18px; flex: none; }
+/* Sobre negro o rojo, el chip de la segunda línea va en blanco velado. */
+.d-banner.negro .d-banner-sub .d-chip,
+.d-banner.rojo .d-banner-sub .d-chip { background: rgba(255, 255, 255, .18); color: #fff; }
+
+/* ── En el muro: el hecho de la entrega como chip beige y la fecha
+   destacada. La Neue Haas de la app solo trae el peso roman, así que
+   un <strong> a secas no engorda: se engorda con un filete. ── */
+.d-nota .d-nota-estado.d-chip-mini {
+  background: var(--d-beige); color: var(--d-tinta);
+  font-size: 12px; font-weight: 500; line-height: 16px;
+  padding: 3px 9px; border-radius: 999px; margin-top: 2px;
+}
+.d-nota-texto strong { font-weight: 500; -webkit-text-stroke: .45px currentColor; }
+
+/* ── La nota al pie de la hoja de fechas. ── */
+/* Solo se lee: tocarla no cierra la hoja (el «extra» de menuTarjeta
+   lleva un cierre pensado para los enlaces). */
+.d-menu-nota { display: block; margin: 8px 8px 2px; font-size: 13px; line-height: 1.35; color: var(--d-gris); pointer-events: none; }
+
+/* ── La hoja de la hora y la de los compradores: un campo grande y
+   dos botones, como las demás hojas de abajo. ── */
+.d-hoja-campo { margin-top: 14px; }
+.d-hoja-campo input {
+  width: 100%; height: 56px; border-radius: 16px; border: 0; background: var(--d-gris-suave);
+  padding: 0 18px; font: 500 18px/24px var(--d-font); color: var(--d-tinta);
+}
+.d-hoja-campo input[type='time'] { text-align: center; font-size: 26px; }
+.d-hoja-botones { display: flex; gap: 10px; margin-top: 14px; }
+.d-hoja-botones .d-boton-negro { flex: 1; }
+.d-hoja-botones .d-boton-negro.claro { background: #fff; color: var(--d-tinta); box-shadow: inset 0 0 0 1.5px var(--d-beige); }

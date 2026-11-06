@@ -23,8 +23,20 @@ declare(strict_types=1);
     ya nuevo, schema.sql todavía viejo— y la migración selló la 13 sin
     la tabla de adjuntos. Los CREATE son IF NOT EXISTS: repasarlos no
     toca un dato.
-    La 15 añade la prioridad de los repasos (alta o media). */
-const ESQUEMA_VERSION = 15;
+    La 15 añade la prioridad de los repasos (alta o media).
+    La 16 trae las entregas: la tabla `entregas`, la bandera `comercial`
+    de los usuarios y la tabla de suscripciones a los avisos push. */
+const ESQUEMA_VERSION = 16;
+
+/**
+ * Tablas que tienen que existir para dar la versión por puesta. Si
+ * falta alguna es que el CREATE no estaba en el schema.sql que había en
+ * el disco en ese momento —un móvil sincronizando en mitad del
+ * despliegue, con esquema.php ya nuevo y schema.sql todavía viejo— y
+ * sellar la versión dejaría la base coja para siempre (pasó con la 13).
+ * Sin sellar, la siguiente petición lo vuelve a intentar.
+ */
+const ESQUEMA_TABLAS = ['entregas', 'suscripciones_push'];
 
 /**
  * Campos que tienen que existir, por tabla, con el tipo que usa MySQL.
@@ -37,6 +49,9 @@ const ESQUEMA_CAMPOS = [
         'empresa'  => "VARCHAR(120) NOT NULL DEFAULT ''",
         'verifica' => 'TINYINT(1) NOT NULL DEFAULT 0',
         'avatar'   => "VARCHAR(24) NOT NULL DEFAULT ''",
+        // Quien pone las fechas de entrega de cada vivienda: el
+        // comercial (Ezequiel). El administrador puede siempre.
+        'comercial' => 'TINYINT(1) NOT NULL DEFAULT 0',
     ],
     'tareas' => [
         'rechazada' => 'TINYINT(1) NOT NULL DEFAULT 0',
@@ -196,6 +211,12 @@ function esquema_aplicar(PDO $pdo): array
     }
 
     $hechos = array_merge($hechos, esquema_arreglar_datos($pdo));
+
+    foreach (ESQUEMA_TABLAS as $tabla) {
+        if (!esquema_columnas($pdo, $tabla)) {
+            throw new RuntimeException("Falta la tabla {$tabla}: el fichero de esquema no la trae todavía.");
+        }
+    }
 
     return $hechos;
 }

@@ -8,5 +8,10 @@ index.local.html
 # aparece aquí es que se ha colado, y lleva una contraseña dentro.
 repasos/api/revision-cuenta.php
 
+# La precarga de las entregas (compradores y firmas de la fase 1): la
+# escribe el despliegue desde el secreto PRECARGA_ENTREGAS. Lleva
+# nombres de compradores y el repositorio es público: nunca aquí.
+repasos/api/precarga-entregas.php
+
 # El log del servidor PHP de pruebas locales: ruido de esta máquina.
 php-8099.log

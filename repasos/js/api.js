@@ -116,6 +116,7 @@ export const subirComentarios = (comentarios) =>
   pedir('comentarios', { metodo: 'POST', json: { comentarios } });
 export const subirMensajes = (mensajes) =>
   pedir('mensajes', { metodo: 'POST', json: { mensajes } });
+export const subirEntregas = (entregas) => pedir('entregas', { metodo: 'POST', json: { entregas } });
 export const subirLecturas = (lecturas) =>
   pedir('lecturas', { metodo: 'POST', json: { lecturas } });
 
@@ -161,6 +162,12 @@ export const cambios = (desde) =>
   pedir('cambios?desde=' + encodeURIComponent(desde || ''));
 /** El sello del último arranque limpio (vacío si nunca se hizo). */
 export const marcaDeArranque = () => pedir('arranque');
+
+/* ─── Avisos push ─────────────────────────────────────────────── */
+export const pushClave = () => pedir('push/clave');
+export const pushSuscribir = (suscripcion) => pedir('push/suscripcion', { metodo: 'POST', json: suscripcion });
+export const pushBaja = (endpoint) => pedir('push/suscripcion', { metodo: 'DELETE', json: { endpoint } });
+export const pushPrueba = () => pedir('push/prueba', { metodo: 'POST' });
 
 /** URL pública de un medio ya subido. */
 export const urlMedio = (id) => API_BASE + 'medios/' + encodeURIComponent(id) + '/fichero';

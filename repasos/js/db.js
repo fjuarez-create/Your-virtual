@@ -12,6 +12,7 @@
      medios       fotos, vídeos y audios      índice: tareaId
      comentarios  hilo de cada tarea          índice: tareaId
      recorridos   grabaciones de un paseo por una vivienda
+     entregas     la ficha de entrega de cada vivienda   índice: promoId
      outbox       cambios pendientes de subir (orden de llegada)
    ═══════════════════════════════════════════════════════════════ */
 const NOMBRE = 'unik-repasos';
@@ -27,7 +28,7 @@ const NOMBRE = 'unik-repasos';
    arranca nunca más. Abriendo sin exigir número, ese estado se cura
    solo. */
 const ALMACENES = ['meta', 'personas', 'listas', 'tareas', 'medios',
-  'comentarios', 'recorridos', 'mensajes', 'lecturas', 'outbox'];
+  'comentarios', 'recorridos', 'mensajes', 'lecturas', 'entregas', 'outbox'];
 
 let dbPromise = null;
 
@@ -122,6 +123,12 @@ function crearAlmacenes(db) {
   if (!db.objectStoreNames.contains('lecturas')) {
     db.createObjectStore('lecturas', { keyPath: 'id' }).createIndex('mensajeId', 'mensajeId');
   }
+  // Noviembre de 2026: la ficha de entrega de cada vivienda (los
+  // compradores, la revisión con el cliente y la firma). Una por casa,
+  // con la clave de la casa.
+  if (!db.objectStoreNames.contains('entregas')) {
+    db.createObjectStore('entregas', { keyPath: 'id' }).createIndex('promoId', 'promoId');
+  }
   if (!db.objectStoreNames.contains('outbox')) {
     db.createObjectStore('outbox', { keyPath: 'seq', autoIncrement: true });
   }
@@ -201,5 +208,5 @@ export async function numPendientes() {
 
 /** Borra todo el contenido local (cierre de sesión). */
 export async function limpiarTodo() {
-  for (const s of ['meta', 'listas', 'tareas', 'medios', 'comentarios', 'personas', 'recorridos', 'outbox']) await vaciar(s);
+  for (const s of ['meta', 'listas', 'tareas', 'medios', 'comentarios', 'personas', 'recorridos', 'entregas', 'outbox']) await vaciar(s);
 }
