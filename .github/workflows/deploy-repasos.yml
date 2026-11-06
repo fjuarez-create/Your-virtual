@@ -374,7 +374,7 @@ jobs:
           CUERPO="$(python3 -c 'import json,os; print(json.dumps({"email": os.environ["REVISION_EMAIL"], "password": os.environ["REVISION_PASSWORD"]}))')"
           CODIGO=000
           for intento in 1 2 3; do
-            CODIGO=$(printf '%s' "$CUERPO" | curl -s -o respuesta.json -w '%{http_code}' \
+            CODIGO=$(printf '%s' "$CUERPO" | curl -s -o respuesta.json -c galletas.txt -w '%{http_code}' \
               --max-time 25 -X POST -H 'Content-Type: application/json' \
               --data-binary @- "https://repasos.unikdi.com/api/auth/login" || echo 000)
             [ "$CODIGO" = 200 ] && break
@@ -401,4 +401,20 @@ jobs:
               sys.exit("::error::El revisor entra pero sin permiso de verificación: no vería media aplicación.")
           print("El revisor de Apple entra y ve la aplicación entera.")
           PY
-          rm -f respuesta.json
+
+          # Y, ya dentro, el directorio: quién lleva el chip «Comercial»
+          # (lo pone la precarga, api/lib/precarga.php). Solo nombres.
+          curl -s -o directorio.json --max-time 25 -b galletas.txt "https://repasos.unikdi.com/api/cambios?desde=" || true
+          python3 - <<'PY'
+          import json
+          try:
+              personas = (json.load(open("directorio.json")) or {}).get("personas") or []
+          except Exception:
+              personas = []
+          comerciales = [p.get("nombre") for p in personas if p.get("comercial")]
+          if comerciales:
+              print("Con el chip «Comercial»: " + ", ".join(comerciales) + ".")
+          else:
+              print("::warning::Nadie lleva el chip «Comercial» todavía.")
+          PY
+          rm -f respuesta.json galletas.txt directorio.json

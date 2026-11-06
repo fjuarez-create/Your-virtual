@@ -12,6 +12,14 @@
 return array (
   'version' => '2026-10-29',
   'autorNombre' => 'Precarga',
+  'comerciales' => 
+  array (
+    0 => 
+    array (
+      'empresa' => 'gilmar',
+      'nombre' => 'ezequiel',
+    ),
+  ),
   'entregas' => 
   array (
     0 => 

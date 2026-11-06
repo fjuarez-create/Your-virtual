@@ -2082,6 +2082,7 @@ function persona_salida(array $u): array
         'nombre' => $u['nombre'],
         'avatar' => $u['avatar'] ?? '',
         'activo' => (int) ($u['activo'] ?? 1) === 1,
+        'comercial' => (int) ($u['comercial'] ?? 0) === 1,
         'actualizado' => $u['actualizado'],
     ];
 }

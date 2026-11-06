@@ -16,6 +16,7 @@
  * Forma del array:
  *   [ 'version' => '2026-10-29',
  *     'autorNombre' => 'Precarga',                     (opcional)
+ *     'comerciales' => [ [ 'empresa' => 'gilmar', 'nombre' => 'ezequiel' ] ],   (opcional)
  *     'entregas' => [
  *       [ 'unidadId' => 'brassie:02', 'compradores' => 'Dolores Montesdeoca',
  *         'firma' => '2026-10-20', 'revision' => '2026-10-15', 'revisionHora' => '',
@@ -56,8 +57,10 @@ function precarga_entregas_al_dia(PDO $pdo): void
             return;   // la tabla llega en el siguiente arranque; se vuelve a intentar
         }
         $n = precarga_aplicar($pdo, $datos);
+        $comerciales = precarga_comerciales($pdo, $datos['comerciales'] ?? []);
         revision_meta($pdo, 'precarga_entregas', $huella);
-        error_log("UNIK Works · precarga de entregas {$datos['version']} aplicada: {$n} ficha(s) tocada(s).");
+        error_log("UNIK Works · precarga de entregas {$datos['version']} aplicada: {$n} ficha(s) tocada(s)"
+            . ($comerciales ? '; con el chip comercial: ' . implode(', ', $comerciales) : '') . '.');
     } catch (Throwable $e) {
         // Una precarga torcida no puede tumbar la app: se apunta y sigue.
         error_log('UNIK Works · precarga de entregas: ' . $e->getMessage());
@@ -154,4 +157,47 @@ function precarga_aplicar(PDO $pdo, array $datos): int
         $tocadas++;
     }
     return $tocadas;
+}
+
+/**
+ * El chip «Comercial» para quien diga el fichero: Fran no quiso ponerlo
+ * a mano desde el móvil (6-11-2026). Cada regla casa por empresa o por
+ * nombre, sin distinguir mayúsculas, solo entre los usuarios activos.
+ * Devuelve los nombres a los que se les acaba de poner.
+ */
+function precarga_comerciales(PDO $pdo, array $reglas): array
+{
+    $puestos = [];
+    foreach ($reglas as $regla) {
+        if (!is_array($regla)) {
+            continue;
+        }
+        $empresa = mb_strtolower(trim((string) ($regla['empresa'] ?? '')));
+        $nombre = mb_strtolower(trim((string) ($regla['nombre'] ?? '')));
+        if ($empresa === '' && $nombre === '') {
+            continue;
+        }
+        $condiciones = [];
+        $valores = [];
+        if ($empresa !== '') {
+            $condiciones[] = 'LOWER(empresa) LIKE ?';
+            $valores[] = "%{$empresa}%";
+        }
+        if ($nombre !== '') {
+            $condiciones[] = 'LOWER(nombre) LIKE ?';
+            $valores[] = "%{$nombre}%";
+        }
+        $donde = 'activo = 1 AND comercial = 0 AND (' . implode(' OR ', $condiciones) . ')';
+        $quienes = $pdo->prepare("SELECT id, nombre FROM usuarios WHERE {$donde}");
+        $quienes->execute($valores);
+        $filas = $quienes->fetchAll();
+        if (!$filas) {
+            continue;
+        }
+        $pdo->prepare("UPDATE usuarios SET comercial = 1 WHERE {$donde}")->execute($valores);
+        foreach ($filas as $f) {
+            $puestos[] = (string) $f['nombre'];
+        }
+    }
+    return $puestos;
 }
