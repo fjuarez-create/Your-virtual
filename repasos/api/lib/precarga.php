@@ -1,26 +1,26 @@
 <?php
 /**
- * La precarga de las entregas: los compradores y las fechas que ya se
- * sabían al estrenar el calendario (noviembre de 2026, fase 1), para
- * no tener que teclear veinticuatro fichas a mano.
- *
- * Los nombres de los compradores no pueden ir en el repositorio, que
- * es público. Van en un secreto de GitHub (PRECARGA_ENTREGAS, un JSON)
- * que el despliegue convierte en api/precarga-entregas.php: un PHP
- * mudo que devuelve un array y no imprime nada, como la cuenta de
- * revisión. Pedirlo por su dirección da una página en blanco.
+ * La precarga de las entregas: los compradores, las firmas y las
+ * visitas ya hechas que se sabían al estrenar el calendario (noviembre
+ * de 2026, fase 1), para no tener que teclear veinticuatro fichas a
+ * mano. Viven en api/precarga-entregas.php, un PHP mudo que devuelve
+ * un array y no imprime nada, como la cuenta de revisión: pedirlo por
+ * su dirección da una página en blanco. Lleva nombre y primer
+ * apellido, sin más (lo decidió Fran: con eso no se identifica a
+ * nadie, y no quería andar con secretos de GitHub).
  *
  * Se aplica una vez por versión del fichero (huella en `meta`) y solo
  * RELLENA lo que esté vacío: lo que alguien haya puesto ya desde la
  * app manda siempre sobre la precarga.
  *
- * Forma del JSON:
- *   { "version": "2026-11-06",
- *     "autorNombre": "Calendario de firmas",      (opcional)
- *     "entregas": [
- *       { "unidadId": "brassie:02", "compradores": "Dolores Montesdeoca",
- *         "firma": "2026-10-20", "revision": "", "revisionHora": "" },
- *       … ] }
+ * Forma del array:
+ *   [ 'version' => '2026-10-29',
+ *     'autorNombre' => 'Precarga',                     (opcional)
+ *     'entregas' => [
+ *       [ 'unidadId' => 'brassie:02', 'compradores' => 'Dolores Montesdeoca',
+ *         'firma' => '2026-10-20', 'revision' => '2026-10-15', 'revisionHora' => '',
+ *         'revisadaEn' => '2026-10-15T18:00:00.000Z' ],   // la visita ya se hizo
+ *       … ] ]
  */
 declare(strict_types=1);
 
@@ -76,6 +76,7 @@ function precarga_aplicar(PDO $pdo, array $datos): int
         'compradores' => ['sello' => 'compradores_fijados_en', 'campos' => ['compradores'], 'autor' => null],
         'revision'    => ['sello' => 'revision_fijada_en', 'campos' => ['revision', 'revision_hora'], 'autor' => 'revision_por'],
         'firma'       => ['sello' => 'firma_fijada_en', 'campos' => ['firma'], 'autor' => 'firma_por'],
+        'revisada'    => ['sello' => 'revisada_fijada_en', 'campos' => ['revisada_en'], 'autor' => 'revisada_por'],
     ];
     $previa = $pdo->prepare('SELECT * FROM entregas WHERE id = ?');
     $tocadas = 0;
@@ -92,6 +93,7 @@ function precarga_aplicar(PDO $pdo, array $datos): int
             'revision'      => entrega_fecha($e['revision'] ?? ''),
             'revision_hora' => entrega_hora($e['revisionHora'] ?? ''),
             'firma'         => entrega_fecha($e['firma'] ?? ''),
+            'revisada_en'   => entrega_sello($e['revisadaEn'] ?? ''),
         ];
         if ($llega['revision'] === '') {
             $llega['revision_hora'] = '';
@@ -122,7 +124,8 @@ function precarga_aplicar(PDO $pdo, array $datos): int
             foreach ($def['campos'] as $campo) {
                 $registro[$campo] = $llega[$campo];
             }
-            $registro[$def['sello']] = $sello;
+            // La visita hecha se sella con su propio cuándo, que es lo que lee el muro.
+            $registro[$def['sello']] = $def['sello'] === 'revisada_fijada_en' ? $llega['revisada_en'] : $sello;
             if ($def['autor']) {
                 $registro[$def['autor']] = null;
                 $registro["{$def['autor']}_nombre"] = $autor;

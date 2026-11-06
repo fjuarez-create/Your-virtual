@@ -141,29 +141,6 @@ jobs:
             echo "Cuenta de revisión: sin secretos, no se publica."
           fi
 
-          # La precarga de las entregas (compradores y firmas de la fase
-          # 1). Los nombres de los compradores tampoco pueden ir en el
-          # repositorio: viajan en el secreto PRECARGA_ENTREGAS (un JSON)
-          # y llegan al servidor como otro PHP mudo, por el mismo camino.
-          # El servidor la aplica una vez por versión y solo rellena lo
-          # que esté vacío (api/lib/precarga.php).
-          if [ -n "${PRECARGA_ENTREGAS:-}" ]; then
-            php -r '
-              $d = json_decode(getenv("PRECARGA_ENTREGAS"), true);
-              if (!is_array($d) || empty($d["version"]) || !is_array($d["entregas"] ?? null)) {
-                fwrite(STDERR, "PRECARGA_ENTREGAS no es un JSON con version y entregas.\n");
-                exit(1);
-              }
-              file_put_contents("publish/api/precarga-entregas.php",
-                "<?php\n// Generado por el despliegue. NO está en el repositorio.\nreturn "
-                . var_export($d, true) . ";\n");
-            '
-            php -l publish/api/precarga-entregas.php > /dev/null
-            echo "Precarga de entregas: se publica ($(php -r '$d=json_decode(getenv("PRECARGA_ENTREGAS"),true); echo $d["version"]." · ".count($d["entregas"])." fichas";'))."
-          else
-            echo "Precarga de entregas: sin secreto, no se publica."
-          fi
-
           # actualizar.php ya no hace falta arriba: el esquema se pone al
           # día solo. Ni él ni el instalador piden contraseña, así que
           # dejarlos publicados sería dejar dos puertas abiertas.
@@ -184,7 +161,6 @@ jobs:
           REVISION_PASSWORD: ${{ secrets.REVISION_PASSWORD }}
           REVISION_NOMBRE: ${{ secrets.REVISION_NOMBRE }}
           REVISION_EMPRESA: ${{ secrets.REVISION_EMPRESA }}
-          PRECARGA_ENTREGAS: ${{ secrets.PRECARGA_ENTREGAS }}
 
       - name: Comprobar que no viaja ningún secreto
         env:
@@ -220,8 +196,8 @@ jobs:
               || { echo "revision-cuenta.php imprime algo: filtraría la contraseña." >&2; exit 1; }
             echo "La cuenta de revisión viaja como PHP mudo, correcto."
           fi
-          # Lo mismo con la precarga de las entregas: lleva nombres de
-          # compradores y solo puede viajar como PHP mudo.
+          # Lo mismo con la precarga de las entregas (api/precarga-entregas.php,
+          # en el repositorio): solo puede viajar como PHP mudo.
           if [ -f publish/api/precarga-entregas.php ]; then
             head -1 publish/api/precarga-entregas.php | grep -q '^<?php' \
               || { echo "precarga-entregas.php no empieza por <?php: se serviría como texto." >&2; exit 1; }
