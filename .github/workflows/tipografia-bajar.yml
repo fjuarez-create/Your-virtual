@@ -1,0 +1,85 @@
+name: Bajar la tipografía de Fran
+
+# Trae la Neue Haas Display de pago desde la carpeta de Drive de Fran,
+# la convierte a woff2 —el formato que entienden todos los móviles— y
+# la deja en repasos/assets/fonts.
+#
+# Existe porque la máquina donde se desarrolla no llega a Drive, y las
+# de GitHub sí. Y porque subir un fichero por la web de GitHub se le
+# atragantaba: el botón de confirmar queda al final del todo y sin
+# pulsarlo no se guarda nada.
+#
+# La carpeta está compartida por enlace mientras dura esto; los
+# identificadores de abajo son los de esa carpeta.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/uniq-repasos-app-2ja8y2]
+    paths: ['diseno-figma/LANZAR-TIPOGRAFIA.txt']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tipografia-bajar-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bajar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Traer el repositorio
+        uses: actions/checkout@v4
+
+      - name: Preparar las herramientas de tipografía
+        run: python -m pip install --quiet fonttools brotli
+
+      - name: Bajar los cortes y convertirlos
+        run: |
+          set -e
+          mkdir -p repasos/assets/fonts
+          # La Light es la que Fran quiere usar; la Roman se guarda al
+          # lado porque su Figma está hecho con ella y quiere poder
+          # cambiar sin esperar a otra descarga.
+          bajar () {
+            NOMBRE="$1"; ID="$2"; DESTINO="$3"
+            echo "── $NOMBRE"
+            curl -sL -o "/tmp/$NOMBRE" "https://drive.google.com/uc?export=download&id=$ID"
+            file "/tmp/$NOMBRE" | sed 's/^/   /'
+            python - "$NOMBRE" "$DESTINO" <<'PY'
+          import sys
+          from fontTools.ttLib import TTFont
+          origen, destino = f"/tmp/{sys.argv[1]}", sys.argv[2]
+          f = TTFont(origen)
+          n = f['name']
+          cmap = f.getBestCmap()
+          prueba = 'áéíóúüñÁÉÍÓÚÜÑ¿¡€«»–—“”·%'
+          faltan = ''.join(c for c in prueba if ord(c) not in cmap)
+          print(f"   familia: {n.getDebugName(1)} / {n.getDebugName(2)}")
+          print(f"   peso: {f['OS/2'].usWeightClass} · glifos: {len(cmap)}")
+          print(f"   faltan: {faltan or 'ninguno'}")
+          if faltan:
+              raise SystemExit(f"::error::A {origen} le faltan caracteres del español: {faltan}")
+          f.flavor = 'woff2'
+          f.save(destino)
+          print(f"   guardada {destino}")
+          PY
+          }
+          bajar NeueHaasDisplayLight.ttf 1jsndmT4HHzpO_jHE6ZtkZpCF9iZ1AJ6f repasos/assets/fonts/neue-haas-display-light.woff2
+          bajar NeueHaasDisplayRoman.ttf 1zLfDkhatp_cTxW9rl0ITuFeZP-PrEw3I repasos/assets/fonts/neue-haas-display-roman.woff2
+          ls -la repasos/assets/fonts/
+
+      - name: Guardarlas en la rama
+        run: |
+          git config user.name 'Claude'
+          git config user.email 'noreply@anthropic.com'
+          git add repasos/assets/fonts/
+          if git diff --cached --quiet; then
+            echo 'No hay nada nuevo que guardar.'
+            exit 0
+          fi
+          git commit -m 'Bajar la Neue Haas Display de pago y convertirla a woff2'
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"

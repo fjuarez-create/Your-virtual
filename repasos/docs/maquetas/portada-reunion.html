@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maqueta · Cuatro trajes para «Última reunión de obra»</title>
+<link rel="stylesheet" href="../../css/app.css">
+<style>
+  body { background: #d9d6d0; margin: 0; padding: 24px; display: grid; gap: 40px; justify-content: center; }
+  .telefono {
+    width: 430px; box-sizing: border-box; min-height: 700px;
+    padding: 12px 12px 36px; background: var(--d-fondo);
+    border-radius: 24px; overflow: hidden;
+  }
+  .m-rotulo { font: 600 13px/1 var(--d-font); color: #6d6a64; margin: 0 0 8px 6px; letter-spacing: 0.04em; text-transform: uppercase; }
+
+  /* Piezas SOLO de maqueta */
+  .m-bola-mic {
+    position: absolute; right: 10px; bottom: 10px; width: 55px; height: 55px;
+    border-radius: 999px; background: var(--d-tinta); color: #fff;
+    display: grid; place-items: center;
+  }
+  .m-bola-mic svg { width: 24px; height: 24px; }
+  /* La tarjeta del diseño ancla sus piezas: las cifras también. */
+  .m-cifras { position: absolute; top: 96px; left: 16px; right: 16px; display: flex; gap: 10px; }
+  .m-cifra { flex: 1; border-radius: 14px; padding: 10px 14px; }
+  .m-cifra b { display: block; font: 500 34px/1 var(--d-font); letter-spacing: -0.02em; }
+  .m-cifra span { display: block; margin-top: 5px; font: 500 12.5px/1 var(--d-font); }
+  .m-cifra.ambar { background: #fef4e6; color: #683c03; }
+  .m-cifra.verde { background: var(--d-verde-suave); color: var(--d-verde); }
+</style>
+</head>
+<body>
+  <div><p class="m-rotulo">A · Como una tarjeta de vivienda</p><div class="telefono pantalla-diseno" id="pA"></div></div>
+  <div><p class="m-rotulo">B · Como una tarjeta de repaso, con el acta de titular</p><div class="telefono pantalla-diseno" id="pB"></div></div>
+  <div><p class="m-rotulo">C · El acta de siempre, con su anillo</p><div class="telefono pantalla-diseno" id="pC"></div></div>
+  <div><p class="m-rotulo">D · Las dos cifras a lo grande</p><div class="telefono pantalla-diseno" id="pD"></div></div>
+
+<script type="module">
+import { h, icon, avatar, grupoAvatares, anillo } from '../../js/ui.js';
+
+const F = { nombre: 'Francisco Juárez del Dago' };
+const A = { nombre: 'Alba García' };
+const FE = { nombre: 'Felipe Remacha' };
+
+const cab = () => h('div.d-cab', null,
+  avatar(F, { tam: 55 }),
+  h('div.d-cab-menu', null,
+    ...[['inicio', 'brujula'], ['obra', 'grua'], ['viviendas', 'casa'], ['listas', 'periodico']]
+      .map(([id, ic]) => h('button.d-bola', { class: id === 'inicio' ? 'activa' : '' }, icon(ic))),
+  ),
+);
+const epigrafe = (t) => h('p.d-epigrafe', null, t);
+const banda = () => h('button.d-banner.negro', null,
+  h('span.d-mordida'), h('span.d-mordida-esquina'),
+  h('span.d-banner-texto', null,
+    h('span.d-banner-rotulo', null, 'Tareas de obra pendientes'),
+    h('span.d-banner-cifra', null, '3'),
+  ),
+  h('span.d-banner-boton', null, icon('flechaSubir')),
+);
+const contexto = () => [
+  epigrafe('Pendiente de revisión por la DF'),
+  h('button.d-banner.beige', null,
+    h('span.d-mordida'), h('span.d-mordida-esquina'),
+    h('span.d-banner-texto', null,
+      h('span.d-banner-rotulo', null, 'Repasos completados por verificar'),
+      h('span.d-banner-cifra', null, '4'),
+    ),
+    h('span.d-banner-boton', null, icon('flechaSubir')),
+  ),
+];
+const monta = (id, tarjeta) => document.getElementById(id).append(
+  cab(),
+  h('h1.d-saludo', null, 'Brassie'),
+  epigrafe('Última reunión de obra'),
+  tarjeta,
+  banda(),
+  ...contexto(),
+);
+
+/* ─── A · Calcada de la tarjeta de vivienda ───
+   La misma pieza que las villas: la mordida, el cuándo con las caras,
+   los chips grandes con el listado y el fuego, y el anillo con el
+   avance de las tareas de esa reunión (6 hechas de 9). */
+monta('pA', h('button.d-tarjeta.tramo-ambar', null,
+  h('span.d-mordida'), h('span.d-mordida-esquina'),
+  h('div.d-tarjeta-cab', null,
+    icon('grua'),
+    h('span', null, 'Hoy, 9:31'),
+    h('span.d-tarjeta-caras', null, grupoAvatares([F, A, FE], { tam: 36, max: 3, solape: 12 })),
+  ),
+  h('div.d-tarjeta-titulo', null, 'Reunión de obra'),
+  h('div.d-tarjeta-pie', null,
+    h('span.d-chip.grande', null, icon('listaChecks'), '6 / 9'),
+    h('span.d-chip.grande.ambar', null, icon('fuego'), '67%'),
+  ),
+  h('span.d-tarjeta-anillo', null, anillo(67, { tam: 55, grosor: 5, etiqueta: false })),
+));
+
+/* ─── B · Calcada de la tarjeta de repaso ───
+   El titular es el ACTA: la primera frase del resumen, que cuenta más
+   que ninguna cifra. Los chips llevan las cuentas y la bolita de la
+   esquina es la grabación, como la foto en un repaso. */
+monta('pB', h('button.d-tarjeta.d-tarea-fila', null,
+  h('span.d-mordida'), h('span.d-mordida-esquina'),
+  h('div.d-tarjeta-cab', null,
+    h('span', null, 'Hoy, 9:31'),
+    h('span.d-tarjeta-caras', null, grupoAvatares([F, A, FE], { tam: 36, max: 3, solape: 12 })),
+  ),
+  h('div.d-tarjeta-titulo', { style: { fontSize: '22px', lineHeight: '1.25' } },
+    'Se acordó limpiar la obra entera y pedir el vidrio del lucernario…'),
+  h('div.d-tarjeta-pie', null,
+    h('span.d-chip.tarea', null, '9 tareas'),
+    h('span.d-chip.tarea', { style: { background: '#fef4e6', color: '#683c03' } }, '3 pendientes'),
+  ),
+  h('span.m-bola-mic', null, icon('mic')),
+));
+
+/* ─── C · El acta de siempre, con su anillo ───
+   La tarjeta beige que ya conoces, pero el hueco de la derecha lo
+   ocupa el anillo de avance de las tareas, como en las villas. */
+monta('pC', h('button.d-acta-dia.hoy', null,
+  h('div.d-acta-dia-cab', null,
+    h('div.grow', null,
+      h('p.d-acta-dia-cuando', null, 'Hoy · terminada a las 9:31'),
+      h('p.d-acta-dia-fecha', null, '24 de agosto'),
+    ),
+    anillo(67, { tam: 55, grosor: 5, etiqueta: false }),
+  ),
+  h('p.d-acta-dia-villas', null, 'Francisco, Alba y Felipe'),
+  h('div.d-acta-dia-chips', null,
+    h('span.d-chip.ambar', null, '3 pendientes'),
+    h('span.d-chip.verde', null, '6 hechas'),
+  ),
+));
+
+/* ─── D · Las dos cifras a lo grande ───
+   Lo que importa de un vistazo son dos números: cuántas quedan y
+   cuántas cayeron. Van en grande, con la gente arriba. */
+monta('pD', h('button.d-tarjeta.tramo-ambar', null,
+  h('span.d-mordida'), h('span.d-mordida-esquina'),
+  h('div.d-tarjeta-cab', null,
+    icon('grua'),
+    h('span', null, 'Hoy, 9:31'),
+    h('span.d-tarjeta-caras', null, grupoAvatares([F, A, FE], { tam: 36, max: 3, solape: 12 })),
+  ),
+  h('div.d-tarjeta-titulo', null, 'Reunión de obra'),
+  h('div.m-cifras', null,
+    h('span.m-cifra.ambar', null, h('b', null, '3'), h('span', null, 'pendientes')),
+    h('span.m-cifra.verde', null, h('b', null, '6'), h('span', null, 'hechas')),
+  ),
+));
+</script>
+</body>
+</html>

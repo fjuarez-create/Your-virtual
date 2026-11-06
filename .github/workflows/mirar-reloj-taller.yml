@@ -1,0 +1,55 @@
+name: Mirar el reloj del taller
+
+# Diagnóstico de relojes, a raíz de la tarjeta que decía «Ayer» con el
+# punto vivo encendido: compara la hora del hosting con la hora real y
+# saca SOLO los sellos de tiempo de las reuniones del taller (fecha,
+# empezada, terminada) — ningún contenido, que el registro es público.
+
+on:
+  push:
+    branches: [claude/obra-en-taller]
+    paths: ['.github/workflows/mirar-reloj-taller.yml']
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  mirar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      DOMINIO: https://repasos.unikdi.com
+    steps:
+      - name: Comparar relojes
+        run: |
+          set -eu
+          echo "— Hora real (runner, NTP de GitHub) —"
+          date -u '+%a, %d %b %Y %H:%M:%S GMT (runner)'
+          echo ""
+          echo "— Lo que dice el hosting en su cabecera Date —"
+          curl -s -D - -o /dev/null "$DOMINIO/taller/index.html" | tr -d '\r' | grep -i '^date:' || echo "(sin cabecera Date)"
+          echo ""
+          date -u '+%a, %d %b %Y %H:%M:%S GMT (runner, tras la petición)'
+
+      - name: Sellos de las reuniones del taller
+        env:
+          ENTRADA_EMAIL: ${{ secrets.REVISION_EMAIL }}
+          ENTRADA_PASSWORD: ${{ secrets.REVISION_PASSWORD }}
+        run: |
+          set -eu
+          CUERPO="$(python3 -c 'import json,os; print(json.dumps({"email": os.environ["ENTRADA_EMAIL"], "password": os.environ["ENTRADA_PASSWORD"]}))')"
+          printf '%s' "$CUERPO" | curl -fsS --max-time 25 -X POST \
+            -H 'Content-Type: application/json' --data-binary @- \
+            -c galletas.txt -o /dev/null \
+            "$DOMINIO/taller/api/auth/login"
+
+          echo "— obra/estado: hoy según el servidor —"
+          curl -fsS --max-time 25 -b galletas.txt "$DOMINIO/taller/api/obra/estado?promo=brassie" \
+            | jq '{hoy, ultima: (.ultima | {fecha, empezada, terminada})}'
+
+          echo ""
+          echo "— Todas las reuniones: solo sus sellos —"
+          curl -fsS --max-time 25 -b galletas.txt "$DOMINIO/taller/api/obra/reuniones?promo=brassie" \
+            | jq '.reuniones | map({fecha, empezada, terminada, creado})'
+          rm -f galletas.txt

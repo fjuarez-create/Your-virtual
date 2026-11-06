@@ -1,0 +1,744 @@
+# Compilar UNIK Works y subirla a TestFlight, sin Mac y sin que nadie
+# tenga que exportar un certificado.
+#
+# EL PROBLEMA QUE RESUELVE ESTE FICHERO
+#
+# Para firmar una app de iOS hacen falta dos cosas: un certificado de
+# distribución (que lleva una clave privada) y un perfil de
+# aprovisionamiento. Lo normal es sacarlos a mano desde un Mac y
+# guardarlos en los secretos del repositorio. Fran no tiene Mac, y una
+# clave privada no puede viajar por un chat.
+#
+# Así que aquí no se guarda ninguna: en cada compilación se crea un
+# certificado nuevo, se usa, y en la siguiente se revoca antes de crear
+# el suyo. Apple solo deja tener dos o tres a la vez, y por eso hay que
+# barrer antes de sembrar.
+#
+# Revocar un certificado NO afecta a las apps ya publicadas en la App
+# Store: Apple las vuelve a firmar con el suyo al distribuirlas. Sí
+# afectaría a builds repartidos fuera de la tienda, y esta app no
+# reparte ninguno.
+#
+# Lo único que hace falta guardar es la clave de App Store Connect, que
+# Fran crea desde la web de Apple en tres clics y pega en los secretos.
+
+default_platform(:ios)
+
+RUTA_PROYECTO = "ios/App"
+IDENTIFICADOR = "com.unikdi.repasos"
+# El Team ID vive en el Appfile porque no es un secreto. Se puede pisar
+# con IOS_EQUIPO si algún día hiciera falta otro.
+# El `to_s.empty?` importa: si el secreto no existe, GitHub pasa la
+# variable vacía en vez de no pasarla, y un `fetch` con valor por
+# defecto se quedaría con la cadena vacía.
+EQUIPO = ENV["IOS_EQUIPO"].to_s.empty? ? "M8KKGDT273" : ENV["IOS_EQUIPO"]
+
+platform :ios do
+  desc "Compila y sube a TestFlight. No envía a revisión."
+  lane :publicar do
+    clave = app_store_connect_api_key(
+      key_id: ENV.fetch("APPSTORE_CLAVE_ID"),
+      issuer_id: ENV.fetch("APPSTORE_EMISOR_ID"),
+      key_content: ENV.fetch("APPSTORE_CLAVE_P8"),
+      is_key_content_base64: false,
+      in_house: false
+    )
+
+    revocar_certificados_viejos
+    crear_certificado(clave: clave)
+    perfil = crear_perfil(clave: clave)
+
+    numerar
+    compilar(perfil: perfil)
+    subir(clave: clave)
+
+    UI.success("Subida la compilación. En unos minutos aparece en TestFlight.")
+  end
+
+  desc "Pregunta a App Store Connect cómo está todo y lo cuenta en cristiano. No toca nada."
+  lane :estado do
+    require "spaceship"
+    require "time"
+
+    Spaceship::ConnectAPI.auth(
+      key_id: ENV.fetch("APPSTORE_CLAVE_ID"),
+      issuer_id: ENV.fetch("APPSTORE_EMISOR_ID"),
+      key: ENV.fetch("APPSTORE_CLAVE_P8")
+    )
+
+    app = Spaceship::ConnectAPI::App.find(IDENTIFICADOR)
+    UI.user_error!("En esta cuenta de Apple no aparece ninguna app con el identificador #{IDENTIFICADOR}.") if app.nil?
+
+    lineas = ["## #{app.name} en App Store Connect", ""]
+
+    # Las versiones de la tienda: la publicada, la que esté en revisión…
+    en_curso = nil
+    begin
+      versiones = app.get_app_store_versions.to_a
+      if versiones.empty?
+        lineas << "En la tienda todavía no hay ninguna versión creada."
+      else
+        lineas << "### Versiones en la tienda"
+        lineas << ""
+        recientes = versiones.sort_by { |v| v.created_date.to_s }.reverse
+        recientes.first(3).each do |v|
+          lineas << "- **Versión #{v.version_string}** — #{en_cristiano_tienda(estado_de(v))}"
+        end
+        # La que está en curso es la que todavía no ha salido a la
+        # tienda: la que se puede tocar y la que hay que enviar.
+        en_curso = recientes.find { |v| !PUBLICADAS.include?(estado_de(v).to_s) }
+      end
+    rescue StandardError => e
+      lineas << "No se han podido leer las versiones de la tienda: #{e.message}"
+    end
+
+    # Las últimas compilaciones subidas y cómo las tiene TestFlight.
+    begin
+      builds = Spaceship::ConnectAPI::Build.all(
+        app_id: app.id,
+        sort: "-uploadedDate",
+        includes: "preReleaseVersion,buildBetaDetail"
+      )
+      lineas << ""
+      if builds.empty?
+        lineas << "Todavía no se ha subido ninguna compilación."
+      else
+        lineas << "### Últimas compilaciones subidas"
+        lineas << ""
+        builds.first(5).each do |b|
+          version = b.pre_release_version && b.pre_release_version.version
+          cuando = begin
+            Time.parse(b.uploaded_date.to_s).localtime.strftime("%d/%m/%Y a las %H:%M")
+          rescue StandardError
+            b.uploaded_date.to_s
+          end
+          detalle = b.build_beta_detail
+          en_testflight = detalle && (detalle.internal_build_state || detalle.external_build_state)
+          texto = b.expired ? "caducada: TestFlight ya no la reparte" : en_cristiano_build(b.processing_state, en_testflight)
+          lineas << "- **#{version} (compilación #{b.version})**, subida el #{cuando} — #{texto}"
+        end
+      end
+    rescue StandardError => e
+      lineas << "No se han podido leer las compilaciones: #{e.message}"
+    end
+
+    # Y el repaso hueco por hueco de lo que Apple exige para dejar
+    # enviar la app, que es la pregunta de verdad.
+    begin
+      lineas.concat(repaso_de_la_ficha(app, en_curso))
+    rescue StandardError => e
+      lineas << ""
+      lineas << "No se ha podido repasar la ficha: #{e.message}"
+    end
+
+    # Los envíos de revisión abiertos. Un envío es la carpeta con la que
+    # se manda una versión a Apple; puede haber una a medio preparar sin
+    # que nadie lo sepa, y entonces la versión no se puede meter en otra.
+    begin
+      envios = app.get_review_submissions(includes: "items")
+      if envios && !envios.empty?
+        lineas << ""
+        lineas << "### Envíos de revisión abiertos"
+        lineas << ""
+        envios.first(5).each do |e|
+          dentro = begin
+            (e.items || []).map { |i| i.app_store_version && i.app_store_version.version_string }.compact
+          rescue StandardError
+            []
+          end
+          detalle = dentro.empty? ? "vacío" : "con la versión #{dentro.join(', ')}"
+          lineas << "- `#{e.id}` — #{en_cristiano_envio(e.state)}, #{detalle}"
+        end
+      end
+    rescue StandardError => e
+      lineas << ""
+      lineas << "No se han podido leer los envíos de revisión: #{e.message}"
+    end
+
+    # Si Apple ha dicho algo —un rechazo, una pega, una pregunta— está
+    # en el Resolution Center de su web. Leerlo sí se puede por aquí;
+    # contestar no, eso sigue siendo a mano.
+    begin
+      lineas.concat(lo_que_dice_apple(app))
+    rescue StandardError => e
+      lineas << ""
+      lineas << "No se ha podido mirar si Apple ha dicho algo: #{e.message}"
+    end
+
+    texto = lineas.join("\n")
+    texto.each_line { |l| UI.message(l.chomp) }
+    if ENV["GITHUB_STEP_SUMMARY"]
+      File.open(ENV["GITHUB_STEP_SUMMARY"], "a") { |f| f.puts(texto, "") }
+    end
+  end
+
+  desc "Retira un envío de revisión VACÍO. No toca los que llevan algo dentro."
+  lane :retirar_envio do
+    require "spaceship"
+
+    Spaceship::ConnectAPI.auth(
+      key_id: ENV.fetch("APPSTORE_CLAVE_ID"),
+      issuer_id: ENV.fetch("APPSTORE_EMISOR_ID"),
+      key: ENV.fetch("APPSTORE_CLAVE_P8")
+    )
+
+    buscado = ENV.fetch("ENVIO_ID", "").strip
+    UI.user_error!("No se ha dicho qué envío retirar.") if buscado.empty?
+
+    app = Spaceship::ConnectAPI::App.find(IDENTIFICADOR)
+    UI.user_error!("No aparece la app #{IDENTIFICADOR}.") if app.nil?
+
+    envio = app.get_review_submissions(includes: "items").find { |e| e.id == buscado }
+    UI.user_error!("En esta cuenta no hay ningún envío con el identificador #{buscado}.") if envio.nil?
+
+    # Los dos cerrojos. Retirar un envío que lleva una versión dentro, o
+    # uno que está en mitad de una conversación con Apple, es meterse
+    # donde no llaman: eso lo decide Fran, no un robot.
+    estado = envio.state.to_s
+    unless estado == "READY_FOR_REVIEW"
+      UI.user_error!("Ese envío está «#{en_cristiano_envio(estado)}». Solo retiro los que están preparados y sin mandar.")
+    end
+
+    dentro = (envio.items || []).length
+    unless dentro.zero?
+      UI.user_error!("Ese envío lleva #{dentro} cosa(s) dentro. Solo retiro los vacíos.")
+    end
+
+    envio.cancel_submission
+    UI.success("Retirado el envío vacío #{buscado}.")
+  end
+
+  desc "Envía a revisión la versión en curso. Se planta si algo no está en su sitio."
+  lane :enviar do
+    require "spaceship"
+
+    Spaceship::ConnectAPI.auth(
+      key_id: ENV.fetch("APPSTORE_CLAVE_ID"),
+      issuer_id: ENV.fetch("APPSTORE_EMISOR_ID"),
+      key: ENV.fetch("APPSTORE_CLAVE_P8")
+    )
+
+    app = Spaceship::ConnectAPI::App.find(IDENTIFICADOR)
+    UI.user_error!("En esta cuenta de Apple no aparece ninguna app con el identificador #{IDENTIFICADOR}.") if app.nil?
+
+    version = app.get_app_store_versions.to_a
+                 .sort_by { |v| v.created_date.to_s }.reverse
+                 .find { |v| !PUBLICADAS.include?(estado_de(v).to_s) }
+    UI.user_error!("No hay ninguna versión en curso que enviar.") if version.nil?
+
+    # Antes de tocar nada, los cerrojos. Enviar a revisión con un hueco
+    # sin rellenar no es un fallo que se arregle repitiendo: es una
+    # semana de cola de Apple tirada y un rechazo en el expediente.
+    estado = estado_de(version).to_s
+    unless %w[READY_FOR_REVIEW PREPARE_FOR_SUBMISSION].include?(estado)
+      UI.user_error!("La versión #{version.version_string} está «#{en_cristiano_tienda(estado)}». No es momento de enviarla.")
+    end
+
+    build = begin
+      version.build
+    rescue StandardError
+      nil
+    end
+    UI.user_error!("La versión #{version.version_string} no tiene ninguna compilación pegada.") if build.nil?
+
+    detalle = begin
+      version.fetch_app_store_review_detail
+    rescue StandardError
+      nil
+    end
+    if detalle.nil? || !(lleno?(detalle.demo_account_name) && lleno?(detalle.demo_account_password))
+      UI.user_error!("La ficha no lleva cuenta de prueba para el revisor. Sin ella no entra y la rechazan.")
+    end
+
+    UI.message("Enviando a revisión la versión #{version.version_string} con la compilación #{build.version}…")
+
+    # Apple retiró la manera antigua de enviar —un «envío de versión»— y
+    # ahora se hace con un «envío de revisión», que es una carpeta que
+    # puede llevar varias cosas dentro y se manda entera.
+    plataforma = Spaceship::ConnectAPI::Platform::IOS
+
+    # Si ya hubiera una carpeta abierta se reutiliza. Crear otra sin
+    # mirar deja dos envíos compitiendo por la misma versión.
+    envio = begin
+      app.get_ready_review_submission(platform: plataforma, includes: "items")
+    rescue StandardError
+      nil
+    end
+
+    if envio
+      UI.message("Ya había un envío empezado; se aprovecha ese.")
+    else
+      envio = app.create_review_submission(platform: plataforma)
+    end
+
+    # Meter dos veces la misma versión da error, así que se mira antes.
+    ya_dentro = begin
+      (envio.items || []).any? { |i| i.app_store_version && i.app_store_version.id == version.id }
+    rescue StandardError
+      false
+    end
+    envio.add_app_store_version_to_review_items(app_store_version_id: version.id) unless ya_dentro
+
+    envio.submit_for_review
+
+    UI.success("Enviada. La versión #{version.version_string} está en la cola de revisión de Apple.")
+    if ENV["GITHUB_STEP_SUMMARY"]
+      File.open(ENV["GITHUB_STEP_SUMMARY"], "a") do |f|
+        f.puts("## Enviada a revisión", "",
+               "La versión **#{version.version_string}** con la compilación " \
+               "**#{build.version}** está en la cola de Apple.", "",
+               "Suelen tardar entre uno y tres días. Cuando contesten, el robot " \
+               "«Mirar la App Store» lo dirá.", "")
+      end
+    end
+  end
+
+  # ─── Los pasos, uno a uno ──────────────────────────────────────
+
+  # Apple solo admite dos o tres certificados de distribución vivos. Como
+  # cada compilación crea el suyo, hay que retirar los anteriores o a la
+  # tercera se acabarían las plazas y fallaría sin decir por qué.
+  private_lane :revocar_certificados_viejos do
+    require "spaceship"
+    Spaceship::ConnectAPI.auth(
+      key_id: ENV.fetch("APPSTORE_CLAVE_ID"),
+      issuer_id: ENV.fetch("APPSTORE_EMISOR_ID"),
+      key: ENV.fetch("APPSTORE_CLAVE_P8")
+    )
+    viejos = Spaceship::ConnectAPI::Certificate.all.select do |c|
+      %w[DISTRIBUTION IOS_DISTRIBUTION].include?(c.certificate_type.to_s)
+    end
+    if viejos.empty?
+      UI.message("No había certificados de distribución que retirar.")
+    else
+      viejos.each do |c|
+        UI.message("Retirando el certificado #{c.name} (#{c.id})…")
+        begin
+          c.delete!
+        rescue StandardError => e
+          # Que no se pueda retirar uno no puede tumbar la compilación:
+          # mientras quede plaza libre, el siguiente paso funciona igual.
+          UI.important("No se ha podido retirar #{c.id}: #{e.message}")
+        end
+      end
+    end
+  end
+
+  private_lane :crear_certificado do |op|
+    cert(
+      api_key: op[:clave],
+      generate_apple_certs: true,
+      development: false,
+      keychain_path: ENV.fetch("LLAVERO_RUTA"),
+      keychain_password: ENV.fetch("LLAVERO_CLAVE"),
+      output_path: "#{ENV.fetch('RUNNER_TEMP')}/firma"
+    )
+    lane_context[SharedValues::CERT_FILE_PATH]
+  end
+
+  private_lane :crear_perfil do |op|
+    sigh(
+      api_key: op[:clave],
+      app_identifier: IDENTIFICADOR,
+      platform: "ios",
+      force: true,
+      output_path: "#{ENV.fetch('RUNNER_TEMP')}/firma"
+    )
+    lane_context[SharedValues::SIGH_NAME]
+  end
+
+  # Cada subida a Apple tiene que llevar un número de compilación
+  # distinto del anterior. El del propio robot vale y no hay que
+  # acordarse de subirlo a mano.
+  private_lane :numerar do
+    increment_build_number(
+      build_number: ENV.fetch("GITHUB_RUN_NUMBER", "1"),
+      xcodeproj: "#{RUTA_PROYECTO}/App.xcodeproj"
+    )
+  end
+
+  private_lane :compilar do |op|
+    perfil = op[:perfil]
+
+    # La firma se escribe SOLO en el objetivo «App», dentro del propio
+    # proyecto. Antes se pasaba por la línea de órdenes y eso se lo
+    # aplicaba a todo lo que hay en el espacio de trabajo, incluidos los
+    # módulos de Capacitor, que no se firman: la compilación se caía con
+    # «CapacitorStatusBar does not support provisioning profiles».
+    update_code_signing_settings(
+      path: "#{RUTA_PROYECTO}/App.xcodeproj",
+      targets: ["App"],
+      use_automatic_signing: false,
+      team_id: EQUIPO,
+      bundle_identifier: IDENTIFICADOR,
+      code_sign_identity: "Apple Distribution",
+      profile_name: perfil
+    )
+
+    build_app(
+      workspace: "#{RUTA_PROYECTO}/App.xcworkspace",
+      scheme: "App",
+      configuration: "Release",
+      export_method: "app-store",
+      output_directory: "#{ENV.fetch('RUNNER_TEMP')}/salida",
+      output_name: "UNIK-Works.ipa",
+      export_options: {
+        provisioningProfiles: { IDENTIFICADOR => perfil },
+        signingStyle: "manual",
+        teamID: EQUIPO
+      },
+      silent: false,
+      clean: true
+    )
+  end
+
+  private_lane :subir do |op|
+    upload_to_testflight(
+      api_key: op[:clave],
+      ipa: "#{ENV.fetch('RUNNER_TEMP')}/salida/UNIK-Works.ipa",
+      # No se espera a que Apple termine de procesarla: son diez o quince
+      # minutos de máquina alquilada mirando una barra de progreso.
+      skip_waiting_for_build_processing: true,
+      # Y no se envía a revisión: eso lo decide Fran desde la web.
+      distribute_external: false,
+      notify_external_testers: false
+    )
+  end
+end
+
+# ─── Traductores para el carril «estado» ─────────────────────────
+#
+# Apple contesta con siglas en mayúsculas. Aquí se pasan a frases que
+# digan qué está pasando y, cuando toca, qué falta por hacer. Si un día
+# aparece una sigla nueva, se enseña tal cual en vez de esconderla.
+
+def en_cristiano_tienda(estado)
+  {
+    "PREPARE_FOR_SUBMISSION" => "en preparación: todavía no se ha enviado a revisión",
+    "READY_FOR_REVIEW" => "lista para enviarse a revisión",
+    "WAITING_FOR_REVIEW" => "en la cola de revisión de Apple",
+    "IN_REVIEW" => "Apple la está revisando ahora mismo",
+    "PENDING_DEVELOPER_RELEASE" => "APROBADA por Apple: solo falta que pulses «Publicar esta versión»",
+    "PENDING_APPLE_RELEASE" => "aprobada: Apple la publicará automáticamente",
+    "PROCESSING_FOR_DISTRIBUTION" => "aprobada: preparándose para salir en la tienda",
+    "READY_FOR_DISTRIBUTION" => "publicada y disponible en la App Store",
+    "READY_FOR_SALE" => "publicada y disponible en la App Store",
+    "REJECTED" => "RECHAZADA por Apple: los motivos están en el Resolution Center de la web",
+    "METADATA_REJECTED" => "rechazada por la ficha (textos, capturas o datos de revisión), no por la app",
+    "DEVELOPER_REJECTED" => "retirada de la revisión por ti: hay que volver a enviarla",
+    "DEVELOPER_REMOVED_FROM_SALE" => "retirada de la venta por ti",
+    "REMOVED_FROM_SALE" => "retirada de la venta",
+    "INVALID_BINARY" => "la compilación enviada no vale: hay que subir otra"
+  }.fetch(estado.to_s, "estado «#{estado}»")
+end
+
+# ─── El repaso de la ficha ───────────────────────────────────────
+#
+# Apple no deja enviar una app a revisión hasta que están todos los
+# huecos rellenos, y su web no te dice cuáles faltan hasta que le das
+# al botón y te lo escupe en rojo. Esto los mira uno a uno por la API
+# y los reparte en tres montones: lo que ya está, lo que puedo dejar
+# hecho yo desde aquí, y lo que solo puede hacer Fran.
+#
+# Lo que no se pueda comprobar se dice en voz alta. Un hueco que no se
+# ha podido mirar y se calla es el que te tumba el envío.
+
+def lleno?(valor)
+  !valor.nil? && valor.to_s.strip != ""
+end
+
+# Los estados en los que la versión ya ha salido a la tienda y no es la
+# que hay que enviar. Todo lo demás está en curso.
+PUBLICADAS = %w[
+  READY_FOR_DISTRIBUTION READY_FOR_SALE REPLACED_WITH_NEW_VERSION
+  REMOVED_FROM_SALE DEVELOPER_REMOVED_FROM_SALE NOT_APPLICABLE
+].freeze
+
+# Apple está mudando el nombre del campo del estado y va sirviendo uno u
+# otro según la versión de la librería; se lee el que haya.
+def estado_de(version)
+  (version.respond_to?(:app_version_state) && version.app_version_state) || version.app_store_state
+end
+
+def repaso_de_la_ficha(app, version)
+  if version.nil?
+    return ["", "### Para enviarla a revisión", "",
+            "No he encontrado ninguna versión en curso que repasar."]
+  end
+
+  hecho = []
+  mio = []
+  tuyo = []
+  dudas = []
+
+  # 1. La compilación. Sin una pegada a la versión no hay nada que
+  #    revisar, y es el despiste más típico: subirla a TestFlight y
+  #    creer que con eso ya está enviada.
+  begin
+    build = begin
+      version.respond_to?(:get_build) ? version.get_build : nil
+    rescue StandardError
+      nil
+    end
+    build ||= begin
+      version.build
+    rescue StandardError
+      nil
+    end
+    if build
+      hecho << "La compilación #{build.version} está pegada a la versión #{version.version_string}."
+    else
+      mio << "Pegar a la versión #{version.version_string} la última compilación de TestFlight."
+    end
+  rescue StandardError => e
+    dudas << "si hay una compilación pegada a la versión (#{e.message})"
+  end
+
+  # 2. Los textos de la ficha y las capturas, idioma por idioma.
+  begin
+    locales = version.get_app_store_version_localizations
+    if locales.empty?
+      tuyo << "La ficha no tiene ningún idioma dado de alta."
+    end
+    locales.each do |l|
+      falta = []
+      falta << "la descripción" unless lleno?(l.description)
+      falta << "las palabras clave" unless lleno?(l.keywords)
+      falta << "la URL de soporte" unless lleno?(l.support_url)
+      if falta.empty?
+        hecho << "Los textos de la ficha en #{l.locale} están puestos."
+      else
+        mio << "Escribir #{falta.join(", ")} en #{l.locale}."
+      end
+
+      begin
+        capturas = l.get_app_screenshot_sets(includes: "appScreenshots")
+        total = capturas.sum { |c| (c.app_screenshots || []).length }
+        if total.zero?
+          tuyo << "Subir las capturas de pantalla de #{l.locale}: Apple no las admite por esta vía, van desde la web."
+        else
+          hecho << "Hay #{total} capturas subidas en #{l.locale}."
+        end
+      rescue StandardError => e
+        dudas << "cuántas capturas hay en #{l.locale} (#{e.message})"
+      end
+    end
+  rescue StandardError => e
+    dudas << "los textos de la ficha (#{e.message})"
+  end
+
+  # 3. Los datos de revisión: a quién llama Apple si algo va mal y con
+  #    qué cuenta entra el revisor. Aquí es donde se cayó la vez
+  #    anterior, y es justo lo que puedo dejar puesto yo.
+  begin
+    detalle = version.fetch_app_store_review_detail
+    if detalle.nil?
+      mio << "Rellenar los datos de contacto para la revisión."
+    else
+      contacto = [detalle.contact_first_name, detalle.contact_last_name,
+                  detalle.contact_phone, detalle.contact_email]
+      if contacto.all? { |c| lleno?(c) }
+        hecho << "Los datos de contacto para Apple están puestos."
+      else
+        mio << "Rellenar los datos de contacto para la revisión (nombre, teléfono y correo)."
+      end
+
+      if detalle.demo_account_required == false
+        dudas << "por qué la ficha dice que el revisor NO necesita cuenta, si la app pide entrar"
+      elsif lleno?(detalle.demo_account_name) && lleno?(detalle.demo_account_password)
+        hecho << "La cuenta de prueba para el revisor está puesta (#{detalle.demo_account_name})."
+      else
+        mio << "Poner la cuenta de prueba del revisor, la misma que ya publica el servidor."
+      end
+    end
+  rescue StandardError => e
+    dudas << "los datos de revisión (#{e.message})"
+  end
+
+  # 4. El nombre, el subtítulo, la política de privacidad y las
+  #    categorías, que viven en otro sitio distinto de la versión.
+  begin
+    # El nombre y la política de privacidad no cuelgan de la versión
+    # sino de la «ficha» de la app, que va por su cuenta y tiene su
+    # propia copia editable y su copia publicada.
+    porque = nil
+    info = begin
+      app.fetch_edit_app_info
+    rescue StandardError => e
+      porque = e.message
+      nil
+    end
+    info ||= begin
+      app.fetch_live_app_info
+    rescue StandardError => e
+      porque = e.message
+      nil
+    end
+
+    # Si no se ha podido leer, se dice. Saltarse cuatro comprobaciones
+    # en silencio deja un informe más limpio y menos de fiar, que es lo
+    # contrario de para lo que está esto.
+    if info.nil?
+      dudas << "la ficha de la app: nombre, política de privacidad, categoría y edad recomendada" \
+               "#{porque ? " (#{porque})" : ""}"
+    end
+
+    if info
+      begin
+        info.get_app_info_localizations.each do |l|
+          hecho << "El nombre en la tienda es «#{l.name}» (#{l.locale})." if lleno?(l.name)
+          if lleno?(l.privacy_policy_url)
+            hecho << "La política de privacidad está enlazada en #{l.locale}."
+          else
+            mio << "Enlazar la política de privacidad en #{l.locale} (ya está publicada en la web)."
+          end
+        end
+      rescue StandardError => e
+        dudas << "el nombre y la política de privacidad (#{e.message})"
+      end
+
+      begin
+        if info.primary_category
+          hecho << "La categoría está elegida."
+        else
+          mio << "Elegir la categoría de la app."
+        end
+      rescue StandardError => e
+        dudas << "la categoría (#{e.message})"
+      end
+
+      begin
+        edades = info.fetch_age_rating_declaration
+        if edades
+          hecho << "El cuestionario de edad recomendada está contestado."
+        else
+          mio << "Contestar el cuestionario de edad recomendada."
+        end
+      rescue StandardError => e
+        dudas << "el cuestionario de edad recomendada (#{e.message})"
+      end
+    end
+  rescue StandardError => e
+    dudas << "los datos generales de la app (#{e.message})"
+  end
+
+  # Los contratos y los datos fiscales no se pueden mirar por la API y
+  # son el motivo número uno de app terminada que no puede salir.
+  tuyo << "Comprobar en «Business» que el contrato de apps gratuitas está firmado y aceptado."
+
+  lineas = ["", "### Para enviarla a revisión", ""]
+  unless hecho.empty?
+    lineas << "**Ya está hecho:**"
+    hecho.each { |t| lineas << "- #{t}" }
+    lineas << ""
+  end
+  unless mio.empty?
+    lineas << "**Puedo dejarlo hecho yo desde aquí, si me lo dices:**"
+    mio.each { |t| lineas << "- #{t}" }
+    lineas << ""
+  end
+  unless tuyo.empty?
+    lineas << "**Solo lo puedes hacer tú, desde la web de Apple:**"
+    tuyo.each { |t| lineas << "- #{t}" }
+    lineas << ""
+  end
+  unless dudas.empty?
+    lineas << "**Esto no lo he podido comprobar** (lo digo en vez de darlo por bueno):"
+    dudas.each { |t| lineas << "- #{t}" }
+    lineas << ""
+  end
+  lineas
+end
+
+# Lo que Apple haya escrito en el Resolution Center: los rechazos y sus
+# motivos. Se puede LEER por la API, que es lo que importa para saber a
+# qué atenerse; contestar sigue habiendo que hacerlo desde su web.
+def lo_que_dice_apple(app)
+  plataforma = Spaceship::ConnectAPI::Platform::IOS
+
+  envio = nil
+  %i[get_in_progress_review_submission get_ready_review_submission].each do |via|
+    next if envio
+    envio = begin
+      app.send(via, platform: plataforma)
+    rescue StandardError
+      nil
+    end
+  end
+  return [] if envio.nil?
+
+  hilos = begin
+    envio.fetch_resolution_center_threads
+  rescue StandardError => e
+    return ["", "### Lo que dice Apple", "", "No se han podido leer los mensajes: #{e.message}"]
+  end
+  return [] if hilos.nil? || hilos.empty?
+
+  lineas = ["", "### Lo que dice Apple", ""]
+  hilos.first(3).each do |hilo|
+    begin
+      motivos = hilo.fetch_rejection_reasons
+      (motivos || []).first(5).each do |m|
+        titulo = (m.respond_to?(:title) && m.title) || (m.respond_to?(:reason) && m.reason)
+        lineas << "- **#{titulo}**" if lleno?(titulo)
+      end
+    rescue StandardError
+      # Que no se puedan leer los motivos no impide leer los mensajes,
+      # que es donde Apple suele explicarse de verdad.
+      nil
+    end
+
+    begin
+      (hilo.fetch_messages || []).last(3).each do |m|
+        texto = (m.respond_to?(:message_body) && m.message_body) || (m.respond_to?(:body) && m.body)
+        next unless lleno?(texto)
+        # Viene en inglés y puede ser largo; se recorta para el resumen.
+        recorte = texto.to_s.strip.gsub(/\s+/, " ")
+        recorte = "#{recorte[0, 400]}…" if recorte.length > 400
+        lineas << "  > #{recorte}"
+      end
+    rescue StandardError => e
+      lineas << "  (no se han podido leer los mensajes de este hilo: #{e.message})"
+    end
+  end
+  lineas << ""
+  lineas << "Contestar a esto hay que hacerlo desde la web de Apple; por aquí solo se lee."
+  lineas
+end
+
+def en_cristiano_envio(estado)
+  {
+    "READY_FOR_REVIEW" => "preparado pero SIN mandar todavía",
+    "WAITING_FOR_REVIEW" => "mandado, en la cola de Apple",
+    "IN_REVIEW" => "Apple lo está revisando",
+    "UNRESOLVED_ISSUES" => "devuelto con pegas por resolver",
+    "CANCELING" => "retirándose",
+    "COMPLETING" => "terminándose",
+    "COMPLETE" => "terminado"
+  }.fetch(estado.to_s, "estado «#{estado}»")
+end
+
+def en_cristiano_build(procesado, en_testflight)
+  case procesado.to_s
+  when "PROCESSING" then return "Apple todavía la está procesando"
+  when "FAILED", "INVALID" then return "Apple la rechazó al procesarla"
+  end
+  case en_testflight.to_s
+  when "IN_BETA_TESTING", "READY_FOR_BETA_TESTING"
+    "procesada y disponible en TestFlight"
+  when "READY_FOR_BETA_SUBMISSION"
+    "procesada; en TestFlight para probadores internos"
+  when "WAITING_FOR_BETA_REVIEW"
+    "esperando la revisión de TestFlight para probadores externos"
+  when "IN_BETA_REVIEW"
+    "en revisión de TestFlight para probadores externos"
+  when "BETA_REJECTED"
+    "rechazada para TestFlight externo"
+  when "EXPIRED"
+    "caducada: TestFlight ya no la reparte"
+  when "MISSING_EXPORT_COMPLIANCE"
+    "a falta de contestar la pregunta del cifrado (export compliance) en la web"
+  else
+    "procesada"
+  end
+end
