@@ -61,6 +61,22 @@ export function abrir() {
         await borrarBase();
         db = await abrirCon();
       }
+      // Un almacén nuevo en una base que ya tenía datos: lo que va en
+      // él ya existe en el servidor desde ANTES de que este móvil
+      // supiera guardarlo. La marca de sincronización va por delante
+      // de esas filas y, si se dejara, no se pedirían nunca (le pasó a
+      // Andrea en noviembre de 2026 con las entregas: la app vieja
+      // sincronizó tras el despliegue, tiró lo que no conocía y
+      // adelantó la marca; la nueva se encontró el almacén vacío). Se
+      // borra la marca y la siguiente sincronización baja todo otra
+      // vez: lo repetido se funde sin daño.
+      if (habiaAlgo) {
+        await new Promise((resolve) => {
+          const tx = db.transaction('meta', 'readwrite');
+          tx.objectStore('meta').delete('ultimoSync');
+          tx.oncomplete = tx.onerror = tx.onabort = () => resolve();
+        });
+      }
     }
     // Si otra pestaña necesita subir la versión, esta suelta la base
     // para no bloquearla; la siguiente operación la reabre.

@@ -1921,11 +1921,26 @@ function sinBlobs(registro) {
 }
 
 /* Arranque del motor: pendientes al abrir y reintento periódico. */
+/**
+ * Una resincronización completa, de una sola vez por móvil. Se cambia
+ * el nombre cuando hace falta que todos los móviles vuelvan a bajarlo
+ * todo: en noviembre de 2026, los que ya tenían la app instalada
+ * crearon el almacén de entregas con la marca de sincronización por
+ * delante de las fichas precargadas, y el calendario les salía vacío
+ * (lo cazó Andrea). db.js lo evita de ahí en adelante al crear un
+ * almacén nuevo; esto recoge a los que ya habían pasado por ahí.
+ */
+const RESINCRONIZACION = 'entregas-2026-11';
+
 export async function arrancarSync() {
   // El directorio primero: si se pintara la primera pantalla sin él,
   // las bolitas saldrían con iniciales y cambiarían a foto al segundo.
   await cargarPersonas();
   await refrescarPendientes();
+  if ((await db.meta.get('resincronizacion')) !== RESINCRONIZACION) {
+    await db.meta.del('ultimoSync');
+    await db.meta.set('resincronizacion', RESINCRONIZACION);
+  }
   estadoSync.ultimo = await db.meta.get('ultimoSync');
   avisar();
   sincronizar();

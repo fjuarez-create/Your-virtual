@@ -1930,9 +1930,20 @@ function servir_medio(string $id): void
 function cambios(): void
 {
     exigir_sesion();
-    $desde = iso($_GET['desde'] ?? null, '1970-01-01T00:00:00.000Z');
-    if (($_GET['desde'] ?? '') === '') {
-        $desde = '1970-01-01T00:00:00.000Z';
+    // La marca «desde»: la app manda la que le dio el servidor (ISO con
+    // milisegundos), pero quien pruebe la API a mano manda lo que sea
+    // («2026-11-09T12:00:00Z»). Antes, lo que no casara con el formato
+    // exacto se tomaba en silencio como «desde el principio» y la
+    // respuesta parecía ignorar el parámetro (lo vio Andrea en
+    // noviembre de 2026). Ahora se admite cualquier fecha ISO 8601 y lo
+    // que no sea una fecha es un 400 con su motivo.
+    $crudo = trim((string) ($_GET['desde'] ?? ''));
+    $desde = '1970-01-01T00:00:00.000Z';
+    if ($crudo !== '') {
+        $desde = marca_normalizada($crudo);
+        if ($desde === null) {
+            responder_error(400, "La marca «desde» no es una fecha ISO 8601: {$crudo}", 'formato');
+        }
     }
 
     // Directorio ligero del equipo: nombre y versión de la foto. Sin
@@ -2031,6 +2042,28 @@ function cambios(): void
         // si cambia con una bajada en marcha, el móvil se entera igual.
         'arranque'    => marca_de_arranque(),
     ]);
+}
+
+/**
+ * Una marca de tiempo del cliente en el formato de la casa
+ * («2026-11-09T12:00:00.000Z», UTC con milisegundos), venga como
+ * venga: sin milisegundos, con zona horaria («+01:00»), con espacio en
+ * vez de T… Si no es una fecha, null.
+ */
+function marca_normalizada(string $valor): ?string
+{
+    if (preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/', $valor)) {
+        return $valor;
+    }
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}/', $valor)) {
+        return null;
+    }
+    try {
+        $fecha = new DateTimeImmutable($valor, new DateTimeZone('UTC'));
+    } catch (Throwable $e) {
+        return null;
+    }
+    return $fecha->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s.v\Z');
 }
 
 /** El sello del último arranque limpio. Vacío si nunca se ha hecho. */
