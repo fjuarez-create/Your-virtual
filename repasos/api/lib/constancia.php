@@ -19,7 +19,9 @@
  * Qué NO viaja nunca al modelo: compradores, autores, gremios,
  * empresas, fechas ni el número de la vivienda. Tampoco los
  * identificadores de la base: cada repaso va con una clave corta (r1,
- * r2…) que solo vale para esa llamada.
+ * r2…) que solo vale para esa llamada. Y de cada foto, solo la imagen:
+ * sin la fecha de la toma, la posición ni el modelo del móvil que el
+ * fichero pueda llevar por dentro.
  *
  * OJO con el diccionario de la casa: por dentro, la tabla `tareas`
  * guarda REPASOS y su columna `zona` guarda la ESTANCIA. Las «zonas»
@@ -94,6 +96,21 @@ const CONSTANCIA_COLETILLA = ' Asimismo, terminación del resto de puntos anotad
 /** El apartado entero cuando el modelo no ha escrito nada para él. */
 const CONSTANCIA_GENERICO = 'Repasos de terminación y acabado de los puntos anotados en el registro de seguimiento.';
 
+/**
+ * Las empresas que llevan cada gremio en la obra. El servidor no guarda
+ * el catálogo de gremios (vive en el cliente, js/catalog.js, GREMIOS →
+ * `empresa`), y una empresa puede no tener a nadie con cuenta: sin esta
+ * lista, el buscador de nombres propios no la conocería. Se buscan
+ * enteras, como frase, igual que la empresa de un usuario.
+ *
+ * OJO: es una copia a mano. Si cambia una empresa en js/catalog.js, se
+ * cambia aquí también.
+ */
+const CONSTANCIA_EMPRESAS_DE_GREMIOS = [
+    'Insiste', 'Aluvidrio', 'Railing Canarias', 'Samony', 'Octavio Guerra', 'Cisneros',
+    'Cardona Cubas', 'Construegraf', 'Zurita', 'Felipe', 'Jordán', 'Willian',
+];
+
 /** Lo que se deja viajar de cada texto: de sobra para un repaso, corto para un abuso. */
 const CONSTANCIA_TOPE_ANOTACION = 1000;
 const CONSTANCIA_TOPE_NOTA = 600;
@@ -153,6 +170,25 @@ function constancia_existe_vivienda(string $unidad): bool
         }
     }
     return false;
+}
+
+/**
+ * El cuerpo JSON de la petición, siempre como matriz. El `cuerpo()` de
+ * la casa (lib/nucleo.php) devuelve tal cual lo que venga, y con un
+ * JSON válido que no es ni objeto ni lista —un número, una cadena
+ * entre comillas, un `true`— revienta por su tipo de retorno y la ruta
+ * contesta un 500. Aquí eso vale lo mismo que un cuerpo vacío o roto:
+ * nada. El día que `cuerpo()` lo aguante, esto puede volver a llamarlo.
+ */
+function constancia_cuerpo(): array
+{
+    static $datos = null;
+    if ($datos === null) {
+        $crudo = file_get_contents('php://input');
+        $leido = is_string($crudo) && $crudo !== '' ? json_decode($crudo, true) : null;
+        $datos = is_array($leido) ? $leido : [];
+    }
+    return $datos;
 }
 
 /** La puerta de las cinco rutas: permiso, tablas y vivienda, por ese orden. */
@@ -499,7 +535,8 @@ function constancia_donde_esta(array $palabras, array $frase): int
 
 /**
  * Lo que no debería aparecer en el papel: cada palabra de cuatro
- * letras o más del nombre de cualquier usuario, y cada empresa entera.
+ * letras o más del nombre de cualquier usuario, y cada empresa entera
+ * —las de los usuarios y las que llevan cada gremio en la obra—.
  * Se miran todos los usuarios, también los dados de baja: su nombre
  * sigue en los repasos que anotaron.
  */
@@ -511,6 +548,12 @@ function constancia_nombres_de_la_casa(): array
     }
     $palabras = [];
     $frases = [];
+    foreach (CONSTANCIA_EMPRESAS_DE_GREMIOS as $empresa) {
+        $frase = array_column(constancia_palabras($empresa), 'llana');
+        if ($frase !== []) {
+            $frases[implode(' ', $frase)] = $frase;
+        }
+    }
     $stmt = bd()->prepare('SELECT nombre, empresa FROM usuarios');
     $stmt->execute();
     foreach ($stmt->fetchAll() as $u) {
@@ -1000,12 +1043,273 @@ function constancia_tipo_de_imagen(string $bytes): string
     return '';
 }
 
+/* ─── Metadatos de las fotos ─────────────────────────────────────────
+   Una foto puede llevar por dentro la fecha y la hora de la toma, la
+   posición GPS, el modelo del móvil y hasta un comentario. La app casi
+   siempre los pierde al recomprimir, pero cuando la foto ya es pequeña
+   sube la original tal cual. Al modelo no viajan fechas ni nada que
+   diga qué vivienda es, así que antes de mandar una foto se le quita
+   todo lo que no sea imagen.
+
+   Se hace recorriendo el fichero trozo a trozo y copiando solo los que
+   pintan —sin recomprimir: los píxeles no cambian— y sin depender de
+   ninguna extensión de PHP. Es una lista de lo que se deja, no de lo
+   que se quita: lo desconocido no pasa. Y si el fichero no se deja
+   recorrer de principio a fin, no se manda. */
+
+/** Un JPEG sin metadatos: fuera APP1…APP15 y COM, y lo que cuelgue detrás del final. */
+function constancia_jpeg_sin_metadatos(string $b): ?string
+{
+    $n = strlen($b);
+    if ($n < 4 || $b[0] !== "\xFF" || $b[1] !== "\xD8") {
+        return null;
+    }
+    $limpio = "\xFF\xD8";
+    $i = 2;
+    while ($i < $n) {
+        if ($b[$i] !== "\xFF") {
+            return null;
+        }
+        while ($i < $n && $b[$i] === "\xFF") {
+            $i++;   // un marcador puede venir con relleno delante
+        }
+        if ($i >= $n) {
+            return null;
+        }
+        $marca = ord($b[$i]);
+        $i++;
+        if ($marca === 0xD9) {
+            // Fin de la imagen. Lo que haya detrás (vídeos pegados,
+            // colas del fabricante) no es imagen y no viaja.
+            return $limpio . "\xFF\xD9";
+        }
+        $conocida = ($marca >= 0xC0 && $marca <= 0xCF) || ($marca >= 0xDA && $marca <= 0xEF) || $marca === 0xFE;
+        if (!$conocida || $i + 2 > $n) {
+            return null;
+        }
+        $largo = (ord($b[$i]) << 8) | ord($b[$i + 1]);
+        if ($largo < 2 || $i + $largo > $n) {
+            return null;
+        }
+        $trozo = substr($b, $i, $largo);
+        $i += $largo;
+
+        if ($marca === 0xE0) {
+            // APP0: solo la cabecera JFIF de toda la vida.
+            $dejar = strncmp(substr($trozo, 2), "JFIF\0", 5) === 0 || strncmp(substr($trozo, 2), "JFXX\0", 5) === 0;
+        } elseif ($marca === 0xEE) {
+            // APP14 de Adobe: doce bytes que dicen cómo van los colores.
+            // Sin ellos la foto se vería con los colores cambiados.
+            $dejar = $largo === 14 && strncmp(substr($trozo, 2), 'Adobe', 5) === 0;
+        } else {
+            // APP1…APP15 (EXIF, XMP, IPTC, perfiles, miniaturas) y COM, fuera.
+            $dejar = !(($marca >= 0xE1 && $marca <= 0xEF) || $marca === 0xFE);
+        }
+        if ($dejar) {
+            $limpio .= "\xFF" . chr($marca) . $trozo;
+        }
+
+        if ($marca === 0xDA) {
+            // Detrás del inicio de un barrido van los datos de la imagen,
+            // hasta el siguiente marcador de verdad (FF00 y los de
+            // reinicio son parte de los datos).
+            $desde = $i;
+            while (true) {
+                $p = strpos($b, "\xFF", $i);
+                if ($p === false || $p + 1 >= $n) {
+                    return null;   // se acaba sin marca de fin: está cortado
+                }
+                $sigue = ord($b[$p + 1]);
+                if ($sigue === 0x00 || ($sigue >= 0xD0 && $sigue <= 0xD7)) {
+                    $i = $p + 2;
+                } elseif ($sigue === 0xFF) {
+                    $i = $p + 1;
+                } else {
+                    $i = $p;
+                    break;
+                }
+            }
+            $limpio .= substr($b, $desde, $i - $desde);
+        }
+    }
+    return null;
+}
+
+/** Un PNG sin metadatos: solo los trozos que pintan (ni textos, ni fecha, ni EXIF, ni perfiles). */
+function constancia_png_sin_metadatos(string $b): ?string
+{
+    $dejar = ['IHDR', 'PLTE', 'IDAT', 'IEND', 'tRNS', 'gAMA', 'cHRM', 'sRGB', 'sBIT', 'bKGD', 'pHYs', 'acTL', 'fcTL', 'fdAT'];
+    $n = strlen($b);
+    $limpio = substr($b, 0, 8);
+    $i = 8;
+    $primero = true;
+    while ($i + 12 <= $n) {
+        $largo = (ord($b[$i]) << 24) | (ord($b[$i + 1]) << 16) | (ord($b[$i + 2]) << 8) | ord($b[$i + 3]);
+        $tipo = substr($b, $i + 4, 4);
+        if ($largo > $n - $i - 12 || preg_match('/^[A-Za-z]{4}$/', $tipo) !== 1 || ($primero && $tipo !== 'IHDR')) {
+            return null;
+        }
+        $primero = false;
+        if (in_array($tipo, $dejar, true)) {
+            $limpio .= substr($b, $i, 12 + $largo);
+        } elseif (ctype_upper($tipo[0])) {
+            return null;   // un trozo imprescindible que no se conoce: no se sabe limpiar
+        }
+        $i += 12 + $largo;
+        if ($tipo === 'IEND') {
+            return $limpio;
+        }
+    }
+    return null;
+}
+
+/** Dónde acaba una ristra de subbloques de un GIF (cada uno dice cuánto mide; el de cero cierra). */
+function constancia_gif_fin_de_subbloques(string $b, int $i): ?int
+{
+    $n = strlen($b);
+    while ($i < $n) {
+        $largo = ord($b[$i]);
+        $i += 1 + $largo;
+        if ($largo === 0) {
+            return $i;
+        }
+    }
+    return null;
+}
+
+/** Un GIF sin metadatos: fuera los comentarios, el texto y las extensiones de aplicación que no sean el bucle. */
+function constancia_gif_sin_metadatos(string $b): ?string
+{
+    $n = strlen($b);
+    if ($n < 13) {
+        return null;
+    }
+    $i = 13 + ((ord($b[10]) & 0x80) ? 3 * (1 << ((ord($b[10]) & 0x07) + 1)) : 0);
+    if ($i > $n) {
+        return null;
+    }
+    $limpio = substr($b, 0, $i);
+    while ($i < $n) {
+        $clase = ord($b[$i]);
+        $desde = $i;
+        if ($clase === 0x3B) {
+            return $limpio . ';';
+        }
+        if ($clase === 0x2C) {
+            // Una imagen: su cabecera, su paleta si la trae y sus datos.
+            if ($i + 10 > $n) {
+                return null;
+            }
+            $paleta = (ord($b[$i + 9]) & 0x80) ? 3 * (1 << ((ord($b[$i + 9]) & 0x07) + 1)) : 0;
+            $fin = constancia_gif_fin_de_subbloques($b, $i + 10 + $paleta + 1);
+            $dejar = true;
+        } elseif ($clase === 0x21 && $i + 2 <= $n) {
+            $etiqueta = ord($b[$i + 1]);
+            $fin = constancia_gif_fin_de_subbloques($b, $i + 2);
+            // Se quedan el control de cada fotograma y el aviso de
+            // bucle; el comentario, el texto y lo demás (XMP), fuera.
+            $dejar = $etiqueta === 0xF9
+                || ($etiqueta === 0xFF && in_array(substr($b, $i + 2, 12), ["\x0BNETSCAPE2.0", "\x0BANIMEXTS1.0"], true));
+        } else {
+            return null;
+        }
+        if ($fin === null || $fin > $n) {
+            return null;
+        }
+        if ($dejar) {
+            $limpio .= substr($b, $desde, $fin - $desde);
+        }
+        $i = $fin;
+    }
+    return null;
+}
+
+/** Un WebP sin metadatos: fuera EXIF, XMP y perfil de color, y la cabecera deja de anunciarlos. */
+function constancia_webp_sin_metadatos(string $b): ?string
+{
+    $dejar = ['VP8X', 'VP8 ', 'VP8L', 'ALPH', 'ANIM', 'ANMF'];
+    $n = strlen($b);
+    if ($n < 20) {
+        return null;
+    }
+    $leer = static fn (int $en): int => ord($b[$en]) | (ord($b[$en + 1]) << 8) | (ord($b[$en + 2]) << 16) | (ord($b[$en + 3]) << 24);
+    $fin = 8 + $leer(4);
+    if ($fin > $n) {
+        return null;
+    }
+    $trozos = '';
+    $i = 12;
+    while ($i + 8 <= $fin) {
+        $tipo = substr($b, $i, 4);
+        $largo = $leer($i + 4);
+        if ($largo > $fin - $i - 8) {
+            return null;
+        }
+        if (in_array($tipo, $dejar, true)) {
+            $trozo = substr($b, $i, 8 + $largo) . (($largo & 1) ? "\0" : '');
+            if ($tipo === 'VP8X') {
+                if ($largo < 10) {
+                    return null;
+                }
+                // Las banderas de «llevo perfil», «llevo EXIF» y «llevo XMP».
+                $trozo[8] = chr(ord($trozo[8]) & 0xD3);
+            }
+            $trozos .= $trozo;
+        }
+        $i += 8 + $largo + ($largo & 1);
+    }
+    if ($trozos === '') {
+        return null;
+    }
+    $total = 4 + strlen($trozos);
+    return 'RIFF' . chr($total & 0xFF) . chr(($total >> 8) & 0xFF) . chr(($total >> 16) & 0xFF) . chr(($total >> 24) & 0xFF)
+        . 'WEBP' . $trozos;
+}
+
+/**
+ * La foto sin nada que no sea imagen, o null si no se ha podido limpiar
+ * con garantías: el fichero no se deja recorrer, o lo que queda ya no
+ * es la misma imagen (mismo tipo y mismas medidas). Lo que no se puede
+ * limpiar no se manda.
+ */
+function constancia_sin_metadatos(string $bytes, string $mime): ?string
+{
+    switch ($mime) {
+        case 'image/jpeg':
+            $limpio = constancia_jpeg_sin_metadatos($bytes);
+            break;
+        case 'image/png':
+            $limpio = constancia_png_sin_metadatos($bytes);
+            break;
+        case 'image/gif':
+            $limpio = constancia_gif_sin_metadatos($bytes);
+            break;
+        case 'image/webp':
+            $limpio = constancia_webp_sin_metadatos($bytes);
+            break;
+        default:
+            $limpio = null;
+    }
+    if ($limpio === null || $limpio === '' || constancia_tipo_de_imagen($limpio) !== $mime) {
+        return null;
+    }
+    $antes = @getimagesizefromstring($bytes);
+    $despues = @getimagesizefromstring($limpio);
+    if (!is_array($antes) || !is_array($despues) || (int) $antes[0] < 1 || (int) $antes[1] < 1
+        || array_slice($antes, 0, 3) !== array_slice($despues, 0, 3)) {
+        return null;
+    }
+    return $limpio;
+}
+
 /**
  * Lee una foto del disco para mandarla a mirar. La ruta es la que
  * guarda la base, nunca algo de la petición, y aun así se comprueba que
  * no se sale de la carpeta de medios. Devuelve null —y la foto se da
- * por saltada— si el fichero falta, está vacío, pesa demasiado o por
- * dentro no es JPEG, PNG, GIF ni WebP, diga lo que diga su extensión.
+ * por saltada— si el fichero falta, está vacío, pesa demasiado, por
+ * dentro no es JPEG, PNG, GIF ni WebP (diga lo que diga su extensión) o
+ * no se deja limpiar de metadatos. Lo que devuelve va ya limpio: sin
+ * fecha de la toma, sin posición, sin modelo de móvil.
  */
 function constancia_leer_foto(string $ruta): ?array
 {
@@ -1029,7 +1333,11 @@ function constancia_leer_foto(string $ruta): ?array
     if ($mime === '') {
         return null;
     }
-    return ['mime' => $mime, 'b64' => base64_encode($bytes)];
+    $limpia = constancia_sin_metadatos($bytes, $mime);
+    if ($limpia === null) {
+        return null;
+    }
+    return ['mime' => $mime, 'b64' => base64_encode($limpia)];
 }
 
 /**
@@ -1069,7 +1377,7 @@ function mirar_constancia(string $unidad): void
 {
     constancia_entrar($unidad);
 
-    $medios = cuerpo()['medios'] ?? null;
+    $medios = constancia_cuerpo()['medios'] ?? null;
     if (!is_array($medios) || count($medios) < 1 || count($medios) > CONSTANCIA_FOTOS_POR_LOTE) {
         responder_error(400, 'Las fotos se miran de una a seis cada vez.', 'formato');
     }
@@ -1175,7 +1483,7 @@ function mirar_constancia(string $unidad): void
 function redactar_constancia(string $unidad): void
 {
     $yo = constancia_entrar($unidad);
-    $cuerpo = cuerpo();
+    $cuerpo = constancia_cuerpo();
     $sinFotos = booleano($cuerpo, 'sinFotos');
     $forzar = booleano($cuerpo, 'forzar');
 
@@ -1305,7 +1613,7 @@ function constancia_previo(array $borrador, array $material): array
 function ajustar_constancia(string $unidad): void
 {
     $yo = constancia_entrar($unidad);
-    $cuerpo = cuerpo();
+    $cuerpo = constancia_cuerpo();
     $fila = constancia_fila($unidad, $cuerpo['id'] ?? null);
     $sobran = max(0, min(200, entero($cuerpo, 'sobran')));
 
@@ -1392,7 +1700,7 @@ function ajustar_constancia(string $unidad): void
 function sellar_constancia(string $unidad): void
 {
     $yo = constancia_entrar($unidad);
-    $fila = constancia_fila($unidad, cuerpo()['id'] ?? null);
+    $fila = constancia_fila($unidad, constancia_cuerpo()['id'] ?? null);
     $material = constancia_material($unidad);
 
     $ahora = ahora_iso();

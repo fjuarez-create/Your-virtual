@@ -996,6 +996,10 @@ function claude_mirar_fotos(array $fotos): array
  * de un notario. Los párrafos de ejemplo son los de tres documentos de
  * verdad, escritos a mano antes de que existiera esta función, sin
  * nada que diga de qué vivienda eran.
+ *
+ * Las notas del hilo de cada repaso viajan en `notas`, y en un hilo se
+ * discute: por eso se dice expresamente que de ellas solo se toma el
+ * trabajo que queda por hacer, nunca el comentario ni quién lo hizo.
  */
 function claude_instrucciones_constancia(): string
 {
@@ -1019,8 +1023,8 @@ reprochan: «defecto», «desperfecto», «daño», «dañado», «roto», «rot
 «urgente», «sucio», «manchado», «torcido», «incorrecto». Tampoco le quites
 importancia a nada: sin «leve», «pequeño», «mínimo», «simple», «meramente
 estético», «sin importancia», ni afirmaciones de que algo no afecta al uso, a la
-seguridad o a la habitabilidad. Ni promesas ni plazos: el documento ya dice en
-otro apartado cómo se coordinan los trabajos.
+seguridad, a la habitabilidad o a la entrega. Ni promesas ni plazos: el
+documento ya dice en otro apartado cómo se coordinan los trabajos.
 
 QUÉ ENTRA. Todo repaso del registro es una actuación pendiente: los «pendiente»
 y los «rechazado» (para estos, redacta lo que falta según `motivoRechazo`, no la
@@ -1068,8 +1072,10 @@ estén anotadas. No inventes actuaciones, fechas, plazos, compromisos, causas,
 materiales, soluciones técnicas ni gravedad. No uses lenguaje coloquial ni
 diminutivos. No declares la vivienda terminada ni incluyas fórmulas de
 aceptación, conformidad o renuncia. No nombres personas, operarios, empresas ni
-marcas, ni atribuyas culpas. No des cifras ni el número total de repasos. No
-menciones trabajos ya hechos.
+marcas, ni atribuyas culpas. No traslades al texto comentarios internos, juicios
+de valor, discusiones ni quién dijo qué: de las notas toma solo qué trabajo
+queda por hacer. No des cifras ni el número total de repasos. No menciones
+trabajos ya hechos.
 
 FISURAS, GRIETAS, HUMEDADES Y FILTRACIONES. No presupongas que una fisura es
 estructural ni que es superficial, y no la conviertas en un simple repaso de
