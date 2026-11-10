@@ -5,6 +5,8 @@
  * calendario de Ezequiel y visitas de cortesía ya hechas. La aplica
  * api/lib/precarga.php una sola vez por versión y solo rellena lo que
  * esté vacío. Es un PHP mudo: devuelve el array y no imprime nada.
+ * «correcciones» enmienda una ficha que la propia precarga puso con dos
+ * apellidos (10-11-2026): lleva la huella de lo que había, no el nombre.
  * Fuentes: contratos de compraventa (Drive), calendario de firmas del
  * 29-10-2026 y correos de la DF y del comercial, cruzados y
  * confirmados por Fran el 6-11-2026.
@@ -18,6 +20,15 @@ return array (
     array (
       'empresa' => 'gilmar',
       'nombre' => 'ezequiel',
+    ),
+  ),
+  'correcciones' => 
+  array (
+    0 => 
+    array (
+      'unidadId' => 'brassie:13',
+      'compradoresEra' => '16afd7f6634477d1d1fd321e0844ad458c9018e37f8d27711981167b2e77bec8',
+      'compradores' => 'Eucarpio Guzmán y Dunia Esther Domínguez',
     ),
   ),
   'entregas' => 
@@ -117,7 +128,7 @@ return array (
     11 => 
     array (
       'unidadId' => 'brassie:13',
-      'compradores' => 'Eucarpio Guzmán Díaz y Dunia Esther Domínguez',
+      'compradores' => 'Eucarpio Guzmán y Dunia Esther Domínguez',
       'firma' => '',
       'revision' => '',
       'revisionHora' => '',

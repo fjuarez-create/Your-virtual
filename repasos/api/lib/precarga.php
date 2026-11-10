@@ -21,7 +21,18 @@
  *       [ 'unidadId' => 'brassie:02', 'compradores' => 'Dolores Montesdeoca',
  *         'firma' => '2026-10-20', 'revision' => '2026-10-15', 'revisionHora' => '',
  *         'revisadaEn' => '2026-10-15T18:00:00.000Z' ],   // la visita ya se hizo
+ *       … ],
+ *     'correcciones' => [                              (opcional)
+ *       [ 'unidadId' => 'brassie:13', 'compradoresEra' => '<sha256 de lo que había>',
+ *         'compradores' => 'Nombre Apellido' ],
  *       … ] ]
+ *
+ * Las correcciones son la única excepción al «solo rellena»: cambian
+ * unos compradores que la propia precarga puso mal. Para no volver a
+ * escribir en un repositorio público justo lo que se quiere quitar, la
+ * regla no lleva el valor viejo sino su huella: solo se corrige si lo
+ * guardado sigue siendo exactamente aquello. Lo que alguien haya
+ * escrito después desde la app no se toca.
  */
 declare(strict_types=1);
 
@@ -57,9 +68,11 @@ function precarga_entregas_al_dia(PDO $pdo): void
             return;   // la tabla llega en el siguiente arranque; se vuelve a intentar
         }
         $n = precarga_aplicar($pdo, $datos);
+        $corregidas = precarga_corregir($pdo, is_array($datos['correcciones'] ?? null) ? $datos['correcciones'] : []);
         $comerciales = precarga_comerciales($pdo, $datos['comerciales'] ?? []);
         revision_meta($pdo, 'precarga_entregas', $huella);
         error_log("UNIK Works · precarga de entregas {$datos['version']} aplicada: {$n} ficha(s) tocada(s)"
+            . ($corregidas ? "; {$corregidas} corregida(s)" : '')
             . ($comerciales ? '; con el chip comercial: ' . implode(', ', $comerciales) : '') . '.');
     } catch (Throwable $e) {
         // Una precarga torcida no puede tumbar la app: se apunta y sigue.
@@ -157,6 +170,41 @@ function precarga_aplicar(PDO $pdo, array $datos): int
         $tocadas++;
     }
     return $tocadas;
+}
+
+/**
+ * Corrige compradores que la precarga puso mal (ver la cabecera). Cada
+ * regla dice la vivienda, la huella sha256 de lo que había y lo que
+ * tiene que haber. Si lo guardado ya no es aquello —alguien lo cambió
+ * desde la app, o ya se corrigió—, no hace nada. El hecho se sella con
+ * el ahora para que todos los móviles se bajen el nombre corregido.
+ * Devuelve cuántas fichas ha corregido.
+ */
+function precarga_corregir(PDO $pdo, array $reglas): int
+{
+    $corregidas = 0;
+    $leer = $pdo->prepare('SELECT compradores FROM entregas WHERE id = ?');
+    $poner = $pdo->prepare('UPDATE entregas SET compradores = ?, compradores_fijados_en = ?, actualizado = ? WHERE id = ?');
+    foreach ($reglas as $regla) {
+        if (!is_array($regla)) {
+            continue;
+        }
+        $unidad = trim((string) ($regla['unidadId'] ?? ''));
+        $era = strtolower(trim((string) ($regla['compradoresEra'] ?? '')));
+        $nuevo = mb_substr(trim((string) ($regla['compradores'] ?? '')), 0, 160);
+        if (!es_unidad($unidad) || !preg_match('/^[0-9a-f]{64}$/', $era) || $nuevo === '') {
+            continue;
+        }
+        $leer->execute([$unidad]);
+        $guardado = $leer->fetchColumn();
+        if ($guardado === false || !hash_equals($era, hash('sha256', (string) $guardado))) {
+            continue;
+        }
+        $ahora = ahora_iso();
+        $poner->execute([$nuevo, $ahora, $ahora, $unidad]);
+        $corregidas++;
+    }
+    return $corregidas;
 }
 
 /**

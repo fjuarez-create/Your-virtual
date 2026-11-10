@@ -111,7 +111,11 @@ function cuerpo(): array
     static $datos = null;
     if ($datos === null) {
         $crudo = file_get_contents('php://input');
-        $datos = $crudo === '' ? [] : (json_decode($crudo, true) ?: []);
+        // Un JSON válido que no es objeto ni lista (un número, una cadena
+        // suelta, «true») cuenta como cuerpo vacío. Antes se devolvía tal
+        // cual y la ruta reventaba con un 500 por el tipo de retorno.
+        $leido = is_string($crudo) && $crudo !== '' ? json_decode($crudo, true) : null;
+        $datos = is_array($leido) ? $leido : [];
     }
     return $datos;
 }
