@@ -56,6 +56,53 @@ function hay_suscripciones_push(): bool
     return $hay;
 }
 
+/* ═══ Las que ya figuraban como entregadas ════════════════════════ */
+
+/**
+ * Hasta el 10-11-2026 la app daba una vivienda por entregada en cuanto
+ * llegaba el día de su firma. Desde ese día lo dicen el comercial o el
+ * administrador. Para no obligarles a marcar una a una las que ya
+ * figuraban como entregadas, las que firmaron ANTES de ese día se dan
+ * por entregadas aquí, una sola vez (marca en `meta`), con el día de
+ * su firma. Las de ese día en adelante esperan a que alguien lo diga.
+ * Cualquiera se puede deshacer después desde la app.
+ */
+const ENTREGADAS_DE_ANTES_HASTA = '2026-11-10';
+
+function entregas_de_antes_al_dia(PDO $pdo): void
+{
+    try {
+        if (revision_meta($pdo, 'entregadas_de_antes') === ENTREGADAS_DE_ANTES_HASTA) {
+            return;
+        }
+        if (!in_array('entregada_en', esquema_columnas($pdo, 'entregas'), true)) {
+            return;   // la columna llega en el siguiente arranque; se vuelve a intentar
+        }
+        $filas = $pdo->prepare(
+            "SELECT id, firma FROM entregas
+              WHERE borrada = 0 AND firma <> '' AND firma < ? AND entregada_en = '' AND entregada_fijada_en = ''"
+        );
+        $filas->execute([ENTREGADAS_DE_ANTES_HASTA]);
+        $poner = $pdo->prepare(
+            'UPDATE entregas
+                SET entregada_en = ?, entregada_fijada_en = ?, entregada_por = NULL, entregada_por_nombre = ?, actualizado = ?
+              WHERE id = ?'
+        );
+        $ahora = ahora_iso();
+        $cuantas = 0;
+        foreach ($filas->fetchAll() as $f) {
+            // A mediodía: es el mismo día en Canarias y en la Península.
+            $poner->execute([$f['firma'] . 'T12:00:00.000Z', $ahora, 'Precarga', $ahora, $f['id']]);
+            $cuantas++;
+        }
+        revision_meta($pdo, 'entregadas_de_antes', ENTREGADAS_DE_ANTES_HASTA);
+        error_log("UNIK Works · {$cuantas} vivienda(s) que firmaron antes del " . ENTREGADAS_DE_ANTES_HASTA . ' quedan como entregadas.');
+    } catch (Throwable $e) {
+        // No puede tumbar la app: se apunta y se vuelve a intentar.
+        error_log('UNIK Works · entregadas de antes: ' . $e->getMessage());
+    }
+}
+
 /* ═══ Validación de campos ════════════════════════════════════════ */
 
 /** Un día suelto «AAAA-MM-DD» que exista de verdad, o vacío. */
@@ -103,6 +150,9 @@ const ENTREGA_HECHOS = [
     'revision'    => ['sello' => 'revision_fijada_en', 'campos' => ['revision', 'revision_hora'], 'autor' => 'revision_por'],
     'firma'       => ['sello' => 'firma_fijada_en', 'campos' => ['firma'], 'autor' => 'firma_por'],
     'revisada'    => ['sello' => 'revisada_fijada_en', 'campos' => ['revisada_en'], 'autor' => 'revisada_por'],
+    // Que la vivienda se ha entregado no lo dice la fecha de la firma:
+    // lo dice el comercial o el administrador (Fran, 10-11-2026).
+    'entregada'   => ['sello' => 'entregada_fijada_en', 'campos' => ['entregada_en'], 'autor' => 'entregada_por'],
 ];
 
 /** Lo que manda el cliente para cada sello, en camelCase. */
@@ -111,6 +161,7 @@ const ENTREGA_SELLOS_CLIENTE = [
     'revision'    => 'revisionFijadaEn',
     'firma'       => 'firmaFijadaEn',
     'revisada'    => 'revisadaFijadaEn',
+    'entregada'   => 'entregadaFijadaEn',
 ];
 
 /** Una marca ISO venga como venga; si no vale, ahora. */
@@ -197,6 +248,7 @@ function guardar_entregas(): void
             'revision_hora' => entrega_hora($e['revisionHora'] ?? ''),
             'firma'         => entrega_fecha($e['firma'] ?? ''),
             'revisada_en'   => entrega_sello($e['revisadaEn'] ?? ''),
+            'entregada_en'  => entrega_sello($e['entregadaEn'] ?? ''),
         ];
         // Una hora sin fecha no significa nada.
         if ($llega['revision'] === '') {
@@ -276,6 +328,10 @@ function entrega_salida(array $f): array
         'revisadaFijadaEn' => (string) ($f['revisada_fijada_en'] ?? ''),
         'revisadaPor' => $f['revisada_por'] ?? null,
         'revisadaPorNombre' => (string) ($f['revisada_por_nombre'] ?? ''),
+        'entregadaEn' => (string) ($f['entregada_en'] ?? ''),
+        'entregadaFijadaEn' => (string) ($f['entregada_fijada_en'] ?? ''),
+        'entregadaPor' => $f['entregada_por'] ?? null,
+        'entregadaPorNombre' => (string) ($f['entregada_por_nombre'] ?? ''),
         'borrada' => (int) ($f['borrada'] ?? 0) === 1,
         'creado' => $f['creado'], 'actualizado' => $f['actualizado'],
         'creadoPor' => $f['creado_por'] ?? null,
@@ -367,6 +423,17 @@ function entregas_aviso(?array $antes, array $ahora, array $yo, int $momento): ?
         return ['autor' => is_string($id) && es_uuid($id) ? $id : null, 'quien' => nombre_de_pila($nombre)];
     };
     $base = ['ruta' => $ruta, 'etiqueta' => 'entrega-' . $ahora['unidad_id']];
+
+    // Entregada: es el hecho que cierra la ficha, y manda sobre los demás.
+    if ((string) ($antes['entregada_en'] ?? '') === '' && (string) ($ahora['entregada_en'] ?? '') !== '') {
+        ['autor' => $base['autor'], 'quien' => $quien] = $autor('entregada');
+        return $base + [
+            'titulo' => "{$villa} · entregada",
+            'texto' => $compradores !== ''
+                ? "{$quien} ha apuntado la entrega de llaves a {$compradores}."
+                : "{$quien} ha apuntado la entrega de llaves.",
+        ];
+    }
 
     $revisadaAntes = (string) ($antes['revisada_en'] ?? '');
     if ($revisadaAntes === '' && $ahora['revisada_en'] !== '') {

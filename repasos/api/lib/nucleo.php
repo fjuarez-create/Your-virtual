@@ -79,6 +79,10 @@ function bd(): PDO
         // meta, y cuando ya está aplicada no toca la base de datos.
         require_once __DIR__ . '/precarga.php';
         precarga_entregas_al_dia($pdo);
+
+        // Y, una sola vez, las viviendas que firmaron antes de que
+        // «entregada» fuera algo que se marca a mano (ver entregas.php).
+        entregas_de_antes_al_dia($pdo);
     }
     return $pdo;
 }

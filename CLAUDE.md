@@ -40,6 +40,15 @@ Y una quinta, de noviembre de 2026:
   `constancias`, las rutas `constancias/…`, `js/constancia.js` y
   `js/pdfConstancia.js`.
 
+Y una regla sobre una palabra que ya existía:
+
+- **Entregada**: una vivienda está entregada cuando lo apuntan el
+  comercial o el administrador («La vivienda se ha entregado», en la
+  hoja de fechas). NUNCA se deduce de la fecha de la firma: una firma
+  prevista para hoy, o para ayer, no es una vivienda entregada (lo
+  decidió Fran el 10-11-2026). Por dentro es el hecho `entregadaEn` de
+  la ficha de entrega.
+
 OJO, la trampa que no hay que pisar: **por dentro, la tabla `tareas`,
 la ruta `#/tareas/…` y los nombres de código (`crearTarea`,
 `tareaId`…) guardan REPASOS**. Son identificadores que ya viven en

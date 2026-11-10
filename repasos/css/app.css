@@ -3808,3 +3808,16 @@ body.es-taller::before {
 .d-nota-interna-repaso .grow { flex: 1; min-width: 0; }
 .d-nota-interna-repaso .grow > span:first-child { display: block; overflow-wrap: anywhere; }
 .d-nota-interna-repaso .chev { width: 18px; height: 18px; flex: none; color: var(--d-gris); opacity: .7; }
+
+/* ─── El calendario también deja poner fechas (comercial y administrador) ───
+   En la tarjeta de cada visita, una bola más con el calendario abre la
+   hoja de fechas de esa vivienda; debajo del calendario, un botón para
+   ponérselas a cualquier otra. Quien no pone fechas no ve ninguno. */
+.d-dia-bola.fechas { background: var(--d-tinta); box-shadow: none; color: #fff; }
+.d-cal-poner {
+  display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%;
+  min-height: 54px; margin-top: 16px; padding: 0 18px; border-radius: 999px;
+  background: #fff; box-shadow: inset 0 0 0 1.5px var(--d-beige); color: var(--d-tinta);
+  font-size: 15px; line-height: 20px;
+}
+.d-cal-poner svg { width: 20px; height: 20px; flex: none; }

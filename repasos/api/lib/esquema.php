@@ -29,8 +29,11 @@ declare(strict_types=1);
     La 17 trae el reconocimiento de repasos pendientes de una vivienda
     (por dentro, constancia): la tabla `constancias` (una fila por
     redacción) y la tabla `miradas` (lo que la IA vio en cada foto,
-    para pagarlo una sola vez). */
-const ESQUEMA_VERSION = 17;
+    para pagarlo una sola vez).
+    La 18 añade a la ficha de entrega el hecho «entregada»: que la
+    vivienda se ha entregado lo dicen el comercial o el administrador,
+    no la fecha de la firma (lo pidió Fran el 10-11-2026). */
+const ESQUEMA_VERSION = 18;
 
 /**
  * Tablas que tienen que existir para dar la versión por puesta. Si
@@ -85,6 +88,15 @@ const ESQUEMA_CAMPOS = [
     ],
     'medios' => [
         'comentario_id' => 'CHAR(36) DEFAULT NULL',
+    ],
+    'entregas' => [
+        // «La vivienda se ha entregado»: cuándo, cuándo se apuntó y
+        // quién lo apuntó. Vacío = no entregada, tenga la firma la
+        // fecha que tenga.
+        'entregada_en'         => "CHAR(24) NOT NULL DEFAULT ''",
+        'entregada_fijada_en'  => "CHAR(24) NOT NULL DEFAULT ''",
+        'entregada_por'        => 'CHAR(36) DEFAULT NULL',
+        'entregada_por_nombre' => "VARCHAR(120) NOT NULL DEFAULT ''",
     ],
     'reuniones' => [
         // El acta que sale de la grabación: el resumen ya aceptado y,

@@ -281,6 +281,9 @@ const HECHOS_ENTREGA = [
   { sello: 'revisionFijadaEn', campos: ['revision', 'revisionHora'], autor: 'revisionPor' },
   { sello: 'firmaFijadaEn', campos: ['firma'], autor: 'firmaPor' },
   { sello: 'revisadaFijadaEn', campos: ['revisadaEn'], autor: 'revisadaPor' },
+  // Que la vivienda se ha entregado lo dicen el comercial o el
+  // administrador, no la fecha de la firma (Fran, 10-11-2026).
+  { sello: 'entregadaFijadaEn', campos: ['entregadaEn'], autor: 'entregadaPor' },
 ];
 
 /**
@@ -348,6 +351,7 @@ function entregaVacia(unidadId, promoId) {
     revisionFijadaEn: '', revisionPor: null, revisionPorNombre: '',
     firmaFijadaEn: '', firmaPor: null, firmaPorNombre: '',
     revisadaFijadaEn: '', revisadaPor: null, revisadaPorNombre: '',
+    entregadaEn: '', entregadaFijadaEn: '', entregadaPor: null, entregadaPorNombre: '',
     borrada: false,
     creado: ahora(), actualizado: ahora(),
     creadoPor: usuario?.id || 'local',
@@ -396,6 +400,21 @@ export async function marcarRevisionHecha(unidadId, promoId) {
 /** Marcada por error: se quita el sello. Los partes abiertos se quedan. */
 export async function deshacerRevisionHecha(unidadId, promoId) {
   return fijarEntrega(unidadId, promoId, { revisadaEn: '' });
+}
+
+/**
+ * «La vivienda se ha entregado»: lo apuntan el comercial o el
+ * administrador cuando de verdad se han dado las llaves. La fecha de
+ * la firma no lo decide: una firma prevista para hoy no es todavía una
+ * vivienda entregada.
+ */
+export async function marcarEntregada(unidadId, promoId) {
+  return fijarEntrega(unidadId, promoId, { entregadaEn: ahora() });
+}
+
+/** Marcada por error: la vivienda vuelve a estar sin entregar. */
+export async function deshacerEntregada(unidadId, promoId) {
+  return fijarEntrega(unidadId, promoId, { entregadaEn: '' });
 }
 
 /**
@@ -1470,6 +1489,7 @@ export async function datosHome(promoId) {
     if (e.revision && e.revisionFijadaEn) hecho('revision', e.revisionFijadaEn, e.revisionPorNombre, e.revisionPor);
     if (e.firma && e.firmaFijadaEn) hecho('firma', e.firmaFijadaEn, e.firmaPorNombre, e.firmaPor);
     if (e.revisadaEn) hecho('revisada', e.revisadaEn, e.revisadaPorNombre, e.revisadaPor);
+    if (e.entregadaEn) hecho('entregada', e.entregadaEn, e.entregadaPorNombre, e.entregadaPor);
   }
   muro.sort((a, b) => (b.cuando || '').localeCompare(a.cuando || ''));
 
@@ -1935,9 +1955,10 @@ const normalizarEntrega = (e) => ({
   ...e, borrada: bool(e.borrada),
   compradores: typeof e.compradores === 'string' ? e.compradores : '',
   revision: e.revision || '', revisionHora: e.revisionHora || '',
-  firma: e.firma || '', revisadaEn: e.revisadaEn || '',
+  firma: e.firma || '', revisadaEn: e.revisadaEn || '', entregadaEn: e.entregadaEn || '',
   compradoresFijadosEn: e.compradoresFijadosEn || '', revisionFijadaEn: e.revisionFijadaEn || '',
   firmaFijadaEn: e.firmaFijadaEn || '', revisadaFijadaEn: e.revisadaFijadaEn || '',
+  entregadaFijadaEn: e.entregadaFijadaEn || '',
 });
 const normalizarMedio = (m) => ({
   ...m, subido: true, borrada: bool(m.borrada),

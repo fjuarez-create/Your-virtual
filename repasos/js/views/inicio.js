@@ -147,6 +147,13 @@ export async function render() {
           h('strong', null, E.fechaConDia(v.revision)), v.revisionHora ? ` · ${v.revisionHora}` : ''),
       };
     }
+    if (n.hecho === 'entregada') {
+      return {
+        chip: 'Entregada',
+        texto: h('p.d-nota-texto', null, 'Ha apuntado la entrega de la vivienda',
+          v.compradores ? ` a ${v.compradores}` : '', '.'),
+      };
+    }
     if (n.hecho === 'firma') {
       return {
         chip: 'Firma',

@@ -14,16 +14,28 @@
               compradores, la otra fecha de la casa y quién la fijó.
 
    Tocar un día del mes o una tarjeta de la semana abre ese día; en el
-   día, la bola lleva a la ficha de la villa. Las fechas las pone
-   Ezequiel (o el administrador) desde la ficha de cada vivienda; aquí
-   solo se miran. La vista y la fecha viajan en la dirección, así que
-   atrás vuelve a donde se estaba y un enlace copiado abre lo mismo. */
+   día, la bola de la flecha lleva a la ficha de la villa.
+
+   Las fechas las ponen Ezequiel y el administrador, y también desde
+   aquí (al principio el calendario solo dejaba mirar, y el comercial
+   no encontraba dónde cambiarlas): en el día, la bola del calendario
+   de cada tarjeta abre la hoja de fechas de esa vivienda, y debajo del
+   calendario hay un botón para poner fechas a cualquier otra. El resto
+   del equipo no ve ni la bola ni el botón.
+
+   «Entregada» es lo que han apuntado ellos dos, no lo que diga la
+   fecha: una firma con el día ya pasado y sin esa marca sale como
+   «Firma / entrega · sin confirmar».
+
+   La vista y la fecha viajan en la dirección, así que atrás vuelve a
+   donde se estaba y un enlace copiado abre lo mismo. */
 import { h, icon, avatar } from '../ui.js';
 import * as store from '../store.js';
-import { PROMOCIONES } from '../catalog.js';
+import { PROMOCIONES, puedePonerFechas } from '../catalog.js';
 import { cabecera, avisoLocal, barraSync } from '../piezas.js';
-import { ir, anotarRuta } from '../app.js';
+import { ir, anotarRuta, refrescar } from '../app.js';
 import * as E from '../entregas.js';
+import { hojaFechas, hojaFechasDeOtra } from '../hojaEntrega.js';
 
 const VISTAS = [
   { id: 'mes', rotulo: 'Mes', unidad: 'Mes' },
@@ -56,6 +68,10 @@ export async function render() {
   if (!p) { ir('#/promociones', { reemplazar: true }); return { contenido: [] }; }
 
   const hoy = E.hoyIso();
+  // Quien pone fechas (el comercial y el administrador) también las
+  // pone desde aquí. Al guardar se repinta la pantalla, que vuelve a
+  // la misma vista y al mismo día porque van en la dirección.
+  const poneFechas = puedePonerFechas(store.sesion());
   const entregas = await store.entregasDePromo(p.id);
   const incidencias = await store.incidenciasPorUnidad(p.id);
   const hitos = E.hitosDe(entregas, { incidencias, hoy });
@@ -171,6 +187,8 @@ export async function render() {
   );
   const rotuloLargo = (e) => {
     if (e.tipo === 'incidencia') return `Entregada · ${e.incidencias} ${e.incidencias === 1 ? 'incidencia' : 'incidencias'}`;
+    // La fecha de la firma ya pasó y nadie ha dicho si se entregó.
+    if (e.tipo === 'firma' && e.sinConfirmar) return `${E.HITOS.firma.largo} · sin confirmar`;
     return E.HITOS[e.tipo].largo + (e.hora ? ` · ${e.hora}` : '');
   };
 
@@ -214,7 +232,9 @@ export async function render() {
   /* Quién lo fijó y cuándo, para el pie de la tarjeta. */
   const quienLoFijo = (e) => {
     const v = e.entrega;
-    const [id, nombre, cuando, verbo] = e.tipo === 'revisada'
+    const [id, nombre, cuando, verbo] = e.tipo === 'entregada' || e.tipo === 'incidencia'
+      ? [v.entregadaPor, v.entregadaPorNombre, v.entregadaFijadaEn || v.entregadaEn, 'la dio por entregada']
+      : e.tipo === 'revisada'
       ? [v.revisadaPor, v.revisadaPorNombre, v.revisadaEn, 'la dio por hecha']
       : e.tipo === 'revision'
         ? [v.revisionPor, v.revisionPorNombre, v.revisionFijadaEn, 'la fijó']
@@ -227,7 +247,9 @@ export async function render() {
       texto: `${pila} ${verbo}${dia ? ` el ${E.partes(dia).d} ${E.fechaBanner(dia).split(' ').pop()}` : ''}`,
     };
   };
-  const chipTexto = (e) => (e.tipo === 'incidencia' ? 'Entregada con incidencias' : E.HITOS[e.tipo].largo);
+  const chipTexto = (e) => (e.tipo === 'incidencia' ? 'Entregada con incidencias'
+    : e.tipo === 'firma' && e.sinConfirmar ? `${E.HITOS.firma.largo} · sin confirmar`
+      : E.HITOS[e.tipo].largo);
   const villasDe = (iso) => {
     const vs = [...new Set((porDia.get(iso) || []).map((e) => e.nombre))].sort();
     return vs.length > 1 ? `${vs.slice(0, -1).join(', ')} y ${vs[vs.length - 1]}` : vs[0] || '';
@@ -278,6 +300,10 @@ export async function render() {
         h('div.d-dia-pie', null,
           quien ? avatar(quien.persona, { tam: 36 }) : null,
           h('span.d-dia-quien', null, quien ? quien.texto : ''),
+          poneFechas ? h('button.d-dia-bola.fechas', {
+            'aria-label': `Cambiar las fechas de la ${e.nombre} o apuntar su entrega`,
+            onclick: () => hojaFechas({ unidadId: e.unidadId, promoId: p.id, nombre: e.nombre, entrega: e.entrega, alCambiar: refrescar }),
+          }, icon('calendario')) : null,
           h('button.d-dia-bola', {
             'aria-label': `Abrir la ficha de la ${e.nombre}`,
             onclick: () => ir(`#/p/${p.id}/v/${nn}`),
@@ -300,6 +326,9 @@ export async function render() {
       h('div.d-cal-fila', null, atras, titulo, adelante),
       sub,
       cuerpo,
+      poneFechas ? h('button.d-cal-poner', {
+        onclick: () => hojaFechasDeOtra({ promoId: p.id, entregas, alCambiar: refrescar }),
+      }, icon('calendario'), h('span', null, 'Poner o cambiar las fechas de una vivienda')) : null,
     ],
   };
 }

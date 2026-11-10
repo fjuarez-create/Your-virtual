@@ -128,13 +128,18 @@ export function semanaRelativa(iso, desde = hoyIso()) {
 /**
  * Lo que dice el banner de la ficha, en orden de prioridad:
  *
- *   incidencias   firmada y con repasos del parte post-entrega sin
+ *   incidencias   entregada y con repasos del parte post-entrega sin
  *                 verificar (rojo)
- *   entregada     firmada, sin incidencias (negro)
+ *   entregada     entregada, sin incidencias (negro)
  *   revisada      la revisión con el cliente ya se hizo (verde suave)
  *   revision      hay revisión fijada y aún no se ha hecho (beige)
  *   firma         solo hay firma (beige)
  *   sin-fechas    la ficha está vacía (solo la ve quien pone fechas)
+ *
+ * ENTREGADA es lo que han apuntado el comercial o el administrador
+ * (`entregadaEn`), nunca lo que diga la fecha de la firma: una firma
+ * prevista para hoy, o para ayer, no es una vivienda entregada hasta
+ * que alguien lo dice (Fran, 10-11-2026).
  *
  * `incidencias` es el número de repasos del parte post-entrega sin
  * visto bueno. Devuelve null si no hay nada que decir.
@@ -143,21 +148,22 @@ export function situacion(entrega, { incidencias = 0, hoy = hoyIso() } = {}) {
   const e = entrega || {};
   const chipFirma = e.firma ? { icono: 'key', texto: `Firma el ${fechaConDia(e.firma)}`, clase: 'negro' } : null;
 
-  if (e.firma && e.firma <= hoy) {
+  if (e.entregadaEn) {
+    const dia = e.firma || diaDeEntrega(e);
     if (incidencias > 0) {
       return {
         clave: 'incidencias', clase: 'rojo', icono: 'periodico',
         rotulo: 'Entregada con incidencias',
         cifra: `${incidencias} por resolver`,
-        sub: { icono: 'key', texto: `Firmada el ${fechaConDia(e.firma)}`, clase: '' },
-        aria: `Entregada el ${fechaConDia(e.firma)} con ${incidencias} ${incidencias === 1 ? 'repaso' : 'repasos'} del parte post-entrega sin verificar`,
+        sub: { icono: 'key', texto: `Entregada el ${fechaConDia(dia)}`, clase: '' },
+        aria: `Entregada el ${fechaConDia(dia)} con ${incidencias} ${incidencias === 1 ? 'repaso' : 'repasos'} del parte post-entrega sin verificar`,
       };
     }
     return {
       clave: 'entregada', clase: 'negro', icono: 'periodico',
-      rotulo: 'Entregada', cifra: fechaBanner(e.firma),
+      rotulo: 'Entregada', cifra: fechaBanner(dia),
       sub: { icono: 'check', texto: 'Sin incidencias', clase: '' },
-      aria: `Entregada el ${fechaConDia(e.firma)}, sin incidencias`,
+      aria: `Entregada el ${fechaConDia(dia)}, sin incidencias`,
     };
   }
   if (e.revisadaEn) {
@@ -189,6 +195,14 @@ export function situacion(entrega, { incidencias = 0, hoy = hoyIso() } = {}) {
   return null;
 }
 
+/** El día en que se apuntó la entrega («2026-11-10»), o '' si no está entregada. */
+export function diaDeEntrega(entrega) {
+  const cuando = entrega?.entregadaEn;
+  if (!cuando) return '';
+  const d = new Date(cuando);
+  return Number.isNaN(d.getTime()) ? '' : isoDe(d);
+}
+
 /* ─── Los hitos del calendario ───────────────────────────────── */
 /**
  * Los tipos de hito, con sus palabras. `chip` es la clase del
@@ -207,8 +221,13 @@ const ORDEN_HITO = { revisada: 0, revision: 1, firma: 2, entregada: 3, incidenci
 
 /**
  * Los hitos de todas las entregas: uno por revisión (hecha o
- * prevista) y uno por firma (prevista o ya pasada). `incidencias` es
- * el mapa unidadId → repasos post-entrega sin verificar.
+ * prevista) y uno por firma o entrega. `incidencias` es el mapa
+ * unidadId → repasos post-entrega sin verificar.
+ *
+ * La firma es «entregada» solo si alguien lo ha apuntado. Una firma
+ * con la fecha ya pasada y sin esa marca sigue siendo una firma, y
+ * lleva `sinConfirmar` para que quien pone fechas vea que le falta
+ * decir si se entregó.
  */
 export function hitosDe(entregas, { incidencias = new Map(), hoy = hoyIso() } = {}) {
   const hitos = [];
@@ -224,10 +243,11 @@ export function hitosDe(entregas, { incidencias = new Map(), hoy = hoyIso() } = 
     } else if (e.revisadaEn) {
       hitos.push({ ...base, dia: isoDe(new Date(e.revisadaEn)), tipo: 'revisada' });
     }
-    if (e.firma) {
-      const pasada = e.firma <= hoy;
+    if (e.entregadaEn) {
       const n = incidencias.get(e.unidadId) || 0;
-      hitos.push({ ...base, dia: e.firma, tipo: !pasada ? 'firma' : n > 0 ? 'incidencia' : 'entregada', incidencias: n });
+      hitos.push({ ...base, dia: e.firma || diaDeEntrega(e), tipo: n > 0 ? 'incidencia' : 'entregada', incidencias: n });
+    } else if (e.firma) {
+      hitos.push({ ...base, dia: e.firma, tipo: 'firma', incidencias: 0, sinConfirmar: e.firma < hoy });
     }
   }
   return hitos;

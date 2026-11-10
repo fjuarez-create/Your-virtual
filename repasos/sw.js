@@ -39,6 +39,7 @@ const CODIGO = [
   'js/ejemplos.js',
   'js/catalog.js',
   'js/entregas.js',
+  'js/hojaEntrega.js',
   'js/push.js',
   'js/informe.js',
   'js/pdf.js',
