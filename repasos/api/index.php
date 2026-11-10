@@ -16,6 +16,7 @@ require __DIR__ . '/lib/claude.php';
 require __DIR__ . '/lib/oido.php';
 require __DIR__ . '/lib/voces.php';
 require_once __DIR__ . '/lib/entregas.php';   // «once»: la precarga también lo carga
+require __DIR__ . '/lib/constancia.php';
 
 /**
  * Tipos admitidos y extensión con la que se guardan. Las funciones se
@@ -384,6 +385,29 @@ function despachar(string $metodo, array $p): void
             }
         }
         responder_error(404, 'Ruta de obra desconocida.');
+    }
+
+    // El reconocimiento de repasos pendientes de una vivienda (por
+    // dentro, constancia). La vivienda va en la ruta y todas pasan por
+    // exigir_constancia(): está todo en lib/constancia.php.
+    if ($r0 === 'constancias' && isset($p[1]) && !isset($p[3])) {
+        $unidad = rawurldecode($p[1]);
+        $accion = $p[2] ?? '';
+        if ($accion === '' && $metodo === 'GET') {
+            ver_constancia($unidad);
+        }
+        if ($accion === 'mirar' && $metodo === 'POST') {
+            mirar_constancia($unidad);
+        }
+        if ($accion === 'redactar' && $metodo === 'POST') {
+            redactar_constancia($unidad);
+        }
+        if ($accion === 'ajustar' && $metodo === 'POST') {
+            ajustar_constancia($unidad);
+        }
+        if ($accion === 'sellar' && $metodo === 'POST') {
+            sellar_constancia($unidad);
+        }
     }
 
     responder_error(404, 'Ruta desconocida.');
@@ -1761,7 +1785,7 @@ function arranque_limpio(): void
         responder_error(500, 'Sin copia previa no se borra nada.', 'disco');
     }
 
-    $tablas = ['tareas', 'listas', 'comentarios', 'medios', 'encargos', 'adjuntos', 'grabaciones', 'reuniones', 'mensajes', 'lecturas'];
+    $tablas = ['tareas', 'listas', 'comentarios', 'medios', 'encargos', 'adjuntos', 'grabaciones', 'reuniones', 'mensajes', 'lecturas', 'constancias', 'miradas'];
     $borrado = [];
     $pdo = bd();
     foreach ($tablas as $t) {

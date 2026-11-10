@@ -289,3 +289,41 @@ CREATE TABLE IF NOT EXISTS suscripciones_push (
   actualizado TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_suscripciones_usuario ON suscripciones_push (usuario_id);
+
+-- El reconocimiento de repasos pendientes (por dentro, constancia):
+-- una fila por redacción, con el borrador de la IA y el texto que se
+-- imprime en JSON. No viaja en la sincronización.
+CREATE TABLE IF NOT EXISTS constancias (
+  id                    TEXT NOT NULL PRIMARY KEY,
+  unidad_id             TEXT NOT NULL,
+  promo_id              TEXT NOT NULL,
+  huella                TEXT NOT NULL,
+  registro              TEXT NOT NULL DEFAULT '',
+  borrador              TEXT NOT NULL,
+  texto                 TEXT NOT NULL,
+  ajustado              INTEGER NOT NULL DEFAULT 0,
+  descargas             INTEGER NOT NULL DEFAULT 0,
+  descargado_en         TEXT,
+  descargado_por_nombre TEXT NOT NULL DEFAULT '',
+  gasto_entrada         INTEGER NOT NULL DEFAULT 0,
+  gasto_salida          INTEGER NOT NULL DEFAULT 0,
+  modelo                TEXT NOT NULL DEFAULT '',
+  borrada               INTEGER NOT NULL DEFAULT 0,
+  creado                TEXT NOT NULL,
+  actualizado           TEXT NOT NULL,
+  creado_por            TEXT,
+  creado_por_nombre     TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS ix_constancias_unidad ON constancias (unidad_id, actualizado);
+
+-- Lo que la IA vio en cada foto de un repaso, para pagarlo una vez.
+CREATE TABLE IF NOT EXISTS miradas (
+  medio_id  TEXT NOT NULL PRIMARY KEY,
+  tarea_id  TEXT NOT NULL,
+  texto     TEXT NOT NULL,
+  discrepa  INTEGER NOT NULL DEFAULT 0,
+  saltada   INTEGER NOT NULL DEFAULT 0,
+  modelo    TEXT NOT NULL DEFAULT '',
+  creado    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_miradas_tarea ON miradas (tarea_id);

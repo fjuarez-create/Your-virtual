@@ -336,3 +336,53 @@ CREATE TABLE IF NOT EXISTS suscripciones_push (
   PRIMARY KEY (id),
   KEY ix_suscripciones_usuario (usuario_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ═══ El reconocimiento de repasos pendientes (por dentro, constancia) ═
+-- El documento que se descarga desde el menú de una vivienda y se
+-- firma en la notaría. Una fila por redacción. El borrador guarda lo
+-- que devolvió la IA y qué repasos dan cada actuación, y el texto lo
+-- que se imprime después del repaso del servidor. Los dos van en JSON.
+-- Los compradores NO se guardan aquí, se leen de la entrega al servir.
+-- No viaja en la sincronización, se pide en línea. OJO con las
+-- columnas de texto largo, que no llevan valor por defecto. El código
+-- les da valor siempre.
+CREATE TABLE IF NOT EXISTS constancias (
+  id                    CHAR(36)     NOT NULL,
+  unidad_id             VARCHAR(80)  NOT NULL,
+  promo_id              VARCHAR(60)  NOT NULL,
+  huella                CHAR(40)     NOT NULL,
+  registro              VARCHAR(10)  NOT NULL DEFAULT '',
+  borrador              MEDIUMTEXT   NOT NULL,
+  texto                 MEDIUMTEXT   NOT NULL,
+  ajustado              TINYINT(1)   NOT NULL DEFAULT 0,
+  descargas             INT          NOT NULL DEFAULT 0,
+  descargado_en         CHAR(24)     DEFAULT NULL,
+  descargado_por_nombre VARCHAR(120) NOT NULL DEFAULT '',
+  gasto_entrada         INT          NOT NULL DEFAULT 0,
+  gasto_salida          INT          NOT NULL DEFAULT 0,
+  modelo                VARCHAR(60)  NOT NULL DEFAULT '',
+  borrada               TINYINT(1)   NOT NULL DEFAULT 0,
+  creado                CHAR(24)     NOT NULL,
+  actualizado           CHAR(24)     NOT NULL,
+  creado_por            CHAR(36)     DEFAULT NULL,
+  creado_por_nombre     VARCHAR(120) NOT NULL DEFAULT '',
+  PRIMARY KEY (id),
+  KEY ix_constancias_unidad (unidad_id, actualizado)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Lo que la IA vio en cada foto de un repaso, para pagarlo una sola
+-- vez. Una fila por foto, con la clave de la foto. Saltada quiere
+-- decir que no se pudo mirar (el fichero falta, está vacío, pesa
+-- demasiado o no es una imagen) y se apunta igual para que el bucle
+-- no se atasque.
+CREATE TABLE IF NOT EXISTS miradas (
+  medio_id  CHAR(36)    NOT NULL,
+  tarea_id  CHAR(36)    NOT NULL,
+  texto     TEXT        NOT NULL,
+  discrepa  TINYINT(1)  NOT NULL DEFAULT 0,
+  saltada   TINYINT(1)  NOT NULL DEFAULT 0,
+  modelo    VARCHAR(60) NOT NULL DEFAULT '',
+  creado    CHAR(24)    NOT NULL,
+  PRIMARY KEY (medio_id),
+  KEY ix_miradas_tarea (tarea_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

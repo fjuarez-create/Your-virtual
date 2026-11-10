@@ -25,8 +25,12 @@ declare(strict_types=1);
     toca un dato.
     La 15 añade la prioridad de los repasos (alta o media).
     La 16 trae las entregas: la tabla `entregas`, la bandera `comercial`
-    de los usuarios y la tabla de suscripciones a los avisos push. */
-const ESQUEMA_VERSION = 16;
+    de los usuarios y la tabla de suscripciones a los avisos push.
+    La 17 trae el reconocimiento de repasos pendientes de una vivienda
+    (por dentro, constancia): la tabla `constancias` (una fila por
+    redacción) y la tabla `miradas` (lo que la IA vio en cada foto,
+    para pagarlo una sola vez). */
+const ESQUEMA_VERSION = 17;
 
 /**
  * Tablas que tienen que existir para dar la versión por puesta. Si
@@ -36,7 +40,7 @@ const ESQUEMA_VERSION = 16;
  * sellar la versión dejaría la base coja para siempre (pasó con la 13).
  * Sin sellar, la siguiente petición lo vuelve a intentar.
  */
-const ESQUEMA_TABLAS = ['entregas', 'suscripciones_push'];
+const ESQUEMA_TABLAS = ['entregas', 'suscripciones_push', 'constancias', 'miradas'];
 
 /**
  * Campos que tienen que existir, por tabla, con el tipo que usa MySQL.
