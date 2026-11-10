@@ -3752,9 +3752,14 @@ body.es-taller::before {
 
 .d-constancia-pie { margin-top: auto; padding-top: 28px; display: flex; flex-direction: column; gap: 10px; }
 
+/* En una pantalla ancha, la caja al centro. Se centra con sus márgenes
+   y no con `justify-content: center` en el velo: así, cuando la
+   ventana es más baja que la caja (un portátil pequeño, el teléfono
+   tumbado), empieza arriba y se desplaza entera. Centrada desde el
+   velo se salía por arriba y el sello y el título no se alcanzaban. */
 @media (min-width: 520px) {
-  .d-velo.d-constancia { justify-content: center; padding-top: 24px; }
-  .d-constancia-caja { flex: none; }
+  .d-velo.d-constancia { padding-top: 24px; }
+  .d-constancia-caja { flex: none; margin-top: auto; margin-bottom: auto; }
   .d-constancia-pie { margin-top: 0; }
 }
 /* En un teléfono bajito (un iPhone SE) se aprieta todo un poco, para
@@ -3774,6 +3779,12 @@ body.es-taller::before {
 @media (prefers-reduced-motion: reduce) {
   .d-constancia-paso.curso .d-constancia-marca { animation: none; }
 }
+/* El escudo: medio segundo a pantalla completa y sin nada que ver. Se
+   traga el segundo toque de quien pulsa dos veces, que si no caería en
+   lo que había debajo. Lo pone constancia.js cuando el velo se quita
+   por un toque («Cancelar», «Cerrar»), y listas.js al pulsar la tarjeta
+   negra, mientras el velo todavía no ha salido. */
+.d-constancia-escudo { position: fixed; inset: 0; z-index: 95; background: transparent; }
 
 /* ── Las filas de más de la hoja «El PDF está listo» ──
    Lo que queda a mano después de tener el papel. Más bajas y en topo,

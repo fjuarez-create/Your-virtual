@@ -49,6 +49,9 @@ const FRASES = {
   sinRepasos: 'Esta vivienda no tiene repasos pendientes ahora mismo: no hay documento que generar.',
   tarda: 'El servidor está tardando demasiado en contestar. Vuelve a intentarlo dentro de un momento.',
   sinFrase: 'El servidor no ha contestado bien (error {codigo}). Vuelve a intentarlo dentro de un momento.',
+  // Contesta, pero no es la app quien contesta: la página de entrada
+  // de un wifi con portal, un hosting a medio publicar.
+  sinRespuesta: 'El servidor no ha contestado bien. Comprueba la conexión y vuelve a intentarlo dentro de un momento.',
   // Un módulo que no llegó a bajar, hay navegadores que no lo vuelven a
   // pedir hasta que la app se abre de nuevo: por eso la segunda mitad.
   sinTaller: 'No se ha podido cargar lo necesario para montar el PDF. Comprueba la conexión y vuelve a intentarlo; si sigue igual, cierra la app y ábrela de nuevo.',
@@ -70,6 +73,19 @@ const TIPOS_DE_NOTA = {
 const FOTOS_POR_LOTE = 6;
 const LOTES_A_LA_VEZ = 3;
 
+/* El reposo: medio segundo en que un toque no cuenta. Es lo que tarda,
+   como mucho, el segundo toque de quien pulsa dos veces seguidas, y
+   ese segundo toque no debe decidir nada que nadie ha leído:
+
+   · Los botones del velo, recién pintados, todavía no atienden. En una
+     pantalla ancha el velo se recoloca al cambiar de botones y
+     «Cancelar» cae justo donde estaba «Volver a intentarlo»: el
+     segundo toque cancelaba el reintento sin decir nada.
+   · Cuando el velo se quita por un toque («Cancelar», «Cerrar»), lo
+     que hay debajo tampoco atiende: el segundo toque abría «Nueva
+     inspección» o se iba a la ficha de un repaso. */
+const REPOSO = 500;
+
 /* Un tropiezo con su frase ya escrita para quien lo lee en el velo.
    `pasoHecho` dice que el paso en que salta sí se completó —se leyó la
    vivienda— y lo que no se puede es seguir: ese paso no se marca como
@@ -84,6 +100,15 @@ class Tropiezo extends Error {
 const CANCELADO = 'cancelado';
 const esRed = (e) => e instanceof api.ApiError && e.status === 0 && e.codigo !== 'tarda' && e.codigo !== CANCELADO;
 
+/* ¿Es esto lo que contesta la app? Un 200 no lo garantiza: la página
+   de entrada de un wifi con portal o un hosting a medio publicar
+   también contestan 200, sin JSON o con uno que no es el nuestro. El
+   estado de una vivienda trae siempre `hayClave` a verdadero o a falso;
+   si no lo trae, no es que falte la clave: es que no ha contestado quien
+   debía. */
+const esObjeto = (r) => !!r && typeof r === 'object' && !Array.isArray(r);
+const esEstado = (r) => esObjeto(r) && typeof r.hayClave === 'boolean';
+
 /* ─── El velo ─────────────────────────────────────────────────── */
 /**
  * La capa a pantalla completa: cabecera, pasos con su marca, la nota
@@ -96,7 +121,12 @@ const esRed = (e) => e instanceof api.ApiError && e.status === 0 && e.codigo !==
  *   estadoDe(paso)               en qué estado está ('' si no se pinta)
  *   preguntar(frase, botones)    cambia la espera por una frase y sus
  *                                botones; resuelve con el `id` pulsado
- *   quitar()                     la retira
+ *   quitar()                     la retira; si es por un toque recién
+ *                                dado, deja un escudo que se traga el
+ *                                siguiente (ver REPOSO)
+ *
+ * Los botones del pie, recién pintados, llevan `aria-disabled` y no
+ * atienden hasta que pasa el reposo.
  */
 function montarVelo(villa, alCancelar) {
   const nodos = new Map();
@@ -123,8 +153,29 @@ function montarVelo(villa, alCancelar) {
     ),
   );
 
+  // El reposo de los botones (ver REPOSO). `reposan` manda; el
+  // `aria-disabled` lo dice hacia fuera, sin cambiarles la cara.
+  let reposan = false;
+  let relojReposo = 0;
+  let ultimoToque = -Infinity;
   const boton = (rotulo, alPulsar, claro) =>
-    h(claro ? 'button.d-boton-negro.claro' : 'button.d-boton-negro', { onclick: alPulsar }, rotulo);
+    h(claro ? 'button.d-boton-negro.claro' : 'button.d-boton-negro', {
+      onclick: () => {
+        if (reposan) return;
+        ultimoToque = performance.now();
+        alPulsar();
+      },
+    }, rotulo);
+  const ponerBotones = (botones) => {
+    clearTimeout(relojReposo);
+    reposan = true;
+    for (const b of botones) b.setAttribute('aria-disabled', 'true');
+    pie.replaceChildren(...botones);
+    relojReposo = setTimeout(() => {
+      reposan = false;
+      for (const b of botones) b.removeAttribute('aria-disabled');
+    }, REPOSO);
+  };
 
   const poner = (paso, estado, entre = '') => {
     let n = nodos.get(paso);
@@ -146,10 +197,15 @@ function montarVelo(villa, alCancelar) {
     n.rotulo.textContent = PASOS[paso] + (entre ? ` (${entre})` : '');
   };
 
+  // Si «Cancelar» ya está puesto se deja como está: pintarlo otra vez
+  // lo tendría otro medio segundo sin atender.
+  let cancelable = false;
   const trabajando = () => {
     fallo.hidden = true;
     nota.hidden = false;
-    pie.replaceChildren(boton('Cancelar', alCancelar, true));
+    if (cancelable) return;
+    cancelable = true;
+    ponerBotones([boton('Cancelar', alCancelar, true)]);
   };
 
   document.body.append(capa);
@@ -174,10 +230,23 @@ function montarVelo(villa, alCancelar) {
         fallo.classList.toggle('sereno', aviso);
         fallo.hidden = false;
         nota.hidden = true;
-        pie.replaceChildren(...botones.map((b, i) => boton(b.rotulo, () => resolver(b.id), i > 0)));
+        cancelable = false;
+        ponerBotones(botones.map((b, i) => boton(b.rotulo, () => resolver(b.id), i > 0)));
       });
     },
-    quitar: () => capa.remove(),
+    quitar() {
+      clearTimeout(relojReposo);
+      if (!capa.isConnected) return;
+      capa.remove();
+      // Si se quita por un toque recién dado, lo que queda del reposo lo
+      // cubre un escudo que no se ve: el toque siguiente se queda en él
+      // y no en lo que el velo tapaba.
+      const falta = REPOSO - (performance.now() - ultimoToque);
+      if (falta <= 0) return;
+      const escudo = h('div.d-constancia-escudo', { 'aria-hidden': 'true' });
+      document.body.append(escudo);
+      setTimeout(() => escudo.remove(), falta);
+    },
   };
 }
 
@@ -308,7 +377,8 @@ async function intentar(m) {
       throw esRed(e) ? new Tropiezo(FRASES.sinConexion) : e;
     }
     seguir();
-    if (!estado?.hayClave) {
+    if (!esEstado(estado)) throw new Tropiezo(FRASES.sinRespuesta);
+    if (!estado.hayClave) {
       throw new Tropiezo(store.esAdmin() ? FRASES.sinClaveAdmin : FRASES.sinClave, 'sin-clave', { pasoHecho: true });
     }
     if (!((estado.cuenta?.pendientes || 0) + (estado.cuenta?.rechazados || 0))) {
@@ -338,11 +408,14 @@ async function intentar(m) {
       // 5. Redactar.
       empezarPaso('redactar');
       estado = await api.constanciaRedactar(unidadId, { sinFotos: m.sinFotos, forzar: m.forzar }, { senal });
+      seguir();
+      // Si no ha contestado la app, no se ha redactado nada: se dice, y
+      // el reintento lo pide igual que ahora.
+      if (!esObjeto(estado)) throw new Tropiezo(FRASES.sinRespuesta);
       // La redacción forzada ya está hecha y pagada: si después falla
       // otra cosa, el reintento no la repite.
       m.forzar = false;
-      seguir();
-      actual = estado?.actual;
+      actual = estado.actual;
       if (!actual) throw new Tropiezo(FRASES.generica);
       velo.poner('redactar', 'hecho');
     }
@@ -358,8 +431,10 @@ async function intentar(m) {
       try {
         const ajustado = await api.constanciaAjustar(unidadId, { id: actual.id, sobran: medida.sobran }, { senal });
         seguir();
+        // Una respuesta sin documento no es un ajuste hecho: se sigue
+        // con lo que hay, como con cualquier otro fallo del ajuste.
         if (ajustado?.actual) actual = ajustado.actual;
-        velo.poner('ajustar', 'hecho');
+        velo.poner('ajustar', ajustado?.actual ? 'hecho' : 'saltado');
       } catch (e) {
         if (m.cancelada || e?.codigo === CANCELADO) throw e;
         // Los repasos han cambiado mientras tanto: se vuelve a leer la
@@ -375,7 +450,8 @@ async function intentar(m) {
     empezarPaso('pdf');
     const sellado = await api.constanciaSellar(unidadId, { id: actual.id }, { senal });
     seguir();
-    if (!sellado?.actual) throw new Tropiezo(FRASES.generica);
+    if (!esObjeto(sellado)) throw new Tropiezo(FRASES.sinRespuesta);
+    if (!sellado.actual) throw new Tropiezo(FRASES.generica);
     const doc = montarDoc(m.u, m.promo, sellado.actual, sellado.compradores);
 
     // 8. El PDF.

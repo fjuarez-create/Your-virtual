@@ -254,7 +254,28 @@ export async function render({ promoId, unidadId }) {
   cajaEscribir.addEventListener('input', () => { botonMandar.disabled = !cajaEscribir.value.trim(); });
 
   /* ─── El menú de los tres puntos: el PDF y las actas firmadas ─── */
+
+  /* La ficha de entrega tal como está AHORA, para la tarjeta negra del
+     menú: se vuelve a leer por si una sincronización ha traído fechas
+     después de pintar la pantalla. Pero el menú —que es por donde se
+     sale a todos los PDF— no puede depender de esa lectura: si la base
+     del teléfono falla, o tarda más de un cuarto de segundo porque está
+     guardando lo que acaba de bajar, se sigue con la ficha con que se
+     pintó la pantalla. No lanza nunca. */
+  const ESPERA_FICHA = 250;
+  const entregaDeAhora = () => new Promise((listo) => {
+    const reloj = setTimeout(() => listo(entrega), ESPERA_FICHA);
+    store.entregaDeUnidad(unidadId)
+      .then(listo, () => listo(entrega))
+      .finally(() => clearTimeout(reloj));
+  });
+
+  // Mientras se lee esa ficha el menú aún no está puesto, y un segundo
+  // toque en los tres puntos abriría otro encima.
+  let abriendoMenu = false;
+
   const menu = async () => {
+    if (abriendoMenu) return;
     const extra = actas.length ? h('div.d-menu-extra', null,
       h('p.d-epigrafe', null, 'Partes de la vivienda'),
       h('div.stack', { style: { gap: '8px' } },
@@ -281,11 +302,18 @@ export async function render({ promoId, unidadId }) {
        arriba del todo. Le sale solo a quien puede descargarlo (DF,
        comercial y administrador) y solo cuando la vivienda tiene fecha
        de revisión o de firma: antes de eso no hay notaría a la vista.
-       La ficha de la entrega se lee ahora y no al pintar la pantalla,
-       por si una sincronización ha traído fechas entretanto. */
-    const cuando = puedeBajarReconocimiento(store.sesion())
-      ? cuandoReconocimiento(await store.entregaDeUnidad(unidadId))
-      : '';
+       A los demás el menú les sale en el acto, sin leer nada. */
+    let cuando = '';
+    if (puedeBajarReconocimiento(store.sesion())) {
+      abriendoMenu = true;
+      try {
+        cuando = cuandoReconocimiento(await entregaDeAhora());
+      } finally {
+        // Se suelta aquí y el menú se pone a renglón seguido, sin
+        // esperas entre medias: a partir de ahí lo tapa su propio velo.
+        abriendoMenu = false;
+      }
+    }
     const destacada = cuando ? {
       id: 'reconocimiento', icono: 'documento',
       rotulo: 'Reconocimiento de repasos pendientes',
@@ -594,6 +622,14 @@ function cuandoReconocimiento(entrega, hoy = E.hoyIso()) {
  * papeles, y casi nunca.
  */
 async function bajarReconocimiento(unidadId) {
+  // El menú se acaba de quitar con un toque, y el velo de la descarga no
+  // sale hasta que baja su módulo. Entre medias, el segundo toque de
+  // quien pulsa dos veces caería en el repaso que el menú tapaba y se
+  // iría a su ficha. Medio segundo de escudo, el mismo que deja el velo
+  // cuando se quita por un toque (constancia.js, REPOSO).
+  const escudo = h('div.d-constancia-escudo', { 'aria-hidden': 'true' });
+  document.body.append(escudo);
+  setTimeout(() => escudo.remove(), 500);
   try {
     const { descargarReconocimiento } = await import('../constancia.js');
     await descargarReconocimiento({ unidadId });
