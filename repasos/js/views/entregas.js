@@ -237,7 +237,7 @@ export async function render() {
     const [id, nombre, cuando, verbo] = e.tipo === 'entregada' || e.tipo === 'incidencia'
       ? [v.entregadaPor, v.entregadaPorNombre, v.entregadaFijadaEn || v.entregadaEn, 'la dio por entregada']
       : e.tipo === 'revisada'
-      ? [v.revisadaPor, v.revisadaPorNombre, v.revisadaEn, 'la dio por hecha']
+      ? [v.revisadaPor, v.revisadaPorNombre, v.revisadaFijadaEn || v.revisadaEn, 'la dio por hecha']
       : e.tipo === 'revision'
         ? [v.revisionPor, v.revisionPorNombre, v.revisionFijadaEn, 'la fijó']
         : [v.firmaPor, v.firmaPorNombre, v.firmaFijadaEn, 'la fijó'];

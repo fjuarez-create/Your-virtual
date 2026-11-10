@@ -505,7 +505,10 @@ function entregas_aviso(?array $antes, array $ahora, array $yo, int $momento): ?
     $firmaAhora = $ahora['firma'] . '|' . (string) ($ahora['firma_hora'] ?? '');
     // En una vivienda ya entregada, corregir el día o la hora de la firma
     // es poner bien un dato del pasado: no se avisa de «firma nueva».
-    if ($ahora['firma'] !== '' && $firmaAntes !== $firmaAhora && (string) ($ahora['entregada_en'] ?? '') === '') {
+    // Salvo que la firma pase a un día que aún no ha llegado: entonces es
+    // que la marca de entregada estaba mal, y la fecha sí es noticia.
+    $esDelPasado = (string) ($ahora['entregada_en'] ?? '') !== '' && dias_hasta($ahora['firma'] !== '' ? $ahora['firma'] : '1970-01-01', $momento) <= 0;
+    if ($ahora['firma'] !== '' && $firmaAntes !== $firmaAhora && !$esDelPasado) {
         ['autor' => $base['autor'], 'quien' => $quien] = $autor('firma');
         $cuando = fecha_bonita($ahora['firma'])
             . ((string) ($ahora['firma_hora'] ?? '') !== '' ? " a las {$ahora['firma_hora']}" : '');

@@ -1503,7 +1503,11 @@ export async function datosHome(promoId) {
       tipo: 'entrega', hecho: clave, entrega: e, unidadId: e.unidadId, estado: '',
       cuando, quien: quien || 'Alguien', quienId: quienId || null, texto: '',
     });
-    if (e.revision && e.revisionFijadaEn) hecho('revision', e.revisionFijadaEn, e.revisionPorNombre, e.revisionPor);
+    // Si la fecha la movió el propio «se ha hecho» (una visita que se
+    // adelantó: mismo sello que la marca), no es una cita nueva.
+    if (e.revision && e.revisionFijadaEn && e.revisionFijadaEn !== e.revisadaFijadaEn) {
+      hecho('revision', e.revisionFijadaEn, e.revisionPorNombre, e.revisionPor);
+    }
     if (e.firma && e.firmaFijadaEn) hecho('firma', e.firmaFijadaEn, e.firmaPorNombre, e.firmaPor);
     // En el muro, cuándo se apuntó (la marca puede llevar el día de la visita).
     if (e.revisadaEn) hecho('revisada', e.revisadaFijadaEn || e.revisadaEn, e.revisadaPorNombre, e.revisadaPor);
@@ -1793,6 +1797,7 @@ async function empujar() {
         }
       } else if (item.tipo === 'mensaje') {
         const m = await db.get('mensajes', item.id);
+        mirar('mensajes', m);
         if (m) await api.subirMensajes([sinBlobs(m)]);
       } else if (item.tipo === 'entrega') {
         // En el móvil de obra entra hoy uno y mañana otro: lo que dejó

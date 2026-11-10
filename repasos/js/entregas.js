@@ -234,10 +234,18 @@ export function diaDeEntrega(entrega) {
  * fecha que todavía no ha llegado.
  */
 export function diaEntregada(entrega) {
-  const apuntada = diaDeEntrega(entrega);
-  if (!apuntada) return '';
   const firma = esDia(entrega?.firma) ? entrega.firma : '';
-  return firma && firma <= apuntada ? firma : apuntada;
+  const apuntada = diaDeEntrega(entrega);
+  // Una marca que no se deja leer como fecha: mejor la firma que nada.
+  if (!apuntada) return entrega?.entregadaEn ? firma : '';
+  // El tope es el día en que se PUSO la marca (su sello), no solo el día
+  // que lleva: a las que firmaron antes del 10-11-2026 la marca se les
+  // puso ese día con la fecha de su firma, y corregirles después la
+  // firma a otro día ya pasado tiene que mover también el «Entregada».
+  const sello = new Date(entrega.entregadaFijadaEn || entrega.entregadaEn);
+  const puesta = Number.isNaN(sello.getTime()) ? apuntada : isoDe(sello);
+  const tope = puesta > apuntada ? puesta : apuntada;
+  return firma && firma <= tope ? firma : apuntada;
 }
 
 /* ─── Los hitos del calendario ───────────────────────────────── */

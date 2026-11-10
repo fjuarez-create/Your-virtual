@@ -88,9 +88,15 @@ export async function hojaFechas({ unidadId, promoId, nombre, entrega = null, al
       await store.fijarEntrega(unidadId, promoId, { firma: dia, firmaHora: dia ? horaNueva : '' });
       toast(dia ? `Firma el ${E.fechaConDia(dia)}${horaNueva ? ` a las ${horaNueva}` : ''}` : 'Firma sin fecha', '', { icono: 'key' });
     } else if (elegido === 'hecha') {
+      // Una cita prevista para más adelante que se da por hecha hoy
+      // es una visita que se adelantó: queda con fecha de hoy. Se dice
+      // antes, porque deshacerlo después no devuelve la fecha que tenía.
+      const adelantada = E.esDia(e.revision) && e.revision > E.hoyIso();
       const seguro = await confirmar({
         titulo: '¿La revisión con el cliente se ha hecho?',
-        texto: 'Se abre el parte post-entrega para apuntar lo que haya visto el comprador, y al equipo le llega un aviso.',
+        texto: (adelantada
+          ? `Estaba prevista para el ${E.fechaConDia(e.revision)}${e.revisionHora ? ` a las ${e.revisionHora}` : ''}: quedará apuntada con fecha de hoy. `
+          : '') + 'Se abre el parte post-entrega para apuntar lo que haya visto el comprador, y al equipo le llega un aviso.',
         ok: 'Sí, se ha hecho', icono: 'check', conservar: 'Todavía no', iconoConservar: 'clock',
       });
       if (!seguro) return;
@@ -108,7 +114,7 @@ export async function hojaFechas({ unidadId, promoId, nombre, entrega = null, al
       // dedo, y un segundo toque sin querer quitaba la marca en el acto.
       const seguro = await confirmar({
         titulo: `¿Quitar la marca de revisión hecha de la ${nombre}?`,
-        texto: 'La revisión con el cliente vuelve a estar pendiente. Los partes que haya abiertos se quedan.',
+        texto: 'La revisión con el cliente vuelve a estar pendiente, con la fecha que tiene ahora puesta. Los partes que haya abiertos se quedan.',
         ok: 'Sí, quitarla', icono: 'x', conservar: 'Dejarla como está', iconoConservar: 'check',
       });
       if (!seguro) return;

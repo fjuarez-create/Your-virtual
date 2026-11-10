@@ -435,9 +435,16 @@ export function confirmar({
     /* En rojo va solo la fila que destruye, nunca las dos: el color
        marca cuál de las dos es la que no tiene vuelta atrás. Si se
        pintaran las dos, dejaría de señalar nada. */
+    /* El «sí» no atiende hasta pasado medio segundo. La pregunta nace
+       muchas veces justo donde estaba el dedo (la fila que la abre), y
+       quien toca dos o tres veces seguidas confirmaba sin haber leído
+       nada: así se quitaba una marca de «revisión hecha» con tres
+       toques. El «no» atiende siempre: equivocarse hacia atrás no
+       rompe nada. */
+    const nace = performance.now();
     const fila = (rotulo, ico, valor) => h(
       `button.d-confirmar-fila${valor && rojo ? '.roja' : ''}`,
-      { onclick: () => cerrar(valor) },
+      { onclick: () => { if (valor && performance.now() - nace < 500) return; cerrar(valor); } },
       icon(ico), h('span', null, rotulo),
     );
 
