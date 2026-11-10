@@ -1130,6 +1130,9 @@ async function bajarTipografia() {
     const direccion = new URL('../assets/fonts/liberation-sans-pdf.ttf', import.meta.url).href;
     const respuesta = await fetch(direccion);
     if (!respuesta || !respuesta.ok) return null;
+    // Solo vale la letra entera. Una descarga cortada a medias, aunque
+    // llegue como buena, cuenta como fallo: así no se guarda y la próxima
+    // vez se vuelve a pedir.
     return fuenteValida(new Uint8Array(await respuesta.arrayBuffer()));
   } catch {
     return null;
