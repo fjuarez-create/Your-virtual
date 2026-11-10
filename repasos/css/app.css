@@ -3653,3 +3653,147 @@ body.es-taller::before {
 .d-hoja-botones { display: flex; gap: 10px; margin-top: 14px; }
 .d-hoja-botones .d-boton-negro { flex: 1; }
 .d-hoja-botones .d-boton-negro.claro { background: #fff; color: var(--d-tinta); box-shadow: inset 0 0 0 1.5px var(--d-beige); }
+
+
+/* ═══ EL RECONOCIMIENTO DE REPASOS PENDIENTES ═══════════════════════
+   El papel de una vivienda que se firma en la notaría. Tres piezas:
+   la tarjeta negra del menú de los tres puntos, el velo de la
+   descarga y lo que queda a mano después (las filas de más de la
+   hoja del PDF y las notas internas).  ═══ */
+
+/* ── La opción destacada del menú de los tres puntos ──
+   Negra y arriba del todo, entre la cabecera y las filas: es el único
+   PDF de ese menú que sale de la casa. A la derecha, la bola blanca
+   de descarga. El rótulo parte en dos líneas si no cabe; nunca se
+   corta con puntos suspensivos. */
+.d-menu-destacada {
+  display: flex; align-items: center; gap: 14px; text-align: left;
+  width: calc(100% - 16px); margin: 8px 8px 10px; padding: 14px 14px 14px 16px;
+  border-radius: 18px; background: var(--d-tinta); color: #fff;
+  font: 500 17px var(--d-font);
+}
+.d-menu-destacada:active { background: #262626; }
+.d-menu-destacada > svg { width: 26px; height: 26px; flex: none; color: #fff; }
+.d-menu-destacada .grow { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.d-menu-destacada .d-menu-sub { margin-top: 0; color: rgba(255, 255, 255, .66); }
+.d-menu-destacada .bajar {
+  width: 40px; height: 40px; flex: none; border-radius: 999px;
+  background: #fff; color: var(--d-tinta); display: grid; place-items: center;
+}
+.d-menu-destacada .bajar svg { width: 22px; height: 22px; }
+
+/* ── El velo de la descarga ──
+   A pantalla completa y encima de todo mientras el servidor lee,
+   mira las fotos y redacta. El fondo de la app y, en negro, lo que
+   importa: el sello, el paso hecho y el botón de volver a intentarlo.
+   Los pasos van en su tarjeta blanca, uno debajo de otro, cada uno con
+   su marca. En el teléfono los botones caen abajo, donde llega el
+   pulgar; en una pantalla ancha todo se recoge en el centro. */
+.d-velo.d-constancia {
+  position: fixed; inset: 0; z-index: 95; overflow-y: auto;
+  background: var(--d-fondo); color: var(--d-tinta);
+  /* Es un velo de la casa (.d-velo), pero opaco: sin el desenfoque ni
+     el centrado de los que dejan ver la pantalla de debajo. */
+  -webkit-backdrop-filter: none; backdrop-filter: none; place-items: normal;
+  font-family: var(--d-font); font-weight: 500;
+  display: flex; flex-direction: column; align-items: center;
+  padding: calc(env(safe-area-inset-top) + 44px) 20px calc(env(safe-area-inset-bottom) + 24px);
+  animation: magia-entra 240ms var(--sal-estandar) both;
+}
+.d-constancia-caja { width: 100%; max-width: 440px; flex: 1 0 auto; display: flex; flex-direction: column; }
+.d-constancia-sello {
+  width: 56px; height: 56px; border-radius: 999px;
+  background: var(--d-tinta); color: #fff; display: grid; place-items: center;
+}
+.d-constancia-sello svg { width: 28px; height: 28px; }
+.d-constancia-titulo {
+  margin: 20px 0 0; font-size: 26px; line-height: 32px; font-weight: 500; letter-spacing: -0.015em;
+}
+.d-constancia-villa { margin: 6px 0 0; font-size: 17px; line-height: 24px; color: var(--d-gris); }
+
+.d-constancia-pasos {
+  list-style: none; margin: 28px 0 0; padding: 4px 16px;
+  background: #fff; border-radius: var(--d-radio);
+}
+.d-constancia-paso {
+  display: flex; align-items: center; gap: 14px; min-height: 54px; padding: 8px 0;
+  font-size: 16px; line-height: 22px; color: var(--d-gris);
+}
+.d-constancia-paso + .d-constancia-paso { border-top: 1px solid var(--d-gris-suave); }
+.d-constancia-paso.curso, .d-constancia-paso.hecho, .d-constancia-paso.fallo { color: var(--d-tinta); }
+.d-constancia-paso .grow { flex: 1; min-width: 0; }
+.d-constancia-marca {
+  width: 26px; height: 26px; flex: none; border-radius: 999px;
+  display: grid; place-items: center; color: #fff;
+  border: 2.5px solid var(--d-anillo-fondo);
+}
+.d-constancia-marca svg { width: 15px; height: 15px; }
+.d-constancia-paso.curso .d-constancia-marca { border-top-color: var(--d-tinta); animation: d-gira 0.9s linear infinite; }
+.d-constancia-paso.hecho .d-constancia-marca { border-color: var(--d-tinta); background: var(--d-tinta); }
+.d-constancia-paso.fallo .d-constancia-marca { border-color: var(--d-rojo); background: var(--d-rojo); }
+.d-constancia-paso.saltado .d-constancia-marca { background: var(--d-anillo-fondo); }
+
+.d-constancia-nota { margin: 16px 4px 0; font-size: 14px; line-height: 20px; color: var(--d-gris); }
+.d-constancia-nota[hidden], .d-constancia-fallo[hidden], .d-constancia-detalle[hidden] { display: none; }
+
+/* La frase cuando algo tropieza. El rojo, solo en el icono: la frase
+   se lee en tinta, que es como se lee todo lo que hay que entender. */
+.d-constancia-fallo {
+  display: flex; align-items: flex-start; gap: 12px;
+  margin-top: 12px; padding: 16px; border-radius: var(--d-radio); background: #fff;
+}
+.d-constancia-fallo > svg { width: 24px; height: 24px; flex: none; color: var(--d-rojo); }
+/* Cuando lo que se dice no es un fallo (no hay repasos pendientes), el
+   icono va en topo. */
+.d-constancia-fallo.sereno > svg { color: var(--d-beige-tinta); }
+.d-constancia-fallo .grow { flex: 1; min-width: 0; }
+.d-constancia-frase { margin: 0; font-size: 16px; line-height: 23px; overflow-wrap: anywhere; }
+.d-constancia-detalle { margin: 6px 0 0; font-size: 14px; line-height: 20px; font-weight: 400; color: var(--d-gris); }
+
+.d-constancia-pie { margin-top: auto; padding-top: 28px; display: flex; flex-direction: column; gap: 10px; }
+
+@media (min-width: 520px) {
+  .d-velo.d-constancia { justify-content: center; padding-top: 24px; }
+  .d-constancia-caja { flex: none; }
+  .d-constancia-pie { margin-top: 0; }
+}
+/* En un teléfono bajito (un iPhone SE) se aprieta todo un poco, para
+   que los cinco pasos y los botones quepan sin tener que desplazar. */
+@media (max-width: 519px) and (max-height: 720px) {
+  .d-velo.d-constancia { padding-top: calc(env(safe-area-inset-top) + 20px); padding-bottom: calc(env(safe-area-inset-bottom) + 16px); }
+  .d-constancia-sello { width: 44px; height: 44px; }
+  .d-constancia-sello svg { width: 22px; height: 22px; }
+  .d-constancia-titulo { margin-top: 14px; font-size: 22px; line-height: 27px; }
+  .d-constancia-villa { margin-top: 4px; font-size: 16px; line-height: 22px; }
+  .d-constancia-pasos { margin-top: 18px; }
+  .d-constancia-paso { min-height: 46px; padding: 6px 0; }
+  .d-constancia-nota { margin-top: 12px; }
+  .d-constancia-pie { padding-top: 16px; gap: 8px; }
+}
+/* Sin animaciones, el girito se queda quieto con su arco en negro. */
+@media (prefers-reduced-motion: reduce) {
+  .d-constancia-paso.curso .d-constancia-marca { animation: none; }
+}
+
+/* ── Las filas de más de la hoja «El PDF está listo» ──
+   Lo que queda a mano después de tener el papel. Más bajas y en topo,
+   para que no compitan con Compartir y Guardar. */
+.d-hoja-fila.discreta { height: 48px; font-size: 15px; color: var(--d-beige-tinta); }
+.d-hoja-fila.discreta svg { width: 20px; height: 20px; }
+
+/* ── Las notas internas del reconocimiento ──
+   En la tarjeta de los menús. Cada nota dice de qué tipo es, qué pasa
+   y a qué repasos toca; cada repaso es un botón que lleva a su ficha. */
+.d-notas-internas-aviso { margin: 0 8px 4px; font-size: 14px; line-height: 20px; color: var(--d-gris); }
+.d-nota-interna { margin: 8px 0 0; padding: 14px 8px 4px; border-top: 1px solid rgba(0, 0, 0, .07); }
+.d-nota-interna-tipo { margin: 0; font-size: 13px; line-height: 18px; font-weight: 500; color: var(--d-beige-tinta); }
+.d-nota-interna-texto { margin: 2px 0 6px; font-size: 16px; line-height: 22px; color: var(--d-tinta); }
+.d-nota-interna-repaso {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  min-height: 52px; margin-top: 6px; padding: 8px 12px 8px 14px; border-radius: 14px;
+  background: var(--d-gris-suave); font: 500 15px/20px var(--d-font); color: var(--d-tinta);
+}
+.d-nota-interna-repaso:active { background: #e6e6e6; }
+.d-nota-interna-repaso .grow { flex: 1; min-width: 0; }
+.d-nota-interna-repaso .grow > span:first-child { display: block; overflow-wrap: anywhere; }
+.d-nota-interna-repaso .chev { width: 18px; height: 18px; flex: none; color: var(--d-gris); opacity: .7; }

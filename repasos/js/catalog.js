@@ -306,6 +306,16 @@ export function puedePonerFechas(usuario) {
 }
 
 /**
+ * Quién descarga el «Reconocimiento de repasos pendientes» de una
+ * vivienda, el papel que se firma en la notaría: la dirección
+ * facultativa, el departamento comercial y el administrador. Nadie
+ * más. El servidor lo vuelve a comprobar en cada llamada.
+ */
+export function puedeBajarReconocimiento(usuario) {
+  return puedeVerificar(usuario) || puedePonerFechas(usuario);
+}
+
+/**
  * Estados que puede poner un usuario concreto.
  *
  * Verificar y rechazar son las dos caras de lo mismo —ir a la vivienda y

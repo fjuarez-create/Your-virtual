@@ -42,6 +42,12 @@ const CODIGO = [
   'js/push.js',
   'js/informe.js',
   'js/pdf.js',
+  // El reconocimiento de repasos pendientes: la descarga, su PDF y las
+  // medidas de su letra. Se cargan al pulsar la tarjeta negra, pero van
+  // aquí como todo el código: o entran con la versión, o no hay versión.
+  'js/constancia.js',
+  'js/pdfConstancia.js',
+  'js/tipografiaConstancia.js',
   'js/piezasObra.js',
   'js/grabadora.js',
   'js/views/entrar.js',
@@ -71,6 +77,9 @@ const EXTRAS = [
   // Las corporativas planas que viajan DENTRO de los PDF de reparto.
   'assets/fonts/neue-haas-pdf.ttf',
   'assets/fonts/eiko-pdf.cff',
+  // La letra del reconocimiento de repasos pendientes (17 KB). Si
+  // faltara, ese PDF sale igual con la de reserva.
+  'assets/fonts/liberation-sans-pdf.ttf',
   'assets/fonts/opensans-var.woff2',
   'assets/fonts/inter-tight-latin-400-normal.woff2',
   'assets/fonts/inter-tight-latin-500-normal.woff2',

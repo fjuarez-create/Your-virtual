@@ -271,6 +271,58 @@ export const vocesPonerClave = (clave) =>
   pedir('obra/voces/clave', { metodo: 'POST', json: { clave } });
 export const vocesQuitarClave = () => pedir('obra/voces/clave', { metodo: 'DELETE' });
 
+/* ─── El reconocimiento de repasos pendientes ─────────────────────
+   El papel de una vivienda que se firma en la notaría. En pantalla se
+   llama así; por dentro, «constancia». Va SIEMPRE en línea, como la
+   obra: lo redacta el servidor con la IA y no viaja en la
+   sincronización.
+
+   `pedir` no pone tope de tiempo, y aquí hace falta uno: redactar puede
+   pasar del minuto, pero una llamada que no contestara nunca dejaría la
+   descarga esperando para siempre. Cinco minutos y, si se pasan, se
+   dice (código `tarda`). `senal` es un AbortSignal para cancelar a
+   mitad (código `cancelado`); lo que el servidor ya haya guardado se
+   aprovecha la próxima vez. */
+const ESPERA_CONSTANCIA = 300000;
+
+async function pedirConstancia(unidadId, accion, json, { senal } = {}) {
+  const corte = new AbortController();
+  let vencida = false;
+  const reloj = setTimeout(() => { vencida = true; corte.abort(); }, ESPERA_CONSTANCIA);
+  const alCancelar = () => corte.abort();
+  if (senal?.aborted) corte.abort();
+  else senal?.addEventListener('abort', alCancelar);
+  try {
+    const ruta = 'constancias/' + encodeURIComponent(unidadId) + (accion ? '/' + accion : '');
+    return await pedir(ruta, accion
+      ? { metodo: 'POST', json: json || {}, signal: corte.signal }
+      : { signal: corte.signal });
+  } catch (e) {
+    if (senal?.aborted) throw new ApiError('Descarga cancelada', 0, 'cancelado');
+    if (vencida) throw new ApiError('El servidor está tardando demasiado en contestar.', 0, 'tarda');
+    throw e;
+  } finally {
+    clearTimeout(reloj);
+    senal?.removeEventListener('abort', alCancelar);
+  }
+}
+
+/** Cómo está la vivienda: repasos pendientes, fotos por mirar y el documento actual, si lo hay. */
+export const constanciaVer = (unidadId, opciones) =>
+  pedirConstancia(unidadId, '', null, opciones);
+/** La IA mira un lote de fotos (de una a seis) de los repasos pendientes. */
+export const constanciaMirar = (unidadId, medios, opciones) =>
+  pedirConstancia(unidadId, 'mirar', { medios }, opciones);
+/** Redacta el documento: { sinFotos, forzar }. Con los mismos repasos devuelve el que ya había. */
+export const constanciaRedactar = (unidadId, datos, opciones) =>
+  pedirConstancia(unidadId, 'redactar', datos, opciones);
+/** La segunda pasada, una sola por documento: { id, sobran } (líneas que no caben en la página). */
+export const constanciaAjustar = (unidadId, datos, opciones) =>
+  pedirConstancia(unidadId, 'ajustar', datos, opciones);
+/** Apunta la descarga: { id }. Con su respuesta se monta el PDF. */
+export const constanciaSellar = (unidadId, datos, opciones) =>
+  pedirConstancia(unidadId, 'sellar', datos, opciones);
+
 /* ─── Claude ──────────────────────────────────────────────────────
    La clave vive en el servidor y no vuelve nunca: de aquí solo sale
    si hay una puesta y sus cuatro últimos caracteres, para reconocerla. */

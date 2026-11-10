@@ -786,8 +786,13 @@ export function menuFlotante(construir, { conX = true } = {}) {
  * Las filas se pasan como datos y no como nodos, y admiten null entre
  * medias: así una opción que solo ve quien creó la tarea se escribe
  * con un `edita ? {...} : null` y no ensucia la llamada.
+ *
+ * `destacada` ({ id, icono, rotulo, sub }) es la opción que manda sobre
+ * las demás: una tarjeta negra entre la cabecera y las filas, con la
+ * bola blanca de descarga a la derecha. Resuelve el menú con su `id`,
+ * igual que una fila. Sin ella, el menú queda como siempre.
  */
-export function menuTarjeta(titulo, filas, { extra = null } = {}) {
+export function menuTarjeta(titulo, filas, { extra = null, destacada = null } = {}) {
   return new Promise((resolver) => {
     const cerrar = (valor = null) => { velo.remove(); resolver(valor); };
     const tarjeta = h('div.d-menu-tarjeta', null,
@@ -795,6 +800,13 @@ export function menuTarjeta(titulo, filas, { extra = null } = {}) {
         h('span.d-menu-titulo', null, titulo),
         h('button.d-menu-x', { 'aria-label': 'Cerrar', onclick: () => cerrar(null) }, icon('x')),
       ),
+      destacada ? h('button.d-menu-destacada', { onclick: () => cerrar(destacada.id) },
+        destacada.icono ? icon(destacada.icono) : null,
+        h('span.grow', null,
+          h('span', null, destacada.rotulo),
+          destacada.sub ? h('span.d-menu-sub', null, destacada.sub) : null),
+        h('span.bajar', null, icon('download')),
+      ) : null,
       ...filas.filter(Boolean).map((f) => h('button.d-menu-fila', {
         class: f.rojo ? 'rojo' : '',
         onclick: () => cerrar(f.id),
@@ -841,8 +853,18 @@ export function filaMenu(icono, rotulo, accion, { rojo = false } = {}) {
  * fichero ya listo, y es el toque en «Compartir» —recién dado— el que
  * abre la de iOS. Donde no hay hoja de compartir (el ordenador), se
  * descarga sin más, como siempre.
+ *
+ * `extras` es opcional y genérico: [{ icono, rotulo, accion }], lo que
+ * conviene dejar a mano cuando el papel ya está —leer unas notas,
+ * repetirlo—. En el teléfono van en la misma hoja, debajo de las dos
+ * filas de siempre y más discretas. En el ordenador, tras la descarga,
+ * sale una hoja pequeña «PDF descargado» con esas filas y «Cerrar».
+ * Al tocar una, la hoja se quita y su `accion` recibe `volver`, que la
+ * pone otra vez (sin descargar de nuevo): quien abre unas notas y las
+ * cierra no se queda sin haber compartido el PDF. Sin `extras` no cambia
+ * nada de lo de arriba.
  */
-export function entregarFichero(fichero, nombre) {
+export function entregarFichero(fichero, nombre, { extras } = {}) {
   const bajar = () => {
     const url = URL.createObjectURL(fichero);
     const enlace = h('a', { href: url, download: nombre, style: { display: 'none' } });
@@ -851,11 +873,25 @@ export function entregarFichero(fichero, nombre) {
     setTimeout(() => { enlace.remove(); URL.revokeObjectURL(url); }, 4000);
     toast('PDF descargado', '', { icono: 'documento', detalle: nombre });
   };
+  const deMas = (extras || []).filter(Boolean);
+  const filasDeMas = (cerrar, volver, clase = '') => deMas.map((x) => {
+    const fila = filaMenu(x.icono, x.rotulo, () => { cerrar(); x.accion?.(volver); });
+    if (clase) fila.classList.add(clase);
+    return fila;
+  });
   if (!navigator.canShare?.({ files: [fichero] })) {
     bajar();
+    if (deMas.length) {
+      const hojaDescargado = () => menuFlotante((cerrar) => [
+        h('p.d-hoja-titulo', null, 'PDF descargado'),
+        ...filasDeMas(cerrar, hojaDescargado),
+        filaMenu('x', 'Cerrar', cerrar),
+      ], { conX: false });
+      hojaDescargado();
+    }
     return;
   }
-  menuFlotante((cerrar) => [
+  const hojaListo = () => menuFlotante((cerrar) => [
     h('p.d-hoja-titulo', null, 'El PDF está listo'),
     filaMenu('share', 'Compartir', () => {
       cerrar();
@@ -867,7 +903,9 @@ export function entregarFichero(fichero, nombre) {
       });
     }),
     filaMenu('documento', 'Guardar sin compartir', () => { cerrar(); bajar(); }),
+    ...filasDeMas(cerrar, hojaListo, 'discreta'),
   ]);
+  hojaListo();
 }
 
 /** Una fila que abre el selector de ficheros del sistema. */

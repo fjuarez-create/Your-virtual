@@ -12,7 +12,10 @@
    las tres visitas salió cada cosa. Las actas siguen existiendo —son
    la firma de quién vio qué y cuándo— y viven en el menú de arriba. */
 import { h, icon, toast, avatar, fechaCorta, hora, sheet, confirmar } from '../ui.js';
-import { promocion, unidad, oficio, estado as estadoDe, puedeCrearLista, puedeVerificar, prioridadDe, puedePonerFechas } from '../catalog.js';
+import {
+  promocion, unidad, oficio, estado as estadoDe, puedeCrearLista, puedeVerificar, prioridadDe, puedePonerFechas,
+  puedeBajarReconocimiento,
+} from '../catalog.js';
 import * as store from '../store.js';
 import {
   cabecera, tarjetaActa, tarjetaTarea, cuandoTarea, cuandoCorto, bannerAvance, bannerMordido,
@@ -273,6 +276,24 @@ export async function render({ promoId, unidadId }) {
       prioridad && prioridad !== 'todas' ? `Prioridad ${prioridad}` : '',
     ].filter(Boolean).join(' · ');
 
+    /* El reconocimiento de repasos pendientes —el papel que se firma
+       en la notaría— manda sobre los demás PDF: va en la tarjeta negra,
+       arriba del todo. Le sale solo a quien puede descargarlo (DF,
+       comercial y administrador) y solo cuando la vivienda tiene fecha
+       de revisión o de firma: antes de eso no hay notaría a la vista.
+       La ficha de la entrega se lee ahora y no al pintar la pantalla,
+       por si una sincronización ha traído fechas entretanto. */
+    const cuando = puedeBajarReconocimiento(store.sesion())
+      ? cuandoReconocimiento(await store.entregaDeUnidad(unidadId))
+      : '';
+    const destacada = cuando ? {
+      id: 'reconocimiento', icono: 'documento',
+      rotulo: 'Reconocimiento de repasos pendientes',
+      // Con espacios duros: si la línea no cabe entera, parte por el
+      // punto y no deja un «12 nov» colgando solo debajo.
+      sub: `Estado de hoy\u00a0· ${cuando.replace(/ /g, '\u00a0')}`,
+    } : null;
+
     const elegido = await menuTarjeta(u.nombre, [
       { id: 'pdf', icono: 'documento', rotulo: 'PDF de repasos por cerrar',
         sub: `${vivas.length} ${vivas.length === 1 ? 'repaso por cerrar' : 'repasos por cerrar'}, con sus fotos` },
@@ -280,8 +301,9 @@ export async function render({ promoId, unidadId }) {
         sub: `${fraseFiltros} · ${conFiltro.length} ${conFiltro.length === 1 ? 'repaso' : 'repasos'}` } : null,
       { id: 'pdf-historico', icono: 'listaChecks', rotulo: 'PDF con todo el histórico',
         sub: `Lo por cerrar primero y las ${hechas9.length} ejecutadas al final` },
-    ].filter(Boolean), { extra });
+    ].filter(Boolean), { extra, destacada });
 
+    if (elegido === 'reconocimiento') bajarReconocimiento(unidadId);
     if (elegido === 'pdf') descargarVivienda(p, u, { tareas: vivas });
     if (elegido === 'pdf-filtrado') descargarVivienda(p, u, { tareas: conFiltro, filtros: fraseFiltros });
     if (elegido === 'pdf-historico') descargarVivienda(p, u, { tareas: vivas, ejecutadas: hechas9, apellido: 'historico' });
@@ -526,6 +548,61 @@ function encaja(t, estado, oficioId, estancia, prioridad = 'todas') {
 /** El filtro de oficio viaja en la dirección como lista: «pladur,cocinas». */
 function oficiosElegidos(oficioId) {
   return oficioId && oficioId !== 'todos' ? String(oficioId).split(',').filter(Boolean) : [];
+}
+
+/**
+ * La segunda línea de la tarjeta del reconocimiento de repasos
+ * pendientes: lo próximo de la entrega de esa vivienda.
+ *
+ *   «firma el jueves 12 nov»      hay firma, hoy o más adelante
+ *                                 («firma hoy», «firma mañana»)
+ *   «revisión el martes 10 nov»   solo hay revisión, o la revisión es
+ *                                 lo siguiente que viene
+ *   «firmó el 6 nov»              la firma ya pasó
+ *
+ * Devuelve '' si la vivienda no tiene ni revisión ni firma: sin fechas
+ * la tarjeta no sale.
+ */
+function cuandoReconocimiento(entrega, hoy = E.hoyIso()) {
+  const revision = E.esDia(entrega?.revision) ? entrega.revision : '';
+  const firma = E.esDia(entrega?.firma) ? entrega.firma : '';
+  if (!revision && !firma) return '';
+
+  // Lo que viene: «hoy», «mañana» o «el jueves 12 nov».
+  const viene = (iso) => {
+    const n = E.diasHasta(iso, hoy);
+    if (n === 0) return 'hoy';
+    if (n === 1) return 'mañana';
+    const banner = E.fechaBanner(iso);   // «Jueves 12 nov»
+    return `el ${banner.charAt(0).toLowerCase()}${banner.slice(1)}`;
+  };
+  // Lo que pasó: «ayer» o «el 6 nov» (con el año si no es el de ahora).
+  const paso = (iso) => {
+    const corto = cuandoCorto(E.partes(iso).fecha);
+    return corto === 'ayer' ? corto : `el ${corto}`;
+  };
+
+  if (firma && firma < hoy) return `firmó ${paso(firma)}`;
+  const revisionPrimero = revision && revision >= hoy && !entrega.revisadaEn && (!firma || revision < firma);
+  if (firma && !revisionPrimero) return `firma ${viene(firma)}`;
+  return `revisión ${revision >= hoy ? viene(revision) : paso(revision)}`;
+}
+
+/**
+ * Descarga el reconocimiento de repasos pendientes de la vivienda. El
+ * módulo se pide ahora y no al abrir la app: solo lo usan tres
+ * papeles, y casi nunca.
+ */
+async function bajarReconocimiento(unidadId) {
+  try {
+    const { descargarReconocimiento } = await import('../constancia.js');
+    await descargarReconocimiento({ unidadId });
+  } catch (e) {
+    console.error('No se pudo abrir la descarga del reconocimiento:', e);
+    // Un módulo que no llegó a bajar, hay navegadores que no lo vuelven
+    // a pedir hasta que la app se abre de nuevo: por eso se dice.
+    toast('No se ha podido abrir la descarga', 'err', { detalle: 'Comprueba la conexión. Si sigue igual, cierra la app y ábrela de nuevo' });
+  }
 }
 
 /**
