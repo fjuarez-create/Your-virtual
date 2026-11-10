@@ -21,7 +21,7 @@
    dentro, «constancia» (ver CLAUDE.md: «acta» es solo el documento de
    una reunión de obra).
    ═══════════════════════════════════════════════════════════════ */
-import { h, icon, toast } from './ui.js';
+import { h, icon, toast, confirmar } from './ui.js';
 import * as api from './api.js';
 import * as store from './store.js';
 import { promocion, unidad, puedeVerificar } from './catalog.js';
@@ -57,6 +57,12 @@ const FRASES = {
   sinTaller: 'No se ha podido cargar lo necesario para montar el PDF. Comprueba la conexión y vuelve a intentarlo; si sigue igual, cierra la app y ábrela de nuevo.',
   // Lo que significa «Seguir sin mirar las fotos», debajo del fallo.
   sinFotos: 'Sin las fotos, el documento se redacta solo con lo anotado en cada repaso.',
+  // Lo apuntado en este teléfono que no ha conseguido subir: el papel
+  // saldría sin ello. Se dice y se pregunta; no se sigue callado.
+  sinSubir: (n) => (n === 1
+    ? 'Este teléfono tiene 1 cambio de esta vivienda sin subir. El documento saldría sin él.'
+    : `Este teléfono tiene ${n} cambios de esta vivienda sin subir. El documento saldría sin ellos.`),
+  sinSubirAclaracion: 'Comprueba la conexión y vuelve a intentarlo para que suban antes de redactar.',
   generica: 'No se ha podido preparar el documento.',
 };
 
@@ -367,6 +373,16 @@ async function intentar(m) {
         }
       } catch { /* no corta */ }
       seguir();
+      // Que la sincronización falle no corta, pero tampoco se calla: si
+      // algo de ESTA vivienda sigue sin subir, el servidor no lo conoce
+      // y el documento saldría sin ello. Se pregunta, y la respuesta
+      // («Seguir sin ellos») sobrevive al reintento.
+      if (!m.sinLoSuyo) {
+        let sinSubir = 0;
+        try { sinSubir = await store.sinSubirDeUnidad(unidadId); } catch { /* sin memoria: se sigue */ }
+        seguir();
+        if (sinSubir > 0) throw new Tropiezo(FRASES.sinSubir(sinSubir), 'sin-subir');
+      }
     }
 
     // 2. Cómo está la vivienda.
@@ -378,7 +394,9 @@ async function intentar(m) {
     }
     seguir();
     if (!esEstado(estado)) throw new Tropiezo(FRASES.sinRespuesta);
-    if (!estado.hayClave) {
+    // Sin clave solo se corta si de verdad hay que redactar: un
+    // documento ya redactado y al día se vuelve a bajar sin la IA.
+    if (!estado.hayClave && (m.forzar || !(estado.actual && estado.alDia))) {
       throw new Tropiezo(store.esAdmin() ? FRASES.sinClaveAdmin : FRASES.sinClave, 'sin-clave', { pasoHecho: true });
     }
     if (!((estado.cuenta?.pendientes || 0) + (estado.cuenta?.rechazados || 0))) {
@@ -482,8 +500,9 @@ function fraseDe(e) {
   return e?.constructor === Error && e.message ? e.message : FRASES.generica;
 }
 
-/** Sin repasos pendientes no hay nada roto: se dice sin pintarlo de fallo. */
-const esAviso = (e) => e?.codigo === 'sin-repasos';
+/** Sin repasos pendientes, o con algo sin subir, no hay nada roto: se
+    dice sin pintarlo de fallo. */
+const esAviso = (e) => e?.codigo === 'sin-repasos' || e?.codigo === 'sin-subir';
 
 /* ─── Lo que queda a mano después de descargar ────────────────── */
 /**
@@ -542,7 +561,17 @@ function extrasDe(actual, unidadId) {
     extras.push({
       icono: 'refresh',
       rotulo: 'Redactar de nuevo',
-      accion: () => { descargarReconocimiento({ unidadId, forzar: true }); },
+      // Un toque por error gasta una redacción entera: se pregunta. Si
+      // dice que no, vuelve la hoja del PDF como estaba.
+      accion: async (volver) => {
+        const seguro = await confirmar({
+          titulo: '¿Redactar el documento de nuevo?',
+          texto: 'Se vuelve a redactar entero con la IA a partir de los repasos de ahora. El anterior queda guardado.',
+          ok: 'Sí, redactar de nuevo', icono: 'refresh', conservar: 'No', iconoConservar: 'x',
+        });
+        if (seguro) descargarReconocimiento({ unidadId, forzar: true });
+        else volver?.();
+      },
     });
   }
   return extras;
@@ -597,7 +626,11 @@ export async function descargarReconocimiento({ unidadId, forzar = false } = {})
         if (!(e instanceof Tropiezo) && !(e instanceof api.ApiError)) {
           console.error('No se pudo preparar el reconocimiento de repasos pendientes:', e);
         }
-        const enFotos = m.paso === 'fotos';
+        // «Seguir sin mirar las fotos» solo se ofrece cuando arregla
+        // algo: si lo que falla es la clave o el cupo de la IA, redactar
+        // fallaría igual.
+        const enFotos = m.paso === 'fotos' && !['clave-mala', 'sin-clave', 'sin-cupo'].includes(e?.codigo);
+        const sinSubir = e?.codigo === 'sin-subir';
         const aviso = esAviso(e);
         if (m.velo.estadoDe(m.paso)) {
           m.velo.poner(m.paso, e?.pasoHecho ? 'hecho' : aviso ? 'saltado' : 'fallo');
@@ -605,10 +638,12 @@ export async function descargarReconocimiento({ unidadId, forzar = false } = {})
         const eleccion = await m.velo.preguntar(fraseDe(e), [
           { id: 'otra', rotulo: 'Volver a intentarlo' },
           enFotos ? { id: 'sin-fotos', rotulo: 'Seguir sin mirar las fotos' } : null,
+          sinSubir ? { id: 'sin-lo-suyo', rotulo: 'Seguir sin ellos' } : null,
           { id: 'cerrar', rotulo: 'Cerrar' },
-        ].filter(Boolean), { aclaracion: enFotos ? FRASES.sinFotos : '', aviso });
+        ].filter(Boolean), { aclaracion: enFotos ? FRASES.sinFotos : sinSubir ? FRASES.sinSubirAclaracion : '', aviso });
         if (eleccion === 'cerrar' || m.cancelada) return false;
         if (eleccion === 'sin-fotos') m.sinFotos = true;
+        if (eleccion === 'sin-lo-suyo') m.sinLoSuyo = true;
       }
     }
     if (m.cancelada) return false;

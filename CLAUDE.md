@@ -31,6 +31,15 @@ En pantalla, cuatro palabras con dueño fijo:
 - **Parte**: el papeleo de repasos — el del día y el de cada vivienda.
 - **Acta**: SOLO el documento de una reunión de obra.
 
+Y una quinta, de noviembre de 2026:
+
+- **Reconocimiento de repasos pendientes**: el documento de una
+  vivienda que se firma en la notaría, con lo que queda por terminar.
+  NO se le llama «acta» (lo decidió Fran el 9-11-2026), ni en pantalla
+  ni en el papel. Por dentro se llama `constancia`: la tabla
+  `constancias`, las rutas `constancias/…`, `js/constancia.js` y
+  `js/pdfConstancia.js`.
+
 OJO, la trampa que no hay que pisar: **por dentro, la tabla `tareas`,
 la ruta `#/tareas/…` y los nombres de código (`crearTarea`,
 `tareaId`…) guardan REPASOS**. Son identificadores que ya viven en

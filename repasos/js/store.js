@@ -306,6 +306,36 @@ export async function entregaDeUnidad(unidadId) {
   return e && !e.borrada ? e : null;
 }
 
+/**
+ * Cuántos cambios de ESTA vivienda siguen en la cola de este teléfono
+ * sin subir: sus partes, sus repasos, las notas y las fotos de esos
+ * repasos y su ficha de entrega. Lo pregunta el reconocimiento de
+ * repasos pendientes antes de redactar: lo que no ha llegado al
+ * servidor no sale en el papel. No vale el total de la cola: es de
+ * todo el teléfono y puede llevar cosas de otras viviendas, o que esta
+ * sesión no puede subir nunca.
+ */
+export async function sinSubirDeUnidad(unidadId) {
+  const pend = await db.pendientes();
+  let cuantos = 0;
+  for (const item of pend) {
+    if (item.tipo === 'entrega') {
+      if (item.id === unidadId) cuantos++;
+      continue;
+    }
+    let listaId = null;
+    if (item.tipo === 'lista') listaId = item.id;
+    else if (item.tipo === 'tarea') listaId = (await db.get('tareas', item.id))?.listaId;
+    else if (item.tipo === 'comentario' || item.tipo === 'medio') {
+      const registro = await db.get(item.tipo === 'medio' ? 'medios' : 'comentarios', item.id);
+      listaId = registro?.tareaId ? (await db.get('tareas', registro.tareaId))?.listaId : null;
+    }
+    if (!listaId) continue;
+    if ((await db.get('listas', listaId))?.unidadId === unidadId) cuantos++;
+  }
+  return cuantos;
+}
+
 export async function entregasDePromo(promoId) {
   return (await db.porIndice('entregas', 'promoId', promoId)).filter((e) => !e.borrada);
 }

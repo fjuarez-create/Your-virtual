@@ -97,6 +97,20 @@ const CONSTANCIA_COLETILLA = ' Asimismo, terminación del resto de puntos anotad
 const CONSTANCIA_GENERICO = 'Repasos de terminación y acabado de los puntos anotados en el registro de seguimiento.';
 
 /**
+ * Lo que no puede salir en un párrafo del documento, escriba lo que
+ * escriba el modelo: cifras de dos o más dígitos (importes, fechas,
+ * teléfonos), direcciones, y las palabras de compromiso, de plazo o de
+ * culpa que las instrucciones ya le prohíben. El papel se firma ante
+ * notario y no hay pantalla de revisión: esto no puede depender de que
+ * el modelo obedezca, ni de lo que alguien haya dejado escrito en una
+ * nota. Ninguno de los tres documentos aprobados por Fran casa con ello.
+ */
+const CONSTANCIA_DELICADO = '/\d{2,}|€|\beuros?\b|%|@|https?:|www\.|indemni|compens|penaliz|descuent|compromet|compromis|garant[ií]|renunci|conformidad|responsab|culpa|\bplazos?\b|\bantes del?\s+(?:la\s+)?(?:firma|entrega|escritura|d[ií]a|\d)|defect|\bgraves?\b|urgen/iu';
+
+/** Un párrafo de zona más largo que esto no es un párrafo de zona (el más largo de los modelos mide 249 letras). */
+const CONSTANCIA_LARGO_DE_ZONA = 1200;
+
+/**
  * Las empresas que llevan cada gremio en la obra. El servidor no guarda
  * el catálogo de gremios (vive en el cliente, js/catalog.js, GREMIOS →
  * `empresa`), y una empresa puede no tener a nadie con cuenta: sin esta
@@ -443,13 +457,19 @@ function constancia_entrada_ia(array $material, bool $conFotos): array
                 continue;
             }
             if ($c['tipo'] === 'rechazo') {
-                $motivo = mb_substr($texto, 0, CONSTANCIA_TOPE_NOTA);
+                $motivo = mb_substr(constancia_tapar($texto), 0, CONSTANCIA_TOPE_NOTA);
                 continue;
             }
-            if (preg_match('/^Oficio cambiado:/u', $texto) === 1 || count($notas) >= CONSTANCIA_TOPE_NOTAS) {
+            if (preg_match('/^Oficio cambiado:/u', $texto) === 1) {
                 continue;
             }
-            $notas[] = mb_substr($texto, 0, CONSTANCIA_TOPE_NOTA);
+            $notas[] = mb_substr(constancia_tapar($texto), 0, CONSTANCIA_TOPE_NOTA);
+        }
+        // Van de la más antigua a la más reciente. Si hay más de las
+        // que caben, se quedan las ÚLTIMAS: son las que dicen qué queda
+        // por hacer («utiliza la información más reciente»).
+        if (count($notas) > CONSTANCIA_TOPE_NOTAS) {
+            $notas = array_slice($notas, -CONSTANCIA_TOPE_NOTAS);
         }
 
         $fotos = [];
@@ -470,7 +490,7 @@ function constancia_entrada_ia(array $material, bool $conFotos): array
             'zona' => $r['zona'],
             'estancia' => mb_substr(claude_en_una_linea($r['estancia']), 0, 80),
             'estado' => $rechazado ? 'rechazado' : 'pendiente',
-            'anotacion' => mb_substr(claude_en_una_linea($r['texto']), 0, CONSTANCIA_TOPE_ANOTACION),
+            'anotacion' => mb_substr(constancia_tapar(claude_en_una_linea($r['texto'])), 0, CONSTANCIA_TOPE_ANOTACION),
             'notas' => $notas,
             'motivoRechazo' => $rechazado ? $motivo : '',
             'fotos' => $fotos,
@@ -597,6 +617,133 @@ function constancia_buscar_nombres(string $texto): array
     return array_values($hallados);
 }
 
+/* ═══ Lo que no va al papel, y lo que no viaja ════════════════════ */
+
+/** ¿Trae este párrafo algo que no puede ir a un papel que se firma? */
+function constancia_es_delicado(string $parrafo): bool
+{
+    return mb_strlen($parrafo) > CONSTANCIA_LARGO_DE_ZONA || preg_match(CONSTANCIA_DELICADO, $parrafo) === 1;
+}
+
+/**
+ * Lo que viaja a la IA es texto libre que escribe la gente de la obra.
+ * Antes de mandarlo se tapa lo que identifica a alguien y no hace falta
+ * para saber qué trabajo queda: correos, teléfonos, el número de la
+ * vivienda, las empresas de los gremios y el nombre y apellido seguidos
+ * de quien tiene cuenta. Las palabras sueltas de un nombre NO se tapan:
+ * un usuario apellidado «Puerta» dejaría el documento sin puertas. La
+ * huella no cambia: se calcula con el texto de la base.
+ */
+function constancia_tapar(string $texto): string
+{
+    static $frases = null;
+    if ($frases === null) {
+        $frases = [];
+        foreach (CONSTANCIA_EMPRESAS_DE_GREMIOS as $empresa) {
+            $frases[] = implode('\\s+', array_map(static fn ($p) => preg_quote($p, '/'), preg_split('/\s+/u', trim($empresa)) ?: []));
+        }
+        try {
+            foreach (bd()->query('SELECT nombre FROM usuarios')->fetchAll() as $u) {
+                $partes = preg_split('/\s+/u', trim((string) $u['nombre'])) ?: [];
+                if (count($partes) >= 2 && mb_strlen($partes[0]) >= 2 && mb_strlen($partes[1]) >= 2) {
+                    $frases[] = preg_quote($partes[0], '/') . '\\s+' . preg_quote($partes[1], '/');
+                }
+            }
+        } catch (Throwable $e) {
+            // Sin la lista de usuarios se tapa lo demás.
+        }
+        $frases = array_values(array_unique(array_filter($frases, static fn ($f) => $f !== '')));
+        usort($frases, static fn ($a, $b) => strlen($b) <=> strlen($a));
+    }
+    $marca = '[…]';
+    $pasos = [
+        // Correos.
+        '/[\p{L}\p{N}._%+-]+@[\p{L}\p{N}.-]+\.\p{L}{2,}/u' => $marca,
+        // Teléfonos de nueve cifras, juntas o de tres en tres o de dos en dos, con o sin prefijo.
+        '/(?<![\p{L}\p{N}])(?:\+?34[ .-]?)?[6789]\d{2}[ .-]?(?:\d{3}[ .-]?\d{3}|\d{2}[ .-]?\d{2}[ .-]?\d{2})(?![\p{L}\p{N}])/u' => $marca,
+        // «villa 22», «vivienda nº 7»: se queda la palabra, se va el número.
+        '/\b(villa|vivienda|chalet)\s+(?:n[ºo°.]{0,2}\s*)?\d{1,3}\b/iu' => '$1',
+    ];
+    if ($frases !== []) {
+        $pasos['/(?<![\p{L}\p{N}])(?:' . implode('|', $frases) . ')(?![\p{L}\p{N}])/iu'] = $marca;
+    }
+    foreach ($pasos as $patron => $por) {
+        $texto = preg_replace($patron, $por, $texto) ?? $texto;
+    }
+    return $texto;
+}
+
+/**
+ * La última red, justo antes de sellar. Lo que el modelo no ha querido
+ * o no ha podido quitar —un párrafo con cifras, fechas, plazos o
+ * compromisos, uno desmesurado, o uno que nombra a una empresa de la
+ * obra— no se corrige: se retira. La zona sale con la fórmula general
+ * y sus repasos pasan a «genéricos», con su nota interna. Así el papel
+ * que se firma no depende de que el modelo obedezca.
+ *
+ * Devuelve [borrador, texto] ya cambiados, o null si no hay nada que retirar.
+ */
+function constancia_no_aceptar(array $borrador, array $texto): ?array
+{
+    $empresas = [];
+    foreach (CONSTANCIA_EMPRESAS_DE_GREMIOS as $empresa) {
+        $frase = array_column(constancia_palabras($empresa), 'llana');
+        if ($frase !== []) {
+            $empresas[] = $frase;
+        }
+    }
+    $genericos = constancia_lista($borrador['genericos'] ?? []);
+    $retirados = constancia_lista($borrador['retirados'] ?? []);
+    $cambia = false;
+    $zonas = [];
+    foreach ((array) ($texto['zonas'] ?? []) as $z) {
+        if (!is_array($z)) {
+            continue;
+        }
+        $parrafo = (string) ($z['texto'] ?? '');
+        $fuera = false;
+        if ($parrafo !== CONSTANCIA_GENERICO) {
+            $fuera = constancia_es_delicado($parrafo);
+            if (!$fuera) {
+                $palabras = constancia_palabras($parrafo);
+                foreach ($empresas as $frase) {
+                    if (constancia_donde_esta($palabras, $frase) >= 0) {
+                        $fuera = true;
+                        break;
+                    }
+                }
+            }
+        }
+        if ($fuera) {
+            $z['texto'] = CONSTANCIA_GENERICO;
+            $z['resto'] = false;
+            foreach (constancia_lista($z['repasos'] ?? []) as $id) {
+                if (!in_array($id, $genericos, true)) {
+                    $genericos[] = $id;
+                }
+            }
+            $zona = (string) ($z['zona'] ?? '');
+            if ($zona !== '' && !in_array($zona, $retirados, true)) {
+                $retirados[] = $zona;
+            }
+            $cambia = true;
+        }
+        $zonas[] = $z;
+    }
+    if (!$cambia) {
+        return null;
+    }
+    $todo = '';
+    foreach ($zonas as $z) {
+        $todo .= $z['texto'] . "\n";
+    }
+    $borrador['genericos'] = $genericos;
+    $borrador['retirados'] = $retirados;
+    $borrador['delicados'] = [];
+    $borrador['nombres'] = constancia_buscar_nombres($todo);
+    return [$borrador, ['zonas' => $zonas]];
+}
+
 /* ═══ El repaso determinista ══════════════════════════════════════ */
 
 /**
@@ -669,6 +816,12 @@ function constancia_repasar(array $ia, array $material, bool $conFotos): array
             continue;
         }
         foreach ($e['actuaciones'] as $a) {
+            // Una actuación sin texto no describe ningún trabajo: sus
+            // repasos no cuentan como citados y siguen el camino de los
+            // descolgados (coletilla, genéricos, nota y segunda pasada).
+            if ($a['texto'] === '') {
+                continue;
+            }
             foreach ($a['repasos'] as $id) {
                 $citados[$zona][] = $id;
                 $yaCitado[$id] = true;
@@ -739,10 +892,18 @@ function constancia_repasar(array $ia, array $material, bool $conFotos): array
         }
     }
 
-    // (3) Nombres propios, sobre el texto que de verdad va al papel.
+    // (3) Nombres propios, sobre el texto que de verdad va al papel; y
+    // las zonas cuyo párrafo trae algo que no puede ir en él (cifras,
+    // fechas, plazos, compromisos, un largo desmesurado): se piden
+    // corregir en la segunda pasada y, si siguen ahí, se retiran al
+    // sellar (constancia_no_aceptar).
     $todo = '';
+    $delicados = [];
     foreach ($zonasTexto as $z) {
         $todo .= $z['texto'] . "\n";
+        if ($z['texto'] !== CONSTANCIA_GENERICO && constancia_es_delicado($z['texto'])) {
+            $delicados[] = $z['zona'];
+        }
     }
 
     return [
@@ -751,6 +912,7 @@ function constancia_repasar(array $ia, array $material, bool $conFotos): array
             'dudas' => $dudas,
             'genericos' => $genericos,
             'nombres' => constancia_buscar_nombres($todo),
+            'delicados' => $delicados,
             'conFotos' => $conFotos,
             'fotos' => [
                 'miradas' => $material['fotos']['miradas'],
@@ -906,6 +1068,17 @@ function constancia_notas(array $borrador, array $material, string $unidad): arr
         ];
     }
 
+    $retirados = count(constancia_lista($borrador['retirados'] ?? []));
+    if ($retirados > 0) {
+        $notas[] = [
+            'tipo' => 'sensible',
+            'texto' => ($retirados === 1 ? 'El párrafo de una zona traía' : "Los párrafos de {$retirados} zonas traían")
+                . ' cifras, fechas, plazos, compromisos o el nombre de una empresa, y en el documento se ha'
+                . ($retirados === 1 ? '' : 'n') . ' cambiado por la fórmula general: conviene leerlo.',
+            'repasos' => [],
+        ];
+    }
+
     foreach ((array) ($borrador['discrepan'] ?? []) as $d) {
         if (!is_array($d) || !is_string($d['repaso'] ?? null)) {
             continue;
@@ -968,6 +1141,7 @@ function constancia_servida(array $fila, array $material, array $yo): array
 
     $genericos = count(constancia_lista($borrador['genericos'] ?? []));
     $nombres = count(constancia_lista($borrador['nombres'] ?? []));
+    $delicados = count(constancia_lista($borrador['delicados'] ?? []));
     $ajustado = (int) $fila['ajustado'] === 1;
     $descargado = (string) ($fila['descargado_en'] ?? '');
 
@@ -978,7 +1152,7 @@ function constancia_servida(array $fila, array $material, array $yo): array
         'registro' => (string) $fila['registro'],
         'texto' => ['zonas' => $zonas],
         'ajustado' => $ajustado,
-        'pideAjuste' => !$ajustado && ($genericos > 0 || $nombres > 0),
+        'pideAjuste' => !$ajustado && ($genericos > 0 || $nombres > 0 || $delicados > 0),
         'genericos' => $genericos,
         'conFotos' => ($borrador['conFotos'] ?? false) === true,
         'notas' => es_df($yo) ? constancia_notas($borrador, $material, (string) $fila['unidad_id']) : [],
@@ -1411,7 +1585,7 @@ function mirar_constancia(string $unidad): void
         $lote[$clave] = [
             'medio' => $medio,
             'repaso' => $foto['repaso'],
-            'anotacion' => $repaso['texto'] ?? '',
+            'anotacion' => constancia_tapar((string) ($repaso['texto'] ?? '')),
             'estancia' => $repaso['estancia'] ?? '',
             'mime' => $leida['mime'],
             'b64' => $leida['b64'],
@@ -1633,6 +1807,7 @@ function ajustar_constancia(string $unidad): void
     $borrador = constancia_leer_json($fila['borrador']);
     $genericos = constancia_lista($borrador['genericos'] ?? []);
     $nombres = constancia_lista($borrador['nombres'] ?? []);
+    $delicados = constancia_lista($borrador['delicados'] ?? []);
     $faltan = [];
     foreach ($genericos as $id) {
         $r = constancia_repaso($material, $id);
@@ -1642,7 +1817,7 @@ function ajustar_constancia(string $unidad): void
     }
 
     $pdo = bd();
-    if ($faltan === [] && $nombres === [] && $sobran === 0) {
+    if ($faltan === [] && $nombres === [] && $delicados === [] && $sobran === 0) {
         // Nada que corregir: no se gasta una llamada. Se da por hecha
         // para que nadie vuelva a pedirla por esta fila.
         $pdo->prepare('UPDATE constancias SET ajustado = 1, actualizado = ? WHERE id = ?')
@@ -1654,7 +1829,7 @@ function ajustar_constancia(string $unidad): void
     $ia = claude_redactar_constancia([
         'repasos' => constancia_entrada_ia($material, $conFotos),
         'previo' => constancia_previo($borrador, $material),
-        'observaciones' => ['faltan' => $faltan, 'sobran' => $sobran, 'nombres' => $nombres],
+        'observaciones' => ['faltan' => $faltan, 'sobran' => $sobran, 'nombres' => $nombres, 'delicados' => $delicados],
     ]);
     $hecho = constancia_repasar($ia, $material, $conFotos);
 
@@ -1702,6 +1877,18 @@ function sellar_constancia(string $unidad): void
     $yo = constancia_entrar($unidad);
     $fila = constancia_fila($unidad, constancia_cuerpo()['id'] ?? null);
     $material = constancia_material($unidad);
+
+    // La última red: lo que no puede ir a un papel que se firma, fuera.
+    // Se hace aquí porque el PDF se monta SIEMPRE con lo que contesta
+    // esta ruta, haya habido segunda pasada o no.
+    $firme = constancia_no_aceptar(constancia_leer_json($fila['borrador']), constancia_leer_json($fila['texto']));
+    if ($firme !== null) {
+        bd()->prepare('UPDATE constancias SET borrador = ?, texto = ? WHERE id = ?')->execute([
+            (string) json_encode($firme[0], CONSTANCIA_JSON),
+            (string) json_encode($firme[1], CONSTANCIA_JSON),
+            $fila['id'],
+        ]);
+    }
 
     $ahora = ahora_iso();
     $cambio = constancia_hora_de_cambio($fila);
