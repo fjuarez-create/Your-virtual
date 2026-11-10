@@ -188,7 +188,7 @@ export async function render() {
   const rotuloLargo = (e) => {
     if (e.tipo === 'incidencia') return `Entregada · ${e.incidencias} ${e.incidencias === 1 ? 'incidencia' : 'incidencias'}`;
     // La fecha de la firma ya pasó y nadie ha dicho si se entregó.
-    if (e.tipo === 'firma' && e.sinConfirmar) return `${E.HITOS.firma.largo} · sin confirmar`;
+    if (e.tipo === 'firma' && e.sinConfirmar) return `${E.HITOS.firma.largo}${e.hora ? ` · ${e.hora}` : ''} · sin confirmar`;
     return E.HITOS[e.tipo].largo + (e.hora ? ` · ${e.hora}` : '');
   };
 
@@ -219,13 +219,13 @@ export async function render() {
     const v = e.entrega;
     if (e.tipo === 'revision' || e.tipo === 'revisada') {
       return v.firma
-        ? { clase: 'gris', icono: 'key', texto: `Firma el ${E.fechaConDia(v.firma)}` }
+        ? { clase: 'gris', icono: 'key', texto: `Firma el ${E.fechaConDia(v.firma)}${v.firmaHora ? ` · ${v.firmaHora}` : ''}` }
         : { clase: 'gris', icono: 'key', texto: 'Firma sin fecha todavía' };
     }
     if (e.tipo === 'incidencia') {
       return { clase: 'rojo', icono: 'periodico', texto: `${e.incidencias} ${e.incidencias === 1 ? 'repaso del parte post-entrega por resolver' : 'repasos del parte post-entrega por resolver'}` };
     }
-    if (v.revisadaEn) return { clase: 'verde', icono: 'check', texto: `Revisión hecha${v.revision ? ` el ${E.fechaLarga(v.revision)}` : ''}` };
+    if (E.revisionHecha(v)) return { clase: 'verde', icono: 'check', texto: `Revisión hecha${v.revision ? ` el ${E.fechaLarga(v.revision)}` : ''}` };
     if (v.revision) return { clase: 'gris', icono: 'calendario', texto: `Revisión con el cliente el ${E.fechaConDia(v.revision)}${v.revisionHora ? ` · ${v.revisionHora}` : ''}` };
     return { clase: 'gris', icono: 'calendario', texto: 'Revisión sin fecha todavía' };
   };

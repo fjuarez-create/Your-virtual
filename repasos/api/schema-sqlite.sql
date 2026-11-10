@@ -256,6 +256,7 @@ CREATE TABLE IF NOT EXISTS entregas (
   revision             TEXT NOT NULL DEFAULT '',
   revision_hora        TEXT NOT NULL DEFAULT '',
   firma                TEXT NOT NULL DEFAULT '',
+  firma_hora           TEXT NOT NULL DEFAULT '',
   revisada_en          TEXT NOT NULL DEFAULT '',
   compradores_fijados_en TEXT NOT NULL DEFAULT '',
   revisada_fijada_en   TEXT NOT NULL DEFAULT '',

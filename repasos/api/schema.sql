@@ -299,6 +299,7 @@ CREATE TABLE IF NOT EXISTS entregas (
   revision             CHAR(10)     NOT NULL DEFAULT '',
   revision_hora        CHAR(5)      NOT NULL DEFAULT '',
   firma                CHAR(10)     NOT NULL DEFAULT '',
+  firma_hora           CHAR(5)      NOT NULL DEFAULT '',
   revisada_en          CHAR(24)     NOT NULL DEFAULT '',
   compradores_fijados_en CHAR(24)   NOT NULL DEFAULT '',
   revisada_fijada_en   CHAR(24)     NOT NULL DEFAULT '',

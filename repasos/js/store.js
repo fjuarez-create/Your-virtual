@@ -279,7 +279,7 @@ window.addEventListener('offline', () => { estadoSync.online = false; avisar(); 
 const HECHOS_ENTREGA = [
   { sello: 'compradoresFijadosEn', campos: ['compradores'], autor: null },
   { sello: 'revisionFijadaEn', campos: ['revision', 'revisionHora'], autor: 'revisionPor' },
-  { sello: 'firmaFijadaEn', campos: ['firma'], autor: 'firmaPor' },
+  { sello: 'firmaFijadaEn', campos: ['firma', 'firmaHora'], autor: 'firmaPor' },
   { sello: 'revisadaFijadaEn', campos: ['revisadaEn'], autor: 'revisadaPor' },
   // Que la vivienda se ha entregado lo dicen el comercial o el
   // administrador, no la fecha de la firma (Fran, 10-11-2026).
@@ -346,7 +346,7 @@ export async function entregasDePromo(promoId) {
 function entregaVacia(unidadId, promoId) {
   return {
     id: unidadId, unidadId, promoId,
-    compradores: '', revision: '', revisionHora: '', firma: '', revisadaEn: '',
+    compradores: '', revision: '', revisionHora: '', firma: '', firmaHora: '', revisadaEn: '',
     compradoresFijadosEn: '',
     revisionFijadaEn: '', revisionPor: null, revisionPorNombre: '',
     firmaFijadaEn: '', firmaPor: null, firmaPorNombre: '',
@@ -372,6 +372,7 @@ export async function fijarEntrega(unidadId, promoId, cambios) {
   const nueva = { ...previa, ...cambios, borrada: false, actualizado: cuando };
   // Una hora sin fecha no significa nada.
   if (!nueva.revision) nueva.revisionHora = '';
+  if (!nueva.firma) nueva.firmaHora = '';
   for (const h of HECHOS_ENTREGA) {
     if (h.campos.every((c) => (nueva[c] || '') === (previa[c] || ''))) continue;
     nueva[h.sello] = cuando;
@@ -393,7 +394,9 @@ export async function fijarEntrega(unidadId, promoId, cambios) {
  */
 export async function marcarRevisionHecha(unidadId, promoId) {
   const entrega = await fijarEntrega(unidadId, promoId, { revisadaEn: ahora() });
-  const lista = await crearLista({ unidadId, promoId, fase: FASE_POST });
+  // Si la vivienda ya tiene parte post-entrega (de una revisión
+  // anterior), se sigue en ese: una segunda visita no abre otro.
+  const lista = (await partePostDeUnidad(unidadId)) || await crearLista({ unidadId, promoId, fase: FASE_POST });
   return { entrega, lista };
 }
 
@@ -1955,7 +1958,7 @@ const normalizarEntrega = (e) => ({
   ...e, borrada: bool(e.borrada),
   compradores: typeof e.compradores === 'string' ? e.compradores : '',
   revision: e.revision || '', revisionHora: e.revisionHora || '',
-  firma: e.firma || '', revisadaEn: e.revisadaEn || '', entregadaEn: e.entregadaEn || '',
+  firma: e.firma || '', firmaHora: e.firmaHora || '', revisadaEn: e.revisadaEn || '', entregadaEn: e.entregadaEn || '',
   compradoresFijadosEn: e.compradoresFijadosEn || '', revisionFijadaEn: e.revisionFijadaEn || '',
   firmaFijadaEn: e.firmaFijadaEn || '', revisadaFijadaEn: e.revisadaFijadaEn || '',
   entregadaFijadaEn: e.entregadaFijadaEn || '',

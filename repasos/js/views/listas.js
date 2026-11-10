@@ -556,7 +556,7 @@ function cuandoReconocimiento(entrega, hoy = E.hoyIso()) {
     return `entregada ${dia >= hoy ? viene(dia) : paso(dia)}`;
   }
   if (firma && firma < hoy) return `firma prevista ${paso(firma)}`;
-  const revisionPrimero = revision && revision >= hoy && !entrega.revisadaEn && (!firma || revision < firma);
+  const revisionPrimero = revision && revision >= hoy && !E.revisionHecha(entrega) && (!firma || revision < firma);
   if (firma && !revisionPrimero) return `firma ${viene(firma)}`;
   return `revisión ${revision >= hoy ? viene(revision) : paso(revision)}`;
 }

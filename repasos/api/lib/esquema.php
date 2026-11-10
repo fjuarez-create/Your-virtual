@@ -32,8 +32,10 @@ declare(strict_types=1);
     para pagarlo una sola vez).
     La 18 añade a la ficha de entrega el hecho «entregada»: que la
     vivienda se ha entregado lo dicen el comercial o el administrador,
-    no la fecha de la firma (lo pidió Fran el 10-11-2026). */
-const ESQUEMA_VERSION = 18;
+    no la fecha de la firma (lo pidió Fran el 10-11-2026).
+    La 19 añade la hora de la firma: la cita en la notaría tiene hora,
+    como la revisión con el cliente (lo pidió el comercial ese día). */
+const ESQUEMA_VERSION = 19;
 
 /**
  * Tablas que tienen que existir para dar la versión por puesta. Si
@@ -97,6 +99,8 @@ const ESQUEMA_CAMPOS = [
         'entregada_fijada_en'  => "CHAR(24) NOT NULL DEFAULT ''",
         'entregada_por'        => 'CHAR(36) DEFAULT NULL',
         'entregada_por_nombre' => "VARCHAR(120) NOT NULL DEFAULT ''",
+        // La hora de la cita en la notaría. Vacía = sin hora.
+        'firma_hora'           => "CHAR(5) NOT NULL DEFAULT ''",
     ],
     'reuniones' => [
         // El acta que sale de la grabación: el resumen ya aceptado y,

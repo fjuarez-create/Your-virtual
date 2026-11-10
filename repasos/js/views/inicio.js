@@ -157,7 +157,8 @@ export async function render() {
     if (n.hecho === 'firma') {
       return {
         chip: 'Firma',
-        texto: h('p.d-nota-texto', null, 'Ha fijado la firma para el ', h('strong', null, E.fechaConDia(v.firma))),
+        texto: h('p.d-nota-texto', null, 'Ha fijado la firma para el ', h('strong', null, E.fechaConDia(v.firma)),
+          v.firmaHora ? ` · ${v.firmaHora}` : ''),
       };
     }
     return {

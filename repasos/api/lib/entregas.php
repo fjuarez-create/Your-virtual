@@ -148,7 +148,7 @@ function es_unidad(string $valor): bool
 const ENTREGA_HECHOS = [
     'compradores' => ['sello' => 'compradores_fijados_en', 'campos' => ['compradores'], 'autor' => null],
     'revision'    => ['sello' => 'revision_fijada_en', 'campos' => ['revision', 'revision_hora'], 'autor' => 'revision_por'],
-    'firma'       => ['sello' => 'firma_fijada_en', 'campos' => ['firma'], 'autor' => 'firma_por'],
+    'firma'       => ['sello' => 'firma_fijada_en', 'campos' => ['firma', 'firma_hora'], 'autor' => 'firma_por'],
     'revisada'    => ['sello' => 'revisada_fijada_en', 'campos' => ['revisada_en'], 'autor' => 'revisada_por'],
     // Que la vivienda se ha entregado no lo dice la fecha de la firma:
     // lo dice el comercial o el administrador (Fran, 10-11-2026).
@@ -247,12 +247,16 @@ function guardar_entregas(): void
             'revision'      => entrega_fecha($e['revision'] ?? ''),
             'revision_hora' => entrega_hora($e['revisionHora'] ?? ''),
             'firma'         => entrega_fecha($e['firma'] ?? ''),
+            'firma_hora'    => entrega_hora($e['firmaHora'] ?? ''),
             'revisada_en'   => entrega_sello($e['revisadaEn'] ?? ''),
             'entregada_en'  => entrega_sello($e['entregadaEn'] ?? ''),
         ];
         // Una hora sin fecha no significa nada.
         if ($llega['revision'] === '') {
             $llega['revision_hora'] = '';
+        }
+        if ($llega['firma'] === '') {
+            $llega['firma_hora'] = '';
         }
 
         $ahora = ahora_iso();
@@ -317,6 +321,7 @@ function entrega_salida(array $f): array
         'revision' => (string) ($f['revision'] ?? ''),
         'revisionHora' => (string) ($f['revision_hora'] ?? ''),
         'firma' => (string) ($f['firma'] ?? ''),
+        'firmaHora' => (string) ($f['firma_hora'] ?? ''),
         'revisadaEn' => (string) ($f['revisada_en'] ?? ''),
         'revisionFijadaEn' => (string) ($f['revision_fijada_en'] ?? ''),
         'revisionPor' => $f['revision_por'] ?? null,
@@ -337,6 +342,39 @@ function entrega_salida(array $f): array
         'creadoPor' => $f['creado_por'] ?? null,
         'creadoPorNombre' => (string) ($f['creado_por_nombre'] ?? ''),
     ];
+}
+
+/* ═══ ¿Está hecha la revisión? ════════════════════════════════════ */
+
+/**
+ * ¿Está hecha la revisión que figura en la ficha? La marca «hecha»
+ * vale para la cita que había cuando se puso. Si después alguien fija
+ * una fecha de revisión NUEVA y posterior a aquel día, es otra cita y
+ * está pendiente. Lo vio el comercial el 10-11-2026: puso una revisión
+ * en dos villas que ya tenían hecha la visita de cortesía y le salían
+ * en verde, como hechas. Es la misma regla que revisionHecha() en
+ * js/entregas.js: si se toca una, se toca la otra.
+ */
+function entrega_revision_hecha(array $f): bool
+{
+    $hecha = (string) ($f['revisada_en'] ?? '');
+    if ($hecha === '') {
+        return false;
+    }
+    $revision = (string) ($f['revision'] ?? '');
+    if ($revision === '') {
+        return true;
+    }
+    $marcada = (string) ($f['revisada_fijada_en'] ?? '');
+    if ($marcada === '') {
+        $marcada = $hecha;
+    }
+    try {
+        $diaHecha = (new DateTimeImmutable($hecha))->setTimezone(new DateTimeZone(ZONA_OBRA))->format('Y-m-d');
+    } catch (Throwable $e) {
+        return true;
+    }
+    return !((string) ($f['revision_fijada_en'] ?? '') > $marcada && $revision > $diaHecha);
 }
 
 /* ═══ Los avisos ══════════════════════════════════════════════════ */
@@ -435,8 +473,11 @@ function entregas_aviso(?array $antes, array $ahora, array $yo, int $momento): ?
         ];
     }
 
+    // Se avisa cada vez que alguien da una revisión por hecha: la
+    // primera, y también la de una cita nueva en una vivienda que ya
+    // tenía otra hecha (cambia el cuándo de la marca).
     $revisadaAntes = (string) ($antes['revisada_en'] ?? '');
-    if ($revisadaAntes === '' && $ahora['revisada_en'] !== '') {
+    if ($ahora['revisada_en'] !== '' && $ahora['revisada_en'] !== $revisadaAntes) {
         ['autor' => $base['autor'], 'quien' => $quien] = $autor('revisada');
         return $base + [
             'titulo' => "{$villa} · revisada con el cliente",
@@ -448,7 +489,7 @@ function entregas_aviso(?array $antes, array $ahora, array $yo, int $momento): ?
 
     $revisionAntes = (string) ($antes['revision'] ?? '') . '|' . (string) ($antes['revision_hora'] ?? '');
     $revisionAhora = $ahora['revision'] . '|' . $ahora['revision_hora'];
-    if ($ahora['revision'] !== '' && $revisionAntes !== $revisionAhora && $ahora['revisada_en'] === '') {
+    if ($ahora['revision'] !== '' && $revisionAntes !== $revisionAhora && !entrega_revision_hecha($ahora)) {
         ['autor' => $base['autor'], 'quien' => $quien] = $autor('revision');
         $cuando = fecha_bonita($ahora['revision']);
         $hora = $ahora['revision_hora'] !== '' ? " a las {$ahora['revision_hora']}" : '';
@@ -460,9 +501,12 @@ function entregas_aviso(?array $antes, array $ahora, array $yo, int $momento): ?
         ];
     }
 
-    if ($ahora['firma'] !== '' && (string) ($antes['firma'] ?? '') !== $ahora['firma']) {
+    $firmaAntes = (string) ($antes['firma'] ?? '') . '|' . (string) ($antes['firma_hora'] ?? '');
+    $firmaAhora = $ahora['firma'] . '|' . (string) ($ahora['firma_hora'] ?? '');
+    if ($ahora['firma'] !== '' && $firmaAntes !== $firmaAhora) {
         ['autor' => $base['autor'], 'quien' => $quien] = $autor('firma');
-        $cuando = fecha_bonita($ahora['firma']);
+        $cuando = fecha_bonita($ahora['firma'])
+            . ((string) ($ahora['firma_hora'] ?? '') !== '' ? " a las {$ahora['firma_hora']}" : '');
         $cuenta = frase_de_cuenta(dias_hasta($ahora['firma'], $momento), 'que no quede ni un repaso', 'Que no quede ni un repaso.');
         $texto = $compradores !== ''
             ? "{$quien} ha puesto fecha a la entrega de llaves a {$compradores}: el {$cuando}. {$cuenta}"

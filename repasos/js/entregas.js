@@ -146,7 +146,8 @@ export function semanaRelativa(iso, desde = hoyIso()) {
  */
 export function situacion(entrega, { incidencias = 0, hoy = hoyIso() } = {}) {
   const e = entrega || {};
-  const chipFirma = e.firma ? { icono: 'key', texto: `Firma el ${fechaConDia(e.firma)}`, clase: 'negro' } : null;
+  const horaFirma = e.firmaHora ? ` · ${e.firmaHora}` : '';
+  const chipFirma = e.firma ? { icono: 'key', texto: `Firma el ${fechaConDia(e.firma)}${horaFirma}`, clase: 'negro' } : null;
 
   if (e.entregadaEn) {
     const dia = e.firma || diaDeEntrega(e);
@@ -166,7 +167,7 @@ export function situacion(entrega, { incidencias = 0, hoy = hoyIso() } = {}) {
       aria: `Entregada el ${fechaConDia(dia)}, sin incidencias`,
     };
   }
-  if (e.revisadaEn) {
+  if (revisionHecha(e)) {
     const dia = e.revision || isoDe(new Date(e.revisadaEn));
     return {
       clave: 'revisada', clase: 'verde-suave', icono: 'check',
@@ -187,12 +188,34 @@ export function situacion(entrega, { incidencias = 0, hoy = hoyIso() } = {}) {
   if (e.firma) {
     return {
       clave: 'firma', clase: 'beige', icono: 'key',
-      rotulo: 'Firma y entrega de llaves', cifra: fechaBanner(e.firma),
+      rotulo: 'Firma y entrega de llaves', cifra: fechaBanner(e.firma) + horaFirma,
       sub: e.compradores ? { icono: 'users', texto: e.compradores, clase: '' } : null,
-      aria: `Firma el ${fechaConDia(e.firma)}`,
+      aria: `Firma el ${fechaConDia(e.firma)}${e.firmaHora ? ` a las ${e.firmaHora}` : ''}`,
     };
   }
   return null;
+}
+
+/**
+ * ¿Está hecha la revisión que figura en la ficha? La marca «hecha»
+ * (`revisadaEn`) vale para la cita que había cuando se puso. Si después
+ * alguien fija una fecha de revisión NUEVA y posterior a aquel día, es
+ * otra cita y está pendiente. Lo vio el comercial el 10-11-2026: puso
+ * una revisión en dos villas que ya tenían hecha la visita de cortesía
+ * y le salían en verde, como hechas. Corregir la fecha de una visita ya
+ * hecha (ponerla en su día, o antes) no la deshace.
+ *
+ * Es la misma regla que entrega_revision_hecha() en api/lib/entregas.php:
+ * si se toca una, se toca la otra.
+ */
+export function revisionHecha(entrega) {
+  const e = entrega || {};
+  if (!e.revisadaEn) return false;
+  if (!e.revision) return true;
+  const marcada = e.revisadaFijadaEn || e.revisadaEn;
+  const d = new Date(e.revisadaEn);
+  if (Number.isNaN(d.getTime())) return true;
+  return !((e.revisionFijadaEn || '') > marcada && e.revision > isoDe(d));
 }
 
 /** El día en que se apuntó la entrega («2026-11-10»), o '' si no está entregada. */
@@ -238,8 +261,15 @@ export function hitosDe(entregas, { incidencias = new Map(), hoy = hoyIso() } = 
       unidadId: e.unidadId, villa: u?.corto || e.unidadId.split(':')[1] || '', nombre: u?.nombre || e.unidadId,
       compradores: e.compradores || '', entrega: e, hora: '',
     };
+    const hecha = revisionHecha(e);
     if (e.revision) {
-      hitos.push({ ...base, dia: e.revision, tipo: e.revisadaEn ? 'revisada' : 'revision', hora: e.revisadaEn ? '' : (e.revisionHora || '') });
+      hitos.push({ ...base, dia: e.revision, tipo: hecha ? 'revisada' : 'revision', hora: hecha ? '' : (e.revisionHora || '') });
+      // Una cita nueva en una vivienda que ya tuvo otra revisión hecha:
+      // aquella sigue en su día, y la nueva sale como prevista.
+      if (!hecha && e.revisadaEn) {
+        const antes = isoDe(new Date(e.revisadaEn));
+        if (esDia(antes) && antes !== e.revision) hitos.push({ ...base, dia: antes, tipo: 'revisada' });
+      }
     } else if (e.revisadaEn) {
       hitos.push({ ...base, dia: isoDe(new Date(e.revisadaEn)), tipo: 'revisada' });
     }
@@ -247,7 +277,7 @@ export function hitosDe(entregas, { incidencias = new Map(), hoy = hoyIso() } = 
       const n = incidencias.get(e.unidadId) || 0;
       hitos.push({ ...base, dia: e.firma || diaDeEntrega(e), tipo: n > 0 ? 'incidencia' : 'entregada', incidencias: n });
     } else if (e.firma) {
-      hitos.push({ ...base, dia: e.firma, tipo: 'firma', incidencias: 0, sinConfirmar: e.firma < hoy });
+      hitos.push({ ...base, dia: e.firma, tipo: 'firma', hora: e.firmaHora || '', incidencias: 0, sinConfirmar: e.firma < hoy });
     }
   }
   return hitos;

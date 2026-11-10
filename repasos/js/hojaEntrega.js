@@ -32,16 +32,20 @@ export async function hojaFechas({ unidadId, promoId, nombre, entrega = null, al
   const e = entrega || {};
   const fecha = (iso) => E.fechaConDia(iso, { mayus: true });
   const diaEntrega = E.diaDeEntrega(e);
+  const hecha = E.revisionHecha(e);
   const filas = [
     { id: 'compradores', icono: 'users', rotulo: 'Compradores', sub: e.compradores || 'Sin apuntar' },
     { id: 'revision', icono: 'calendario', rotulo: 'Fecha de la revisión con el cliente',
       sub: e.revision ? `${fecha(e.revision)}${e.revisionHora ? ` · ${e.revisionHora}` : ''}` : 'Sin fecha' },
-    { id: 'firma', icono: 'key', rotulo: 'Fecha de la firma', sub: e.firma ? fecha(e.firma) : 'Sin fecha' },
-    e.revisadaEn
+    { id: 'firma', icono: 'key', rotulo: 'Fecha de la firma',
+      sub: e.firma ? `${fecha(e.firma)}${e.firmaHora ? ` · ${e.firmaHora}` : ''}` : 'Sin fecha' },
+    // «Hecha» es la revisión que hay puesta ahora: una cita nueva en una
+    // vivienda que ya tuvo otra visita vuelve a estar por hacer.
+    hecha
       ? { id: 'parte', icono: 'periodico', rotulo: 'Abrir el parte post-entrega',
           sub: `Revisión hecha el ${E.fechaLarga(E.isoDe(new Date(e.revisadaEn)))}` }
       : { id: 'hecha', icono: 'check', rotulo: 'La revisión se ha hecho', sub: 'Abre el parte post-entrega' },
-    e.revisadaEn ? { id: 'deshacer', icono: 'x', rotulo: 'La revisión no se ha hecho', sub: 'Quita la marca; los partes se quedan' } : null,
+    hecha ? { id: 'deshacer', icono: 'x', rotulo: 'La revisión no se ha hecho', sub: 'Quita la marca; los partes se quedan' } : null,
     e.entregadaEn
       ? { id: 'no-entregada', icono: 'x', rotulo: 'La vivienda no se ha entregado',
           sub: `Quita la marca de entregada${diaEntrega ? ` (${E.fechaLarga(diaEntrega)})` : ''}` }
@@ -74,8 +78,15 @@ export async function hojaFechas({ unidadId, promoId, nombre, entrega = null, al
       const v = await hojaFecha(e.firma ? E.partes(e.firma).fecha.toISOString() : null);
       if (v === null) return;
       const dia = v ? E.isoDe(new Date(v)) : '';
-      await store.fijarEntrega(unidadId, promoId, { firma: dia });
-      toast(dia ? `Firma el ${E.fechaConDia(dia)}` : 'Firma sin fecha', '', { icono: 'key' });
+      let horaNueva = e.firmaHora || '';
+      if (dia) {
+        // Igual que en la revisión: cerrar la hoja de la hora sin
+        // elegir no tira la fecha que se acaba de escoger.
+        const hh = await hojaHora(horaNueva, 'La hora de la cita en la notaría. Se puede dejar sin hora.');
+        if (hh !== null) horaNueva = hh;
+      }
+      await store.fijarEntrega(unidadId, promoId, { firma: dia, firmaHora: dia ? horaNueva : '' });
+      toast(dia ? `Firma el ${E.fechaConDia(dia)}${horaNueva ? ` a las ${horaNueva}` : ''}` : 'Firma sin fecha', '', { icono: 'key' });
     } else if (elegido === 'hecha') {
       const seguro = await confirmar({
         titulo: '¿La revisión con el cliente se ha hecho?',
@@ -162,11 +173,11 @@ function hojaCompradores(actual) {
 }
 
 /**
- * La hora de la revisión, con el reloj del propio móvil. Resuelve con
- * «HH:MM», con vacío si se quita la hora, o null si se cierra sin
- * tocar.
+ * La hora de la revisión o de la firma, con el reloj del propio móvil.
+ * Resuelve con «HH:MM», con vacío si se quita la hora, o null si se
+ * cierra sin tocar.
  */
-function hojaHora(actual) {
+function hojaHora(actual, pista = 'La hora de la visita con el cliente. Se puede dejar sin hora.') {
   return sheet((cerrar) => {
     const campo = h('input', { type: 'time', value: actual || '' });
     const sinHora = h('button.d-boton-negro.claro', { onclick: () => cerrar('') }, 'Sin hora');
@@ -175,7 +186,7 @@ function hojaHora(actual) {
     }, 'Guardar');
     return [
       h('h2.title', null, '¿A qué hora?'),
-      h('p.hint', null, 'La hora de la visita con el cliente. Se puede dejar sin hora.'),
+      h('p.hint', null, pista),
       h('div.d-hoja-campo', null, campo),
       h('div.d-hoja-botones', null, sinHora, guardar),
     ];
