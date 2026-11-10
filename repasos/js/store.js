@@ -393,7 +393,21 @@ export async function fijarEntrega(unidadId, promoId, cambios) {
  * apuntarlas.
  */
 export async function marcarRevisionHecha(unidadId, promoId) {
-  const entrega = await fijarEntrega(unidadId, promoId, { revisadaEn: ahora() });
+  // El día que cuenta es el de la visita, no el del toque:
+  //  · si la revisión tenía puesto un día que aún no ha llegado, es que
+  //    se adelantó y se ha hecho hoy: la fecha pasa a hoy (si no, un
+  //    retoque posterior de la hora la devolvía a «pendiente»);
+  //  · si el día ya pasó y se apunta tarde, la marca lleva ese día (a
+  //    mediodía, como la precarga), para que en el calendario la visita
+  //    no cambie de sitio. Cuándo se apuntó queda en su sello.
+  const previa = await db.get('entregas', unidadId);
+  const prevista = previa && !previa.borrada && /^\d{4}-\d{2}-\d{2}$/.test(previa.revision || '') ? previa.revision : '';
+  const d = new Date();
+  const hoy = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const cambios = { revisadaEn: ahora() };
+  if (prevista > hoy) { cambios.revision = hoy; cambios.revisionHora = ''; }
+  else if (prevista && prevista < hoy) cambios.revisadaEn = `${prevista}T12:00:00.000Z`;
+  const entrega = await fijarEntrega(unidadId, promoId, cambios);
   // Si la vivienda ya tiene parte post-entrega (de una revisión
   // anterior), se sigue en ese: una segunda visita no abre otro.
   const lista = (await partePostDeUnidad(unidadId)) || await crearLista({ unidadId, promoId, fase: FASE_POST });
@@ -1491,7 +1505,8 @@ export async function datosHome(promoId) {
     });
     if (e.revision && e.revisionFijadaEn) hecho('revision', e.revisionFijadaEn, e.revisionPorNombre, e.revisionPor);
     if (e.firma && e.firmaFijadaEn) hecho('firma', e.firmaFijadaEn, e.firmaPorNombre, e.firmaPor);
-    if (e.revisadaEn) hecho('revisada', e.revisadaEn, e.revisadaPorNombre, e.revisadaPor);
+    // En el muro, cuándo se apuntó (la marca puede llevar el día de la visita).
+    if (e.revisadaEn) hecho('revisada', e.revisadaFijadaEn || e.revisadaEn, e.revisadaPorNombre, e.revisadaPor);
     if (e.entregadaEn) hecho('entregada', e.entregadaEn, e.entregadaPorNombre, e.entregadaPor);
   }
   muro.sort((a, b) => (b.cuando || '').localeCompare(a.cuando || ''));
@@ -1579,6 +1594,8 @@ function programarSync() {
 }
 
 let sincronizando = null;
+/** Algo cambió mientras subía y sigue en la cola (ver empujar): toca otra vuelta. */
+let quedaAlgoPorSubir = false;
 /** Marca del relleno de una vez (ver sincronizar). Cambiarla obliga a otro. */
 const RELLENO = 'relleno-tandas-2026-11';
 
@@ -1646,6 +1663,12 @@ export async function sincronizar({ forzar = false } = {}) {
     }
   })();
   try { await sincronizando; } finally { sincronizando = null; }
+  // Lo que cambió mientras subía se quedó en la cola: otra vuelta
+  // enseguida, sin esperar a la siguiente sincronización de rutina.
+  if (quedaAlgoPorSubir) {
+    quedaAlgoPorSubir = false;
+    programarSync();
+  }
 }
 
 /* ═══ El blindaje de los medios ya guardados ═══════════════════════
@@ -1713,14 +1736,22 @@ async function empujar() {
   const pend = await db.pendientes();
   for (const item of pend) {
     try {
+      // Lo que se ha leído para subir: de qué almacén y con qué marca.
+      // Sirve para saber, al volver la respuesta, si lo subido sigue
+      // siendo lo que hay (ver abajo, antes de desencolar).
+      let visto = null;
+      const mirar = (almacen, registro) => { if (registro) visto = { almacen, actualizado: registro.actualizado || '' }; };
       if (item.tipo === 'lista') {
         const l = await db.get('listas', item.id);
+        mirar('listas', l);
         if (l) await api.subirListas([sinBlobs(l)]);
       } else if (item.tipo === 'tarea') {
         const t = await db.get('tareas', item.id);
+        mirar('tareas', t);
         if (t) await api.subirTareas([sinBlobs(t)]);
       } else if (item.tipo === 'comentario') {
         const c = await db.get('comentarios', item.id);
+        mirar('comentarios', c);
         if (c) await api.subirComentarios([sinBlobs(c)]);
       } else if (item.tipo === 'medio') {
         const m = despertarMedio(await db.get('medios', item.id));
@@ -1770,6 +1801,7 @@ async function empujar() {
         // espera hasta que entre alguien que pueda.
         if (!puedePonerFechas(usuario)) continue;
         const e = await db.get('entregas', item.id);
+        mirar('entregas', e);
         if (e) await api.subirEntregas([e]);
       } else if (item.tipo === 'lectura') {
         const l = await db.get('lecturas', item.id);
@@ -1779,6 +1811,21 @@ async function empujar() {
       } else if (item.tipo === 'medio-borrado') {
         try { await api.borrarMedioRemoto(item.id); }
         catch (e) { if (e.status !== 404) throw e; }
+      }
+      // Si el registro ha cambiado mientras subía —un segundo toque en
+      // la misma ficha con la subida en camino—, lo que ha llegado al
+      // servidor es lo de antes: el apunte se queda en la cola y la
+      // siguiente sincronización sube lo de ahora. Sin esto el segundo
+      // cambio no subía NUNCA: encolar() no añade otro apunte porque ve
+      // el que está en vuelo, y aquí se borraba al acabar. Así se
+      // perdía, por ejemplo, el «deshacer» de una entrega marcada por
+      // error: el móvil decía que no y el resto del equipo que sí.
+      if (visto) {
+        const ahoraHay = await db.get(visto.almacen, item.id);
+        if (ahoraHay && (ahoraHay.actualizado || '') !== visto.actualizado) {
+          quedaAlgoPorSubir = true;
+          continue;
+        }
       }
       await db.desencolar(item.seq);
       await refrescarPendientes();

@@ -114,7 +114,13 @@ export function anotarFiltros(filtros) {
  */
 export function anotarRuta(hash) {
   history.replaceState(history.state, '', hash);
-  rutaActual = hash.replace(/^#/, '') || '/';
+  const nueva = hash.replace(/^#/, '') || '/';
+  // Si lo que está pintado es la ruta que había, sigue siéndolo con la
+  // dirección nueva: es la misma pantalla. Sin esto, el primer repintado
+  // tras cambiar de día en el calendario —al guardar una fecha desde
+  // allí— la tomaba por una pantalla nueva y la devolvía arriba.
+  if (rutaPintada === rutaActual) rutaPintada = nueva;
+  rutaActual = nueva;
 }
 
 /** Vuelve atrás sin salirse de la app si se entró por enlace directo. */

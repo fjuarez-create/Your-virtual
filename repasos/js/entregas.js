@@ -150,7 +150,7 @@ export function situacion(entrega, { incidencias = 0, hoy = hoyIso() } = {}) {
   const chipFirma = e.firma ? { icono: 'key', texto: `Firma el ${fechaConDia(e.firma)}${horaFirma}`, clase: 'negro' } : null;
 
   if (e.entregadaEn) {
-    const dia = e.firma || diaDeEntrega(e);
+    const dia = diaEntregada(e);
     if (incidencias > 0) {
       return {
         clave: 'incidencias', clase: 'rojo', icono: 'periodico',
@@ -226,6 +226,20 @@ export function diaDeEntrega(entrega) {
   return Number.isNaN(d.getTime()) ? '' : isoDe(d);
 }
 
+/**
+ * El día que cuenta como el de la entrega: el de la firma, salvo que la
+ * firma tenga puesto un día POSTERIOR a aquel en que se apuntó la
+ * entrega (la notaría se adelantó y nadie corrigió la fecha): entonces,
+ * el día en que se apuntó. Una vivienda no puede salir entregada en una
+ * fecha que todavía no ha llegado.
+ */
+export function diaEntregada(entrega) {
+  const apuntada = diaDeEntrega(entrega);
+  if (!apuntada) return '';
+  const firma = esDia(entrega?.firma) ? entrega.firma : '';
+  return firma && firma <= apuntada ? firma : apuntada;
+}
+
 /* ─── Los hitos del calendario ───────────────────────────────── */
 /**
  * Los tipos de hito, con sus palabras. `chip` es la clase del
@@ -275,7 +289,7 @@ export function hitosDe(entregas, { incidencias = new Map(), hoy = hoyIso() } = 
     }
     if (e.entregadaEn) {
       const n = incidencias.get(e.unidadId) || 0;
-      hitos.push({ ...base, dia: e.firma || diaDeEntrega(e), tipo: n > 0 ? 'incidencia' : 'entregada', incidencias: n });
+      hitos.push({ ...base, dia: diaEntregada(e), tipo: n > 0 ? 'incidencia' : 'entregada', incidencias: n });
     } else if (e.firma) {
       hitos.push({ ...base, dia: e.firma, tipo: 'firma', hora: e.firmaHora || '', incidencias: 0, sinConfirmar: e.firma < hoy });
     }

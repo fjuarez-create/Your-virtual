@@ -220,7 +220,9 @@ export async function render() {
     if (e.tipo === 'revision' || e.tipo === 'revisada') {
       return v.firma
         ? { clase: 'gris', icono: 'key', texto: `Firma el ${E.fechaConDia(v.firma)}${v.firmaHora ? ` · ${v.firmaHora}` : ''}` }
-        : { clase: 'gris', icono: 'key', texto: 'Firma sin fecha todavía' };
+        : v.entregadaEn
+          ? { clase: 'gris', icono: 'key', texto: `Entregada el ${E.fechaConDia(E.diaEntregada(v))}` }
+          : { clase: 'gris', icono: 'key', texto: 'Firma sin fecha todavía' };
     }
     if (e.tipo === 'incidencia') {
       return { clase: 'rojo', icono: 'periodico', texto: `${e.incidencias} ${e.incidencias === 1 ? 'repaso del parte post-entrega por resolver' : 'repasos del parte post-entrega por resolver'}` };

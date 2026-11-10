@@ -104,6 +104,14 @@ export async function hojaFechas({ unidadId, promoId, nombre, entrega = null, al
       toast('Esta vivienda no tiene parte post-entrega todavía', 'err');
       return;
     } else if (elegido === 'deshacer') {
+      // Deshacer también pregunta: la hoja nace justo donde estaba el
+      // dedo, y un segundo toque sin querer quitaba la marca en el acto.
+      const seguro = await confirmar({
+        titulo: `¿Quitar la marca de revisión hecha de la ${nombre}?`,
+        texto: 'La revisión con el cliente vuelve a estar pendiente. Los partes que haya abiertos se quedan.',
+        ok: 'Sí, quitarla', icono: 'x', conservar: 'Dejarla como está', iconoConservar: 'check',
+      });
+      if (!seguro) return;
       await store.deshacerRevisionHecha(unidadId, promoId);
       toast('La revisión vuelve a estar pendiente');
     } else if (elegido === 'entregada') {
@@ -118,6 +126,12 @@ export async function hojaFechas({ unidadId, promoId, nombre, entrega = null, al
       await store.marcarEntregada(unidadId, promoId);
       toast(`${nombre} entregada`, '', { icono: 'key' });
     } else if (elegido === 'no-entregada') {
+      const seguro = await confirmar({
+        titulo: `¿Quitar la marca de entregada de la ${nombre}?`,
+        texto: 'La vivienda vuelve a estar sin entregar. Se puede volver a marcar cuando toque.',
+        ok: 'Sí, quitarla', icono: 'x', conservar: 'Dejarla como está', iconoConservar: 'key',
+      });
+      if (!seguro) return;
       await store.deshacerEntregada(unidadId, promoId);
       toast('La vivienda vuelve a estar sin entregar');
     }

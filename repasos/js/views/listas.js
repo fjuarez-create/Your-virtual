@@ -414,8 +414,10 @@ export async function render({ promoId, unidadId }) {
       const parte = await store.partePostDeUnidad(unidadId);
       if (parte) { ir(`#/l/${parte.id}`); return; }
     }
-    const dia = sit.clave === 'firma' || sit.clave === 'entregada' || sit.clave === 'incidencias'
-      ? (entrega.firma || E.diaDeEntrega(entrega) || E.hoyIso())
+    const dia = sit.clave === 'entregada' || sit.clave === 'incidencias'
+      ? (E.diaEntregada(entrega) || entrega.firma || E.hoyIso())
+      : sit.clave === 'firma'
+      ? (entrega.firma || E.hoyIso())
       : sit.clave === 'revisada' && !entrega.revision && entrega.revisadaEn
         ? E.isoDe(new Date(entrega.revisadaEn))   // el día en que se dio por hecha
         : (entrega.revision || entrega.firma || E.hoyIso());
@@ -552,7 +554,7 @@ function cuandoReconocimiento(entrega, hoy = E.hoyIso()) {
   // lo que diga el calendario: una firma con fecha pasada y sin esa
   // marca sigue siendo una firma, no una entrega.
   if (entrega.entregadaEn) {
-    const dia = firma || E.diaDeEntrega(entrega);
+    const dia = E.diaEntregada(entrega) || firma;
     return `entregada ${dia >= hoy ? viene(dia) : paso(dia)}`;
   }
   if (firma && firma < hoy) return `firma prevista ${paso(firma)}`;
