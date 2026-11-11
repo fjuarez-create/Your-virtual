@@ -218,13 +218,20 @@ export async function sinLeerPorUnidad(promoId) {
  * escribió: nadie espera un tic de sí mismo. Si el directorio todavía no
  * ha bajado, se responde 1 en cuanto haya una lectura en vez de prometer
  * dos que no se pueden comprobar.
+ *
+ * Se mira QUIÉN lo ha leído, no cuántos. Las lecturas de quien ya no
+ * está en el equipo —dado de baja, o con el acceso desactivado— se
+ * quedan guardadas, y contándolas a bulto salía con los dos tics un
+ * mensaje que habían leído el que se fue y todos los que quedan menos
+ * uno: «leído por todos» sin que ese uno lo hubiera abierto.
  */
 export async function ticsDe(mensaje) {
   const leidas = (await lecturasDe(mensaje.id)).filter((l) => l.usuarioId !== mensaje.creadoPor);
   if (!leidas.length) return 0;
   const equipo = [...personas.values()].filter((p) => p.activo !== false && p.id !== mensaje.creadoPor);
   if (!equipo.length) return 1;
-  return leidas.length >= equipo.length ? 2 : 1;
+  const lectores = new Set(leidas.map((l) => l.usuarioId));
+  return equipo.every((p) => lectores.has(p.id)) ? 2 : 1;
 }
 
 /* ─── Estado de sincronización (observable simple) ────────────── */
@@ -2090,6 +2097,62 @@ async function acatarArranque(sello) {
   return true;
 }
 
+/** ¿Dicen lo mismo dos fichas del directorio? Campo a campo. */
+function mismaFicha(a, b) {
+  if (!a || !b) return false;
+  const campos = Object.keys(b);
+  return Object.keys(a).length === campos.length && campos.every((c) => a[c] === b[c]);
+}
+
+/**
+ * El directorio que manda el servidor, al pie de la letra: se guarda a
+ * quien viene y se QUITA a quien ya no viene.
+ *
+ * El caso: el administrador da de baja a alguien y el servidor borra su
+ * fila. Aquí solo se añadía lo que bajaba, así que la persona borrada
+ * seguía para siempre en los móviles que ya la tenían: salía al elegir
+ * responsable o al sentar a alguien a la mesa de una reunión, y seguía
+ * contando para los dos tics, de modo que un mensaje ya no se daba por
+ * leído por todos si no lo había leído ella (noviembre de 2026). El
+ * directorio viaja ENTERO en cada respuesta (ver cambios() en el
+ * servidor), así que quien no viene es que ya no existe. Lo que firmó
+ * sigue saliendo con su nombre: cada repaso, cada nota y cada mensaje
+ * guardan el nombre de quien los hizo, y persona() cae a él.
+ *
+ * Borrar de más dejaría a un equipo entero sin caras, así que solo se
+ * borra con una lista de la que fiarse: con alguien dentro (ver
+ * fusionarTanda) y en la que venga quien está usando la app. El
+ * servidor no contesta a quien no existe —le da un 401—, así que una
+ * lista en la que no está uno mismo no es el directorio de este
+ * servidor: se guarda lo que traiga, como siempre, pero no se quita a
+ * nadie por ella. OJO: si algún día el directorio dejara de viajar
+ * entero, esto borraría a todo el que no viniera.
+ *
+ * Y sin trabajo de balde: una bajada larga son hasta 25 tandas
+ * seguidas, cada una con el directorio entero. Solo se escribe la ficha
+ * que ha cambiado, y si lo que llega es lo que ya hay no se escribe ni
+ * se recarga nada.
+ */
+async function acatarDirectorio(lista) {
+  const guardadas = new Map((await db.getAll('personas')).map((p) => [p.id, p]));
+  const vienen = new Set(lista.map((p) => p?.id));
+  const cambiadas = lista.filter((p) => !mismaFicha(guardadas.get(p?.id), p));
+  const bajas = usuario && vienen.has(usuario.id)
+    ? [...guardadas.keys()].filter((id) => !vienen.has(id))
+    : [];
+  await db.putVarios('personas', cambiadas);
+  for (const id of bajas) await db.borrar('personas', id);
+
+  // La memoria se coteja con lo guardado en vez de darla por buena: con
+  // la app abierta en dos pestañas, la otra puede haber escrito ya este
+  // mismo directorio, y aquí no habría nada que guardar pero sí caras
+  // de más (o de menos) en lo que pinta esta.
+  const alDia = !cambiadas.length && !bajas.length
+    && personas.size === guardadas.size
+    && [...guardadas.values()].every((p) => mismaFicha(personas.get(p.id), p));
+  if (!alDia) await cargarPersonas();
+}
+
 async function fusionarTanda(desde) {
   const r = await api.cambios(desde);
   if (!r) return null;
@@ -2101,12 +2164,11 @@ async function fusionarTanda(desde) {
     // Si ya era una bajada completa, esta tanda vale: se fusiona.
   }
 
-  if (r.personas?.length) {
-    // El directorio no se fusiona por marca de tiempo: lo que manda el
-    // servidor es la verdad, aquí nadie lo edita desde el dispositivo.
-    await db.putVarios('personas', r.personas);
-    await cargarPersonas();
-  }
+  // El directorio no se fusiona por marca de tiempo: lo que manda el
+  // servidor es la verdad, aquí nadie lo edita desde el dispositivo.
+  // Una respuesta sin «personas», o con la lista vacía, no dice nada
+  // del directorio y no lo toca (ver acatarDirectorio).
+  if (Array.isArray(r.personas) && r.personas.length) await acatarDirectorio(r.personas);
   if (r.listas?.length) {
     const fusionadas = [];
     for (const remota of r.listas) {

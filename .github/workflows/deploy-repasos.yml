@@ -73,6 +73,17 @@ jobs:
       - name: Comprobar que el service worker guarda todo el código
         run: python3 ../.github/scripts/comprobar-armazon.py .
 
+      # La bajada de cambios se guía por «recibido», el número de orden
+      # que el servidor le pone a cada fila al llegar. Toda escritura en
+      # una de las siete tablas que bajan a los móviles tiene que dejar
+      # la fila con recibido = ''. Un UPDATE que se olvide no da ningún
+      # error: ese cambio, sencillamente, no le baja nunca a quien ya
+      # pasó por esa fila. Como no avisa él, esto lee el PHP de la API y
+      # lo caza antes de subir nada (y antes se prueba a sí mismo, para
+      # no dar un visto bueno a ciegas).
+      - name: Comprobar que ninguna escritura se salta la recepción
+        run: node ../.github/scripts/comprobar-recepcion.mjs .
+
       # El SHA sella la versión en index.html y en sw.js. Al cambiar, el
       # service worker tira su caché entera y ningún móvil se queda con
       # media versión vieja y media nueva.
