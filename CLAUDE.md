@@ -65,6 +65,26 @@ palabra. Y cuando se construyan las tareas de reunión, su entidad
 llevará por dentro un nombre propio que no choque (`encargos`), nunca
 `tareas`.
 
+## Una regla del servidor que no se puede olvidar (noviembre de 2026)
+
+Las siete tablas que bajan a los móviles —`listas`, `tareas`,
+`comentarios`, `medios`, `mensajes`, `lecturas` y `entregas`— llevan la
+columna `recibido`: el número de orden con el que cada fila LLEGÓ al
+servidor. La bajada de cambios se guía por ese número y no por
+`actualizado`, que lo pone el reloj de cada móvil (lo apuntado sin
+cobertura y subido más tarde no les bajaba nunca a quienes ya habían
+sincronizado algo más nuevo).
+
+**Toda escritura en una de esas tablas deja la fila con
+`recibido = ''`** («pendiente de numerar»). `upsert()` ya lo hace;
+quien escriba un `UPDATE` a mano tiene que ponerlo en su `SET`. Si se
+olvida, ese cambio no le baja a quien ya pasó por esa fila, y no da
+ningún error.
+
+Y la marca de sincronización viaja escrita con «+00:00», no con «Z»:
+no es un descuido y no se «arregla». Todo está contado en la cabecera
+«La bajada por recepción» de `api/index.php`.
+
 ## Lo que no se hace nunca
 
 - **No se cambia la contraseña de Fran** (f.juarez@unikdi.com). Lo ha
