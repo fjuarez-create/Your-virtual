@@ -325,11 +325,14 @@ function esquema_arreglar_datos(PDO $pdo): array
     // ya habían rebotado se quedarían contadas como pendientes: no
     // saldrían en el contador de rechazadas ni en su filtro, que es justo
     // para lo que se hizo el estado.
-    if (in_array('rechazada', esquema_columnas($pdo, 'tareas'), true)) {
+    // Las columnas se preguntan UNA vez: con dos preguntas, si fallara
+    // solo la segunda el rescate se haría sin dejar la fila pendiente.
+    $columnas = esquema_columnas($pdo, 'tareas');
+    if (in_array('rechazada', $columnas, true)) {
         // Con la columna de recepción puesta, la fila queda además
         // «pendiente de numerar»: sin eso, este cambio no bajaba a
         // ningún móvil (ni siquiera tocaba `actualizado`).
-        $vaciar = in_array('recibido', esquema_columnas($pdo, 'tareas'), true) ? ", recibido = ''" : '';
+        $vaciar = in_array('recibido', $columnas, true) ? ", recibido = ''" : '';
         $sent = $pdo->prepare(
             "UPDATE tareas SET estado = 'rechazada'{$vaciar} WHERE estado = 'pendiente' AND rechazada = 1"
         );
@@ -375,6 +378,15 @@ function esquema_arreglar_datos(PDO $pdo): array
  * fila. Las dos condiciones van en positivo (LIKE, y no NOT LIKE)
  * para que tampoco un valor nulo acabe copiado: lo que no casa cae al
  * ELSE.
+ *
+ * EL REPASO. El LIKE mira que los signos estén en su sitio, no que
+ * haya cifras donde van cifras, y no distingue mayúsculas. La forma
+ * EXACTA la remata, detrás del relleno, un repaso en PHP con la regla
+ * de iso(): todo número que no la cumpla va al principio. Se corrige
+ * por `id` y no por valor: con la colación de la casa, para MariaDB
+ * una marca en minúsculas y su gemela bien escrita son «el mismo
+ * valor». Así, antes de encender, TODO número tiene la forma de la
+ * casa, lo diga el motor que lo diga.
  */
 function esquema_recepcion(PDO $pdo): array
 {
@@ -389,9 +401,20 @@ function esquema_recepcion(PDO $pdo): array
         }
         $indice = "ix_{$tabla}_recibido";
         if (!esquema_hay_indice($pdo, $tabla, $indice)) {
-            $pdo->exec("CREATE INDEX {$indice} ON {$tabla} (recibido)");
+            // En MariaDB, con ALTER TABLE y no con CREATE INDEX: este
+            // pide el permiso INDEX, que la app no había necesitado
+            // nunca (todos sus índices nacieron dentro de un CREATE
+            // TABLE); a aquel le basta ALTER, el de añadir columnas.
+            // SQLite solo entiende el CREATE INDEX.
+            $pdo->exec(motor() === 'sqlite'
+                ? "CREATE INDEX {$indice} ON {$tabla} (recibido)"
+                : "ALTER TABLE {$tabla} ADD INDEX {$indice} (recibido)");
             $hechos[] = "{$tabla}: índice {$indice}";
         }
+        // Un nulo no es ni «pendiente» ni un número: no lo numeraría ni
+        // lo leería nadie. No puede haberlo con la columna de la casa;
+        // solo si alguien la hubiera puesto a mano de otra manera.
+        $pdo->exec("UPDATE {$tabla} SET recibido = '' WHERE recibido IS NULL");
     }
 
     $encendido = $pdo->query("SELECT 1 FROM meta WHERE clave = 'recepcion_serie'")->fetchColumn();
@@ -412,6 +435,24 @@ function esquema_recepcion(PDO $pdo): array
             $sent->execute([$ahora, $ahora]);
             if ($sent->rowCount() > 0) {
                 $hechos[] = "{$tabla}: {$sent->rowCount()} filas numeradas";
+            }
+            // El repaso: la forma exacta, mirada aquí y no por el motor.
+            // Primero se lee todo y se suelta la lectura; después se
+            // escribe (ver upsert() en index.php).
+            $malos = [];
+            $sent = $pdo->query("SELECT id, recibido FROM {$tabla} WHERE recibido <> ''");
+            while ($fila = $sent->fetch(PDO::FETCH_NUM)) {
+                if (!preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/D', (string) $fila[1])) {
+                    $malos[] = $fila[0];
+                }
+            }
+            $sent->closeCursor();
+            if ($malos) {
+                $corregir = $pdo->prepare("UPDATE {$tabla} SET recibido = '1970-01-01T00:00:00.000Z' WHERE id = ?");
+                foreach ($malos as $id) {
+                    $corregir->execute([$id]);
+                }
+                $hechos[] = "{$tabla}: " . count($malos) . ' números mal formados, al principio';
             }
         }
     }

@@ -75,7 +75,10 @@ function entregas_de_antes_al_dia(PDO $pdo): void
         if (revision_meta($pdo, 'entregadas_de_antes') === ENTREGADAS_DE_ANTES_HASTA) {
             return;
         }
-        if (!in_array('entregada_en', esquema_columnas($pdo, 'entregas'), true)) {
+        // Las columnas se preguntan UNA vez (ver el rescate de
+        // rechazadas en esquema.php).
+        $columnas = esquema_columnas($pdo, 'entregas');
+        if (!in_array('entregada_en', $columnas, true)) {
             return;   // la columna llega en el siguiente arranque; se vuelve a intentar
         }
         $filas = $pdo->prepare(
@@ -85,7 +88,7 @@ function entregas_de_antes_al_dia(PDO $pdo): void
         $filas->execute([ENTREGADAS_DE_ANTES_HASTA]);
         // Con la columna de recepción, la ficha queda pendiente de numerar
         // (ver «La bajada por recepción» en index.php).
-        $vaciar = in_array('recibido', esquema_columnas($pdo, 'entregas'), true) ? ", recibido = ''" : '';
+        $vaciar = in_array('recibido', $columnas, true) ? ", recibido = ''" : '';
         $poner = $pdo->prepare(
             "UPDATE entregas
                 SET entregada_en = ?, entregada_fijada_en = ?, entregada_por = NULL, entregada_por_nombre = ?, actualizado = ?{$vaciar}

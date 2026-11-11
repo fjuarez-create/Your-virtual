@@ -191,7 +191,12 @@ function precarga_corregir(PDO $pdo, array $reglas): int
 {
     $corregidas = 0;
     $leer = $pdo->prepare('SELECT compradores FROM entregas WHERE id = ?');
-    $vaciar = in_array('recibido', esquema_columnas($pdo, 'entregas'), true) ? ", recibido = ''" : '';
+    // Si las columnas no se pueden leer (lista vacía: la tabla existe,
+    // que quien llama lo acaba de mirar), la de recepción se da por
+    // puesta, como en recepcion_hay() de index.php: mejor un error, que
+    // se reintenta, que una corrección guardada sin dejarla pendiente.
+    $columnas = esquema_columnas($pdo, 'entregas');
+    $vaciar = ($columnas === [] || in_array('recibido', $columnas, true)) ? ", recibido = ''" : '';
     $poner = $pdo->prepare("UPDATE entregas SET compradores = ?, compradores_fijados_en = ?, actualizado = ?{$vaciar} WHERE id = ?");
     foreach ($reglas as $regla) {
         if (!is_array($regla)) {

@@ -2157,20 +2157,46 @@ function cambios(): void
 
    SI SE VUELVE ATRÁS ESTE CÓDIGO DESPUÉS DE ENCENDER (o se restaura
    una copia de la base): el código de antes modifica filas sin
-   dejarlas pendientes de numerar. La publicación que vuelva a traer
-   este código tiene que cambiar RESINCRONIZACION en js/store.js, para
-   que todos los móviles lo bajen todo una vez. (Si la vuelta atrás es
-   ANTES de encender no hay que hacer nada: la espera empieza de nuevo
-   sola; ver recepcion_encendida.)
+   dejarlas pendientes de numerar, y eso no le baja a quien conserve
+   una marca nueva. El remedio, cuando este código haya vuelto y ya no
+   quede código de antes vivo: dejar pendientes TODAS las filas de las
+   siete tablas, una sola vez (UPDATE tabla SET recibido = ''). Se
+   numeran con marca nueva y le bajan a todo el mundo con la marca que
+   tenga, lleve la app que lleve (probado en el banco: una
+   sincronización). Cambiar RESINCRONIZACION en js/store.js también lo
+   cura, pero solo en los móviles que ya hayan cargado esa app. (Si la
+   vuelta atrás es ANTES de encender no hay que hacer nada: la espera
+   empieza de nuevo sola; ver recepcion_encendida.)
    ═══════════════════════════════════════════════════════════════ */
 
-/** ¿Tiene ya esa tabla la columna `recibido`? (ventana del despliegue) */
+/**
+ * ¿Tiene ya esa tabla la columna `recibido`? (ventana del despliegue)
+ * Lo pregunta quien va a ESCRIBIR en la tabla.
+ *
+ * Si las columnas no se pueden leer (la lista viene vacía: la consulta
+ * ha fallado, porque la tabla existe y se va a escribir en ella), la
+ * columna se da por puesta y se apunta en el registro. Lo que no puede
+ * pasar es guardar un cambio sin dejarlo pendiente de numerar: no le
+ * bajaría nunca a quien ya pasó por esa fila, y sin ningún error (visto
+ * en el banco de pruebas: MariaDB resuelve esa consulta con una tabla
+ * temporal en disco, y sin sitio en su carpeta temporal falla ella
+ * mientras las escrituras siguen entrando). Si de verdad no estuviera
+ * (la ventana del despliegue y, además, esa avería), la escritura falla
+ * y el móvil la reintenta.
+ */
 function recepcion_hay(string $tabla): bool
 {
     static $hay = [];
     if (!isset($hay[$tabla])) {
-        $hay[$tabla] = in_array($tabla, TABLAS_QUE_VIAJAN, true)
-            && in_array('recibido', esquema_columnas(bd(), $tabla), true);
+        if (!in_array($tabla, TABLAS_QUE_VIAJAN, true)) {
+            return $hay[$tabla] = false;
+        }
+        $columnas = esquema_columnas(bd(), $tabla);
+        if ($columnas === []) {
+            error_log("UNIK Works · recepción: no se pueden leer las columnas de {$tabla}; se escribe dejando la fila pendiente de numerar.");
+            return $hay[$tabla] = true;
+        }
+        $hay[$tabla] = in_array('recibido', $columnas, true);
     }
     return $hay[$tabla];
 }
@@ -2224,15 +2250,35 @@ function recepcion_encendida(): bool
         }
         clearstatcache(true, __FILE__);
         $huella = (string) @filemtime(__FILE__);
+        if ($huella === '') {
+            // Sin la fecha del fichero no hay cómo saber si el código se
+            // ha vuelto a subir: el cronómetro no arranca y se queda
+            // apagado, que es como hoy.
+            error_log('UNIK Works · recepción, sin encender: no se puede leer la fecha de index.php.');
+            return false;
+        }
         [$vista, $deQuien] = array_pad(explode('|', (string) ($meta['recepcion_vista'] ?? ''), 2), 2, '');
-        if ($vista === '' || $deQuien !== $huella) {
+        // Los segundos tienen que ser cifras: cualquier otra cosa (solo
+        // puede venir de tocar meta a mano) se leería como cero y
+        // encendería en el acto.
+        if (!ctype_digit($vista) || $deQuien !== $huella) {
             foreach (TABLAS_QUE_VIAJAN as $tabla) {
-                if (!recepcion_hay($tabla)) {
+                // Aquí, si las columnas no se pueden leer, la respuesta
+                // es «no» (por eso no se pregunta con recepcion_hay(),
+                // que ante la duda dice «sí»): el cronómetro no arranca
+                // en esta petición.
+                if (!in_array('recibido', esquema_columnas($pdo, $tabla), true)) {
                     return false;
                 }
             }
             // La espera empieza (o vuelve a empezar) ahora.
             $habia = isset($meta['recepcion_vista']);
+            if ($habia && $deQuien !== $huella) {
+                // Que quede dicho: si esta línea saliera en cada bajada,
+                // la fecha del fichero no se está quieta, y así no se
+                // enciende nunca.
+                error_log("UNIK Works · recepción: la espera para encender vuelve a empezar (la fecha de index.php era {$deQuien} y ahora es {$huella}).");
+            }
             $vista = (string) time();
             if ($habia) {
                 $pdo->prepare("UPDATE meta SET valor = ? WHERE clave = 'recepcion_vista'")->execute(["{$vista}|{$huella}"]);
@@ -2308,10 +2354,14 @@ function recepcion_cerrar(PDO $pdo): bool
         // por una tabla que otro tenga bloqueada (una copia del
         // alojamiento, por ejemplo): mejor dejar lo pendiente para la
         // bajada siguiente que tener esta colgada.
-        try {
-            $pdo->exec('SET SESSION lock_wait_timeout = ' . RECEPCION_CERROJO . ', innodb_lock_wait_timeout = ' . RECEPCION_CERROJO);
-        } catch (Throwable $e) {
-            // Sin ese ajuste se sigue igual, con las esperas de siempre.
+        // Cada una en su sentencia: juntas, si una no existe (un
+        // servidor sin InnoDB no tiene la segunda) no se aplica ninguna.
+        foreach (['lock_wait_timeout', 'innodb_lock_wait_timeout'] as $variable) {
+            try {
+                $pdo->exec("SET SESSION {$variable} = " . RECEPCION_CERROJO);
+            } catch (Throwable $e) {
+                // Sin ese ajuste se sigue igual, con la espera de siempre.
+            }
         }
         return true;
     } catch (Throwable $e) {
@@ -2329,7 +2379,13 @@ function recepcion_abrir(PDO $pdo, bool $bien): void
         $sent = $pdo->prepare('SELECT RELEASE_LOCK(?)');
         $sent->execute([recepcion_nombre_cerrojo()]);
         $sent->closeCursor();
-        $pdo->exec('SET SESSION lock_wait_timeout = DEFAULT, innodb_lock_wait_timeout = DEFAULT');
+        foreach (['lock_wait_timeout', 'innodb_lock_wait_timeout'] as $variable) {
+            try {
+                $pdo->exec("SET SESSION {$variable} = DEFAULT");
+            } catch (Throwable $e) {
+                // La que no existe no se puso al tomar el cerrojo.
+            }
+        }
     } catch (Throwable $e) {
         error_log('UNIK Works · recepción, al soltar el cerrojo: ' . $e->getMessage());
     }
@@ -2455,8 +2511,15 @@ function recepcion_marca_entrada(string $crudo): ?string
 /**
  * Las filas de una tabla numeradas entre la marca del móvil y el tope,
  * por orden de llegada. Con «>=» y no «>»: la marca del móvil es la
- * mayor que VIO, y puede quedar por numerar parte de ese mismo lote.
- * Volver a mandar una fila que ya tiene no hace daño; saltársela, sí.
+ * mayor que VIO, y con esa misma marca puede haber filas que no le
+ * cupieron en la tanda: los empates en la frontera de una tanda
+ * cortada y, si pasan de un tope de filas, las que sirve enteras la
+ * rama de «la misma marca» de cambios_por_recepcion(). Y quien entra
+ * de cero pide desde el principio (1970), que es justo la marca que
+ * llevan las filas que el relleno de la migración mandó allí. (No es
+ * que un lote se quede a medio numerar: un lote es UNA sentencia, y
+ * quien lee lo ve entero o no lo ve.) Volver a mandar una fila que ya
+ * tiene no hace daño; saltársela, sí.
  */
 function traer_por_recepcion(string $tabla, string $desde, string $tope): array
 {
