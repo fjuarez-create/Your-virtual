@@ -238,8 +238,10 @@ jobs:
         continue-on-error: true
         run: |
           set -u
-          camino="$(apt-cache show lftp 2> /dev/null | awk '/^Filename:/ { print $2; exit }')"
-          espejos="$(awk '/^  espejos:/ { dentro = 1; next } dentro && /^    default:/ { leer = 1; next } leer && /^      / { print $1; next } leer { exit }' .github/actions/instalar-lftp/action.yml)"
+          # (Los awk leen su entrada hasta el final: si cortaran antes,
+          # quien les escribe moriría de un «tubo roto».)
+          camino="$(apt-cache show lftp 2> /dev/null | awk '/^Filename:/ && !visto { print $2; visto = 1 }' || true)"
+          espejos="$(awk '/^  espejos:/ { dentro = 1; next } dentro && /^    default:/ { leer = 1; next } leer && /^      / { print $1; next } leer { leer = 0; dentro = 0 }' .github/actions/instalar-lftp/action.yml || true)"
           {
             echo "### Los espejos, vistos desde esta máquina de GitHub"
             echo ""

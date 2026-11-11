@@ -240,8 +240,10 @@ del_espejo() {
     resto="${fichero#*_}"
     version="$(printf '%s' "${resto%_*}" | sed 's/%3[aA]/:/g')"
     ficha="$(apt-cache show "$paquete=$version" 2> /dev/null || true)"
-    camino="$(printf '%s\n' "$ficha" | awk '/^Filename:/ { print $2; exit }')"
-    huella="$(printf '%s\n' "$ficha" | awk '/^SHA256:/ { print $2; exit }')"
+    # (Sin «exit» en awk: que lea hasta el final, o quien le escribe
+    # puede morir de un «tubo roto».)
+    camino="$(printf '%s\n' "$ficha" | awk '/^Filename:/ && !visto { print $2; visto = 1 }')"
+    huella="$(printf '%s\n' "$ficha" | awk '/^SHA256:/ && !visto { print $2; visto = 1 }')"
     case "$camino" in pool/*) ;; *) echo "  $paquete no dice de dónde se baja." >&2; return 1 ;; esac
     case "$camino" in *..*) return 1 ;; esac
     if ! printf '%s' "$huella" | grep -q -E '^[0-9a-f]{64}$'; then
