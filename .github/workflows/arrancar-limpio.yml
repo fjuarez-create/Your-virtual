@@ -260,9 +260,34 @@ jobs:
             # Aquí NO se exige la obra a cero: el equipo ya trabaja de
             # verdad y ese trabajo tiene que seguir donde está. Lo que
             # se exige es que ningún mensaje del hilo quede a la vista.
-            T="$(curl -fsS --max-time 25 -b galletas.txt "$DOMINIO/api/cambios?desde=")"
-            A_LA_VISTA=$(echo "$T" | jq '[.mensajes[] | select(.borrada | not)] | length')
-            ESCONDIDOS=$(echo "$T" | jq '[.mensajes[] | select(.borrada)] | length')
+            #
+            # Se bajan TODAS las tandas, como hace la app, y no solo la
+            # primera: con la bajada por recepción una tanda trae solo
+            # lo que hay hasta su frontera, y los mensajes pueden venir
+            # en la última. Mirando una sola, esto salía en verde sin
+            # haber visto ningún mensaje.
+            : > mensajes.jsonl
+            DESDE=""; COMPLETA=no; QUIETA=0
+            for vuelta in $(seq 1 80); do
+              T="$(curl -fsS --max-time 25 -b galletas.txt -G --data-urlencode "desde=$DESDE" "$DOMINIO/api/cambios")"
+              echo "$T" | jq -c '.mensajes[] | {id, borrada}' >> mensajes.jsonl
+              if [ "$(echo "$T" | jq -r '.mas')" != true ]; then COMPLETA=si; break; fi
+              SIGUIENTE="$(echo "$T" | jq -r '.ahora')"
+              if [ "$SIGUIENTE" = "$DESDE" ]; then
+                # Hay más pero la marca no avanza (alguien está subiendo
+                # algo justo ahora): un respiro y se insiste.
+                QUIETA=$((QUIETA + 1))
+                [ "$QUIETA" -lt 5 ] || break
+                sleep 2
+              else
+                QUIETA=0; DESDE="$SIGUIENTE"
+              fi
+            done
+            [ "$COMPLETA" = si ] \
+              || { echo "::error::No se ha podido bajar todo para mirar los mensajes." >&2; exit 1; }
+            A_LA_VISTA=$(jq -s '[unique_by(.id)[] | select(.borrada == true or .borrada == 1 | not)] | length' mensajes.jsonl)
+            ESCONDIDOS=$(jq -s '[unique_by(.id)[] | select(.borrada == true or .borrada == 1)] | length' mensajes.jsonl)
+            rm -f mensajes.jsonl
             R="$(curl -fsS --max-time 25 -b galletas.txt "$DOMINIO/api/obra/reuniones?promo=brassie")"
             REUNIONES=$(echo "$R" | jq '.reuniones | length')
             echo "Mensajes a la vista: $A_LA_VISTA · escondidos: $ESCONDIDOS · reuniones intactas: $REUNIONES"

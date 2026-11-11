@@ -142,6 +142,24 @@ def main():
 
     lineas = []
 
+    # 0 · ¿Deja pasar el alojamiento una marca escrita con «+00:00»? La
+    #     bajada por recepción manda la marca así, con el «+» codificado
+    #     en la dirección (%2B00%3A00), y es la primera vez que la app
+    #     manda un «+» en una dirección. Si algo delante de PHP lo
+    #     cortara, ningún móvil con marca nueva podría bajar. El servidor
+    #     de siempre ya entiende esa marca, así que se puede mirar ANTES
+    #     de publicar nada: las dos formas de la misma hora tienen que
+    #     contestar 200 con datos.
+    hace_un_rato = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(time.time() - 3600))
+    codigo_z, _, r_z = pedir("cambios?desde=" + urllib.parse.quote(hace_un_rato + ".000Z", safe=""))
+    codigo_mas, _, r_mas = pedir("cambios?desde=" + urllib.parse.quote(hace_un_rato + ".000+00:00", safe=""))
+    pasa = codigo_mas == 200 and isinstance(r_mas, dict) and "ahora" in r_mas
+    if pasa and codigo_z == 200:
+        lineas.append("LA MARCA CON «+00:00» EN LA DIRECCIÓN: pasa (200 con datos, igual que con «Z»).")
+    else:
+        lineas.append("::error::La marca con «+00:00» en la dirección NO pasa: el servidor contesta %s (con «Z», %s)."
+                      % (codigo_mas or "sin red", codigo_z or "sin red"))
+
     # 1 · Como un móvil que estrena la app: todo, desde el principio.
     todo = bajar("")
     total, reparto = contar(todo)
