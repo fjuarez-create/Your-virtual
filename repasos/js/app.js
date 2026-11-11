@@ -428,10 +428,11 @@ export function refrescar() {
 async function arrancar() {
   // El sello del taller: si la app corre en /taller se dice bien claro,
   // con un rótulo flotante. Nadie debe poder confundir el banco de
-  // pruebas con la obra real, ni un segundo. Que es el taller se mira
-  // como en todo lo demás (ver «Cada app, con su registro» en
-  // js/push.js): por «//taller/» —un enlace mal escrito— el taller se
-  // servía igual, con su base y su servidor de pruebas, y SIN rótulo.
+  // pruebas con la obra real, ni un segundo.
+  // Que es el taller se mira como todo lo demás (ver «Cada app, con su
+  // registro» en js/push.js): por «//taller/» —un enlace mal escrito—
+  // el taller se servía igual, con su base y su servidor de pruebas, y
+  // SIN rótulo.
   if (push.EN_EL_TALLER) document.body.classList.add('es-taller');
   await store.cargarSesion();
   // El directorio del equipo antes de pintar: si no, la primera
@@ -648,9 +649,10 @@ function aplicarAlVolver() {
     // navegador lo hace al abrir una página, y dentro de la app del
     // iPhone solo hay UNA: la del arranque. Sin esto, una app que se
     // queda cinco días en segundo plano no se enteraría de tres
-    // despliegues seguidos. Al registro de ESTA app: desde el taller,
-    // mientras no tiene el suyo, «el de esta página» es el de la app
-    // de verdad (ver «Cada app, con su registro» en js/push.js).
+    // despliegues seguidos.
+    // Se le pregunta al registro de ESTA app: desde el taller, mientras
+    // no tiene el suyo, «el de esta página» es el de la app de verdad
+    // (ver «Cada app, con su registro» en js/push.js).
     try {
       await (await push.registroDeEstaApp())?.update();
     } catch { /* sin red: otra vez será */ }
@@ -760,9 +762,8 @@ arrancar().catch((e) => {
 /* El rescate de emergencia: tira la base local, las cachés y el service
    worker, y recarga. Es el botón de «apagar y encender» para cuando el
    almacenamiento del navegador queda en un estado que ni el arranque
-   tolerante sabe curar.
-
-   Tira lo de ESTA app y nada más. La de verdad y el taller —la rama de
+   tolerante sabe curar. */
+/* Tira lo de ESTA app y nada más. La de verdad y el taller —la rama de
    pruebas, en /taller— comparten origen, y el navegador da juntos los
    service workers y las cachés de las dos: cuando se llevaba «todos» y
    «todas», el botón pulsado en el taller dejaba a la app de verdad sin
