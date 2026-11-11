@@ -15,7 +15,15 @@
    ENTREGADA no lo decide la fecha de la firma (decisión de Fran,
    10-11-2026): una cosa es que la firma sea hoy y otra que la vivienda
    ya se haya entregado. Lo apuntan aquí el comercial o el
-   administrador, y se puede deshacer. */
+   administrador, y se puede deshacer.
+
+   LAS VISITAS. Una vivienda puede tener varias visitas con el cliente.
+   Las filas de la revisión hablan de la cita VIGENTE; las que ya se
+   hicieron antes salen en «Visitas ya hechas», con quién apuntó cada
+   una, y desde ahí se quita la que se hubiera apuntado por error.
+   Las preguntas de marcar y de deshacer dicen lo que va a pasar de
+   verdad: si la cita se trae a hoy, si al deshacer vuelve a su fecha
+   y si al equipo le llega un aviso. */
 import { h, toast, sheet, confirmar } from './ui.js';
 import * as store from './store.js';
 import { unidades } from './catalog.js';
@@ -32,7 +40,12 @@ export async function hojaFechas({ unidadId, promoId, nombre, entrega = null, al
   const e = entrega || {};
   const fecha = (iso) => E.fechaConDia(iso, { mayus: true });
   const diaEntrega = E.diaDeEntrega(e);
-  const hecha = E.revisionHecha(e);
+  // La cita vigente, si ya está hecha; lo que vuelve si se deshace; y
+  // las visitas de antes (el historial).
+  const marcada = E.visitaMarcada(e);
+  const hecha = !!marcada?.vigente;
+  const vuelve = hecha ? E.citaQueVuelve(e) : null;
+  const anteriores = E.todasLasVisitas(e).filter((v) => !v.vigente);
   const filas = [
     { id: 'compradores', icono: 'users', rotulo: 'Compradores', sub: e.compradores || 'Sin apuntar' },
     { id: 'revision', icono: 'calendario', rotulo: 'Fecha de la revisión con el cliente',
@@ -43,9 +56,24 @@ export async function hojaFechas({ unidadId, promoId, nombre, entrega = null, al
     // vivienda que ya tuvo otra visita vuelve a estar por hacer.
     hecha
       ? { id: 'parte', icono: 'periodico', rotulo: 'Abrir el parte post-entrega',
-          sub: `Revisión hecha el ${E.fechaLarga(E.isoDe(new Date(e.revisadaEn)))}` }
-      : { id: 'hecha', icono: 'check', rotulo: 'La revisión se ha hecho', sub: 'Abre el parte post-entrega' },
-    hecha ? { id: 'deshacer', icono: 'x', rotulo: 'La revisión no se ha hecho', sub: 'Quita la marca; los partes se quedan' } : null,
+          sub: `Revisión hecha el ${E.fechaLarga(marcada.dia)}` }
+      // Si la vivienda ya tiene otras visitas hechas, se dice de cuál
+      // se habla: la hoja también se abre desde la tarjeta de una de
+      // las de antes, y ahí «la revisión» podría parecer aquella.
+      : { id: 'hecha', icono: 'check', rotulo: 'La revisión se ha hecho',
+          sub: anteriores.length && E.esDia(e.revision)
+            ? `La del ${E.diaCorto(e.revision).replace(/ /g, ' ')}; abre el parte post-entrega`
+            : 'Abre el parte post-entrega' },
+    hecha ? { id: 'deshacer', icono: 'x', rotulo: 'La revisión no se ha hecho',
+      // En corto y con espacios duros, para que la hora no se quede
+      // colgando sola en una segunda línea.
+      sub: vuelve
+        ? `Quita la marca; la cita vuelve al ${E.diaCorto(vuelve.dia).replace(/ /g, ' ')}${vuelve.hora ? ` · ${vuelve.hora}` : ''}`
+        : 'Quita la marca; los partes se quedan' } : null,
+    // Las visitas que ya se hicieron antes de la cita que hay ahora.
+    anteriores.length
+      ? { id: 'visitas', icono: 'listaChecks', rotulo: 'Visitas ya hechas', sub: enumerar(anteriores.map((v) => E.diaCorto(v.dia))) }
+      : null,
     e.entregadaEn
       ? { id: 'no-entregada', icono: 'x', rotulo: 'La vivienda no se ha entregado',
           sub: `Quita la marca de entregada${diaEntrega ? ` (${E.fechaLarga(diaEntrega)})` : ''}` }
@@ -72,8 +100,22 @@ export async function hojaFechas({ unidadId, promoId, nombre, entrega = null, al
         const hh = await hojaHora(horaNueva);
         if (hh !== null) horaNueva = hh;
       }
-      await store.fijarEntrega(unidadId, promoId, { revision: dia, revisionHora: dia ? horaNueva : '' });
-      toast(dia ? `Revisión el ${E.fechaConDia(dia)}${horaNueva ? ` a las ${horaNueva}` : ''}` : 'Revisión sin fecha', '', { icono: 'calendario' });
+      const guardada = await store.fijarEntrega(unidadId, promoId, { revision: dia, revisionHora: dia ? horaNueva : '' });
+      // Una fecha nueva y posterior sobre una visita ya hecha es otra
+      // cita: la visita hecha no se pierde, pasa a «Visitas ya hechas».
+      // Se dice, que si no parece que la marca ha desaparecido.
+      const archivada = hecha && !guardada.revisadaEn ? marcada : null;
+      // Y al revés: ponerle a una cita pendiente el día de una visita
+      // que ya figura como hecha es devolverle su fecha (se le había
+      // puesto otra por error). Esa visita vuelve a ser la revisión de
+      // la ficha, hecha; también se dice, que la cita deja de estar
+      // pendiente sin que nadie haya pulsado «se ha hecho».
+      const devuelta = !hecha && !!guardada.revisadaEn && anteriores.some((v) => v.dia === dia);
+      toast(dia ? `Revisión el ${E.fechaConDia(dia)}${horaNueva ? ` a las ${horaNueva}` : ''}` : 'Revisión sin fecha', '', {
+        icono: 'calendario',
+        detalle: archivada ? `La visita del ${E.fechaLarga(archivada.dia)} sigue como hecha`
+          : devuelta ? 'Ese día ya figuraba una visita hecha: la revisión queda como hecha' : '',
+      });
     } else if (elegido === 'firma') {
       const v = await hojaFecha(e.firma ? E.partes(e.firma).fecha.toISOString() : null);
       if (v === null) return;
@@ -88,15 +130,38 @@ export async function hojaFechas({ unidadId, promoId, nombre, entrega = null, al
       await store.fijarEntrega(unidadId, promoId, { firma: dia, firmaHora: dia ? horaNueva : '' });
       toast(dia ? `Firma el ${E.fechaConDia(dia)}${horaNueva ? ` a las ${horaNueva}` : ''}` : 'Firma sin fecha', '', { icono: 'key' });
     } else if (elegido === 'hecha') {
-      // Una cita prevista para más adelante que se da por hecha hoy
-      // es una visita que se adelantó: queda con fecha de hoy. Se dice
-      // antes, porque deshacerlo después no devuelve la fecha que tenía.
-      const adelantada = E.esDia(e.revision) && e.revision > E.hoyIso();
+      // La pregunta cuenta lo que va a pasar con ESTA ficha:
+      //  · una cita de más adelante que se da por hecha hoy es una
+      //    visita que se adelantó: queda con fecha de hoy (y, si fue un
+      //    error, deshacerlo le devuelve la que tenía);
+      //  · una cita de un día ya pasado queda apuntada en su día;
+      //  · si la vivienda ya tenía otra visita hecha, esa no se pierde;
+      //  · y el parte: el que ya tenga la vivienda, o uno nuevo.
+      const hoy = E.hoyIso();
+      const prevista = E.esDia(e.revision) ? e.revision : '';
+      const frases = [];
+      if (prevista > hoy) {
+        frases.push(`Estaba prevista para el ${E.fechaConDia(prevista)}${e.revisionHora ? ` a las ${e.revisionHora}` : ''}: quedará apuntada con fecha de hoy. Si es un error, «La revisión no se ha hecho» le devuelve esa fecha.`);
+      } else if (prevista && prevista < hoy) {
+        frases.push(`Queda apuntada en su día, el ${E.fechaConDia(prevista)}.`);
+      }
+      // De las visitas de antes se dice que siguen como están. Menos de
+      // la que cayera el mismo día en que va a quedar apuntada esta (lo
+      // puede dejar así un móvil con la app anterior): es la misma
+      // visita, y decirlo sería hablar dos veces de ella.
+      const quedaEn = prevista && prevista < hoy ? prevista : hoy;
+      const otras = anteriores.filter((v) => v.dia !== quedaEn);
+      if (otras.length) {
+        frases.push(otras.length === 1
+          ? `La visita del ${E.fechaLarga(otras[0].dia)} sigue como hecha.`
+          : 'Las visitas ya hechas de antes siguen como están.');
+      }
+      frases.push((await store.partePostDeUnidad(unidadId))
+        ? 'Lo que haya visto el comprador se apunta en el parte post-entrega que ya tiene la vivienda, y al equipo le llega un aviso.'
+        : 'Se abre el parte post-entrega para apuntar lo que haya visto el comprador, y al equipo le llega un aviso.');
       const seguro = await confirmar({
         titulo: '¿La revisión con el cliente se ha hecho?',
-        texto: (adelantada
-          ? `Estaba prevista para el ${E.fechaConDia(e.revision)}${e.revisionHora ? ` a las ${e.revisionHora}` : ''}: quedará apuntada con fecha de hoy. `
-          : '') + 'Se abre el parte post-entrega para apuntar lo que haya visto el comprador, y al equipo le llega un aviso.',
+        texto: frases.join(' '),
         ok: 'Sí, se ha hecho', icono: 'check', conservar: 'Todavía no', iconoConservar: 'clock',
       });
       if (!seguro) return;
@@ -112,14 +177,40 @@ export async function hojaFechas({ unidadId, promoId, nombre, entrega = null, al
     } else if (elegido === 'deshacer') {
       // Deshacer también pregunta: la hoja nace justo donde estaba el
       // dedo, y un segundo toque sin querer quitaba la marca en el acto.
+      // Y dice con qué fecha queda la revisión: la que tenía antes de
+      // darla por hecha, si al marcarla se trajo a hoy (entonces el
+      // servidor avisa al equipo de esa cita); si no, la que tiene.
+      const queda = vuelve
+        ? `La revisión con el cliente vuelve a estar pendiente para el ${E.fechaConDia(vuelve.dia)}${vuelve.hora ? ` a las ${vuelve.hora}` : ''}, que es la fecha que tenía antes de darla por hecha, y al equipo le llega el aviso de esa cita.`
+        : E.esDia(e.revision)
+          ? `La revisión con el cliente vuelve a estar pendiente, con la fecha que tiene puesta: el ${E.fechaConDia(e.revision)}${e.revisionHora ? ` a las ${e.revisionHora}` : ''}.`
+          : 'La revisión con el cliente deja de figurar como hecha y, como no tiene fecha puesta, la vivienda queda sin revisión.';
       const seguro = await confirmar({
         titulo: `¿Quitar la marca de revisión hecha de la ${nombre}?`,
-        texto: 'La revisión con el cliente vuelve a estar pendiente, con la fecha que tiene ahora puesta. Los partes que haya abiertos se quedan.',
+        texto: `${queda} Los partes que haya abiertos se quedan${anteriores.length ? ', y las visitas ya hechas de antes también' : ''}.`,
         ok: 'Sí, quitarla', icono: 'x', conservar: 'Dejarla como está', iconoConservar: 'check',
       });
       if (!seguro) return;
       await store.deshacerRevisionHecha(unidadId, promoId);
-      toast('La revisión vuelve a estar pendiente');
+      toast(vuelve ? `La revisión vuelve al ${E.fechaConDia(vuelve.dia)}${vuelve.hora ? ` a las ${vuelve.hora}` : ''}`
+        : E.esDia(e.revision) ? 'La revisión vuelve a estar pendiente' : 'La vivienda queda sin revisión');
+    } else if (elegido === 'visitas') {
+      // La lista de las visitas ya hechas, con quién apuntó cada una.
+      // Tocar una es para quitarla (se archivó o se marcó por error), y
+      // antes se pregunta, como en todo lo que deshace algo.
+      const dia = await hojaVisitas(nombre, anteriores);
+      if (!dia) return;
+      const unica = anteriores.length === 1 && !hecha;
+      const seguro = await confirmar({
+        titulo: `¿Quitar la visita del ${E.fechaLarga(dia)} de la ${nombre}?`,
+        texto: 'Deja de figurar como hecha en el calendario y en la actividad de la portada. '
+          + (E.esDia(e.revision) ? 'La fecha de revisión que hay puesta ahora no cambia, y los partes que haya abiertos se quedan.' : 'Los partes que haya abiertos se quedan.')
+          + (unica ? ' Era la única visita hecha de la vivienda: los partes que se abran a partir de ahora ya no serán post-entrega.' : ''),
+        ok: 'Sí, quitarla', icono: 'x', conservar: 'Dejarla como está', iconoConservar: 'check',
+      });
+      if (!seguro) return;
+      await store.quitarVisitaHecha(unidadId, promoId, dia);
+      toast(`Visita del ${E.fechaLarga(dia)} quitada`);
     } else if (elegido === 'entregada') {
       const seguro = await confirmar({
         titulo: `¿La ${nombre} se ha entregado?`,
@@ -161,6 +252,11 @@ export async function hojaFechasDeOtra({ promoId, entregas = [], alCambiar = () 
     if (x.entregadaEn) trozos.push('entregada');
     else if (x.firma) trozos.push(`firma el ${E.fechaLarga(x.firma)}`);
     else if (x.revision) trozos.push(`revisión el ${E.fechaLarga(x.revision)}`);
+    else {
+      // Sin cita ni firma, pero con visitas ya hechas: la última.
+      const ultima = E.todasLasVisitas(x).pop();
+      if (ultima) trozos.push(`revisada el ${E.fechaLarga(ultima.dia)}`);
+    }
     return trozos.join(' · ') || 'Sin fechas todavía';
   };
   const todas = unidades(promoId);
@@ -170,6 +266,35 @@ export async function hojaFechasDeOtra({ promoId, entregas = [], alCambiar = () 
   if (!unidadId) return;
   const u = todas.find((x) => x.id === unidadId);
   await hojaFechas({ unidadId, promoId, nombre: u?.nombre || unidadId, entrega: fichaDe.get(unidadId) || null, alCambiar });
+}
+
+/* ─── Las visitas ya hechas ────────────────────────────────────── */
+/** «6 nov» · «6 nov y 12 nov» · «6 nov, 12 nov y 20 nov». */
+function enumerar(trozos) {
+  return trozos.length > 1 ? `${trozos.slice(0, -1).join(', ')} y ${trozos[trozos.length - 1]}` : trozos[0] || '';
+}
+
+/**
+ * La lista de las visitas ya hechas de una vivienda: el día de cada
+ * una y quién la dio por hecha. Resuelve con el día de la que se toque
+ * (para quitarla; quien llama pregunta antes) o null si se cierra.
+ */
+function hojaVisitas(nombre, visitas) {
+  const filas = visitas.map((v) => {
+    const pila = String(v.porNombre || '').trim().split(/\s+/)[0];
+    const apuntada = E.diaDeMarca(v.hechaEn);
+    return {
+      id: v.dia, icono: 'check', rotulo: E.fechaConDia(v.dia, { mayus: true }),
+      sub: pila
+        ? `${pila} la dio por hecha${apuntada ? ` el ${E.diaCorto(apuntada)}` : ''}`
+        : (apuntada ? `Dada por hecha el ${E.diaCorto(apuntada)}` : 'Dada por hecha'),
+    };
+  });
+  return menuTarjeta(`${nombre} · visitas ya hechas`, filas, {
+    extra: h('span.d-menu-nota', null, visitas.length === 1
+      ? 'Si se apuntó por error, tócala para quitarla. Antes de quitarla se pregunta.'
+      : 'Si alguna se apuntó por error, tócala para quitarla. Antes de quitarla se pregunta.'),
+  });
 }
 
 /* ─── Las dos hojas pequeñas de la entrega ─────────────────────── */

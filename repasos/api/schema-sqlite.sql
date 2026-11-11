@@ -248,6 +248,10 @@ CREATE TABLE IF NOT EXISTS adjuntos (
 CREATE INDEX IF NOT EXISTS ix_adjuntos_reunion ON adjuntos (reunion_id);
 
 -- Las entregas: una fila por vivienda, con la clave de la vivienda.
+-- Desde la versión 20 guarda todas las visitas hechas con el cliente
+-- (ver el comentario del esquema de MySQL). visitas_hechas va sin valor
+-- por defecto, igual que allí, para que una base nueva y una que sube
+-- de versión queden con la misma columna.
 CREATE TABLE IF NOT EXISTS entregas (
   id                   TEXT NOT NULL PRIMARY KEY,
   unidad_id            TEXT NOT NULL,
@@ -268,6 +272,10 @@ CREATE TABLE IF NOT EXISTS entregas (
   firma_por_nombre     TEXT NOT NULL DEFAULT '',
   revisada_por         TEXT,
   revisada_por_nombre  TEXT NOT NULL DEFAULT '',
+  revisada_de          TEXT NOT NULL DEFAULT '',
+  revisada_de_hora     TEXT NOT NULL DEFAULT '',
+  visitas_hechas       TEXT,
+  visitas_fijadas_en   TEXT NOT NULL DEFAULT '',
   entregada_en         TEXT NOT NULL DEFAULT '',
   entregada_fijada_en  TEXT NOT NULL DEFAULT '',
   entregada_por        TEXT,

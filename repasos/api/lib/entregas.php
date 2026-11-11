@@ -103,6 +103,105 @@ function entregas_de_antes_al_dia(PDO $pdo): void
     }
 }
 
+/* ═══ Las visitas de antes, al historial ══════════════════════════ */
+
+/**
+ * Hasta el 10-11-2026 la ficha guardaba UNA sola marca de «revisión
+ * hecha». A las villas que ya tenían hecha su visita de cortesía el
+ * comercial les puso una revisión nueva: la ficha quedó con la marca de
+ * la visita vieja y, encima, una cita posterior todavía por hacer. Desde
+ * la versión 20 cada ficha guarda todas sus visitas hechas
+ * (`visitas_hechas`) y la marca es solo de la cita vigente.
+ *
+ * Aquí, una sola vez (marca en `meta`), las fichas que estén así —marca
+ * puesta, pero de una cita que ya no es la vigente: lo dice
+ * entrega_revision_hecha()— pasan esa visita al historial, en su día, y
+ * se quedan sin marca: la cita nueva, pendiente sin más. Las demás
+ * fichas no se tocan. Pasarla dos veces no hace nada: una ficha ya
+ * puesta al día no tiene marca que mover.
+ *
+ * LOS SELLOS. La marca de la fila (`actualizado`) sube a ahora, que es
+ * lo que hace que los móviles se la bajen. Pero la marca limpia y el
+ * historial NO se sellan con ahora, sino con el sello de la cita nueva:
+ * es cuando de verdad la visita anterior dejó de ser la vigente. Con
+ * «ahora», lo que alguien hubiera hecho con esa cita antes de este
+ * momento y subiera después —darla por hecha sin cobertura, o con el
+ * reloj del móvil un poco atrasado— perdía contra este sello: la marca
+ * se quedaba sin guardar, la fecha sí entraba (movida a ese día y sin
+ * hora) y nadie avisaba de nada. El sello de la cita nueva es, por
+ * definición de este estado, posterior al de la marca vieja (un móvil
+ * con la ficha de antes sin tocar sigue cediendo ante el servidor) y
+ * anterior a cualquier cosa hecha después con esa cita.
+ */
+const VISITAS_AL_HISTORIAL = '2026-11-10';
+
+function entregas_visitas_al_dia(PDO $pdo): void
+{
+    try {
+        if (revision_meta($pdo, 'visitas_al_historial') === VISITAS_AL_HISTORIAL) {
+            return;
+        }
+        $columnas = esquema_columnas($pdo, 'entregas');
+        foreach (['revisada_de', 'revisada_de_hora', 'visitas_hechas', 'visitas_fijadas_en'] as $columna) {
+            if (!in_array($columna, $columnas, true)) {
+                return;   // las columnas llegan en el siguiente arranque; se vuelve a intentar
+            }
+        }
+        $filas = $pdo->query("SELECT * FROM entregas WHERE revisada_en <> ''")->fetchAll();
+        // Solo si la marca sigue siendo la que se ha leído: si entre la
+        // lectura y la escritura un móvil ha subido otra cosa a esa
+        // ficha, manda lo suyo y esta puesta al día no se lo pisa.
+        $poner = $pdo->prepare(
+            "UPDATE entregas
+                SET visitas_hechas = ?, visitas_fijadas_en = ?,
+                    revisada_en = '', revisada_de = '', revisada_de_hora = '', revisada_fijada_en = ?,
+                    revisada_por = NULL, revisada_por_nombre = '', actualizado = ?
+              WHERE id = ? AND revisada_en = ? AND revisada_fijada_en = ?"
+        );
+        $ahora = ahora_iso();
+        $cuantas = 0;
+        foreach ($filas as $f) {
+            if (entrega_revision_hecha($f)) {
+                continue;   // la marca es de la cita vigente: está bien como está
+            }
+            $dia = entrega_dia_de((string) $f['revisada_en']);
+            if ($dia === '') {
+                continue;
+            }
+            $selloMarca = (string) ($f['revisada_fijada_en'] ?? '');
+            $visitas = entrega_visitas(array_merge(
+                entrega_visitas($f['visitas_hechas'] ?? ''),
+                [[
+                    'dia' => $dia,
+                    'hechaEn' => $selloMarca !== '' ? $selloMarca : (string) $f['revisada_en'],
+                    'por' => $f['revisada_por'] ?? null,
+                    'porNombre' => (string) ($f['revisada_por_nombre'] ?? ''),
+                ]]
+            ));
+            // El sello del archivo: el de la cita nueva (ver arriba). Si
+            // viniera del futuro —la fijó un móvil con el reloj
+            // adelantado—, ahora: un sello futuro dejaría la marca
+            // clavada hasta esa fecha. Y el del historial nunca hacia
+            // atrás, por si la lista ya llevaba uno más nuevo.
+            $selloArchivo = (string) ($f['revision_fijada_en'] ?? '');
+            if ($selloArchivo === '' || $selloArchivo > $ahora) {
+                $selloArchivo = $ahora;
+            }
+            $poner->execute([
+                entrega_visitas_json($visitas), max((string) ($f['visitas_fijadas_en'] ?? ''), $selloArchivo), $selloArchivo,
+                max((string) $f['actualizado'], $ahora),
+                $f['id'], (string) $f['revisada_en'], $selloMarca,
+            ]);
+            $cuantas += $poner->rowCount();
+        }
+        revision_meta($pdo, 'visitas_al_historial', VISITAS_AL_HISTORIAL);
+        error_log("UNIK Works · {$cuantas} ficha(s) de entrega con una visita hecha y una cita nueva encima: la visita pasa al historial.");
+    } catch (Throwable $e) {
+        // No puede tumbar la app: se apunta y se vuelve a intentar.
+        error_log('UNIK Works · visitas al historial: ' . $e->getMessage());
+    }
+}
+
 /* ═══ Validación de campos ════════════════════════════════════════ */
 
 /** Un día suelto «AAAA-MM-DD» que exista de verdad, o vacío. */
@@ -135,6 +234,73 @@ function es_unidad(string $valor): bool
     return (bool) preg_match('/^[a-z0-9-]{1,40}:[a-z0-9-]{1,40}$/', $valor);
 }
 
+/** El día, en la zona de la obra, de una marca ISO; vacío si no se deja leer. */
+function entrega_dia_de(string $marca): string
+{
+    if ($marca === '') {
+        return '';
+    }
+    try {
+        return (new DateTimeImmutable($marca))->setTimezone(new DateTimeZone(ZONA_OBRA))->format('Y-m-d');
+    } catch (Throwable $e) {
+        return '';
+    }
+}
+
+/** Cuántas visitas hechas guarda una ficha como mucho. */
+const ENTREGA_VISITAS_TOPE = 30;
+
+/**
+ * Las visitas ya hechas de una ficha, saneadas. Vale para lo que manda
+ * el móvil (una lista) y para lo guardado (su JSON; NULL o vacío si no
+ * hay ninguna). De cada visita queda el día —uno que exista—, cuándo se
+ * apuntó (una marca ISO, o vacío), quién (un uuid, o null) y su nombre
+ * (hasta 120 letras). Un día, una visita: de dos del mismo día se queda
+ * la primera. Sale ordenada por día y con treinta como mucho, las más
+ * recientes.
+ */
+function entrega_visitas($valor): array
+{
+    if (is_string($valor)) {
+        $valor = $valor === '' ? [] : json_decode($valor, true);
+    }
+    if (!is_array($valor)) {
+        return [];
+    }
+    $porDia = [];
+    foreach ($valor as $visita) {
+        if (!is_array($visita)) {
+            continue;
+        }
+        $dia = entrega_fecha($visita['dia'] ?? '');
+        if ($dia === '' || isset($porDia[$dia])) {
+            continue;
+        }
+        $por = $visita['por'] ?? null;
+        $porDia[$dia] = [
+            'dia' => $dia,
+            'hechaEn' => entrega_sello($visita['hechaEn'] ?? ''),
+            'por' => is_string($por) && es_uuid($por) ? $por : null,
+            'porNombre' => texto($visita, 'porNombre', 120),
+        ];
+    }
+    ksort($porDia);
+    return array_slice(array_values($porDia), -ENTREGA_VISITAS_TOPE);
+}
+
+/**
+ * La lista tal como se guarda: siempre con la misma forma (las claves
+ * en su orden, los días en el suyo), o la cadena vacía si no hay
+ * ninguna visita.
+ */
+function entrega_visitas_json(array $visitas): string
+{
+    if ($visitas === []) {
+        return '';
+    }
+    return (string) json_encode($visitas, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
+}
+
 /* ═══ Guardar ═════════════════════════════════════════════════════ */
 
 /**
@@ -149,18 +315,29 @@ const ENTREGA_HECHOS = [
     'compradores' => ['sello' => 'compradores_fijados_en', 'campos' => ['compradores'], 'autor' => null],
     'revision'    => ['sello' => 'revision_fijada_en', 'campos' => ['revision', 'revision_hora'], 'autor' => 'revision_por'],
     'firma'       => ['sello' => 'firma_fijada_en', 'campos' => ['firma', 'firma_hora'], 'autor' => 'firma_por'],
-    'revisada'    => ['sello' => 'revisada_fijada_en', 'campos' => ['revisada_en'], 'autor' => 'revisada_por'],
+    // La marca de «hecha» de la cita vigente y, con ella, la fecha y la
+    // hora que tenía esa cita si al marcarla se movió a hoy.
+    'revisada'    => ['sello' => 'revisada_fijada_en', 'campos' => ['revisada_en', 'revisada_de', 'revisada_de_hora'], 'autor' => 'revisada_por'],
+    // Las visitas ya hechas que no son la cita vigente. Sin autor de
+    // hecho: cada visita de la lista lleva el suyo.
+    'visitas'     => ['sello' => 'visitas_fijadas_en', 'campos' => ['visitas_hechas'], 'autor' => null],
     // Que la vivienda se ha entregado no lo dice la fecha de la firma:
     // lo dice el comercial o el administrador (Fran, 10-11-2026).
     'entregada'   => ['sello' => 'entregada_fijada_en', 'campos' => ['entregada_en'], 'autor' => 'entregada_por'],
 ];
 
-/** Lo que manda el cliente para cada sello, en camelCase. */
+/**
+ * Lo que manda el cliente para cada sello, en camelCase. Un móvil con
+ * la app anterior en caché no conoce los hechos nuevos y no manda su
+ * sello (o devuelve el que bajó, sin tocar): en los dos casos se
+ * conserva lo guardado, que es justo lo que hace falta.
+ */
 const ENTREGA_SELLOS_CLIENTE = [
     'compradores' => 'compradoresFijadosEn',
     'revision'    => 'revisionFijadaEn',
     'firma'       => 'firmaFijadaEn',
     'revisada'    => 'revisadaFijadaEn',
+    'visitas'     => 'visitasFijadasEn',
     'entregada'   => 'entregadaFijadaEn',
 ];
 
@@ -249,6 +426,9 @@ function guardar_entregas(): void
             'firma'         => entrega_fecha($e['firma'] ?? ''),
             'firma_hora'    => entrega_hora($e['firmaHora'] ?? ''),
             'revisada_en'   => entrega_sello($e['revisadaEn'] ?? ''),
+            'revisada_de'      => entrega_fecha($e['revisadaDe'] ?? ''),
+            'revisada_de_hora' => entrega_hora($e['revisadaDeHora'] ?? ''),
+            'visitas_hechas'   => entrega_visitas_json(entrega_visitas($e['visitasHechas'] ?? null)),
             'entregada_en'  => entrega_sello($e['entregadaEn'] ?? ''),
         ];
         // Una hora sin fecha no significa nada.
@@ -257,6 +437,14 @@ function guardar_entregas(): void
         }
         if ($llega['firma'] === '') {
             $llega['firma_hora'] = '';
+        }
+        // Ni la fecha que tenía la cita, si no hay marca de «hecha» que
+        // deshacer (la app anterior quita la marca sin saber de ella).
+        if ($llega['revisada_en'] === '') {
+            $llega['revisada_de'] = '';
+        }
+        if ($llega['revisada_de'] === '') {
+            $llega['revisada_de_hora'] = '';
         }
 
         $ahora = ahora_iso();
@@ -333,6 +521,11 @@ function entrega_salida(array $f): array
         'revisadaFijadaEn' => (string) ($f['revisada_fijada_en'] ?? ''),
         'revisadaPor' => $f['revisada_por'] ?? null,
         'revisadaPorNombre' => (string) ($f['revisada_por_nombre'] ?? ''),
+        'revisadaDe' => (string) ($f['revisada_de'] ?? ''),
+        'revisadaDeHora' => (string) ($f['revisada_de_hora'] ?? ''),
+        // Siempre una lista, también cuando no hay ninguna (NULL o vacío).
+        'visitasHechas' => entrega_visitas($f['visitas_hechas'] ?? ''),
+        'visitasFijadasEn' => (string) ($f['visitas_fijadas_en'] ?? ''),
         'entregadaEn' => (string) ($f['entregada_en'] ?? ''),
         'entregadaFijadaEn' => (string) ($f['entregada_fijada_en'] ?? ''),
         'entregadaPor' => $f['entregada_por'] ?? null,
@@ -440,6 +633,54 @@ function nombre_de_pila(string $nombre): string
 }
 
 /**
+ * ¿Es la marca de «hecha» que llega la de una visita que ya estaba en
+ * el historial y vuelve a ser la cita vigente? Pasa cuando a una
+ * vivienda ya revisada se le puso por error una cita nueva (la visita
+ * hecha se archivó) y se arregla devolviéndole la fecha que tenía: la
+ * app saca esa visita de la lista y la deja otra vez como la revisión
+ * de la ficha, hecha. Se reconoce porque el día de la visita estaba en
+ * la lista guardada y ya no está en la que llega. (Si sigue en la
+ * lista, la marca es de otra visita de ese mismo día: no es esto.)
+ */
+function entrega_vuelve_del_historial(?array $antes, array $ahora): bool
+{
+    if ($antes === null) {
+        return false;
+    }
+    $dia = (string) ($ahora['revision'] ?? '');
+    if ($dia === '') {
+        $dia = entrega_dia_de((string) ($ahora['revisada_en'] ?? ''));
+    }
+    if ($dia === '') {
+        return false;
+    }
+    $estaba = array_column(entrega_visitas($antes['visitas_hechas'] ?? ''), 'dia');
+    $sigue = array_column(entrega_visitas($ahora['visitas_hechas'] ?? ''), 'dia');
+    return in_array($dia, $estaba, true) && !in_array($dia, $sigue, true);
+}
+
+/**
+ * ¿Es este cambio de fecha la vuelta de un «la revisión no se ha
+ * hecho»? Al dar por hecha una cita de más adelante, la app la trae a
+ * hoy y apunta la fecha y la hora que tenía (`revisada_de`); al
+ * deshacerlo, quita la marca y le devuelve esa fecha. Se reconoce por
+ * eso mismo: había marca y ya no la hay, y la revisión queda justo en
+ * la fecha y la hora apuntadas. El historial no cambia (si cambia, es
+ * que se ha archivado una visita: una cita nueva de verdad).
+ */
+function entrega_cita_que_vuelve(?array $antes, array $ahora): bool
+{
+    if ($antes === null) {
+        return false;
+    }
+    $tenia = (string) ($antes['revisada_de'] ?? '');
+    return (string) ($antes['revisada_en'] ?? '') !== '' && (string) ($ahora['revisada_en'] ?? '') === ''
+        && $tenia !== '' && (string) ($ahora['revision'] ?? '') === $tenia
+        && (string) ($ahora['revision_hora'] ?? '') === (string) ($antes['revisada_de_hora'] ?? '')
+        && (string) ($antes['visitas_hechas'] ?? '') === (string) ($ahora['visitas_hechas'] ?? '');
+}
+
+/**
  * Qué aviso merece el cambio, si alguno. Uno por guardado: si en la
  * misma hoja se tocan la revisión y la firma, manda la revisión (es la
  * cita con persona); si se da por hecha, manda eso.
@@ -475,9 +716,11 @@ function entregas_aviso(?array $antes, array $ahora, array $yo, int $momento): ?
 
     // Se avisa cada vez que alguien da una revisión por hecha: la
     // primera, y también la de una cita nueva en una vivienda que ya
-    // tenía otra hecha (cambia el cuándo de la marca).
+    // tenía otra hecha (cambia el cuándo de la marca). Menos cuando la
+    // marca es la de una visita que ya figuraba como hecha y vuelve del
+    // historial: de esa el equipo ya estaba avisado.
     $revisadaAntes = (string) ($antes['revisada_en'] ?? '');
-    if ($ahora['revisada_en'] !== '' && $ahora['revisada_en'] !== $revisadaAntes) {
+    if ($ahora['revisada_en'] !== '' && $ahora['revisada_en'] !== $revisadaAntes && !entrega_vuelve_del_historial($antes, $ahora)) {
         ['autor' => $base['autor'], 'quien' => $quien] = $autor('revisada');
         return $base + [
             'titulo' => "{$villa} · revisada con el cliente",
@@ -495,9 +738,16 @@ function entregas_aviso(?array $antes, array $ahora, array $yo, int $momento): ?
         $hora = $ahora['revision_hora'] !== '' ? " a las {$ahora['revision_hora']}" : '';
         $con = $compradores !== '' ? $compradores : 'el cliente';
         $cuenta = frase_de_cuenta(dias_hasta($ahora['revision'], $momento), 'dejarla impecable', 'Toca dejarla impecable.');
+        // «La revisión no se ha hecho» sobre una cita que al marcarla se
+        // había traído a hoy: la cita vuelve a la fecha que tenía. Quien
+        // deshace no «ha fijado» nada —la fijó otro, antes—, y el aviso
+        // no se lo atribuye: dice que la visita vuelve a estar prevista.
+        $frase = entrega_cita_que_vuelve($antes, $ahora)
+            ? "La visita con {$con} vuelve a estar prevista para el {$cuando}{$hora}."
+            : "{$quien} ha fijado la visita con {$con} para el {$cuando}{$hora}.";
         return $base + [
             'titulo' => "{$villa} · revisión el " . fecha_corta_bonita($ahora['revision']),
-            'texto' => trim("{$quien} ha fijado la visita con {$con} para el {$cuando}{$hora}. {$cuenta}"),
+            'texto' => trim("{$frase} {$cuenta}"),
         ];
     }
 

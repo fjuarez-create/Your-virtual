@@ -102,6 +102,21 @@ export async function render({ promoId, unidadId, seguir = false }) {
      tecla, y salir corriendo lo pillaba a medias. */
   let guardarAlSalir = null;
 
+  /* La pantalla ya se ha soltado: se salió de ella o su pintado se
+     abandonó (app.js llama entonces a su «alSalir»). Hace falta
+     apuntarlo porque la cámara no se abre al preparar la pantalla: se
+     manda abrir y llega un momento después —medio segundo, o lo que
+     tarde el permiso—. Si llega cuando ya no hay pantalla, su «alSalir»
+     ya pasó y nadie la soltaría: se quedaban la cámara y el micrófono
+     encendidos, con el visor colgado encima de la pantalla en la que se
+     estuviera. Con esto, la cámara que llega tarde se apaga en el acto. */
+  let fuera = false;
+
+  /* El menú de entrada («Comenzar recorrido / Cancelar») cuelga del
+     documento, no de la pantalla: al salir hay que quitarlo, o se queda
+     flotando encima de la pantalla a la que se va. */
+  let cerrarMenuDeEntrada = null;
+
   /* El menú de los tres puntos cambia según dónde estés: grabando no
      hay tareas que borrar, y repasando sí. Lo rellena el repaso cuando
      se monta. */
@@ -236,10 +251,21 @@ export async function render({ promoId, unidadId, seguir = false }) {
         alTope: () => toast('Diez minutos: se corta aquí'),
       });
     } catch (e) {
+      // Ya se había salido de la pantalla: ni aviso ni vuelta atrás
+      // (sería sacar de donde esté a quien ya se ha ido a otra parte).
+      if (fuera) return;
       toast(e?.name === 'NotAllowedError'
         ? 'Hay que dar permiso de cámara y micrófono'
         : 'No se ha podido abrir la cámara', 'err');
       ir(volver);
+      return;
+    }
+    // La cámara ha llegado cuando ya se había salido de la pantalla:
+    // se apaga aquí mismo y no se monta nada.
+    if (fuera) {
+      const m = mando;
+      mando = null;
+      try { await m.cancelar(); } catch { /* ya estaba suelta */ }
       return;
     }
 
@@ -274,7 +300,7 @@ export async function render({ promoId, unidadId, seguir = false }) {
     // El pop up inicial, con la grabación en pausa hasta que se decida:
     // el rato del menú ni cuenta ni se graba.
     mando.pausar();
-    menuFlotante((cerrar) => [
+    cerrarMenuDeEntrada = menuFlotante((cerrar) => [
       filaMenu('zapatilla', 'Comenzar recorrido', () => { cerrar(); reanudar(); }),
       pendiente ? filaMenu('listaChecks', 'Repasar el recorrido a medias', async () => {
         cerrar();
@@ -1237,6 +1263,11 @@ export async function render({ promoId, unidadId, seguir = false }) {
     // volver a entrar en la vivienda se ofrece repasarlo. Salir a mitad
     // de un recorrido casi nunca es «bórralo»; es el teléfono sonando.
     alSalir: () => {
+      // Queda dicho que ya no hay pantalla, por si la cámara aún está
+      // de camino (ver «fuera», arriba).
+      fuera = true;
+      cerrarMenuDeEntrada?.();
+      cerrarMenuDeEntrada = null;
       // Lo repasado, antes que nada: es lo único que no se puede volver
       // a hacer solo. La cámara se suelta igual justo después.
       guardarAlSalir?.();

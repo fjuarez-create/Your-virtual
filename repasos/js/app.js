@@ -113,8 +113,16 @@ export function anotarFiltros(filtros) {
  * desplazamiento arriba del todo.
  */
 export function anotarRuta(hash) {
-  history.replaceState(history.state, '', hash);
   const nueva = hash.replace(/^#/, '') || '/';
+  // Solo anota la pantalla que está en la dirección. El calendario
+  // anota al pintarse, y si mientras leía sus datos se ha ido a otra
+  // pantalla (un pintado abandonado, ver enrutar) escribiría su
+  // dirección encima de la de la nueva: el siguiente repintado por
+  // sincronización traería el calendario él solo. Se mira el camino sin
+  // la consulta, que es lo único que una anotación cambia.
+  const camino = (r) => r.split('?')[0];
+  if (camino(nueva) !== camino(location.hash.replace(/^#/, '') || '/')) return;
+  history.replaceState(history.state, '', hash);
   // Si lo que está pintado es la ruta que había, sigue siéndolo con la
   // dirección nueva: es la misma pantalla. Sin esto, el primer repintado
   // tras cambiar de día en el calendario —al guardar una fecha desde
@@ -238,15 +246,48 @@ function cargando() {
   });
 }
 
+/* ─── Un turno por navegación ─────────────────────────────────────
+   Preparar una pantalla lleva su rato —traer su código, leer sus
+   datos; la portada además pregunta al servidor— y mientras tanto puede
+   empezar otra navegación: un toque en otra bola, o el repintado que
+   lanza el fin de una sincronización. La que acaba la última no es por
+   fuerza la última que se pidió, y antes pintaba igual: quedaba la
+   portada con la dirección del calendario, y volver a tocar lo mismo no
+   hacía nada, porque la dirección ya era esa.
+
+   Cada navegación coge un turno y solo pinta la del turno vigente. No
+   vale comparar la ruta: un repintado lleva la misma que lo que
+   repinta, y el calendario la reescribe al pintarse (ver anotarRuta). */
+let turnoDeRuta = 0;
+/* La cuenta atrás de la ruedecita del turno vigente. */
+let relojDeCargando = null;
+
+/* Una pantalla que se preparó y ya no se va a pintar pudo dejar algo
+   enganchado al prepararse, o de camino: el recorrido manda abrir la
+   cámara y esta llega un momento después. Como no pasa por pintar(),
+   nadie llamaría nunca a su «alSalir»: se llama aquí. (El del
+   recorrido suelta la cámara si ya la tiene y, si aún no ha llegado,
+   deja dicho que se apague en cuanto llegue.) */
+function soltarAbandonada(salida) {
+  try { salida?.alSalir?.(); } catch { /* daba igual */ }
+}
+
 async function enrutar() {
   const hash = location.hash.replace(/^#/, '') || '/';
+  // Antes de coger turno: el aviso de un cambio de dirección que
+  // refrescar() ya atendió no debe dejar sin pintar al que está en ello.
   if (hash === rutaActual) return;
   rutaActual = hash;
+  // Desde aquí manda esta navegación: la que hubiera a medias ya no
+  // pinta nada, tampoco su ruedecita.
+  const turno = ++turnoDeRuta;
+  clearTimeout(relojDeCargando);
 
   const [ruta] = hash.split('?');
   const encontrada = RUTAS.find((r) => r.patron.test(ruta));
 
-  // Sin sesión solo se puede estar en la pantalla de entrada.
+  // Sin sesión solo se puede estar en la pantalla de entrada. Estas dos
+  // salidas no pintan: cambian la dirección, y eso trae otro turno.
   const hayUsuario = !!store.sesion();
   if (!hayUsuario && ruta !== '/entrar') return ir('#/entrar', { reemplazar: true });
   if (hayUsuario && ruta === '/entrar') return ir('#/', { reemplazar: true });
@@ -269,16 +310,27 @@ async function enrutar() {
     return;
   }
 
-  const temporizador = setTimeout(cargando, 180);
+  // La ruedecita de un turno abandonado taparía la pantalla que ya
+  // pintó el siguiente: solo la pone el vigente.
+  const temporizador = setTimeout(() => { if (turno === turnoDeRuta) cargando(); }, 180);
+  relojDeCargando = temporizador;
   try {
     const modulo = await encontrada.vista();
+    // Mientras llegaba el código se ha ido a otra parte: ni se prepara.
+    if (turno !== turnoDeRuta) { clearTimeout(temporizador); return; }
     const m = ruta.match(encontrada.patron);
     const salida = await modulo.render(encontrada.params(m));
     clearTimeout(temporizador);
+    // Lista, pero ya se ha pedido otra pantalla (o repintar esta con
+    // datos más nuevos): no se pinta encima.
+    if (turno !== turnoDeRuta) { soltarAbandonada(salida); return; }
     pintar(salida);
   } catch (e) {
     clearTimeout(temporizador);
     console.error(e);
+    // El fallo de una pantalla a la que ya no se va ni se enseña ni
+    // recarga la página: taparía la que sí se ha pedido.
+    if (turno !== turnoDeRuta) return;
     // Si lo que ha fallado es traer el código de la pantalla, no hay
     // nada que explicarle a nadie: se recarga y ya. Pasa cuando la
     // versión del móvil y la del servidor no coinciden a mitad de

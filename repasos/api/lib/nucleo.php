@@ -80,9 +80,26 @@ function bd(): PDO
         require_once __DIR__ . '/precarga.php';
         precarga_entregas_al_dia($pdo);
 
-        // Y, una sola vez, las viviendas que firmaron antes de que
+        // Las dos puestas al día que siguen viven en entregas.php. Al
+        // publicar, los ficheros suben varios a la vez y sin orden: si
+        // este llega antes que aquel, durante unos segundos la función
+        // todavía no existe, y llamarla tumbaría TODA la API (también
+        // entrar). Por eso se pregunta antes: si aún no está, se hace
+        // en la primera petición que encuentre los dos ficheros nuevos.
+
+        // Una sola vez, las viviendas que firmaron antes de que
         // «entregada» fuera algo que se marca a mano (ver entregas.php).
-        entregas_de_antes_al_dia($pdo);
+        if (function_exists('entregas_de_antes_al_dia')) {
+            entregas_de_antes_al_dia($pdo);
+        }
+
+        // Y, también una sola vez, las fichas que venían con una visita
+        // hecha y una cita nueva encima: la visita pasa a su historial
+        // (ver entregas.php). Va después de la precarga, que es la que
+        // puede traer visitas ya hechas en una base recién creada.
+        if (function_exists('entregas_visitas_al_dia')) {
+            entregas_visitas_al_dia($pdo);
+        }
     }
     return $pdo;
 }

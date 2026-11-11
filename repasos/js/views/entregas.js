@@ -27,6 +27,11 @@
    fecha: una firma con el día ya pasado y sin esa marca sale como
    «Firma / entrega · sin confirmar».
 
+   Una vivienda puede tener varias visitas con el cliente: cada una que
+   se haya hecho sale en su día como «Revisión hecha», con quien la dio
+   por hecha, además de la cita que tenga pendiente (ver hitosDe en
+   js/entregas.js).
+
    La vista y la fecha viajan en la dirección, así que atrás vuelve a
    donde se estaba y un enlace copiado abre lo mismo. */
 import { h, icon, avatar } from '../ui.js';
@@ -227,17 +232,24 @@ export async function render() {
     if (e.tipo === 'incidencia') {
       return { clase: 'rojo', icono: 'periodico', texto: `${e.incidencias} ${e.incidencias === 1 ? 'repaso del parte post-entrega por resolver' : 'repasos del parte post-entrega por resolver'}` };
     }
-    if (E.revisionHecha(v)) return { clase: 'verde', icono: 'check', texto: `Revisión hecha${v.revision ? ` el ${E.fechaLarga(v.revision)}` : ''}` };
+    // Manda la cita vigente (hecha o por hacer); si no hay ninguna pero
+    // la vivienda ya tuvo visitas, se dice la última.
+    const marcada = E.visitaMarcada(v);
+    if (marcada?.vigente) return { clase: 'verde', icono: 'check', texto: `Revisión hecha el ${E.fechaLarga(marcada.dia)}` };
     if (v.revision) return { clase: 'gris', icono: 'calendario', texto: `Revisión con el cliente el ${E.fechaConDia(v.revision)}${v.revisionHora ? ` · ${v.revisionHora}` : ''}` };
+    const ultima = E.todasLasVisitas(v).pop();
+    if (ultima) return { clase: 'verde', icono: 'check', texto: `Revisión hecha el ${E.fechaLarga(ultima.dia)}` };
     return { clase: 'gris', icono: 'calendario', texto: 'Revisión sin fecha todavía' };
   };
-  /* Quién lo fijó y cuándo, para el pie de la tarjeta. */
+  /* Quién lo fijó y cuándo, para el pie de la tarjeta. La de una
+     visita hecha lo lleva en el propio hito: cada visita de la
+     vivienda (la vigente y las del historial) tiene su autor. */
   const quienLoFijo = (e) => {
     const v = e.entrega;
     const [id, nombre, cuando, verbo] = e.tipo === 'entregada' || e.tipo === 'incidencia'
       ? [v.entregadaPor, v.entregadaPorNombre, v.entregadaFijadaEn || v.entregadaEn, 'la dio por entregada']
       : e.tipo === 'revisada'
-      ? [v.revisadaPor, v.revisadaPorNombre, v.revisadaFijadaEn || v.revisadaEn, 'la dio por hecha']
+      ? [e.visita?.por, e.visita?.porNombre, e.visita?.hechaEn, 'la dio por hecha']
       : e.tipo === 'revision'
         ? [v.revisionPor, v.revisionPorNombre, v.revisionFijadaEn, 'la fijó']
         : [v.firmaPor, v.firmaPorNombre, v.firmaFijadaEn, 'la fijó'];

@@ -34,8 +34,15 @@ declare(strict_types=1);
     vivienda se ha entregado lo dicen el comercial o el administrador,
     no la fecha de la firma (lo pidió Fran el 10-11-2026).
     La 19 añade la hora de la firma: la cita en la notaría tiene hora,
-    como la revisión con el cliente (lo pidió el comercial ese día). */
-const ESQUEMA_VERSION = 19;
+    como la revisión con el cliente (lo pidió el comercial ese día).
+    La 20 trae el historial de visitas: la ficha de entrega guarda
+    TODAS las revisiones hechas con el cliente y no solo la última
+    (`visitas_hechas`, con su sello), y la fecha que tenía una cita
+    cuando al darla por hecha se movió a hoy (`revisada_de` y su hora),
+    para que deshacer la deje como estaba. Las fichas que venían con
+    una visita hecha y una cita nueva encima se ponen al día aparte,
+    una sola vez: entregas_visitas_al_dia() en entregas.php. */
+const ESQUEMA_VERSION = 20;
 
 /**
  * Tablas que tienen que existir para dar la versión por puesta. Si
@@ -101,6 +108,18 @@ const ESQUEMA_CAMPOS = [
         'entregada_por_nombre' => "VARCHAR(120) NOT NULL DEFAULT ''",
         // La hora de la cita en la notaría. Vacía = sin hora.
         'firma_hora'           => "CHAR(5) NOT NULL DEFAULT ''",
+        // El día y la hora que tenía la cita si, al darla por hecha
+        // antes de tiempo, se movió a hoy: «la revisión no se ha
+        // hecho» se los devuelve. Vacíos = no se movió.
+        'revisada_de'          => "CHAR(10) NOT NULL DEFAULT ''",
+        'revisada_de_hora'     => "CHAR(5) NOT NULL DEFAULT ''",
+        // Las visitas ya hechas que no son la cita vigente: una lista
+        // en JSON y su sello. TEXT sin valor por defecto (MariaDB no
+        // lo admite en una columna TEXT): en las filas que ya había
+        // queda en NULL, que el código lee como «ninguna», igual que
+        // la cadena vacía.
+        'visitas_hechas'       => 'TEXT',
+        'visitas_fijadas_en'   => "CHAR(24) NOT NULL DEFAULT ''",
     ],
     'reuniones' => [
         // El acta que sale de la grabación: el resumen ya aceptado y,

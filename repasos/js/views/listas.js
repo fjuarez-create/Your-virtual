@@ -418,8 +418,8 @@ export async function render({ promoId, unidadId }) {
       ? (E.diaEntregada(entrega) || entrega.firma || E.hoyIso())
       : sit.clave === 'firma'
       ? (entrega.firma || E.hoyIso())
-      : sit.clave === 'revisada' && !entrega.revision && entrega.revisadaEn
-        ? E.isoDe(new Date(entrega.revisadaEn))   // el día en que se dio por hecha
+      : sit.clave === 'revisada' && sit.dia
+        ? sit.dia   // el día de la visita hecha: la vigente, o la última del historial
         : (entrega.revision || entrega.firma || E.hoyIso());
     ir(`#/entregas?vista=dia&fecha=${dia}`);
   };
@@ -428,6 +428,15 @@ export async function render({ promoId, unidadId }) {
      «la revisión se ha hecho» y «la vivienda se ha entregado». Vive en
      js/hojaEntrega.js, porque también se abre desde el calendario. */
   const hojaFechas = () => abrirHojaFechas({ unidadId, promoId, nombre: u.nombre, entrega, alCambiar: refrescar });
+
+  // El filtro se leyó de la dirección al empezar, y desde entonces esta
+  // pantalla ha esperado (el chat de la villa, lo último). Si en esa
+  // espera alguien ha quitado o cambiado el filtro en la pantalla que
+  // hay pintada —este es un repintado, el de después de sincronizar—,
+  // la dirección ya dice otra cosa: se vuelve a leer justo antes de
+  // pintar. Si no, quedaba la lista filtrada, con su píldora, y la
+  // dirección sin filtro.
+  ({ estado, oficio: oficioId, prioridad } = filtrosDeRuta());
 
   pintar();
 

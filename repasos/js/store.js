@@ -12,6 +12,9 @@ import {
   puedeVerificar, hecha, esperandoVisto, rebotada, enObra, OFICIO_POR_DEFECTO, FASE_UNICA, FASE_POST,
   PRIORIDAD_POR_DEFECTO, esPrioridad, prioridadDe, puedePonerFechas,
 } from './catalog.js';
+import {
+  revisionHecha, visitasDe, visitaMarcada, todasLasVisitas, hayVisitaHecha, citaQueVuelve, esDia, hoyIso, diaDeMarca,
+} from './entregas.js';
 
 /* ─── Identificadores y sellos de tiempo ──────────────────────── */
 export function nuevoId() {
@@ -273,6 +276,22 @@ window.addEventListener('offline', () => { estadoSync.online = false; avisar(); 
    Las pone el comercial o el administrador; el servidor lo vuelve a
    comprobar y firma la autoría de cada hecho con la sesión (o con
    quien diga el móvil, si esa persona puede poner fechas).
+
+   LAS VISITAS. Una vivienda puede tener varias visitas con el cliente.
+   La ficha lleva la cita VIGENTE (`revision`, y la marca `revisadaEn`
+   cuando ya se ha hecho) y, aparte, el HISTORIAL de las anteriores
+   (`visitasHechas`). Las reglas viven aquí, en el móvil —el servidor
+   solo guarda hechos—:
+
+     · Fijar una fecha NUEVA y posterior sobre una visita ya hecha la
+       pasa al historial y deja la cita nueva pendiente (fijarEntrega).
+       Y devolverle después la fecha que tenía la saca del historial
+       y la deja otra vez como la revisión de la ficha, ya hecha.
+     · «La revisión se ha hecho» sobre una cita de más adelante la trae
+       a hoy y apunta la fecha que tenía (marcarRevisionHecha), para
+       que «la revisión no se ha hecho» la devuelva
+       (deshacerRevisionHecha).
+     · Una visita archivada por error se quita con quitarVisitaHecha.
    ═══════════════════════════════════════════════════════════════ */
 
 /** Los hechos de la ficha: qué campos van juntos, su sello y su autor. */
@@ -280,11 +299,49 @@ const HECHOS_ENTREGA = [
   { sello: 'compradoresFijadosEn', campos: ['compradores'], autor: null },
   { sello: 'revisionFijadaEn', campos: ['revision', 'revisionHora'], autor: 'revisionPor' },
   { sello: 'firmaFijadaEn', campos: ['firma', 'firmaHora'], autor: 'firmaPor' },
-  { sello: 'revisadaFijadaEn', campos: ['revisadaEn'], autor: 'revisadaPor' },
+  // La marca de «hecha» de la cita vigente y, con ella, la fecha y la
+  // hora que tenía esa cita si al marcarla se movió a hoy.
+  { sello: 'revisadaFijadaEn', campos: ['revisadaEn', 'revisadaDe', 'revisadaDeHora'], autor: 'revisadaPor' },
+  // Las visitas ya hechas que no son la cita vigente: una lista. Sin
+  // autor de hecho: cada visita lleva el suyo.
+  { sello: 'visitasFijadasEn', campos: ['visitasHechas'], autor: null },
   // Que la vivienda se ha entregado lo dicen el comercial o el
   // administrador, no la fecha de la firma (Fran, 10-11-2026).
   { sello: 'entregadaFijadaEn', campos: ['entregadaEn'], autor: 'entregadaPor' },
 ];
+
+/**
+ * Lo que no trae una ficha guardada por la app anterior (o por un
+ * servidor que aún no lo conoce): la fecha que tenía la cita y el
+ * historial de visitas. Se le pone vacío, y la lista, saneada, para
+ * que el resto del código no tenga que preguntarse si están.
+ */
+function completarEntrega(e) {
+  return {
+    ...e,
+    revisadaDe: e.revisadaDe || '',
+    revisadaDeHora: e.revisadaDeHora || '',
+    visitasHechas: visitasDe(e),
+    visitasFijadasEn: e.visitasFijadasEn || '',
+  };
+}
+
+/**
+ * ¿Dicen lo mismo dos valores de un campo de la ficha? Casi todos son
+ * textos; el historial de visitas es una lista y se compara por lo que
+ * contiene: dos listas iguales no son nunca «la misma» para un ===.
+ */
+function mismoValor(a, b) {
+  if (Array.isArray(a) || Array.isArray(b)) {
+    return JSON.stringify(visitasDe({ visitasHechas: a })) === JSON.stringify(visitasDe({ visitasHechas: b }));
+  }
+  return (a || '') === (b || '');
+}
+
+/** El historial de una ficha con una visita más (si ya había una ese día, la sustituye). */
+function conVisita(entrega, { dia, hechaEn, por, porNombre }) {
+  return visitasDe({ visitasHechas: [{ dia, hechaEn, por, porNombre }, ...visitasDe(entrega)] });
+}
 
 /**
  * Lo que baja del servidor contra lo que hay en el móvil: por cada
@@ -302,7 +359,9 @@ function fusionarEntrega(local, remota) {
     if (h.autor) { r[h.autor] = local[h.autor]; r[`${h.autor}Nombre`] = local[`${h.autor}Nombre`]; }
   }
   if ((local.actualizado || '') > (remota.actualizado || '')) r.actualizado = local.actualizado;
-  return r;
+  // Lo local puede ser de la app anterior y no traer los campos nuevos
+  // de un hecho que gana por sello: se dejan vacíos, no sin definir.
+  return completarEntrega(r);
 }
 export async function entregaDeUnidad(unidadId) {
   const e = await db.get('entregas', unidadId);
@@ -351,6 +410,8 @@ function entregaVacia(unidadId, promoId) {
     revisionFijadaEn: '', revisionPor: null, revisionPorNombre: '',
     firmaFijadaEn: '', firmaPor: null, firmaPorNombre: '',
     revisadaFijadaEn: '', revisadaPor: null, revisadaPorNombre: '',
+    revisadaDe: '', revisadaDeHora: '',
+    visitasHechas: [], visitasFijadasEn: '',
     entregadaEn: '', entregadaFijadaEn: '', entregadaPor: null, entregadaPorNombre: '',
     borrada: false,
     creado: ahora(), actualizado: ahora(),
@@ -360,30 +421,109 @@ function entregaVacia(unidadId, promoId) {
 }
 
 /**
- * Cambia lo que se diga de la ficha —compradores, revisión, hora,
- * firma, revisadaEn— y sella cada hecho que cambie con quién y cuándo.
- * El cuándo lo pone el móvil (es quien sabe cuándo se tocó, aunque
- * suba horas después); el quién lo vuelve a comprobar el servidor.
+ * El paso común de todo lo que cambia una ficha: la lee, le aplica los
+ * cambios que diga `calcular(previa)` y la guarda sellando cada hecho
+ * que cambie con quién y cuándo. El cuándo lo pone el móvil (es quien
+ * sabe cuándo se tocó, aunque suba horas después); el quién lo vuelve a
+ * comprobar el servidor. Todo lo que cambie en una llamada va en UNA
+ * sola escritura y con el mismo sello: archivar una visita toca tres
+ * hechos a la vez (la revisión, la marca y el historial) y no pueden
+ * subir a medias.
+ *
+ * Si `calcular` devuelve null no hay nada que hacer: la ficha se queda
+ * como estaba, sin guardar ni encolar nada.
+ *
+ * Un hecho que cambia lo firma quien toca. La excepción la dice
+ * `calcular` en `firmas` (campo del autor → { id, nombre }): la visita
+ * que vuelve del historial sigue siendo de quien la dio por hecha, no
+ * de quien le devuelve la fecha. El servidor lo comprueba igual: solo
+ * le cree al móvil un autor que exista y pueda poner fechas.
  */
-export async function fijarEntrega(unidadId, promoId, cambios) {
+async function cambiarEntrega(unidadId, promoId, calcular) {
   if (!puedePonerFechas(usuario)) throw new Error('Las fechas de entrega las pone el comercial o el administrador.');
-  const previa = (await db.get('entregas', unidadId)) || entregaVacia(unidadId, promoId);
+  const previa = completarEntrega((await db.get('entregas', unidadId)) || entregaVacia(unidadId, promoId));
+  const pedido = calcular(previa);
+  if (!pedido) return previa;
+  const { firmas = null, ...cambios } = pedido;
   const cuando = ahora();
   const nueva = { ...previa, ...cambios, borrada: false, actualizado: cuando };
   // Una hora sin fecha no significa nada.
   if (!nueva.revision) nueva.revisionHora = '';
   if (!nueva.firma) nueva.firmaHora = '';
+  // Ni la fecha que tenía la cita, si no hay marca de «hecha» que deshacer.
+  if (!nueva.revisadaEn) nueva.revisadaDe = '';
+  if (!nueva.revisadaDe) nueva.revisadaDeHora = '';
+  nueva.visitasHechas = visitasDe(nueva);
   for (const h of HECHOS_ENTREGA) {
-    if (h.campos.every((c) => (nueva[c] || '') === (previa[c] || ''))) continue;
+    if (h.campos.every((c) => mismoValor(nueva[c], previa[c]))) continue;
     nueva[h.sello] = cuando;
     if (h.autor) {
-      nueva[h.autor] = usuario?.id || null;
-      nueva[`${h.autor}Nombre`] = usuario?.nombre || 'Sin identificar';
+      const firma = firmas?.[h.autor];
+      nueva[h.autor] = firma ? firma.id : (usuario?.id || null);
+      nueva[`${h.autor}Nombre`] = firma ? firma.nombre : (usuario?.nombre || 'Sin identificar');
     }
   }
   await db.put('entregas', nueva);
   await encolar('entrega', unidadId);
   return nueva;
+}
+
+/**
+ * Cambia lo que se diga de la ficha —compradores, revisión, hora,
+ * firma— y sella cada hecho que cambie con quién y cuándo.
+ *
+ * Con dos reglas propias para la fecha de la revisión:
+ *
+ *  1. Si la revisión que había ya estaba HECHA y se le pone una fecha
+ *     nueva y POSTERIOR, es otra cita: la visita hecha pasa al
+ *     historial, la marca se limpia y la cita nueva queda pendiente sin
+ *     más. «Posterior» lo es al día de la visita Y al día en que se
+ *     marcó: una fecha que no pasa del día de la marca es una
+ *     corrección, no una cita nueva (es lo mismo que mira
+ *     revisionHecha()). Así, corregirle la fecha a una visita hecha —al
+ *     mismo día, a uno anterior, o de vuelta a su día después de
+ *     habérsela corregido hacia atrás—, cambiar solo la hora o quitar
+ *     la fecha no archivan nada: sigue hecha.
+ *
+ *  2. Si la cita está PENDIENTE y se le pone el día de una visita del
+ *     historial, es que se le está devolviendo la fecha (alguien le
+ *     puso por error una cita nueva a una vivienda ya revisada y lo
+ *     arregla como lo arreglaría cualquiera). Esa visita sale del
+ *     historial y vuelve a ser la revisión de la ficha, ya hecha, a
+ *     nombre de quien la dio por hecha: la ficha no puede decir a la
+ *     vez que la visita de ese día está hecha y que está por hacer.
+ */
+export async function fijarEntrega(unidadId, promoId, cambios) {
+  return cambiarEntrega(unidadId, promoId, (previa) => {
+    const pedidos = { ...cambios };
+    delete pedidos.firmas;   // quién firma no lo dice quien llama
+    const fecha = 'revision' in pedidos ? (pedidos.revision || '') : '';
+    // Quien manda también la marca sabe lo que hace: no se le toca nada.
+    if (!esDia(fecha) || fecha === (previa.revision || '') || 'revisadaEn' in pedidos) return pedidos;
+    if (revisionHecha(previa)) {
+      const hecha = visitaMarcada(previa);
+      const marca = diaDeMarca(previa.revisadaEn);
+      if (hecha && fecha > hecha.dia && (!marca || fecha > marca)) {
+        pedidos.visitasHechas = conVisita(previa, hecha);
+        pedidos.revisadaEn = '';
+        pedidos.revisadaDe = '';
+        pedidos.revisadaDeHora = '';
+      }
+    } else if (!previa.revisadaEn) {
+      const vuelve = visitasDe(previa).find((v) => v.dia === fecha);
+      if (vuelve) {
+        pedidos.visitasHechas = visitasDe(previa).filter((v) => v.dia !== fecha);
+        // A mediodía, como cuando se apunta tarde una visita de un día
+        // ya pasado: es el mismo día en Canarias y en la Península.
+        pedidos.revisadaEn = `${fecha}T12:00:00.000Z`;
+        pedidos.revisadaDe = '';
+        pedidos.revisadaDeHora = '';
+        // Sigue siendo de quien la dio por hecha (si se sabe quién fue).
+        if (vuelve.por) pedidos.firmas = { revisadaPor: { id: vuelve.por, nombre: vuelve.porNombre || 'Sin identificar' } };
+      }
+    }
+    return pedidos;
+  });
 }
 
 /**
@@ -393,30 +533,85 @@ export async function fijarEntrega(unidadId, promoId, cambios) {
  * apuntarlas.
  */
 export async function marcarRevisionHecha(unidadId, promoId) {
-  // El día que cuenta es el de la visita, no el del toque:
-  //  · si la revisión tenía puesto un día que aún no ha llegado, es que
-  //    se adelantó y se ha hecho hoy: la fecha pasa a hoy (si no, un
-  //    retoque posterior de la hora la devolvía a «pendiente»);
-  //  · si el día ya pasó y se apunta tarde, la marca lleva ese día (a
-  //    mediodía, como la precarga), para que en el calendario la visita
-  //    no cambie de sitio. Cuándo se apuntó queda en su sello.
-  const previa = await db.get('entregas', unidadId);
-  const prevista = previa && !previa.borrada && /^\d{4}-\d{2}-\d{2}$/.test(previa.revision || '') ? previa.revision : '';
-  const d = new Date();
-  const hoy = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  const cambios = { revisadaEn: ahora() };
-  if (prevista > hoy) { cambios.revision = hoy; cambios.revisionHora = ''; }
-  else if (prevista && prevista < hoy) cambios.revisadaEn = `${prevista}T12:00:00.000Z`;
-  const entrega = await fijarEntrega(unidadId, promoId, cambios);
+  const entrega = await cambiarEntrega(unidadId, promoId, (previa) => {
+    const viva = !previa.borrada;
+    // La cita que hay ya está hecha: no hay nada que marcar (ni día
+    // que mover, ni aviso que repetir al equipo).
+    if (viva && revisionHecha(previa)) return null;
+    // El día que cuenta es el de la visita, no el del toque:
+    //  · si la revisión tenía puesto un día que aún no ha llegado, es
+    //    que se adelantó y se ha hecho hoy: la fecha pasa a hoy (si no,
+    //    un retoque posterior de la hora la devolvía a «pendiente») y
+    //    la que tenía se apunta, con su hora, para poder deshacerlo;
+    //  · si el día ya pasó y se apunta tarde, la marca lleva ese día (a
+    //    mediodía, como la precarga), para que en el calendario la
+    //    visita no cambie de sitio. Cuándo se apuntó queda en su sello.
+    const prevista = viva && esDia(previa.revision) ? previa.revision : '';
+    const hoy = hoyIso();
+    const pedidos = { revisadaEn: ahora(), revisadaDe: '', revisadaDeHora: '' };
+    // Una ficha en el estado antiguo: la marca que hay es de una visita
+    // anterior a esta cita. Antes de pisarla, esa visita va al historial.
+    const anterior = viva ? visitaMarcada(previa) : null;
+    if (anterior) pedidos.visitasHechas = conVisita(previa, anterior);
+    if (prevista > hoy) {
+      pedidos.revision = hoy;
+      pedidos.revisionHora = '';
+      pedidos.revisadaDe = prevista;
+      pedidos.revisadaDeHora = previa.revisionHora || '';
+    } else if (prevista && prevista < hoy) {
+      pedidos.revisadaEn = `${prevista}T12:00:00.000Z`;
+    }
+    return pedidos;
+  });
   // Si la vivienda ya tiene parte post-entrega (de una revisión
   // anterior), se sigue en ese: una segunda visita no abre otro.
   const lista = (await partePostDeUnidad(unidadId)) || await crearLista({ unidadId, promoId, fase: FASE_POST });
   return { entrega, lista };
 }
 
-/** Marcada por error: se quita el sello. Los partes abiertos se quedan. */
+/**
+ * «La revisión no se ha hecho»: marcada por error. Se quita la marca y,
+ * si al marcarla la cita se había traído a hoy, vuelve a la fecha y la
+ * hora que tenía: la ficha queda como estaba. El historial de visitas
+ * no se toca, y los partes abiertos se quedan.
+ */
 export async function deshacerRevisionHecha(unidadId, promoId) {
-  return fijarEntrega(unidadId, promoId, { revisadaEn: '' });
+  return cambiarEntrega(unidadId, promoId, (previa) => {
+    // Sin la cita vigente dada por hecha no hay nada que deshacer. (La
+    // marca de una ficha en el estado antiguo es de OTRA visita: esa se
+    // quita, si hace falta, con quitarVisitaHecha.)
+    if (!revisionHecha(previa)) return null;
+    const pedidos = { revisadaEn: '', revisadaDe: '', revisadaDeHora: '' };
+    const vuelve = citaQueVuelve(previa);
+    if (vuelve) {
+      pedidos.revision = vuelve.dia;
+      pedidos.revisionHora = vuelve.hora;
+    }
+    return pedidos;
+  });
+}
+
+/**
+ * Quita una visita del historial, por si se archivó algo por error (o
+ * se dio por hecha una que no lo fue y después se le puso encima una
+ * cita nueva). `dia` es el día de la visita. No toca la cita vigente.
+ */
+export async function quitarVisitaHecha(unidadId, promoId, dia) {
+  return cambiarEntrega(unidadId, promoId, (previa) => {
+    const pedidos = {};
+    const historial = visitasDe(previa);
+    const quedan = historial.filter((v) => v.dia !== dia);
+    if (quedan.length !== historial.length) pedidos.visitasHechas = quedan;
+    // En una ficha en el estado antiguo, la visita de antes no está en
+    // la lista: vive en la marca.
+    const marcada = visitaMarcada(previa);
+    if (marcada && !marcada.vigente && marcada.dia === dia) {
+      pedidos.revisadaEn = '';
+      pedidos.revisadaDe = '';
+      pedidos.revisadaDeHora = '';
+    }
+    return Object.keys(pedidos).length ? pedidos : null;
+  });
 }
 
 /**
@@ -478,10 +673,11 @@ export async function lista(id) {
 export async function crearLista({ unidadId, promoId, fase = null, nombre = '', autor = null }) {
   const quien = autor || usuario;
   // Sin fase dicha, la decide la entrega: si la vivienda ya se revisó
-  // con el cliente, lo que se apunte desde ahora es parte post-entrega.
+  // con el cliente —la cita vigente o cualquier visita del historial—,
+  // lo que se apunte desde ahora es parte post-entrega.
   if (!fase) {
     const entrega = await db.get('entregas', unidadId);
-    fase = entrega && !entrega.borrada && entrega.revisadaEn ? FASE_POST : FASE_UNICA;
+    fase = entrega && !entrega.borrada && hayVisitaHecha(entrega) ? FASE_POST : FASE_UNICA;
   }
   if (fase === FASE_POST && !nombre) nombre = 'Parte post-entrega';
   const l = {
@@ -1499,18 +1695,25 @@ export async function datosHome(promoId) {
   // propia ficha —no se guardan aparte—, así que si Ezequiel cambia la
   // fecha, el muro cuenta la fecha de ahora y no la de antes.
   for (const e of (await db.porIndice('entregas', 'promoId', promoId)).filter((x) => !x.borrada)) {
-    const hecho = (clave, cuando, quien, quienId) => muro.push({
-      tipo: 'entrega', hecho: clave, entrega: e, unidadId: e.unidadId, estado: '',
+    const hecho = (clave, cuando, quien, quienId, visita = null) => muro.push({
+      tipo: 'entrega', hecho: clave, entrega: e, unidadId: e.unidadId, estado: '', visita,
       cuando, quien: quien || 'Alguien', quienId: quienId || null, texto: '',
     });
     // Si la fecha la movió el propio «se ha hecho» (una visita que se
-    // adelantó: mismo sello que la marca), no es una cita nueva.
-    if (e.revision && e.revisionFijadaEn && e.revisionFijadaEn !== e.revisadaFijadaEn) {
+    // adelantó: la marca está puesta y lleva el mismo sello), no es una
+    // cita nueva. Con la marca vacía y el mismo sello es lo contrario:
+    // una cita nueva que mandó la visita anterior al historial, o una
+    // cita que ha vuelto al deshacer; esas sí se cuentan.
+    if (e.revision && e.revisionFijadaEn && !(e.revisadaEn && e.revisionFijadaEn === e.revisadaFijadaEn)) {
       hecho('revision', e.revisionFijadaEn, e.revisionPorNombre, e.revisionPor);
     }
     if (e.firma && e.firmaFijadaEn) hecho('firma', e.firmaFijadaEn, e.firmaPorNombre, e.firmaPor);
-    // En el muro, cuándo se apuntó (la marca puede llevar el día de la visita).
-    if (e.revisadaEn) hecho('revisada', e.revisadaFijadaEn || e.revisadaEn, e.revisadaPorNombre, e.revisadaPor);
+    // Una nota por cada visita hecha, la vigente y las del historial,
+    // con quien la dio por hecha. En el muro manda cuándo se apuntó
+    // (la visita puede ser de un día anterior).
+    for (const v of todasLasVisitas(e)) {
+      hecho('revisada', v.hechaEn || `${v.dia}T12:00:00.000Z`, v.porNombre, v.por, v);
+    }
     if (e.entregadaEn) hecho('entregada', e.entregadaEn, e.entregadaPorNombre, e.entregadaPor);
   }
   muro.sort((a, b) => (b.cuando || '').localeCompare(a.cuando || ''));
@@ -2006,7 +2209,7 @@ const normalizarTarea = (t) => ({
 });
 const normalizarComentario = (c) => ({ ...c, borrada: bool(c.borrada) });
 const normalizarMensaje = (m) => ({ ...m, borrada: bool(m.borrada) });
-const normalizarEntrega = (e) => ({
+const normalizarEntrega = (e) => completarEntrega({
   ...e, borrada: bool(e.borrada),
   compradores: typeof e.compradores === 'string' ? e.compradores : '',
   revision: e.revision || '', revisionHora: e.revisionHora || '',

@@ -291,6 +291,14 @@ CREATE TABLE IF NOT EXISTS adjuntos (
 -- sellos son los que mandan al fundir: el comercial y el administrador
 -- tocan la misma ficha desde móviles distintos, y una fila entera con
 -- una sola marca pisaría lo del otro.
+-- Desde la versión 20 la ficha guarda TODAS las visitas hechas con el
+-- cliente, no solo la última. La cita vigente sigue en revision y
+-- revisada_en, y las anteriores pasan a visitas_hechas, una lista en
+-- JSON (día, cuándo se apuntó y quién) con su propio sello. OJO, que
+-- visitas_hechas es TEXT y por eso no lleva valor por defecto. Nulo o
+-- vacío es «ninguna» y el código lo trata igual. revisada_de y
+-- revisada_de_hora guardan la fecha y la hora que tenía la cita cuando
+-- al darla por hecha se movió a hoy, para devolvérselas al deshacer.
 CREATE TABLE IF NOT EXISTS entregas (
   id                   VARCHAR(80)  NOT NULL,
   unidad_id            VARCHAR(80)  NOT NULL,
@@ -311,6 +319,10 @@ CREATE TABLE IF NOT EXISTS entregas (
   firma_por_nombre     VARCHAR(120) NOT NULL DEFAULT '',
   revisada_por         CHAR(36)     DEFAULT NULL,
   revisada_por_nombre  VARCHAR(120) NOT NULL DEFAULT '',
+  revisada_de          CHAR(10)     NOT NULL DEFAULT '',
+  revisada_de_hora     CHAR(5)      NOT NULL DEFAULT '',
+  visitas_hechas       TEXT,
+  visitas_fijadas_en   CHAR(24)     NOT NULL DEFAULT '',
   entregada_en         CHAR(24)     NOT NULL DEFAULT '',
   entregada_fijada_en  CHAR(24)     NOT NULL DEFAULT '',
   entregada_por        CHAR(36)     DEFAULT NULL,

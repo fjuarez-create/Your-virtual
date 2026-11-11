@@ -41,13 +41,19 @@ async function pedir(ruta, { metodo = 'GET', json, form, crudo, signal } = {}) {
   // momento después ya no está (le pasó a Fran con la WiFi perfecta).
   // Las LECTURAS se reintentan una vez; un POST no, que repetirlo
   // duplicaría lo hecho.
+  //
+  // Menos cuando la lectura ni siquiera ha salido y el móvil dice que
+  // no tiene red: ese reintento tampoco iba a llegar, y esperarlo eran
+  // 1,6 s de ruedecita en cada vuelta a la portada (que pregunta al
+  // servidor por la obra cada vez que se pinta) justo donde más se usa
+  // la app sin cobertura, que es en la obra.
   for (let intento = 0; ; intento++) {
     const reintentable = metodo === 'GET' && intento === 0;
     let res;
     try {
       res = await fetch(API_BASE + ruta, opciones);
     } catch (e) {
-      if (reintentable && e?.name !== 'AbortError') {
+      if (reintentable && e?.name !== 'AbortError' && navigator.onLine !== false) {
         await new Promise((listo) => setTimeout(listo, 1600));
         continue;
       }

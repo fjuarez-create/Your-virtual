@@ -91,6 +91,12 @@ export function fechaBanner(iso) {
   return `${diaSemana(iso, { mayus: true })} ${d} ${MESES_CORTOS[m - 1]}`;
 }
 
+/** «6 nov» · «6 nov 2025» si no es de este año: para las listas apretadas. */
+export function diaCorto(iso) {
+  const { a, m, d } = partes(iso);
+  return `${d} ${MESES_CORTOS[m - 1]}${a !== new Date().getFullYear() ? ` ${a}` : ''}`;
+}
+
 /** «Noviembre 2026». */
 export function mesTitulo(iso) {
   const { a, m } = partes(iso);
@@ -167,13 +173,14 @@ export function situacion(entrega, { incidencias = 0, hoy = hoyIso() } = {}) {
       aria: `Entregada el ${fechaConDia(dia)}, sin incidencias`,
     };
   }
-  if (revisionHecha(e)) {
-    const dia = e.revision || isoDe(new Date(e.revisadaEn));
+  // Manda la cita vigente: hecha (verde) o por hacer (beige).
+  const marcada = visitaMarcada(e);
+  if (marcada?.vigente) {
     return {
       clave: 'revisada', clase: 'verde-suave', icono: 'check',
-      rotulo: 'Revisada con el cliente', cifra: fechaBanner(dia),
-      sub: chipFirma,
-      aria: `Revisada con el cliente el ${fechaConDia(dia)}${e.firma ? ` · firma el ${fechaConDia(e.firma)}` : ''}`,
+      rotulo: 'Revisada con el cliente', cifra: fechaBanner(marcada.dia),
+      sub: chipFirma, dia: marcada.dia,
+      aria: `Revisada con el cliente el ${fechaConDia(marcada.dia)}${e.firma ? ` · firma el ${fechaConDia(e.firma)}` : ''}`,
     };
   }
   if (e.revision) {
@@ -191,6 +198,17 @@ export function situacion(entrega, { incidencias = 0, hoy = hoyIso() } = {}) {
       rotulo: 'Firma y entrega de llaves', cifra: fechaBanner(e.firma) + horaFirma,
       sub: e.compradores ? { icono: 'users', texto: e.compradores, clase: '' } : null,
       aria: `Firma el ${fechaConDia(e.firma)}${e.firmaHora ? ` a las ${e.firmaHora}` : ''}`,
+    };
+  }
+  // Ni cita vigente ni firma, pero la vivienda ya tuvo visitas con el
+  // cliente: se dice la última.
+  const ultima = todasLasVisitas(e).pop();
+  if (ultima) {
+    return {
+      clave: 'revisada', clase: 'verde-suave', icono: 'check',
+      rotulo: 'Revisada con el cliente', cifra: fechaBanner(ultima.dia),
+      sub: null, dia: ultima.dia,
+      aria: `Revisada con el cliente el ${fechaConDia(ultima.dia)}`,
     };
   }
   return null;
@@ -216,6 +234,110 @@ export function revisionHecha(entrega) {
   const d = new Date(e.revisadaEn);
   if (Number.isNaN(d.getTime())) return true;
   return !((e.revisionFijadaEn || '') > marcada && e.revision > isoDe(d));
+}
+
+/* ─── Las visitas ya hechas ──────────────────────────────────── */
+/* Una vivienda puede tener varias visitas con el cliente: la de
+   cortesía, otra antes de firmar… La ficha guarda la cita VIGENTE
+   (`revision`, y `revisadaEn` si ya se hizo) y, aparte, el HISTORIAL de
+   las anteriores (`visitasHechas`: una lista de { dia, hechaEn, por,
+   porNombre }). Al fijar una cita nueva sobre una visita ya hecha, esa
+   visita pasa al historial (lo hace store.fijarEntrega).
+
+   Queda un caso de antes de que existiera el historial, y que un móvil
+   con la app anterior en caché todavía puede dejar: la marca de una
+   visita vieja con una cita nueva encima, sin archivar («el estado
+   antiguo»). revisionHecha() lo reconoce, y aquí esa visita se cuenta
+   como una más de las hechas, en su día. */
+
+/** Cuántas visitas guarda el historial como mucho (el servidor, igual). */
+const TOPE_VISITAS = 30;
+
+/** El día, en el calendario del móvil, de una marca ISO; '' si no se deja leer. */
+export function diaDeMarca(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '' : isoDe(d);
+}
+
+/**
+ * El historial de una ficha, saneado: solo visitas con un día que
+ * exista, una por día (de dos, la primera) y ordenadas por día. Una
+ * ficha guardada por la app anterior no trae la lista: sale vacío.
+ */
+export function visitasDe(entrega) {
+  const lista = Array.isArray(entrega?.visitasHechas) ? entrega.visitasHechas : [];
+  const porDia = new Map();
+  for (const v of lista) {
+    if (!v || !esDia(v.dia) || porDia.has(v.dia)) continue;
+    porDia.set(v.dia, {
+      dia: v.dia,
+      hechaEn: typeof v.hechaEn === 'string' ? v.hechaEn : '',
+      por: typeof v.por === 'string' && v.por ? v.por : null,
+      porNombre: typeof v.porNombre === 'string' ? v.porNombre : '',
+    });
+  }
+  return [...porDia.values()].sort((a, b) => a.dia.localeCompare(b.dia)).slice(-TOPE_VISITAS);
+}
+
+/**
+ * La visita que lleva la MARCA de la ficha (`revisadaEn`), o null si no
+ * hay marca. Lo normal es que sea la cita vigente, ya hecha (`vigente`
+ * a true): su día es el de la revisión, o el de la marca si la revisión
+ * no tiene fecha. En una ficha en el estado antiguo la marca es de una
+ * visita anterior a la cita que hay puesta (`vigente` a false) y su día
+ * es el de la marca. Lleva quién la dio por hecha y cuándo se apuntó.
+ */
+export function visitaMarcada(entrega) {
+  const e = entrega || {};
+  if (!e.revisadaEn) return null;
+  const vigente = revisionHecha(e);
+  const dia = vigente && esDia(e.revision) ? e.revision : diaDeMarca(e.revisadaEn);
+  if (!esDia(dia)) return null;
+  return {
+    dia, vigente,
+    hechaEn: e.revisadaFijadaEn || e.revisadaEn,
+    por: e.revisadaPor || null,
+    porNombre: e.revisadaPorNombre || '',
+  };
+}
+
+/**
+ * Todas las visitas hechas de una vivienda, por día: las del historial
+ * y la que lleve la marca. Una por día: si coinciden, manda la de la
+ * marca. Es lo que pintan el calendario y el muro de la portada.
+ */
+export function todasLasVisitas(entrega) {
+  const marcada = visitaMarcada(entrega);
+  const todas = visitasDe(entrega)
+    .filter((v) => !marcada || v.dia !== marcada.dia)
+    .map((v) => ({ ...v, vigente: false }));
+  if (marcada) todas.push(marcada);
+  return todas.sort((a, b) => a.dia.localeCompare(b.dia));
+}
+
+/** ¿Tiene la vivienda alguna visita hecha, la vigente o una del historial? */
+export function hayVisitaHecha(entrega) {
+  return !!entrega?.revisadaEn || visitasDe(entrega).length > 0;
+}
+
+/**
+ * La cita que vuelve si se deshace «la revisión se ha hecho»: cuando la
+ * cita era para más adelante y al darla por hecha se movió a hoy, la
+ * ficha guarda la fecha y la hora que tenía (`revisadaDe`,
+ * `revisadaDeHora`). Devuelve { dia, hora }, o null si no se movió.
+ *
+ * Solo se le hace caso a una fecha que no sea anterior al día de la
+ * marca: la que se apunta al mover la cita es siempre posterior, y una
+ * anterior solo puede ser un resto que un móvil con la app anterior
+ * devolvió al servidor sin saber qué era.
+ */
+export function citaQueVuelve(entrega) {
+  const e = entrega || {};
+  if (!e.revisadaEn || !esDia(e.revisadaDe)) return null;
+  const marca = diaDeMarca(e.revisadaEn);
+  if (marca && e.revisadaDe < marca) return null;
+  return { dia: e.revisadaDe, hora: e.revisadaDeHora || '' };
 }
 
 /** El día en que se apuntó la entrega («2026-11-10»), o '' si no está entregada. */
@@ -265,9 +387,14 @@ export const HITOS = {
 const ORDEN_HITO = { revisada: 0, revision: 1, firma: 2, entregada: 3, incidencia: 3 };
 
 /**
- * Los hitos de todas las entregas: uno por revisión (hecha o
- * prevista) y uno por firma o entrega. `incidencias` es el mapa
+ * Los hitos de todas las entregas: uno por la revisión prevista, uno
+ * por cada visita ya hecha (la vigente y las del historial, cada una
+ * en su día) y uno por firma o entrega. `incidencias` es el mapa
  * unidadId → repasos post-entrega sin verificar.
+ *
+ * Los de «revisión hecha» llevan en `visita` quién la dio por hecha y
+ * cuándo se apuntó, para el pie de la tarjeta del día. Una villa no
+ * sale dos veces como revisada el mismo día.
  *
  * La firma es «entregada» solo si alguien lo ha apuntado. Una firma
  * con la fecha ya pasada y sin esa marca sigue siendo una firma, y
@@ -283,17 +410,14 @@ export function hitosDe(entregas, { incidencias = new Map(), hoy = hoyIso() } = 
       unidadId: e.unidadId, villa: u?.corto || e.unidadId.split(':')[1] || '', nombre: u?.nombre || e.unidadId,
       compradores: e.compradores || '', entrega: e, hora: '',
     };
-    const hecha = revisionHecha(e);
-    if (e.revision) {
-      hitos.push({ ...base, dia: e.revision, tipo: hecha ? 'revisada' : 'revision', hora: hecha ? '' : (e.revisionHora || '') });
-      // Una cita nueva en una vivienda que ya tuvo otra revisión hecha:
-      // aquella sigue en su día, y la nueva sale como prevista.
-      if (!hecha && e.revisadaEn) {
-        const antes = isoDe(new Date(e.revisadaEn));
-        if (esDia(antes) && antes !== e.revision) hitos.push({ ...base, dia: antes, tipo: 'revisada' });
-      }
-    } else if (e.revisadaEn) {
-      hitos.push({ ...base, dia: isoDe(new Date(e.revisadaEn)), tipo: 'revisada' });
+    // La cita vigente, si aún está por hacer; y después todas las
+    // visitas hechas: la vigente si ya se hizo y las del historial (y,
+    // en una ficha en el estado antiguo, la que lleva la marca).
+    if (e.revision && !revisionHecha(e)) {
+      hitos.push({ ...base, dia: e.revision, tipo: 'revision', hora: e.revisionHora || '' });
+    }
+    for (const visita of todasLasVisitas(e)) {
+      hitos.push({ ...base, dia: visita.dia, tipo: 'revisada', visita });
     }
     if (e.entregadaEn) {
       const n = incidencias.get(e.unidadId) || 0;

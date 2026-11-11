@@ -161,9 +161,12 @@ export async function render() {
           v.firmaHora ? ` · ${v.firmaHora}` : ''),
       };
     }
+    // Una nota por visita hecha: una vivienda puede tener varias, así
+    // que cada una dice de qué día es.
     return {
       chip: 'Revisada',
       texto: h('p.d-nota-texto', null, 'Ha dado por hecha la revisión con el cliente',
+        n.visita?.dia ? [' del ', h('strong', null, E.fechaConDia(n.visita.dia))] : null,
         v.compradores ? ` (${v.compradores})` : '', '. Lo que quede va al parte post-entrega.'),
     };
   };

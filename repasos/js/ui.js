@@ -440,11 +440,27 @@ export function confirmar({
        quien toca dos o tres veces seguidas confirmaba sin haber leído
        nada: así se quitaba una marca de «revisión hecha» con tres
        toques. El «no» atiende siempre: equivocarse hacia atrás no
-       rompe nada. */
-    const nace = performance.now();
+       rompe nada.
+
+       Y cada toque que llega a destiempo vuelve a empezar la cuenta.
+       Con el medio segundo contado solo desde que nace la pregunta, a
+       quien aporrea el mismo punto le bastaba un toque más: cuatro o
+       cinco seguidos, uno cada 200 ms, daban por hecha una revisión o
+       quitaban una visita del historial sin haber leído nada. Ahora
+       el «sí» atiende al primer toque que llegue después de medio
+       segundo de dedo quieto. */
+    let reposaDesde = performance.now();
     const fila = (rotulo, ico, valor) => h(
       `button.d-confirmar-fila${valor && rojo ? '.roja' : ''}`,
-      { onclick: () => { if (valor && performance.now() - nace < 500) return; cerrar(valor); } },
+      {
+        onclick: () => {
+          if (valor) {
+            const ahora = performance.now();
+            if (ahora - reposaDesde < 500) { reposaDesde = ahora; return; }
+          }
+          cerrar(valor);
+        },
+      },
       icon(ico), h('span', null, rotulo),
     );
 
