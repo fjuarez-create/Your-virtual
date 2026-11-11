@@ -49,6 +49,13 @@ Y una regla sobre una palabra que ya existía:
   decidió Fran el 10-11-2026). Por dentro es el hecho `entregadaEn` de
   la ficha de entrega.
 
+Y una nota sobre las revisiones con el cliente (11-11-2026): cada
+vivienda guarda TODAS sus visitas hechas. Por dentro, la cita vigente
+son `revision` y `revisadaEn` en la ficha de entrega, y las visitas
+anteriores ya hechas van en la lista `visitasHechas`. Deshacer una
+marca puesta por error devuelve a la cita la fecha y la hora que tenía
+(`revisadaDe`, `revisadaDeHora`).
+
 OJO, la trampa que no hay que pisar: **por dentro, la tabla `tareas`,
 la ruta `#/tareas/…` y los nombres de código (`crearTarea`,
 `tareaId`…) guardan REPASOS**. Son identificadores que ya viven en
