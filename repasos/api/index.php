@@ -3116,6 +3116,11 @@ function empezar_reunion(): void
         'creado_por'        => $yo['id'],
         'creado_por_nombre' => (string) $yo['nombre'],
     ];
+    // Y con su nombre al lado (ver «El nombre de cada asistente»): el
+    // de la sesión, que acaba de leerse de `usuarios`.
+    if (hay_nombres_de_asistentes()) {
+        $registro['asistentes_nombres'] = json_encode([(string) $yo['id'] => (string) $yo['nombre']], JSON_UNESCAPED_UNICODE);
+    }
     try {
         $columnas = array_keys($registro);
         bd()->prepare(sprintf(
@@ -3226,7 +3231,11 @@ function editar_reunion(string $id): void
 
     $cambios = [];
     if (array_key_exists('asistentes', $c)) {
-        $cambios['asistentes'] = json_encode(lista_de_uuids($c['asistentes']));
+        $asistentes = lista_de_uuids($c['asistentes']);
+        $cambios['asistentes'] = json_encode($asistentes);
+        if (hay_nombres_de_asistentes()) {
+            $cambios['asistentes_nombres'] = nombres_de_asistentes($asistentes, $reunion['asistentes_nombres'] ?? null);
+        }
     }
     if (array_key_exists('invitados', $c)) {
         $cambios['invitados'] = json_encode(lista_de_nombres($c['invitados']), JSON_UNESCAPED_UNICODE);
@@ -3278,6 +3287,87 @@ function lista_de_nombres($valor): array
         }
     }
     return array_slice($nombres, 0, 60);
+}
+
+/* ─── El nombre de cada asistente ────────────────────────────────
+   EL CASO. Una reunión guardaba a sus asistentes solo por
+   identificador (`asistentes`, una lista JSON) y el nombre se buscaba
+   en el directorio al pintar. Cuando el administrador da de baja a
+   alguien se borra su fila de `usuarios`, y el acta de una reunión ya
+   CERRADA le perdía: su bolita pasaba de sus iniciales a «?» y la
+   tarjeta del archivo se quedaba sin su nombre («DF, Peón, Persona,
+   Oficial y Marta» pasaba a «DF, Peón, Oficial y Marta»). Un acta es
+   un documento: no puede perder a un asistente porque meses después se
+   le dé de baja (noviembre de 2026).
+
+   CÓMO. Junto a `asistentes` va `asistentes_nombres`: un objeto JSON
+   {identificador: nombre}. Se escribe CADA VEZ que se escriben los
+   asistentes —al empezar la reunión, al editarla y en la mesa—, con el
+   nombre que cada uno tiene en `usuarios` en ese momento, y SUMANDO a
+   lo que ya hubiera: quien ya no está en `usuarios` conserva el nombre
+   que se le supo. En una obra la gente entra y sale; cuanto antes se
+   guarde el nombre, menos se pierden.
+
+   A QUIEN SE LEVANTA DE LA MESA NO SE LE BORRA EL NOMBRE GUARDADO. Si
+   se le vuelve a sentar cuando ya no está en `usuarios`, su nombre no
+   habría de dónde sacarlo; y puede pasar: lo hace un móvil que todavía
+   le tiene en su directorio, porque el servidor no mira si el
+   identificador existe. Lo guardado de más no se ve —al móvil solo
+   viajan los nombres de quienes ESTÁN en la lista (reunion_salida)— y
+   no crece sin fin: la mesa solo se toca el día de la reunión, y a
+   medianoche se sella.
+
+   `reuniones` NO es una de las siete tablas que bajan a los móviles: va
+   siempre en directo y no lleva `recibido`. */
+
+/**
+ * ¿Tiene ya `reuniones` la columna de los nombres? En la ventana del
+ * despliegue este fichero puede ir unos segundos por delante de la
+ * base (esquema.php sube aparte): mejor guardar la mesa sin nombres,
+ * como hasta ahora, que no poder empezar la reunión.
+ */
+function hay_nombres_de_asistentes(): bool
+{
+    static $hay = null;
+    if ($hay === null) {
+        $hay = in_array('asistentes_nombres', esquema_columnas(bd(), 'reuniones'), true);
+    }
+    return $hay;
+}
+
+/** Los nombres guardados con una reunión: identificador → nombre. Lo que no se entienda, ninguno. */
+function nombres_guardados($crudo): array
+{
+    $nombres = json_decode((string) $crudo, true);
+    if (!is_array($nombres)) {
+        return [];
+    }
+    return array_filter($nombres, static fn ($n) => is_string($n) && $n !== '');
+}
+
+/**
+ * Lo que hay que guardar en `asistentes_nombres` al escribir esa lista
+ * de asistentes: lo que ya había, más el nombre que cada uno tiene hoy
+ * en `usuarios` (que pisa al guardado: si alguien ha corregido su
+ * nombre, vale el nuevo). De quien ya no está en `usuarios` no hay
+ * nombre nuevo, y se queda el que hubiera.
+ */
+function nombres_de_asistentes(array $asistentes, $guardados): string
+{
+    $nombres = nombres_guardados($guardados);
+    $ids = array_values(array_filter($asistentes, static fn ($id) => is_string($id) && es_uuid($id)));
+    if ($ids) {
+        $huecos = implode(',', array_fill(0, count($ids), '?'));
+        $sent = bd()->prepare("SELECT id, nombre FROM usuarios WHERE id IN ({$huecos})");
+        $sent->execute($ids);
+        foreach ($sent->fetchAll() as $u) {
+            if ((string) $u['nombre'] !== '') {
+                $nombres[(string) $u['id']] = (string) $u['nombre'];
+            }
+        }
+    }
+    // Un objeto también cuando no hay ninguno: «{}», no «[]».
+    return json_encode($nombres ?: new stdClass(), JSON_UNESCAPED_UNICODE);
 }
 
 /** Una fecha de calendario «AAAA-MM-DD», o vacío si no viene o viene rara. */
@@ -3416,10 +3506,25 @@ function editar_encargo(string $id): void
 
 function reunion_salida(array $f): array
 {
+    $asistentes = json_decode((string) $f['asistentes'], true) ?: [];
+    // El nombre guardado de cada asistente, para que la app pinte a
+    // quien ya no está en su directorio (ver «El nombre de cada
+    // asistente»). Solo los de quienes están en la lista; y la columna
+    // puede no estar todavía (ventana del despliegue, o la fila recién
+    // creada por empezar_reunion() sin ella): entonces, ninguno.
+    $guardados = nombres_guardados($f['asistentes_nombres'] ?? null);
+    $nombres = [];
+    foreach ((array) $asistentes as $id) {
+        if (is_string($id) && isset($guardados[$id])) {
+            $nombres[$id] = $guardados[$id];
+        }
+    }
     return [
         'id' => $f['id'], 'promoId' => $f['promo_id'], 'fecha' => $f['fecha'],
         'empezada' => $f['empezada'], 'terminada' => $f['terminada'] ?? null,
-        'asistentes' => json_decode((string) $f['asistentes'], true) ?: [],
+        'asistentes' => $asistentes,
+        // Un objeto {identificador: nombre}, también vacío («{}»).
+        'asistentesNombres' => $nombres ?: new stdClass(),
         'invitados' => json_decode((string) $f['invitados'], true) ?: [],
         'sellada' => (string) $f['fecha'] < hoy_obra(),
         // Firmada de verdad, aunque el resumen quedara vacío: sin este
@@ -3536,13 +3641,19 @@ function tocar_mesa(string $reunionId): void
         is_array($v) ? $v : []
     ), static fn ($n) => $n !== ''));
 
+    // Con el nombre de cada asistente al lado, si la base ya lo guarda
+    // (ver «El nombre de cada asistente»).
+    $conNombres = hay_nombres_de_asistentes();
+
     $bd = bd();
     $bd->beginTransaction();
     try {
         // Se relee DENTRO de la transacción: la lista sobre la que se
         // aplican las diferencias es la última de verdad, no la que
-        // tuviera el móvil al abrir la hoja.
-        $sent = $bd->prepare('SELECT asistentes, invitados FROM reuniones WHERE id = ?');
+        // tuviera el móvil al abrir la hoja. Y los nombres guardados,
+        // lo mismo: a los últimos de verdad se les suman los de ahora.
+        $sent = $bd->prepare('SELECT asistentes, invitados' . ($conNombres ? ', asistentes_nombres' : '')
+            . ' FROM reuniones WHERE id = ?');
         $sent->execute([$reunion['id']]);
         $fila = $sent->fetch();
 
@@ -3557,9 +3668,15 @@ function tocar_mesa(string $reunionId): void
         $seVan = $nombres($c['desinvitar'] ?? []);
         $invitados = array_values(array_filter($invitados, static fn ($n) => !in_array($n, $seVan, true)));
 
-        $bd->prepare('UPDATE reuniones SET asistentes = ?, invitados = ?, actualizado = ? WHERE id = ?')
-            ->execute([json_encode($asistentes), json_encode($invitados, JSON_UNESCAPED_UNICODE),
-                ahora_iso(), $reunion['id']]);
+        $valores = [json_encode($asistentes), json_encode($invitados, JSON_UNESCAPED_UNICODE)];
+        if ($conNombres) {
+            $valores[] = nombres_de_asistentes($asistentes, $fila['asistentes_nombres']);
+        }
+        $valores[] = ahora_iso();
+        $valores[] = $reunion['id'];
+        $bd->prepare('UPDATE reuniones SET asistentes = ?, invitados = ?, '
+            . ($conNombres ? 'asistentes_nombres = ?, ' : '') . 'actualizado = ? WHERE id = ?')
+            ->execute($valores);
         $bd->commit();
     } catch (Throwable $e) {
         $bd->rollBack();
@@ -4072,9 +4189,20 @@ function redactar_acta(string $reunionId): void
     $asistentes = json_decode((string) $reunion['asistentes'], true) ?: [];
     if ($asistentes) {
         $huecos = implode(',', array_fill(0, count($asistentes), '?'));
-        $sent = bd()->prepare("SELECT nombre FROM usuarios WHERE id IN ({$huecos})");
+        $sent = bd()->prepare("SELECT id, nombre FROM usuarios WHERE id IN ({$huecos})");
         $sent->execute($asistentes);
-        $gente = $sent->fetchAll(PDO::FETCH_COLUMN);
+        $siguen = $sent->fetchAll(PDO::FETCH_KEY_PAIR);
+        $gente = array_values($siguen);
+        // Y quien ya no está en `usuarios` (se le dio de baja después
+        // de sentarse), con el nombre que la reunión le guardó: estuvo
+        // en la mesa, y a la IA se le cuenta igual que a los demás. Van
+        // detrás; los que siguen salen como salían, y en su orden.
+        $guardados = nombres_guardados($reunion['asistentes_nombres'] ?? null);
+        foreach ($asistentes as $id) {
+            if (is_string($id) && !isset($siguen[$id]) && isset($guardados[$id])) {
+                $gente[] = $guardados[$id];
+            }
+        }
     }
     foreach (json_decode((string) $reunion['invitados'], true) ?: [] as $inv) {
         $gente[] = $inv . ' (invitado)';

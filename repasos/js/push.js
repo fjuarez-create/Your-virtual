@@ -16,6 +16,57 @@ import * as db from './db.js';
 /** Cuánto se deja en paz a quien dijo «ahora no». */
 const POSPONER_MS = 3 * 24 * 3600 * 1000;
 
+/* CADA APP, CON SU REGISTRO. La de verdad se sirve desde la raíz y el
+   taller —la rama de pruebas— desde /taller, en el MISMO origen, cada
+   una con su service worker (ver sw.js). Y el ámbito «/» del de la app
+   de verdad abarca también /taller: una página del taller que pregunta
+   por «el registro de esta página» mientras no tiene el suyo recibe el
+   de la app de VERDAD. Y no lo tiene la primera vez que se abre, todo
+   el rato que su service worker tarda en instalarse (que con la
+   cobertura de una obra no es poco), ni cuando la instalación falla o
+   su sw.js no llega.
+
+   Con el registro de la otra en la mano (visto en noviembre de 2026,
+   con las dos apps en un mismo navegador):
+
+   · Bastaba ABRIR el taller y entrar. Al arrancar se le recuerda al
+     servidor quién lleva el móvil (reafirmar, abajo), y como la
+     suscripción que encontraba era la de la app de verdad, atada a la
+     clave de OTRO servidor, la daba de baja y la rehacía con la clave
+     del de pruebas: ese móvil dejaba de recibir los avisos de verdad,
+     y los de pruebas le llegaban a la app de verdad, que los enseñaba
+     como suyos. Hasta que la app de verdad se abría otra vez y la
+     rehacía ella.
+   · El taller daba los avisos por activados sin estarlo, y apagarlos
+     allí daba de baja los de la app de verdad.
+   · Activarlos en el taller suscribía sobre el registro de la app de
+     verdad y le mandaba esa suscripción al servidor de pruebas.
+   · Y en js/app.js: al volver al taller tras un rato fuera se le
+     buscaba versión nueva a la app de verdad, y «Poner la versión
+     nueva» en los Ajustes del taller le relevaba el service worker en
+     caliente, con sus pantallas abiertas a medio trabajo.
+
+   Así que un registro solo se da por bueno si es el de ESTA app, y eso
+   se mira como en sw.js y en js/db.js: por la carpeta desde la que se
+   sirve, con las barras que traiga delante. Va escrito aquí UNA vez,
+   para este fichero y para js/app.js (que ya importa este; al revés
+   se morderían la cola). En la app de verdad no cambia nada: su
+   registro, el de ámbito «/», pasa siempre. */
+const delTaller = (ruta) => /^\/+taller\//.test(ruta);
+export const EN_EL_TALLER = delTaller(new URL('..', import.meta.url).pathname);
+
+/** ¿Es de ESTA app ese registro de service worker? */
+export const esDeEstaApp = (reg) => !!reg && delTaller(new URL(reg.scope).pathname) === EN_EL_TALLER;
+
+/**
+ * El registro de esta página, si es el de ESTA app; si no, como si no
+ * hubiera ninguno, que es lo que ya sabe llevar todo el que pregunta.
+ */
+export async function registroDeEstaApp() {
+  const reg = await navigator.serviceWorker.getRegistration();
+  return esDeEstaApp(reg) ? reg : undefined;
+}
+
 export function soportado() {
   return typeof window !== 'undefined' && 'serviceWorker' in navigator
     && 'PushManager' in window && 'Notification' in window;
@@ -57,18 +108,34 @@ export async function estado() {
  * haya AHORA, sin esperar a que el service worker termine de instalarse:
  * esto lo pregunta la portada al pintarse, y la primera instalación
  * baja sesenta ficheros. Si todavía no hay registro, no hay suscripción.
+ * Y el registro, el de ESTA app (ver registroDeEstaApp, arriba).
  */
 async function suscripcionActual() {
   try {
-    const reg = await navigator.serviceWorker.getRegistration();
+    const reg = await registroDeEstaApp();
     return reg ? await reg.pushManager.getSubscription() : null;
   } catch { return null; }
 }
 
-/** El service worker activo, o null si en diez segundos no lo hay. */
+/**
+ * El service worker activo de ESTA app, o null si en diez segundos no
+ * lo hay.
+ *
+ * En el taller, «ready» puede traer el de la app de verdad: si se le
+ * pregunta antes de que el taller tenga registro, el navegador contesta
+ * con el único que casa, y esa respuesta ya no la cambia en lo que dure
+ * la página, ni cuando el del taller termina de instalarse. Por eso, si
+ * el que trae no es de esta app, se mira si el propio está ya activo:
+ * así «vuelve a intentarlo en un momento» es verdad sin tener que
+ * recargar. En la app de verdad esa rama no se pisa nunca.
+ */
 function registro() {
   return Promise.race([
-    navigator.serviceWorker.ready,
+    navigator.serviceWorker.ready.then(async (reg) => {
+      if (esDeEstaApp(reg)) return reg;
+      const propio = await registroDeEstaApp().catch(() => null);
+      return propio?.active ? propio : null;
+    }),
     new Promise((r) => setTimeout(() => r(null), 10000)),
   ]);
 }
@@ -163,7 +230,7 @@ export async function posponer() {
 export async function reafirmar() {
   try {
     if (!api.HAY_SERVIDOR || !soportado() || Notification.permission !== 'granted') return;
-    const reg = await navigator.serviceWorker.getRegistration();
+    const reg = await registroDeEstaApp();
     if (!reg || !(await reg.pushManager.getSubscription())) return;
     // Y de paso se comprueba que siga atada a la clave actual del servidor.
     await api.pushSuscribir(aJson(await suscribirConLaClave(reg)));

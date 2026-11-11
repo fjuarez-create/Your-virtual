@@ -15,7 +15,7 @@ import * as store from '../store.js';
 import { PROMOCIONES, puedeVerificar } from '../catalog.js';
 import { cabecera, avisoLocal, barraSync } from '../piezas.js';
 import { fechaDeActa, diaDeLaSemana } from './historial.js';
-import { lineaDeGente, filaEncargo, tacharEncargo, tarjetaReunionViva } from '../piezasObra.js';
+import { lineaDeGente, filaEncargo, tacharEncargo, tarjetaReunionViva, asistenteDe } from '../piezasObra.js';
 import { ir, refrescar } from '../app.js';
 
 /* Cuántas tareas pendientes se enseñan de primeras: las demás quedan
@@ -152,7 +152,7 @@ function tarjetaReunion(r) {
   // cuenta, y que las caras dijeran tres donde el texto dice cuatro
   // descuadraba al que cuenta cabezas.
   const gente = [
-    ...(r.asistentes || []).map((id) => store.persona(id)),
+    ...(r.asistentes || []).map((id) => asistenteDe(r, id)),
     ...(r.invitados || []).map((nombre) => ({ nombre })),
   ];
 
