@@ -18,8 +18,9 @@
    La regla está contada en CLAUDE.md («Una regla del servidor que no se puede olvidar») y en
    la cabecera «La bajada por recepción» de repasos/api/index.php.
 
-   QUÉ MIRA. Todo el PHP de api/: los .php y cualquier otro fichero que lleve «<?php» dentro
-   (salvo los .md y los .txt, que lo citan pero no lo son). No mira lo que no viaja con la app:
+   QUÉ MIRA. Todo el PHP de api/: los .php y cualquier otro fichero de texto de menos de 2 MB
+   que lleve «<?php» o «<?=» dentro (salvo los .md y los .txt, que lo citan pero no lo son, y lo
+   que lleva bytes nulos, que no es un texto). No mira lo que no viaja con la app:
    api/config.php, api/datos/ y api/uploads/. De cada fichero, las cadenas (entre comillas o en
    un heredoc) que EMPIEZAN por un verbo que cambia filas:
      · UPDATE …                          el caso de todos los días;
@@ -32,8 +33,12 @@
    para acusar ni para absolver: un «recibido = ''» comentado no vale.
 
    CUÁNDO DA UNA SENTENCIA POR BUENA. Cuando su SET (lo que va hasta el WHERE) deja la fila
-   pendiente, de una de estas maneras:
-     a) lleva «recibido = ''» escrito como una asignación más;
+   pendiente. La sentencia es su cadena y lo que se le pega detrás con «.», y nada más: lo que
+   va tras una coma, o en la otra rama de un ternario, es otra cosa, aunque esté en la misma
+   instrucción de PHP (el «recibido = ''» de la sentencia vecina no es suyo). Vale de una de
+   estas maneras:
+     a) lleva «recibido = ''» escrito como una asignación más (o «recibido = \'\'», que es lo
+        mismo dentro de unas comillas simples de PHP);
      b) lleva una variable («{$vaciar}») cuya ÚLTIMA asignación, en esa misma función y antes,
         la rellena con «recibido = ''»;
      c) es un SET armado con las claves de un registro («SET {$asignaciones}») y a ESE registro
@@ -52,18 +57,23 @@
    QUE MUERDE, Y LO DEMUESTRA EN CADA PASADA. Una guardia que dice «todo bien» porque ha dejado
    de entender el código es peor que no tener ninguna. Así que, antes de dar el visto bueno, se
    prueba a sí misma sobre una copia EN MEMORIA del código (en el disco no toca nada):
+     · de una api/ de mentira tiene que escoger los ficheros que son, ni uno más ni uno menos;
      · le quita el «recibido» a todo, y cada sentencia que estaba bien tiene que dejar de estarlo;
      · mete un olvido al final de cada fichero, y tiene que verlo; y mira que ninguna función
        le quede «dentro de una cadena» (si una comilla sin cerrar o un heredoc raro la
        hubieran despistado, ahí se nota);
-     · mete, uno a uno, olvidos escritos de todas las formas que sabe leer, y tiene que verlos;
-     · y mete código legítimo con cara de sospechoso, y NO tiene que asustarse.
+     · mete, uno a uno, los olvidos de la lista OLVIDOS, cada uno escrito de una forma, y tiene
+       que verlos;
+     · y mete el código legítimo con cara de sospechoso de la lista LEGITIMOS, y NO tiene que
+       asustarse; y, sin su «recibido», tampoco puede seguir dándolo por bueno.
    Si algo de eso falla, la comprobación falla diciendo que la guardia está ciega.
+   La prueba vigila lo que está en esas listas, no todo lo que el lector sabe leer: una pieza
+   del lector que ningún caso ejercite se puede romper sin que se note (ver SI TOCAS EL LECTOR).
 
    LO QUE NO CAZA. Es un lector de texto, no un analizador de PHP ni una base de datos. No ve:
      1. Una sentencia cuyo verbo no está escrito al empezar su cadena: el verbo en una variable
-        o en una constante ($verbo . ' tareas SET …'), o detrás de otro texto que no sea un «;»
-        («WITH … UPDATE», «EXPLAIN UPDATE»).
+        o en una constante ($verbo . ' tareas SET …'), partido en dos cadenas ('UPD' . 'ATE …'),
+        o detrás de otro texto que no sea un «;» («WITH … UPDATE», «EXPLAIN UPDATE»).
      2. SQL que no está escrito en el PHP de api/: el que se lea de un fichero o de la base, el
         de un disparador, o el que alguien pase a mano por el panel del alojamiento.
      3. Un SET genérico cuyo registro PIERDE la clave «recibido» por el camino porque se la
@@ -78,24 +88,50 @@
         '{$json}'», con $json = json_encode($registro)): lo toma por sus asignaciones.
      6. Lo que no viaja con la app (api/config.php, api/datos/, api/uploads/), los ficheros
         .sql (el servidor solo ejecuta sus CREATE) y todo lo que hay fuera de api/.
+     7. En un UPDATE de varias tablas, de CUÁL es el «recibido = ''»: «UPDATE tareas t JOIN
+        listas l … SET t.estado = 'x', l.recibido = ''» le vale, y deja pendiente la otra.
+     8. Dentro de una función que numera, un SET que empiece por «recibido = recibido» y cambie
+        además otra cosa: lo toma por la sentencia que numera.
+     9. Dónde ACABA una función: el código suelto que va detrás, hasta la función siguiente, lo
+        toma por suyo. Un borrado fuera de función, justo después de la que tiene permiso para
+        borrar, sale exento.
+    10. Una variable que lleve «recibido = ''» como CONDICIÓN y se use dentro del SET («SET
+        estado = CASE WHEN {$cuando} THEN …»): la toma por la que lleva el pendiente.
    Para lo primero y lo tercero sirve una guardia VIVA, que no lee texto (se usó en el banco de
    pruebas al construir la recepción): un disparador por tabla que da error si una fila ya
    numerada cambia y conserva su número. Con él puesto, cualquier batería de pruebas caza el
    olvido se escriba como se escriba. No es para producción.
 
-   Y LAS FALSAS ALARMAS QUE PUEDE DAR, que son pocas y se arreglan en el sitio:
-     · una tabla que no viaja pero va en una variable («UPDATE {$tabla}»): escribe su nombre en
-       la sentencia, o apunta la función en EXENTAS como 'ajena';
-     · un UPDATE de varias tablas que solo LEE de una de las siete («UPDATE reuniones r JOIN
-       tareas t … SET r.total = …»): la guardia no sabe cuál de las dos se escribe;
+   Y LAS FALSAS ALARMAS QUE PUEDE DAR. Todas se arreglan en el sitio, escribiendo la sentencia
+   de la forma que la guardia entiende; cuando la instrucción nombra «recibido» y aun así no
+   vale, el mensaje lo dice (OJO) y manda aquí:
+     · una tabla que no viaja pero va en una variable o en una constante («UPDATE {$tabla}»):
+       escribe su nombre en la sentencia, o apunta la función en EXENTAS como 'ajena';
+     · un UPDATE o un DELETE de varias tablas que solo LEE de una de las siete («UPDATE
+       reuniones r JOIN tareas t … SET r.total = …»): la guardia no sabe cuál se escribe;
      · una sentencia repartida entre dos instrucciones («$sql = 'UPDATE tareas SET …';» y, en
-       la siguiente, «$sql .= ", recibido = ''";»): se juzga lo que hay hasta el «;». Que el
-       SET vaya entero en la misma instrucción, o en una lista de campos que se une después;
-     · un «recibido = ?» con el vacío pasado como parámetro: la guardia no ve el valor y lo
-       toma por un número puesto a mano. Que el '' vaya escrito en la sentencia;
+       la siguiente, «$sql .= ", recibido = ''";»), o entre los argumentos de una llamada
+       (implode(' ', ['UPDATE …', ", recibido = ''"])): se juzga la cadena y lo que lleva
+       pegado con «.». Que el SET vaya entero ahí, o en una lista de campos que se une después;
+     · el «recibido = ''» puesto por un AYUDANTE («… = ?' . recepcion_vaciar('tareas') . '
+       WHERE …»), una constante o una propiedad: la guardia no entra en las funciones a las que
+       se llama. Hoy el trozo «(recepcion_hay('x') ? ", recibido = ''" : '')» está escrito en
+       cada sentencia; quien lo junte en una función tiene que enseñársela antes al lector;
+     · el registro escrito de una vez con su clave («$registro = [… 'recibido' => '']», o con
+       array_merge): la guardia solo sigue la asignación «$registro['recibido'] = ''»;
+     · el vacío escrito de otra manera: «recibido = ""» (comillas dobles) o «recibido = ?» con
+       el vacío pasado como parámetro. La guardia lo toma por un número puesto a mano. Que el
+       '' vaya escrito en la sentencia;
+     · un «;» o la palabra «where» dentro de un TEXTO del SET, delante del «recibido»
+       («SET notas = 'pendiente; avisado', recibido = ''»): la guardia corta ahí. Pon el
+       «recibido = ''» el primero del SET, o pasa ese texto como parámetro;
+     · rehacer una tabla en una migración (copiarla, DROP TABLE de la vieja y renombrar): las
+       filas no se pierden, pero la guardia ve un borrado. Apunta la función en EXENTAS con
+       vale: 'borra' y dilo en su porqué;
      · un texto que no es SQL y empieza por «UPDATE tareas …»: que no empiece así;
-     · y una falsa «ceguera»: un texto largo (un heredoc) con una línea que empiece por
-       «function algo(». La guardia cree que se ha perdido leyendo. Que esa línea no empiece así.
+     · y una falsa «ceguera»: un texto largo (un heredoc, o una página con su JavaScript) con
+       una línea que empiece por «function algo(». La guardia cree que se ha perdido leyendo.
+       Que esa línea no empiece así.
 
    Uso (lo llama el paso «Comprobar que ninguna escritura se salta la recepción» de
    .github/workflows/deploy-repasos.yml, con «repasos» como carpeta de trabajo):
@@ -123,7 +159,8 @@ const TABLAS = ['listas', 'tareas', 'comentarios', 'medios', 'mensajes', 'lectur
  * Las sentencias que NO tienen que dejar la fila pendiente, una a una. «vale» dice qué se les
  * consiente:
  *   'numera'  ponerle un valor a «recibido». Solo la sentencia cuyo SET empieza por «recibido =».
- *   'borra'   borrar filas de verdad. Solo si además reinicia a todos los móviles.
+ *   'borra'   borrar filas de verdad. Solo si además reinicia a todos los móviles (o si no se
+ *             pierde ninguna: rehacer la tabla en una migración).
  *   'ajena'   llevar la tabla en una variable que NUNCA es una de las siete.
  * Quien añada una tiene que poder escribir su porqué. Si no sabe, no es una exención: es un olvido.
  */
@@ -278,6 +315,63 @@ function finDeInstruccion(texto, clase, desde) {
   return texto.length;
 }
 
+/**
+ * Dónde acaba la SENTENCIA dentro de su instrucción de PHP: es su cadena y lo que se le pega
+ * detrás con «.», y nada más. Acaba en lo que la separa de otra cosa: una coma, el «?» o el «:»
+ * de un ternario, un «=>», o el paréntesis que cierra la llamada que la envuelve.
+ *
+ * El caso: una sentencia según el motor, como las de esquema_recepcion(),
+ *     $pdo->exec(motor() === 'sqlite' ? "UPDATE tareas SET estado = 'x'"
+ *                                     : "UPDATE tareas SET estado = 'x', recibido = ''");
+ * La primera se olvida y no tiene WHERE que la corte: leyendo hasta el «;» de PHP se daba por
+ * suyo el «recibido = ''» de la vecina, y pasaba en verde (noviembre de 2026). Igual con una
+ * lista de sentencias, un match, o dos sentencias como argumentos de una llamada.
+ *
+ * Lo que va entre paréntesis abiertos DESPUÉS de la cadena sí es suyo: es como se escribe en la
+ * casa el trozo con su condición («… = ?' . (recepcion_hay('medios') ? ", recibido = ''" : '')»).
+ * Con `conArgumentos`, las comas no cortan: es para sprintf(), que lleva detrás de la coma lo
+ * que rellena los «%s».
+ */
+function finDeSentencia(texto, clase, desde, tope, conArgumentos = false) {
+  let hondo = 0;
+  for (let i = desde; i < tope; i++) {
+    if (clase[i] !== CODIGO) continue;
+    const c = texto[i];
+    if (c === '(' || c === '[' || c === '{') hondo++;
+    else if (c === ')' || c === ']' || c === '}') { if (--hondo < 0) return i; }
+    else if (hondo > 0) continue;
+    else if (c === ',' || (c === '=' && texto[i + 1] === '>')) { if (!conArgumentos) return i; }
+    else if (c === '?' && texto[i + 1] !== '-') return i;   // «?->» no separa nada
+    else if (c === ':' && texto[i + 1] !== ':' && texto[i - 1] !== ':') return i;   // «Clase::CONSTANTE» tampoco
+  }
+  return tope;
+}
+
+/**
+ * Un trozo de PHP sin los comentarios de SQL que llevan sus cadenas: los de barra y asterisco
+ * y los de dos guiones («-- …»). Un «recibido = ''» comentado no deja pendiente nada, y un
+ * comentario metido entre la coma y el «recibido» no lo estropea. El de dos guiones llega hasta
+ * el salto de línea de SQL, que es el que va DENTRO de una cadena: lo que se le pega detrás sin
+ * salto («… -- nota" . ", recibido = ''"») sigue siendo comentario. Fuera de las cadenas, «--»
+ * es una resta de PHP y no se toca.
+ */
+function sinComentariosDeSql(limpio, clase, desde, hasta) {
+  let salida = '';
+  let i = desde;
+  while (i < hasta) {
+    const enCadena = clase[i] === CADENA;
+    const cierre = enCadena && limpio[i] === '/' && limpio[i + 1] === '*' ? limpio.indexOf('*/', i + 2) : -1;
+    if (cierre >= 0 && cierre + 2 <= hasta) {
+      i = cierre + 2;
+      salida += ' ';
+    } else if (enCadena && limpio[i] === '-' && limpio[i + 1] === '-') {
+      while (i < hasta && !(clase[i] === CADENA && limpio[i] === '\n')) i++;
+      salida += ' ';
+    } else salida += limpio[i++];
+  }
+  return salida;
+}
+
 /** Las funciones con nombre de un texto, en orden: la última que empieza antes de una posición es la que la contiene. */
 function funcionesDe(limpio, clase) {
   const lista = [];
@@ -299,18 +393,29 @@ const EMPIEZA = new RegExp(
   + String.raw`|INSERT\s+(?:(?:IGNORE|LOW_PRIORITY|HIGH_PRIORITY|DELAYED)\s+|OR\s+\w+\s+)*INTO`
   + String.raw`|TRUNCATE(?:\s+TABLE)?`
   + String.raw`|DROP\s+TABLE(?:\s+IF\s+EXISTS)?`
-  + String.raw`)\s+`,
+  // Detrás del verbo, un blanco (también el «\n» escrito) o el final de la cadena: «'UPDATE' . ' tareas …'».
+  + String.raw`)(?:${BLANCO}+|$)`,
   'gi',
 );
 const VIAJA = new RegExp(String.raw`\b(${TABLAS.join('|')})\b`, 'i');
 const COLUMNA = String.raw`(?:[\x60"]?\w+[\x60"]?\s*\.\s*)?[\x60"]?recibido[\x60"]?`;
+/** El vacío de SQL, como se escribe ('') y como queda dentro de unas comillas simples de PHP (\'\'). */
+const VACIO = String.raw`(?:''|\\'\\')`;
 /** «recibido = ''» como una asignación más del SET: al empezar o detrás de una coma (no dentro de un CASE ni de una subconsulta). */
-const DEJA_PENDIENTE = new RegExp(String.raw`(?:^|,|\bSET\b)(?:\s|['".]|\\[nrt])*${COLUMNA}\s*=\s*''`, 'i');
+const DEJA_PENDIENTE = new RegExp(String.raw`(?:^|,|\bSET\b)(?:\s|['".]|\\[nrt])*${COLUMNA}\s*=\s*${VACIO}`, 'i');
 /** «recibido = algo» que no es dejarlo vacío: eso es numerar. */
-const PONE_NUMERO = new RegExp(String.raw`(?:^|,|\bSET\b)(?:\s|['".{]|\\[nrt])*${COLUMNA}\s*=(?!\s*'')`, 'i');
+const PONE_NUMERO = new RegExp(String.raw`(?:^|,|\bSET\b)(?:\s|['".{]|\\[nrt])*${COLUMNA}\s*=(?!\s*${VACIO})`, 'i');
 /** La sentencia que numera: su SET empieza por «recibido =». */
 const EMPIEZA_NUMERANDO = new RegExp(String.raw`^(?:\s|['".{]|\\[nrt])*${COLUMNA}\s*=`, 'i');
-const ESCRITO_PENDIENTE = /recibido[`"]?\s*=\s*''/i;
+const ESCRITO_PENDIENTE = new RegExp(String.raw`recibido[\x60"]?\s*=\s*${VACIO}`, 'i');
+/**
+ * Lo que la prueba de la guardia le quita al código para ver si se entera: el «recibido» de todo
+ * lo que el lector da por «dejar pendiente». Tiene que ser TAN ANCHA como el lector (sin distinguir
+ * mayúsculas, la clave de un registro, el vacío entre comillas dobles…): si el lector aceptara una
+ * forma que esto no sabe quitar, la prueba diría que la guardia está ciega sin estarlo.
+ */
+const QUITA_EL_RECIBIDO = new RegExp(String.raw`recibido(?=['"\x60]?\s*\]?\s*=\s*(?:${VACIO}|""))`, 'gi');
+const sinSuRecibido = (texto) => texto.replace(QUITA_EL_RECIBIDO, 'olvidado');
 /** Una variable nombrada entera y sin más: ni «$registro['id']», ni «$sent->algo», ni «$funcion(». */
 const VARIABLE_DESNUDA = /\$([A-Za-z_]\w*)(?!\w)(?!\s*(?:\[|->|\())/g;
 const ASIGNA = /\$([A-Za-z_]\w*)\s*((?:\[[^\]\n]*\]\s*)*)(\.?=)(?![=>])|\bunset\s*\(\s*\$([A-Za-z_]\w*)\s*\[\s*['"]recibido['"]\s*\]/g;
@@ -330,6 +435,8 @@ function tablaTras(texto) {
  * El SET: lo que va hasta el WHERE de la propia sentencia (el de una subconsulta entre
  * paréntesis no lo corta) o, si no lo tiene, hasta que se cierra el paréntesis que la envuelve:
  * en «prepare("UPDATE … SET x = ?")->execute([$vaciar])», lo del execute() ya no es el SET.
+ * Y si no hay ni WHERE ni paréntesis, hasta el final del texto que se le da: por eso ese texto
+ * tiene que ser la sentencia SOLA (ver finDeSentencia), y no la instrucción de PHP entera.
  */
 function hastaElWhere(texto) {
   let hondo = 0;
@@ -394,15 +501,16 @@ function conPendiente(limpio, clase, desde, hasta) {
  * ¿Deja la fila pendiente este trozo de asignaciones (un SET, o la cola de un ON DUPLICATE KEY
  * UPDATE)? Devuelve { bien, como } si sí; { bien: false, tipo: 'pregunta', … } si lo lleva
  * escrito pero preguntando por otra tabla; y null si no lo lleva de ninguna manera.
+ * `instruccion` es la sentencia sola; `conArgumentos()` la da con lo que la sigue en su llamada.
  */
-function quedaPendiente(asignaciones, instruccion, tabla, llevan) {
+function quedaPendiente(asignaciones, instruccion, tabla, llevan, conArgumentos) {
   const mal = (otra) => ({ bien: false, tipo: 'pregunta', otra });
   if (DEJA_PENDIENTE.test(asignaciones)) {
     const otra = preguntaPorOtra(instruccion, tabla);
     return otra === null ? { bien: true, clase: 'pendiente', como: "lleva «recibido = ''»" } : mal(otra);
   }
   // Con sprintf(), lo que rellena el SET va detrás, entre los argumentos.
-  const donde = /%(?:\d+\$)?s/.test(asignaciones) ? instruccion : asignaciones;
+  const donde = /%(?:\d+\$)?s/.test(asignaciones) ? conArgumentos() : asignaciones;
   for (const v of donde.matchAll(VARIABLE_DESNUDA)) {
     if (!llevan().has(v[1])) continue;
     const pregunta = llevan().get(v[1]);
@@ -429,12 +537,20 @@ function mirar(texto, fichero) {
       const en = cadena.cuerpo[0] + m.index + m[0].lastIndexOf(m[2]);
       const trasVerbo = cadena.cuerpo[0] + m.index + m[0].length;
       const verbo = m[2].toUpperCase().split(/\s+/)[0];
+      // El verbo solo en su cadena es una sentencia si se le pega el resto («'UPDATE' . ' tareas
+      // SET …'»). Si no, es una palabra: in_array($accion, ['insert', 'update', 'delete']).
+      if (m.index + m[0].lastIndexOf(m[2]) + m[2].length === cuerpo.length && !/^\s*\./.test(limpio.slice(cadena.hasta, cadena.hasta + 200))) continue;
       let tabla = tablaTras(limpio.slice(trasVerbo, trasVerbo + 200));
 
       // La instrucción llega hasta el «;» de SQL, si lo hay en la misma cadena, o hasta el de PHP.
       const finSql = limpio.indexOf(';', trasVerbo);
       const fin = finSql >= 0 && finSql < cadena.cuerpo[1] ? finSql : finDeInstruccion(limpio, clase, cadena.hasta);
-      const instruccion = limpio.slice(en, fin).replace(/\/\*[\s\S]*?\*\//g, ' ');
+      // La sentencia, no: acaba donde el PHP pasa a otra cosa (ver finDeSentencia).
+      const partida = fin < cadena.cuerpo[1];   // la corta un «;» de SQL dentro de su propia cadena
+      const suya = partida ? fin : finDeSentencia(limpio, clase, cadena.hasta, fin);
+      const instruccion = sinComentariosDeSql(limpio, clase, en, suya);
+      // Con sprintf(), lo que rellena los «%s» va detrás de la coma: hasta que se cierra la llamada.
+      const conArgumentos = () => (partida ? instruccion : sinComentariosDeSql(limpio, clase, en, finDeSentencia(limpio, clase, cadena.hasta, fin, true)));
 
       let funcion = { nombre: '', inicio: 0 };
       for (const f of funciones) {
@@ -454,6 +570,9 @@ function mirar(texto, fichero) {
         verbo,
         tabla,
         sentencia: instruccion.replace(/\s+/g, ' ').trim(),
+        // ¿Nombra «recibido» la instrucción entera de PHP, comentarios incluidos, aunque no le
+        // valga? Se le dice a quien lo lea, que lo tiene delante (ver explicar).
+        nombraRecibido: !veredicto.bien && /recibido/i.test(texto.slice(en, partida ? finDeInstruccion(limpio, clase, cadena.hasta) : fin)),
         ...veredicto,
       });
       const ajena = () => {
@@ -468,12 +587,18 @@ function mirar(texto, fichero) {
         const cola = /\bON\s+DUPLICATE\s+KEY\s+UPDATE\b|\bON\s+CONFLICT\b[\s\S]*?\bDO\s+UPDATE\s+SET\b/i.exec(instruccion);
         if (!cola || (tabla && !TABLAS.includes(tabla)) || ajena()) continue;
         const asignaciones = hastaElWhere(instruccion.slice(cola.index + cola[0].length));
-        apuntar(quedaPendiente(asignaciones, instruccion, tabla, pendientes) ?? { bien: false, tipo: 'insert' });
+        apuntar(quedaPendiente(asignaciones, instruccion, tabla, pendientes, conArgumentos) ?? { bien: false, tipo: 'insert' });
         continue;
       }
 
       if (verbo !== 'UPDATE') {
         // DELETE, TRUNCATE y DROP: una fila borrada de verdad no le baja a nadie.
+        if (verbo === 'DELETE' && tabla && !TABLAS.includes(tabla)) {
+          // Un DELETE de varias tablas («DELETE t FROM usuarios u JOIN tareas t …») se mira, como
+          // el UPDATE, si NOMBRA una que viaja antes de su WHERE, vaya o no la primera.
+          const otra = VIAJA.exec(hastaElWhere(instruccion));
+          if (otra) tabla = otra[1].toLowerCase();
+        }
         if ((tabla && !TABLAS.includes(tabla)) || ajena()) continue;
         if (exenta?.vale === 'borra') apuntar({ bien: true, clase: 'borra', exenta, como: 'borra, y reinicia a todos los móviles (está en EXENTAS)' });
         else apuntar({ bien: false, tipo: 'borra' });
@@ -489,7 +614,7 @@ function mirar(texto, fichero) {
       }
       if (ajena()) continue;
       const set = corte ? hastaElWhere(instruccion.slice(corte.index + corte[0].length)) : '';
-      const pendiente = quedaPendiente(set, instruccion, tabla, pendientes);
+      const pendiente = quedaPendiente(set, instruccion, tabla, pendientes, conArgumentos);
       if (pendiente) apuntar(pendiente);
       else if (PONE_NUMERO.test(set)) {
         // Numerar solo se le consiente a la sentencia que pone el número, en su función.
@@ -687,6 +812,100 @@ const OLVIDOS = [
     {
         bd()->prepare('UPDATE tareas SET recibido = ? WHERE id = ?')->execute([ahora_iso(), $id]);
     }`],
+  // La sentencia vecina: el «recibido = ''» de otra cosa de la misma instrucción no es suyo.
+  ['uno según el motor, con la otra rama del ternario bien hecha (y ese «recibido» no es suyo)', php`
+    function guardia_olvido(PDO $pdo): void
+    {
+        $pdo->exec(motor() === 'sqlite'
+            ? "UPDATE tareas SET estado = 'pendiente'"
+            : "UPDATE tareas SET estado = 'pendiente', recibido = ''");
+    }`],
+  ['uno en una lista de sentencias, delante de otra que sí lo lleva', php`
+    function guardia_olvido(PDO $pdo): void
+    {
+        $sentencias = ["UPDATE tareas SET orden = 0", "UPDATE listas SET borrada = 0, recibido = '' WHERE borrada IS NULL"];
+        foreach ($sentencias as $sentencia) {
+            $pdo->exec($sentencia);
+        }
+    }`],
+  ["uno con la variable que lleva el «recibido = ''» de argumento, al lado de la sentencia y no en su SET", php`
+    function guardia_olvido(): void
+    {
+        $vaciar = ", recibido = ''";
+        guardia_ejecutar("UPDATE tareas SET estado = 'resuelta'", [$vaciar]);
+    }`],
+  ["uno con el «recibido = ''» detrás de dos guiones (un comentario de SQL, hasta el final de la línea)", php`
+    function guardia_olvido(PDO $pdo): void
+    {
+        $pdo->exec("UPDATE medios
+                       SET ruta = '' -- , recibido = ''
+                     WHERE borrada = 1");
+    }`],
+  ["uno con el «recibido = ''» pegado detrás de un comentario de dos guiones, sin salto de línea de SQL en medio", php`
+    function guardia_olvido(PDO $pdo): void
+    {
+        $pdo->exec("UPDATE medios SET ruta = '' -- la foto ya no está"
+            . ", recibido = ''");
+    }`],
+  // El verbo y las comillas, escritos de formas que despistarían a un lector más torpe.
+  ['uno con el verbo solo en su cadena y el resto pegado detrás', php`
+    function guardia_olvido(string $id): void
+    {
+        bd()->prepare('UPDATE' . ' tareas SET estado = ? WHERE id = ?')->execute(['resuelta', $id]);
+    }`],
+  ['uno con el salto de línea escrito detrás del verbo («UPDATE\\n tareas …»)', php`
+    function guardia_olvido(string $id): void
+    {
+        bd()->prepare("UPDATE\n  tareas\n  SET estado = ?\n  WHERE id = ?")->execute(['resuelta', $id]);
+    }`],
+  ['uno detrás de un texto con una comilla simple escapada', php`
+    function guardia_olvido(string $id): void
+    {
+        $nota = 'l\'obra';
+        bd()->prepare('UPDATE tareas SET estado = ? WHERE id = ?')->execute(['resuelta', $id]);
+    }`],
+  ['uno detrás de un texto con una comilla doble escapada', php`
+    function guardia_olvido(string $id): void
+    {
+        $nota = "la \"obra";
+        bd()->prepare('UPDATE tareas SET estado = ? WHERE id = ?')->execute(['resuelta', $id]);
+    }`],
+  ['uno en la misma línea que un comentario que acaba en «?>» (ahí se acaba el comentario, y lo que sigue vuelve a ser código)', php`
+    function guardia_olvido(): void
+    {
+        // una nota que cierra la etiqueta ?> <?php bd()->exec("UPDATE tareas SET estado = 'x'");
+    }`],
+  // Los otros verbos, y las otras formas de los que ya estaban.
+  ['un DROP TABLE (la tabla entera desaparece)', php`
+    function guardia_olvido(): void
+    {
+        bd()->exec('DROP TABLE lecturas');
+    }`],
+  ['un DELETE con alias, el de varias tablas de MySQL («DELETE t FROM tareas t …»)', php`
+    function guardia_olvido(): void
+    {
+        bd()->exec('DELETE t FROM tareas t JOIN usuarios u ON u.id = t.creado_por WHERE u.activo = 0');
+    }`],
+  ['un DELETE de varias tablas con la que no viaja delante («DELETE t FROM usuarios u JOIN tareas t …»)', php`
+    function guardia_olvido(): void
+    {
+        bd()->exec('DELETE t FROM usuarios u JOIN tareas t ON t.creado_por = u.id WHERE u.activo = 0');
+    }`],
+  ['un DELETE con la tabla en una variable', php`
+    function guardia_olvido(string $tabla, string $id): void
+    {
+        bd()->prepare("DELETE FROM {$tabla} WHERE id = ?")->execute([$id]);
+    }`],
+  ['un INSERT con adjetivo («INSERT IGNORE INTO … ON DUPLICATE KEY UPDATE»)', php`
+    function guardia_olvido(string $id): void
+    {
+        bd()->prepare('INSERT IGNORE INTO mensajes (id, texto) VALUES (?, ?) ON DUPLICATE KEY UPDATE texto = VALUES(texto)')->execute([$id, 'x']);
+    }`],
+  ['un «INSERT … ON DUPLICATE KEY UPDATE» con la tabla en una variable', php`
+    function guardia_olvido(string $tabla, string $id): void
+    {
+        bd()->prepare("INSERT INTO {$tabla} (id, texto) VALUES (?, ?) ON DUPLICATE KEY UPDATE texto = VALUES(texto)")->execute([$id, 'x']);
+    }`],
 ];
 
 /**
@@ -798,6 +1017,44 @@ const LEGITIMOS = [
     {
         bd()->prepare("INSERT INTO mensajes (id, texto) VALUES (?, ?) ON DUPLICATE KEY UPDATE texto = VALUES(texto), recibido = ''")->execute([$id, 'x']);
     }`],
+  ["uno bien hecho entre comillas simples de PHP, con el vacío escapado (recibido = \\'\\')", 1, php`
+    function guardia_legitimo(string $id): void
+    {
+        bd()->prepare('UPDATE tareas SET estado = ?, actualizado = ?, recibido = \'\' WHERE id = ?')->execute(['x', ahora_iso(), $id]);
+    }`],
+  ['uno bien hecho con un comentario de SQL de dos guiones en medio del SET', 1, php`
+    function guardia_legitimo(PDO $pdo): void
+    {
+        $pdo->exec("UPDATE medios
+                       SET ruta = '', -- la foto ya no está
+                           recibido = ''
+                     WHERE borrada = 1");
+    }`],
+  ['dos según el motor, y las dos lo llevan', 2, php`
+    function guardia_legitimo(PDO $pdo): void
+    {
+        $pdo->exec(motor() === 'sqlite'
+            ? "UPDATE tareas SET orden = 0, recibido = ''"
+            : "UPDATE tareas SET orden = 0, recibido = '' WHERE borrada = 0");
+    }`],
+  ['uno bien hecho con una resta de PHP (--) en la concatenación, que no es un comentario de SQL', 1, php`
+    function guardia_legitimo(int $orden, string $id): void
+    {
+        bd()->prepare('UPDATE tareas SET orden = ' . $orden-- . ", recibido = '' WHERE id = ?")->execute([$id]);
+    }`],
+  ['un DELETE de varias tablas que no nombra ninguna de las que viajan', 0, php`
+    function guardia_legitimo(PDO $pdo): void
+    {
+        $pdo->exec('DELETE s FROM sesiones s JOIN usuarios u ON u.id = s.usuario_id WHERE u.activo = 0');
+    }`],
+  ['el vacío de la clave del registro entre comillas dobles, y la columna en mayúsculas', 2, php`
+    function guardia_legitimo(array $registro, string $id): void
+    {
+        $registro['recibido'] = "";
+        $asignaciones = implode(', ', array_map(static fn ($c) => "{$c} = ?", array_keys($registro)));
+        bd()->prepare("UPDATE tareas SET {$asignaciones} WHERE id = ?")->execute([...array_values($registro), $id]);
+        bd()->prepare("UPDATE listas SET borrada = 1, RECIBIDO = '' WHERE id = ?")->execute([$id]);
+    }`],
 ];
 
 /**
@@ -814,13 +1071,19 @@ function probarLaGuardia(textos, vistas) {
     return mirar(`${texto}\n<?php\n${trozo}\n`, fichero).filter((v) => v.linea > lineasDe(texto));
   };
 
+  // 0 · Que lee los ficheros que son: de una api/ de mentira tiene que sacar los que viajan y
+  //     llevan PHP (también los de las subcarpetas hondas y los que no acaban en .php), y dejar
+  //     lo que no viaja y lo que no es un texto.
+  const leidos = ficherosDePhp('api', DISCO_DE_MENTIRA).sort().join(', ');
+  if (leidos !== SE_LEEN.join(', ')) fallos.push(`no lee los ficheros que tiene que leer: de la api/ de mentira de su prueba saca «${leidos}» y son «${SE_LEEN.join(', ')}»`);
+
   // 1 · Sin su «recibido», lo que estaba bien tiene que dejar de estarlo.
   for (const [fichero, texto] of Object.entries(textos)) {
-    const sinRecibido = mirar(texto.replace(/recibido(?=['"`]?\s*\]?\s*=\s*'')/g, 'olvidado'), fichero);
+    const sinRecibido = mirar(sinSuRecibido(texto), fichero);
     for (const v of vistas.filter((x) => x.fichero === fichero && x.bien && x.clase === 'pendiente')) {
       cuenta.quitados++;
       const ahora = sinRecibido.find((x) => x.en === v.en);
-      if (!ahora || ahora.bien) fallos.push(`a la sentencia de ${fichero}, línea ${v.linea} (${v.funcion || 'fuera de función'}), se le quita el «recibido = ''» y la sigue dando por buena`);
+      if (!ahora || ahora.bien) fallos.push(`a la sentencia de ${fichero}, línea ${v.linea} (${v.funcion || 'fuera de función'}), se le quita el «recibido = ''» y la sigue dando por buena (o lo lleva escrito de una forma que el lector acepta y esta prueba no sabe quitar: entonces lo que hay que poner al día es QUITA_EL_RECIBIDO, en el guion, y no el código)`);
     }
   }
 
@@ -851,6 +1114,11 @@ function probarLaGuardia(textos, vistas) {
     cuenta.olvidos += 2;
     const dentro = `function ${exenta.funcion}(PDO $pdo): void\n{\n    $pdo->exec("UPDATE mensajes SET borrada = 1 WHERE texto = ''");\n}`;
     if (alAnadir(exenta.fichero, dentro).filter((v) => !v.bien).length !== 1) fallos.push(`no ve un olvido metido dentro de ${exenta.funcion}() (la función no está exenta entera: solo su sentencia que numera)`);
+    cuenta.olvidos += 2;
+    const borra = `function ${exenta.funcion}(PDO $pdo): void\n{\n    $pdo->exec("DELETE FROM mensajes WHERE texto = ''");\n}`;
+    if (alAnadir(exenta.fichero, borra).filter((v) => !v.bien).length !== 1) fallos.push(`no ve un borrado metido dentro de ${exenta.funcion}() (numerar no da permiso para borrar)`);
+    const deMas = `function ${exenta.funcion}(PDO $pdo): void\n{\n    $pdo->exec('UPDATE mensajes SET borrada = 1, recibido = actualizado');\n}`;
+    if (alAnadir(exenta.fichero, deMas).filter((v) => !v.bien).length !== 1) fallos.push(`da por buena, dentro de ${exenta.funcion}(), una sentencia que pone un número sin ser la que numera (su SET no empieza por «recibido =»)`);
     const otro = Object.keys(textos).find((f) => !EXENTAS.some((e) => e.fichero === f && e.funcion === exenta.funcion));
     const fuera = `function ${exenta.funcion}(PDO $pdo): void\n{\n    $pdo->exec('UPDATE tareas SET recibido = actualizado');\n}`;
     if (otro && alAnadir(otro, fuera).filter((v) => !v.bien).length !== 1) fallos.push(`da por buena una función que se llama ${exenta.funcion}() en otro fichero (${otro}) y pone números`);
@@ -860,6 +1128,10 @@ function probarLaGuardia(textos, vistas) {
     const nuevas = alAnadir(principal, trozo);
     if (nuevas.some((v) => !v.bien)) fallos.push(`se asusta sin razón con ${que}`);
     else if (nuevas.length !== cuantas) fallos.push(`no mira como debe ${que} (ve ${nuevas.length} sentencias y son ${cuantas})`);
+    // Y al revés: sin su «recibido», ninguno de esos trozos puede seguir «dejando pendiente».
+    // Así, el día que el lector aprenda una forma nueva de escribirlo, QUITA_EL_RECIBIDO tiene
+    // que aprenderla también, y se nota aquí y no en el despliegue de otro.
+    else if (alAnadir(principal, sinSuRecibido(trozo)).some((v) => v.bien && v.clase === 'pendiente')) fallos.push(`sigue dando por buena, sin su «recibido», ${que} (el lector acepta una forma de escribirlo que QUITA_EL_RECIBIDO no sabe quitar)`);
   }
   return { fallos, cuenta };
 }
@@ -887,7 +1159,7 @@ function explicar(v, rutas) {
       return {
         titulo: 'La recepción: un borrado que no le llega a nadie',
         pasa: `Esta sentencia BORRA filas de ${tabla}. Una fila que desaparece del servidor no le baja a nadie: los móviles que ya la tienen la siguen enseñando para siempre.`,
-        hacer: `No se borra: se marca. «UPDATE … SET borrada = 1, actualizado = ?, recibido = ''», como borrar_medio() en ${rutas.indice}. El único borrado de verdad que vale es el que además reinicia a todos los móviles (arranque_limpio(), con el sello del arranque); si este es otro así, apúntalo en la lista EXENTAS de ${ESTE_GUION} con vale: 'borra' y su porqué. ${v.tabla ? '' : comoAjena}`.trim(),
+        hacer: `No se borra: se marca. «UPDATE … SET borrada = 1, actualizado = ?, recibido = ''», y la fila le baja a todos como borrada. El único borrado de verdad que vale es el que además reinicia a todos los móviles (hoy, ${EXENTAS.filter((e) => e.vale === 'borra').map((e) => `${e.funcion}()`).join(' y ') || 'ninguno'}, con el sello del arranque); si este es otro así, apúntalo en la lista EXENTAS de ${ESTE_GUION} con vale: 'borra' y su porqué. ${v.verbo === 'DROP' ? `Y si lo que haces es REHACER la tabla en una migración (copiarla, tirar la vieja y renombrar la copia), las filas no se pierden y esto es una falsa alarma: apunta la función en EXENTAS, también con vale: 'borra', y dilo en su porqué. ` : ''}${v.tabla ? '' : comoAjena}`.trim(),
       };
     case 'pregunta':
       return {
@@ -907,9 +1179,19 @@ function explicar(v, rutas) {
       return {
         titulo: 'La recepción: una escritura que no deja la fila pendiente',
         pasa: `Este UPDATE cambia filas de ${tabla}, que es una de las siete tablas que bajan a los móviles, y no las deja con «recibido = ''».${v.enExenta ? ` (${v.funcion}() está en EXENTAS, pero la exención solo vale para su sentencia que numera: la que empieza su SET por «recibido =».)` : ''}`,
-        hacer: `Añade «recibido = ''» al SET de esta sentencia. Así lo hace borrar_medio() en ${rutas.indice}: «… SET borrada = 1, actualizado = ?' . (recepcion_hay('medios') ? ", recibido = ''" : '') . ' WHERE id = ?». Y si lo que guardas es un registro entero, usa upsert(), que ya lo pone.`,
+        hacer: `Añade «recibido = ''» al SET de esta sentencia. En la casa se escribe así: «… SET borrada = 1, actualizado = ?' . (recepcion_hay('${v.tabla}') ? ", recibido = ''" : '') . ' WHERE id = ?» (recepcion_hay() pregunta por la tabla de la sentencia). Y si lo que guardas es un registro entero, usa upsert(), en ${rutas.indice}, que ya lo pone.`,
       };
   }
+}
+
+/**
+ * El aviso para cuando la instrucción NOMBRA «recibido» y aun así no vale. Sin él, a quien tenía
+ * escrito «recibido = ""», o el «recibido = ''» detrás de un «;» metido en un texto, el mensaje
+ * le decía «añade recibido = ''» con el recibido delante de los ojos, y no había por dónde cogerlo.
+ */
+function avisoDeRecibido(v) {
+  if (!v.nombraRecibido || !['update', 'variable', 'numera', 'insert'].includes(v.tipo)) return '';
+  return `La instrucción NOMBRA «recibido», pero no de una manera que la guardia dé por buena. Vale escrito en la propia sentencia como una asignación más de su SET («…, recibido = ''», con dos comillas simples), o de las maneras b) y c) de «CUÁNDO DA UNA SENTENCIA POR BUENA», en la cabecera de ${ESTE_GUION}. No vale detrás del WHERE ni dentro de un CASE (ahí se compara, no se asigna), ni en un comentario, ni en otra sentencia de la misma instrucción, ni entre comillas dobles («recibido = ""»), ni como parámetro («recibido = ?»). Y si de verdad deja la fila pendiente de otra forma (con un ayudante o una constante, o con un «;» o un «where» dentro de un texto del SET), es una de las falsas alarmas que cuenta esa cabecera: escríbelo de la forma que sí entiende.`;
 }
 
 const enUnaLinea = (texto) => String(texto).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
@@ -948,27 +1230,68 @@ function renglones(texto, sangria = '    ', ancho = 96) {
 
 /* ─── La comprobación ────────────────────────────────────────────────────────────────────── */
 
-/** El PHP de api/: los .php y lo que lleve «<?php» dentro, menos lo que no viaja con la app. */
-function ficherosDePhp(api) {
+/** El disco de verdad. Va de parámetro para que la prueba de la guardia pueda poner uno de mentira. */
+const DISCO = {
+  nombres: (carpeta) => readdirSync(carpeta),
+  que: (ruta) => statSync(ruta),
+  texto: (ruta) => readFileSync(ruta, 'utf8'),
+};
+
+/**
+ * El PHP de api/: los .php y, de lo demás, lo que lleve «<?php» o «<?=» dentro, menos lo que no
+ * viaja con la app. De lo que no acaba en .php solo se miran los textos de menos de 2 MB: una
+ * imagen o una tipografía pueden llevar «<?=» entre sus bytes por casualidad, y leídas como PHP
+ * despistaban a la guardia hasta hacerle decir que estaba ciega (lo que lleva bytes nulos no es
+ * un texto).
+ */
+function ficherosDePhp(api, disco = DISCO) {
   const salida = [];
   const recorrer = (carpeta, raiz) => {
-    for (const nombre of readdirSync(carpeta).sort()) {
-      const ruta = join(carpeta, nombre);
-      if (statSync(ruta).isDirectory()) {
+    for (const nombre of [...disco.nombres(carpeta)].sort()) {
+      const ruta = `${carpeta}/${nombre}`;
+      let que;
+      try { que = disco.que(ruta); } catch { continue; }   // un enlace roto: ahí no hay nada que PHP pueda ejecutar
+      if (que.isDirectory()) {
         // datos/ y uploads/ viajan vacías: la base, las claves y las fotos viven solo en el servidor.
         if (!(raiz && ['datos', 'uploads'].includes(nombre))) recorrer(ruta, false);
       } else if (raiz && nombre === 'config.php') {
         continue;   // lo crea el instalador y vive solo en el servidor
       } else if (nombre.endsWith('.php')) {
         salida.push(ruta);
-      } else if (!/\.(?:md|txt)$/i.test(nombre) && statSync(ruta).size < 2 * 1024 * 1024 && /<\?(?:php|=)/i.test(readFileSync(ruta, 'utf8'))) {
-        salida.push(ruta);   // un .inc, un .phtml: PHP lo ejecuta igual si alguien lo incluye
+      } else if (!/\.(?:md|txt)$/i.test(nombre) && que.size < 2 * 1024 * 1024) {
+        const contenido = disco.texto(ruta);   // un .inc, un .phtml: PHP lo ejecuta igual si alguien lo incluye
+        if (/<\?(?:php|=)/i.test(contenido) && !contenido.includes('\0')) salida.push(ruta);
       }
     }
   };
   recorrer(api, true);
   return salida;
 }
+
+/**
+ * Una api/ de mentira, para probar qué se lee y qué no: ruta → contenido. `SE_LEEN` es lo que
+ * ficherosDePhp tiene que sacar de ella, ni un fichero más ni uno menos.
+ */
+const API_DE_MENTIRA = {
+  'api/index.php': '<?php',
+  'api/config.php': '<?php',                    // no viaja: lo crea el instalador
+  'api/datos/copia.php': '<?php',               // no viaja
+  'api/uploads/foto.php': '<?php',              // no viaja
+  'api/lib/config.php': '<?php',                // este sí: solo se salta el de la raíz
+  'api/lib/datos/tabla.php': '<?php',           // y esta carpeta también: solo se saltan las de la raíz
+  'api/lib/honda/mas/abajo.php': '<?php',
+  'api/lib/trozo.inc': '<?php echo 1;',
+  'api/lib/pagina.phtml': '<p><?= $nombre ?></p>',
+  'api/lib/LEEME.md': 'Los ficheros empiezan por <?php y no llevan cierre.',
+  'api/lib/sello.png': 'PNG\0\0<?= ruido',
+  'api/lib/estilo.css': 'p { color: red }',
+};
+const SE_LEEN = ['api/index.php', 'api/lib/config.php', 'api/lib/datos/tabla.php', 'api/lib/honda/mas/abajo.php', 'api/lib/pagina.phtml', 'api/lib/trozo.inc'];
+const DISCO_DE_MENTIRA = {
+  nombres: (carpeta) => [...new Set(Object.keys(API_DE_MENTIRA).filter((r) => r.startsWith(`${carpeta}/`)).map((r) => r.slice(carpeta.length + 1).split('/')[0]))],
+  que: (ruta) => ({ isDirectory: () => !(ruta in API_DE_MENTIRA), size: (API_DE_MENTIRA[ruta] ?? '').length }),
+  texto: (ruta) => API_DE_MENTIRA[ruta],
+};
 
 function principal() {
   const app = resolve(process.argv[2] || 'repasos');
@@ -1032,9 +1355,11 @@ function principal() {
     const sentencia = v.sentencia.length > 160 ? `${v.sentencia.slice(0, 160)} …` : v.sentencia;
     console.log(`\nOLVIDO ${n + 1} de ${olvidos.length} · ${fichero}, línea ${v.linea} · ${v.funcion ? `en ${v.funcion}()` : 'fuera de función'}\n`);
     console.log(`${codigoDe(textos[v.fichero], v)}\n`);
+    const ojo = avisoDeRecibido(v);
     console.log(`  QUÉ PASA\n${renglones(e.pasa)}`);
     console.log(`  QUÉ HACER\n${renglones(e.hacer)}`);
-    anotar(`${e.pasa} QUÉ HACER: ${e.hacer} LA REGLA: toda escritura en una de las siete tablas que bajan a los móviles deja la fila con «recibido = ''»; si no, ese cambio no le baja nunca a quien ya pasó por esa fila, y no da ningún error. Está contado en CLAUDE.md («Una regla del servidor que no se puede olvidar») y en la cabecera «La bajada por recepción» de ${rutas.indice}. La sentencia: ${sentencia}`, { titulo: e.titulo, fichero, linea: v.linea });
+    if (ojo) console.log(`  OJO\n${renglones(ojo)}`);
+    anotar(`${e.pasa} QUÉ HACER: ${e.hacer}${ojo ? ` OJO: ${ojo}` : ''} LA REGLA: toda escritura en una de las siete tablas que bajan a los móviles deja la fila con «recibido = ''»; si no, ese cambio no le baja nunca a quien ya pasó por esa fila, y no da ningún error. Está contado en CLAUDE.md («Una regla del servidor que no se puede olvidar») y en la cabecera «La bajada por recepción» de ${rutas.indice}. La sentencia: ${sentencia}`, { titulo: e.titulo, fichero, linea: v.linea });
   });
   if (olvidos.length > 0) mal = true;
 
@@ -1057,7 +1382,7 @@ function principal() {
     console.log(`\n${renglones(`Esto no es un fallo de la API, sino de la guardia (${ESTE_GUION}): alguien ha tocado su lector, o el código ha empezado a escribirse de una forma que la despista. Mientras esté así su visto bueno no vale, y por eso no deja pasar el despliegue. Arregla el lector (o la forma de escribir que lo despista) hasta que vuelva a ver todos los olvidos que se le ponen.`, '  ')}`);
     anotar(`La guardia de la recepción está ciega: se prueba a sí misma metiendo olvidos a propósito en una copia en memoria del código, y ${fallos.length === 1 ? 'hay uno que no ve' : `hay ${fallos.length} que no ve`}: ${fallos.join('; ')}. No es un fallo de la API sino de ${ESTE_GUION} (o de una forma nueva de escribir el código que lo despista). Mientras esté así su visto bueno no vale: por eso falla.`, { titulo: 'La guardia de la recepción está ciega', fichero: ESTE_GUION });
   } else {
-    console.log(`\nLa guardia muerde: ${cuenta.quitados ? `sin su «recibido», las ${cuenta.quitados} sentencias que lo llevan dejan de estar bien; ` : ''}ve el olvido puesto al final de cada uno de los ${cuenta.ficheros} ficheros; ve los ${cuenta.olvidos} olvidos escritos de otras tantas formas; y no se asusta con ${cuenta.legitimos} trozos de código legítimo.`);
+    console.log(`\nLa guardia muerde: de una api/ de mentira escoge los ${SE_LEEN.length} ficheros que son; ${cuenta.quitados ? `sin su «recibido», las ${cuenta.quitados} sentencias que lo llevan dejan de estar bien; ` : ''}ve el olvido puesto al final de cada uno de los ${cuenta.ficheros} ficheros; ve los ${cuenta.olvidos} olvidos escritos de otras tantas formas; y no se asusta con ${cuenta.legitimos} trozos de código legítimo.`);
   }
 
   /* 5 · El veredicto. */

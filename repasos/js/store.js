@@ -2120,25 +2120,43 @@ function mismaFicha(a, b) {
  * guardan el nombre de quien los hizo, y persona() cae a él.
  *
  * Borrar de más dejaría a un equipo entero sin caras, así que solo se
- * borra con una lista de la que fiarse: con alguien dentro (ver
- * fusionarTanda) y en la que venga quien está usando la app. El
- * servidor no contesta a quien no existe —le da un 401—, así que una
- * lista en la que no está uno mismo no es el directorio de este
- * servidor: se guarda lo que traiga, como siempre, pero no se quita a
- * nadie por ella. OJO: si algún día el directorio dejara de viajar
- * entero, esto borraría a todo el que no viniera.
+ * borra con una lista de la que fiarse, y solo a quien se puede:
+ *
+ *  · Con alguien dentro (ver fusionarTanda).
+ *  · En la que venga quien está usando la app. El servidor no contesta
+ *    a quien no existe —le da un 401—, así que una lista sin uno mismo
+ *    está estropeada: se guarda lo que traiga, como siempre, pero no se
+ *    quita a nadie por ella. Es una red contra una respuesta rota, NO
+ *    una manera de reconocer al servidor propio: la lista de otro
+ *    servidor que tenga la misma cuenta pasaría por buena. Y lo hay: el
+ *    taller copia las cuentas del equipo con su mismo identificador y
+ *    vive en el mismo origen. De eso se ocupa db.js, que le da al
+ *    taller su propia base.
+ *  · Y solo a quien esta pestaña ya conocía cuando preguntó
+ *    (`conocidas`). Con la app abierta en dos pestañas, la respuesta de
+ *    una puede llegar tarde: se pidió antes de un alta, la otra pestaña
+ *    ya ha guardado a la persona nueva, y la lista vieja —entera, con
+ *    uno mismo dentro— la borraba del almacén (noviembre de 2026).
+ *    Quien ha aparecido en el almacén con la respuesta de camino no
+ *    estaba en la memoria de esta pestaña al preguntar: a ese no se le
+ *    toca, y si de verdad ya no existe lo quita la sincronización
+ *    siguiente. Al revés no hay red: una respuesta vieja todavía puede
+ *    devolver, hasta la siguiente, a quien otra pestaña acaba de quitar.
+ *
+ * OJO: si algún día el directorio dejara de viajar entero, esto
+ * borraría a todo el que no viniera.
  *
  * Y sin trabajo de balde: una bajada larga son hasta 25 tandas
  * seguidas, cada una con el directorio entero. Solo se escribe la ficha
  * que ha cambiado, y si lo que llega es lo que ya hay no se escribe ni
  * se recarga nada.
  */
-async function acatarDirectorio(lista) {
+async function acatarDirectorio(lista, conocidas) {
   const guardadas = new Map((await db.getAll('personas')).map((p) => [p.id, p]));
   const vienen = new Set(lista.map((p) => p?.id));
   const cambiadas = lista.filter((p) => !mismaFicha(guardadas.get(p?.id), p));
   const bajas = usuario && vienen.has(usuario.id)
-    ? [...guardadas.keys()].filter((id) => !vienen.has(id))
+    ? [...guardadas.keys()].filter((id) => !vienen.has(id) && conocidas.has(id))
     : [];
   await db.putVarios('personas', cambiadas);
   for (const id of bajas) await db.borrar('personas', id);
@@ -2154,6 +2172,9 @@ async function acatarDirectorio(lista) {
 }
 
 async function fusionarTanda(desde) {
+  // A quién conoce esta pestaña ANTES de preguntar: solo a esos puede
+  // dar de baja la respuesta (ver acatarDirectorio).
+  const conocidas = new Set(personas.keys());
   const r = await api.cambios(desde);
   if (!r) return null;
 
@@ -2168,7 +2189,7 @@ async function fusionarTanda(desde) {
   // servidor es la verdad, aquí nadie lo edita desde el dispositivo.
   // Una respuesta sin «personas», o con la lista vacía, no dice nada
   // del directorio y no lo toca (ver acatarDirectorio).
-  if (Array.isArray(r.personas) && r.personas.length) await acatarDirectorio(r.personas);
+  if (Array.isArray(r.personas) && r.personas.length) await acatarDirectorio(r.personas, conocidas);
   if (r.listas?.length) {
     const fusionadas = [];
     for (const remota of r.listas) {

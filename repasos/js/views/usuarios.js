@@ -238,6 +238,29 @@ export function hojaCredenciales(usuario, password, titulo = 'Acceso') {
 }
 
 /* ─── Edición ─────────────────────────────────────────────────── */
+
+/**
+ * Un retoque de los de un toque (permisos, acceso): se manda, se avisa
+ * y se repinta la lista.
+ *
+ * Y si el servidor dice que no, también se avisa. El caso: esta lista
+ * se queda abierta, otro administrador borra a alguien desde su móvil,
+ * y aquí se le toca «Desactivar el acceso» a quien ya no existe. El
+ * «Usuario no encontrado» no lo recogía nadie: la hoja se quedaba
+ * abierta, sin decir nada (noviembre de 2026). Si es eso —un 404—,
+ * además se cierra la hoja y se repinta la lista, que es de antes de
+ * la baja; con cualquier otro fallo la hoja se queda, para reintentar.
+ */
+async function retocar(u, cerrar, cambios, hecho) {
+  try {
+    await api.editarUsuario(u.id, cambios);
+    cerrar(true); toast(hecho); refrescar();
+  } catch (e) {
+    toast(e.message, 'err');
+    if (e.status === 404) { cerrar(true); refrescar(); }
+  }
+}
+
 function editarUsuario(u) {
   return sheet((cerrar) => [
     h('h2.title', null, u.nombre),
@@ -267,10 +290,7 @@ function editarUsuario(u) {
         ),
       ),
       h('button.row', {
-        onclick: async () => {
-          await api.editarUsuario(u.id, { rol: u.rol === 'admin' ? 'usuario' : 'admin' });
-          cerrar(true); toast('Permisos actualizados'); refrescar();
-        },
+        onclick: () => retocar(u, cerrar, { rol: u.rol === 'admin' ? 'usuario' : 'admin' }, 'Permisos actualizados'),
       },
         h('div.row-lead', null, icon('users', 18)),
         h('div.grow', null,
@@ -282,12 +302,8 @@ function editarUsuario(u) {
       // empresa, se decide aquí. La empresa solo pone la sugerencia al
       // dar de alta.
       h('button.row', {
-        onclick: async () => {
-          await api.editarUsuario(u.id, { verifica: !u.verifica });
-          cerrar(true);
-          toast(u.verifica ? 'Ya no puede verificar' : 'Ya puede verificar');
-          refrescar();
-        },
+        onclick: () => retocar(u, cerrar, { verifica: !u.verifica },
+          u.verifica ? 'Ya no puede verificar' : 'Ya puede verificar'),
       },
         h('div.row-lead', null, icon('check', 18)),
         h('div.grow', null,
@@ -302,12 +318,8 @@ function editarUsuario(u) {
       // permiso suelto, como el de verificar: el administrador lo da
       // y lo quita aquí.
       h('button.row', {
-        onclick: async () => {
-          await api.editarUsuario(u.id, { comercial: !u.comercial });
-          cerrar(true);
-          toast(u.comercial ? 'Ya no pone fechas de entrega' : 'Ya puede poner fechas de entrega');
-          refrescar();
-        },
+        onclick: () => retocar(u, cerrar, { comercial: !u.comercial },
+          u.comercial ? 'Ya no pone fechas de entrega' : 'Ya puede poner fechas de entrega'),
       },
         h('div.row-lead', null, icon('calendario', 18)),
         h('div.grow', null,
@@ -320,12 +332,8 @@ function editarUsuario(u) {
       ),
       h('button.row', {
         class: u.activo ? 'danger' : '',
-        onclick: async () => {
-          await api.editarUsuario(u.id, { activo: !u.activo });
-          cerrar(true);
-          toast(u.activo ? 'Usuario desactivado' : 'Usuario reactivado');
-          refrescar();
-        },
+        onclick: () => retocar(u, cerrar, { activo: !u.activo },
+          u.activo ? 'Usuario desactivado' : 'Usuario reactivado'),
       },
         h('div.row-lead', null, icon(u.activo ? 'logout' : 'check', 18)),
         h('div.grow', null,

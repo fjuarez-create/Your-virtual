@@ -15,7 +15,23 @@
      entregas     la ficha de entrega de cada vivienda   índice: promoId
      outbox       cambios pendientes de subir (orden de llegada)
    ═══════════════════════════════════════════════════════════════ */
-const NOMBRE = 'unik-repasos';
+/* El nombre de la base. La app de verdad vive en la raíz del dominio y
+   el taller —la rama de pruebas— en /taller, en el MISMO origen; e
+   IndexedDB va por origen, no por carpeta. Con un solo nombre, las dos
+   leían y escribían la misma base: lo apuntado sin cobertura en la app
+   de verdad se lo llevaba el taller en cuanto se abría en el mismo
+   navegador —lo subía a SU servidor y vaciaba la cola—, y el servidor
+   de verdad no lo recibía nunca (visto en noviembre de 2026). Y desde
+   que el directorio se acata al pie de la letra (acatarDirectorio, en
+   store.js), el de cada servidor habría borrado a la gente del otro.
+   Por eso el taller tiene su base aparte.
+
+   La de la app de verdad NO cambia de nombre, ni puede cambiar: en
+   ella está el trabajo sin subir de cada móvil. Solo se aparta lo que
+   se sirve desde /taller, que es un banco de pruebas y empieza de cero
+   sin perder nada. */
+const EN_EL_TALLER = new URL('..', import.meta.url).pathname.startsWith('/taller/');
+const NOMBRE = EN_EL_TALLER ? 'unik-repasos-taller' : 'unik-repasos';
 
 /* Los almacenes que la app necesita para funcionar. La versión numérica
    de la base ya no se fija aquí: se abre la que el navegador tenga
