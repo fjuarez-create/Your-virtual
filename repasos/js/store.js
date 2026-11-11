@@ -1808,18 +1808,6 @@ function programarSync() {
 }
 
 let sincronizando = null;
-/**
- * ¿Hay una sincronización en marcha AHORA? Si la hay, sincronizar() no
- * empieza otra: devuelve esa. Lo pregunta quien necesita una respuesta
- * del servidor posterior a algo que acaba de saber (la hoja de la mesa
- * de una reunión, en views/reunion.js): la que ya venía de camino pudo
- * salir del servidor antes, y no le vale. Es exacto donde
- * estadoSync.sincronizando no lo es: ese se apaga un instante antes de
- * que sincronizar() deje de devolver la misma.
- */
-export function haySincronizacionEnCurso() {
-  return sincronizando !== null;
-}
 /** Algo cambió mientras subía y sigue en la cola (ver empujar): toca otra vuelta. */
 let quedaAlgoPorSubir = false;
 /** Marca del relleno de una vez (ver sincronizar). Cambiarla obliga a otro. */

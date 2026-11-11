@@ -429,11 +429,7 @@ async function arrancar() {
   // El sello del taller: si la app corre en /taller se dice bien claro,
   // con un rótulo flotante. Nadie debe poder confundir el banco de
   // pruebas con la obra real, ni un segundo.
-  // Que es el taller se mira como todo lo demás (ver «Cada app, con su
-  // registro» en js/push.js): por «//taller/» —un enlace mal escrito—
-  // el taller se servía igual, con su base y su servidor de pruebas, y
-  // SIN rótulo.
-  if (push.EN_EL_TALLER) document.body.classList.add('es-taller');
+  if (location.pathname.startsWith('/taller')) document.body.classList.add('es-taller');
   await store.cargarSesion();
   // El directorio del equipo antes de pintar: si no, la primera
   // pantalla saldría con iniciales y las caras aparecerían al
@@ -650,11 +646,8 @@ function aplicarAlVolver() {
     // iPhone solo hay UNA: la del arranque. Sin esto, una app que se
     // queda cinco días en segundo plano no se enteraría de tres
     // despliegues seguidos.
-    // Se le pregunta al registro de ESTA app: desde el taller, mientras
-    // no tiene el suyo, «el de esta página» es el de la app de verdad
-    // (ver «Cada app, con su registro» en js/push.js).
     try {
-      await (await push.registroDeEstaApp())?.update();
+      await (await navigator.serviceWorker.getRegistration())?.update();
     } catch { /* sin red: otra vez será */ }
     // Con algo a medias, relevoSilencioso no hace nada ni avisa: el
     // siguiente cambio de pantalla la pondrá sin que se note.
@@ -683,7 +676,7 @@ export async function aplicarVersionEsperando(registro) {
   for (let intento = 0; intento < 6; intento++) {
     registro.waiting?.postMessage({ tipo: 'saltar-espera' });
     await new Promise((r) => setTimeout(r, 700));
-    const fresco = await push.registroDeEstaApp().catch(() => null);
+    const fresco = await navigator.serviceWorker.getRegistration().catch(() => null);
     if (!fresco?.waiting) return true;   // ya está tomando el mando
     registro = fresco;
   }
@@ -694,17 +687,11 @@ export async function aplicarVersionEsperando(registro) {
 /**
  * ¿Hay una versión esperando? La usa Ajustes para enseñar el botón de
  * ponerla, que es la salida a mano para quien nunca cierra la app.
- *
- * La de ESTA app. El taller, mientras no tiene registro propio, veía
- * aquí la versión que esperaba en la app de verdad: sus Ajustes
- * ofrecían «Poner la versión nueva» y, al pulsarlo, a la app de verdad
- * le cambiaba el service worker con sus pantallas abiertas (ver «Cada
- * app, con su registro» en js/push.js).
  */
 export async function versionEsperando() {
   if (!('serviceWorker' in navigator)) return null;
   try {
-    const r = await push.registroDeEstaApp();
+    const r = await navigator.serviceWorker.getRegistration();
     return r?.waiting ? r : null;
   } catch { return null; }
 }
@@ -763,17 +750,6 @@ arrancar().catch((e) => {
    worker, y recarga. Es el botón de «apagar y encender» para cuando el
    almacenamiento del navegador queda en un estado que ni el arranque
    tolerante sabe curar. */
-/* Tira lo de ESTA app y nada más. La de verdad y el taller —la rama de
-   pruebas, en /taller— comparten origen, y el navegador da juntos los
-   service workers y las cachés de las dos: cuando se llevaba «todos» y
-   «todas», el botón pulsado en el taller dejaba a la app de verdad sin
-   service worker y sin caché, y sin cobertura daba una página en blanco
-   hasta abrirla otra vez con ella (y pulsado en la app de verdad, lo
-   mismo al taller). Lo del taller es su registro (ver «Cada app, con su
-   registro» en js/push.js) y las cachés «unik-repasos-taller-…», el
-   mismo reparto que hace sw.js; todo lo demás es de la app de verdad,
-   que se lo sigue llevando entero, como siempre. La base ya era de
-   cada una (js/db.js). */
 async function rescateLocal() {
   const seguro = confirm(
     'Se borra la copia local de este dispositivo (lo pendiente de subir se pierde). '
@@ -781,11 +757,9 @@ async function rescateLocal() {
   if (!seguro) return;
   try {
     const registros = await (navigator.serviceWorker?.getRegistrations?.() ?? []);
-    await Promise.all([...registros].filter(push.esDeEstaApp)
-      .map((r) => r.unregister().catch(() => {})));
+    await Promise.all([...registros].map((r) => r.unregister().catch(() => {})));
     const nombres = await (window.caches?.keys?.() ?? []);
-    await Promise.all([...nombres].filter((n) => n.startsWith('unik-repasos-taller-') === push.EN_EL_TALLER)
-      .map((n) => caches.delete(n).catch(() => {})));
+    await Promise.all([...nombres].map((n) => caches.delete(n).catch(() => {})));
     await borrarBase();
   } finally {
     location.reload();
