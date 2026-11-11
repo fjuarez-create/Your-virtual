@@ -1,0 +1,4 @@
+Cada línea nueva de este fichero lanza una medición de la bajada de cambios
+(ver .github/workflows/medir-repasos.yml). No publica nada.
+
+2026-11-11 · primera medición, antes de la bajada por recepción: cuántas tandas ocupa hoy la base.
