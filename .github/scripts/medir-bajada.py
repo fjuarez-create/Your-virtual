@@ -31,6 +31,10 @@ TABLAS = ["listas", "tareas", "comentarios", "medios", "mensajes", "lecturas", "
 # La app hace 25 tandas por sincronización. Aquí se sigue hasta el final,
 # con un tope de cordura por si el servidor no dejara nunca de decir «más».
 TOPE_TANDAS = 600
+# Desde cuándo se cuentan «los apuntes de después»: la hora (UTC) en que
+# se encendió la bajada por recepción en producción. Se puede cambiar
+# con MEDIR_DESPUES_DE para mirar otro tramo.
+DESPUES_DE = os.environ.get("MEDIR_DESPUES_DE", "2026-11-11T12:14:00")
 
 galletas = http.cookiejar.CookieJar()
 abridor = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(galletas))
@@ -72,6 +76,8 @@ def bajar(desde):
     """Baja por tandas desde esa marca. Devuelve el resumen de la bajada."""
     vistas = {t: set() for t in TABLAS}
     filas = {t: 0 for t in TABLAS}
+    despues = {t: set() for t in TABLAS}
+    ultimo = ""
     tandas = octetos = sin_avanzar = 0
     personas = 0
     lenta = 0.0
@@ -92,6 +98,14 @@ def bajar(desde):
             for fila in r.get(t) or []:
                 filas[t] += 1
                 vistas[t].add(fila.get("id"))
+                # La fecha del apunte la pone el reloj de cada móvil; las
+                # dos formas («Z» y «+00:00») empiezan igual, así que se
+                # comparan los 19 primeros caracteres.
+                cuando = str(fila.get("actualizado") or "")[:19]
+                if cuando > ultimo:
+                    ultimo = cuando
+                if cuando >= DESPUES_DE:
+                    despues[t].add(fila.get("id"))
         nueva = r.get("ahora") or ""
         if not r.get("mas"):
             marca = nueva or marca
@@ -114,6 +128,7 @@ def bajar(desde):
         "tandas": tandas, "octetos": octetos, "lenta": lenta, "marca": marca,
         "completa": completa, "motivo": motivo, "personas": personas,
         "filas": filas, "distintas": {t: len(vistas[t]) for t in TABLAS},
+        "ultimo": ultimo, "despues": {t: len(despues[t]) for t in TABLAS},
     }
 
 
@@ -169,6 +184,20 @@ def main():
     lineas.append("Pesa %.1f MB; %d filas viajaron más de una vez; la tanda más lenta, %.1f s."
                   % (todo["octetos"] / 1048576, repetidas, todo["lenta"]))
     lineas.append("La marca viene acabada en %s." % forma(todo["marca"]))
+    # ¿Ha llegado algo DESPUÉS de encender? Dos señales, las dos sin
+    # nombres ni textos: la hora del último apunte (reloj del móvil) y el
+    # número de orden más alto repartido (la marca, que pone el servidor
+    # y solo pasa de la hora de encendido cuando numera una fila nueva).
+    nuevas = sum(todo["despues"].values())
+    lineas.append("ÚLTIMO APUNTE (reloj del móvil): %s UTC. Apuntado desde %s UTC: %d filas%s."
+                  % (todo["ultimo"] or "ninguno", DESPUES_DE, nuevas,
+                     "" if not nuevas else " (" + ", ".join(
+                         "%s %d" % (t, todo["despues"][t]) for t in TABLAS if todo["despues"][t]) + ")"))
+    lineas.append("NÚMERO DE ORDEN MÁS ALTO (la marca): %s UTC; %s."
+                  % (todo["marca"][:19] or "sin marca",
+                     "ya se ha numerado algo llegado después de encender"
+                     if todo["marca"][:19] >= DESPUES_DE else
+                     "todavía no se ha numerado nada llegado después de encender"))
     if todo["completa"]:
         sincronizaciones = -(-todo["tandas"] // 25)
         lineas.append("Un móvil que tenga que bajarlo todo necesita %d sincronizaci%s (25 tandas cada una)."
