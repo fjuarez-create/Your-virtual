@@ -41,6 +41,25 @@ const MIMES = [
 
 /** Máximo de registros por tabla y tanda en la bajada de cambios. */
 const TOPE_CAMBIOS = 500;
+
+/* La bajada por recepción (ver el bloque con ese nombre, más abajo).
+   Las constantes van AQUÍ arriba: tienen que estar definidas antes de
+   la llamada a despachar(). Las tablas que bajan a los móviles: */
+const TABLAS_QUE_VIAJAN = ['listas', 'tareas', 'comentarios', 'medios', 'mensajes', 'lecturas', 'entregas'];
+/** Las mismas siete en el orden en que se NUMERAN: de hijas a madres (ver recepcion_recoger). */
+const RECEPCION_ORDEN = ['medios', 'comentarios', 'tareas', 'listas', 'lecturas', 'mensajes', 'entregas'];
+/** La versión del esquema que trae la columna `recibido` y su índice. */
+const RECEPCION_ESQUEMA = 21;
+/** Segundos entre que esta API ve la base ya migrada y encender. */
+const RECEPCION_ESPERA = 600;
+/** Segundos que una bajada espera el cerrojo para numerar y, ya con él,
+    los que una sentencia de numerar espera por una tabla que otro tenga
+    bloqueada. Pasados, la bajada contesta sin lo pendiente. */
+const RECEPCION_CERROJO = 5;
+/** Filas que se numeran con una misma marca, y lotes por tabla y petición. */
+const RECEPCION_LOTE = 400;
+const RECEPCION_LOTES = 10;
+const RECEPCION_PRINCIPIO = '1970-01-01T00:00:00.000Z';
 /* Las dos prioridades de un repaso. Alta es la de nacimiento: la
    vivienda no debería entregarse sin arreglarlo. Media, lo que se puede
    arreglar con el comprador ya viviendo. Decidido por Fran en
@@ -1218,6 +1237,7 @@ function guardar_tareas(): void
             . ($hayPrioridad ? 'prioridad, ' : '') . 'borrada FROM tareas WHERE id = ?');
         $previo->execute([$t['id']]);
         $fila = $previo->fetch() ?: null;
+        $previo->closeCursor();   // la lectura se suelta antes de escribir (ver upsert)
 
         if (!$decide) {
             if ($fila) {
@@ -1364,6 +1384,7 @@ function guardar_mensajes(): void
             $previo = bd()->prepare('SELECT creado_por, borrada FROM mensajes WHERE id = ?');
             $previo->execute([$m['id']]);
             $fila = $previo->fetch();
+            $previo->closeCursor();
             if ($fila && $fila['creado_por'] !== $yo['id'] && $yo['rol'] !== 'admin') {
                 $borrada = (int) ($fila['borrada'] ?? 0);
             }
@@ -1415,7 +1436,9 @@ function guardar_lecturas(): void
         }
         $id = $l['mensajeId'] . ':' . $yo['id'];
         $sent->execute([$id]);
-        if ($sent->fetchColumn()) {
+        $yaLeida = $sent->fetchColumn();
+        $sent->closeCursor();
+        if ($yaLeida) {
             continue;
         }
         $cuando = iso($l['creado'] ?? null);
@@ -1440,9 +1463,23 @@ function guardar_lecturas(): void
 function upsert(string $tabla, array $registro): bool
 {
     $pdo = bd();
+    // LA RECEPCIÓN. Toda escritura en una tabla que viaja deja la fila
+    // «pendiente de numerar» (recibido vacío): la siguiente bajada de
+    // cualquiera le pone su número de orden y, con él, le llega a todos
+    // (ver «La bajada por recepción», más abajo). Quien añada aquí una
+    // escritura a mano tiene que hacer lo mismo en su UPDATE.
+    $viaja = recepcion_hay($tabla);
+    if ($viaja) {
+        $registro['recibido'] = '';
+    }
     $stmt = $pdo->prepare("SELECT actualizado FROM {$tabla} WHERE id = ?");
     $stmt->execute([$registro['id']]);
     $existente = $stmt->fetchColumn();
+    // La lectura se suelta antes de escribir. En MariaDB no cambia nada;
+    // en SQLite (el banco de pruebas), una lectura a medias en la misma
+    // conexión hace que la escritura falle al instante con «database is
+    // locked» si otro proceso ha escrito entre tanto.
+    $stmt->closeCursor();
 
     if ($existente === false) {
         $columnas = array_keys($registro);
@@ -1463,6 +1500,12 @@ function upsert(string $tabla, array $registro): bool
             }
         }
     } elseif ($registro['actualizado'] < (string) $existente) {
+        // Lo que llega es más viejo y no se guarda. Pero quien lo ha
+        // subido tiene en su móvil algo que aquí ha perdido: la fila
+        // guardada vuelve a bajar, para que acabe viendo lo que ganó.
+        if ($viaja) {
+            recepcion_pendiente($tabla, (string) $registro['id']);
+        }
         return false;
     }
 
@@ -1522,6 +1565,7 @@ function subir_medio(): void
     $existente = bd()->prepare('SELECT ruta FROM medios WHERE id = ?');
     $existente->execute([$id]);
     $rutaPrevia = $existente->fetchColumn();
+    $existente->closeCursor();
 
     $relativa = gmdate('Y/m') . '/' . $id . '.' . $extension;
     $destino = carpeta_medios() . '/' . $relativa;
@@ -1844,7 +1888,8 @@ function barrer_mensajes(): void
     }
 
     $pdo = bd();
-    $st = $pdo->prepare('UPDATE mensajes SET borrada = 1, actualizado = ? WHERE borrada = 0');
+    $st = $pdo->prepare('UPDATE mensajes SET borrada = 1, actualizado = ?'
+        . (recepcion_hay('mensajes') ? ", recibido = ''" : '') . ' WHERE borrada = 0');
     $st->execute([ahora_iso()]);
     $barridos = $st->rowCount();
     $aLaVista = (int) $pdo->query('SELECT COUNT(*) FROM mensajes WHERE borrada = 0')->fetchColumn();
@@ -1861,6 +1906,7 @@ function borrar_medio(string $id): void
     $stmt = bd()->prepare('SELECT ruta FROM medios WHERE id = ?');
     $stmt->execute([$id]);
     $ruta = $stmt->fetchColumn();
+    $stmt->closeCursor();
     if ($ruta === false) {
         responder_error(404, 'El medio no existe.');
     }
@@ -1869,7 +1915,8 @@ function borrar_medio(string $id): void
     }
     // Se marca como borrado en lugar de eliminar la fila: así el resto de
     // dispositivos se entera en su próxima sincronización.
-    bd()->prepare("UPDATE medios SET borrada = 1, ruta = '', actualizado = ? WHERE id = ?")
+    bd()->prepare("UPDATE medios SET borrada = 1, ruta = '', actualizado = ?"
+        . (recepcion_hay('medios') ? ", recibido = ''" : '') . ' WHERE id = ?')
         ->execute([ahora_iso(), $id]);
     responder(['ok' => true]);
 }
@@ -1962,6 +2009,11 @@ function cambios(): void
     // noviembre de 2026). Ahora se admite cualquier fecha ISO 8601 y lo
     // que no sea una fecha es un 400 con su motivo.
     $crudo = trim((string) ($_GET['desde'] ?? ''));
+    // Con la bajada por recepción encendida, todo lo que sigue no se
+    // usa: la respuesta sale de cambios_por_recepcion(), que no vuelve.
+    if (recepcion_encendida()) {
+        cambios_por_recepcion($crudo);
+    }
     $desde = '1970-01-01T00:00:00.000Z';
     if ($crudo !== '') {
         $desde = marca_normalizada($crudo);
@@ -2064,6 +2116,475 @@ function cambios(): void
         'mas'         => $hayMas,
         // El sello del arranque viaja también en la tanda, de cinturón:
         // si cambia con una bajada en marcha, el móvil se entera igual.
+        'arranque'    => marca_de_arranque(),
+    ]);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   La bajada por recepción
+
+   EL FALLO QUE ARREGLA. La bajada de siempre usa como marca el
+   `actualizado` más alto que el móvil ha visto, y `actualizado` lo pone
+   el reloj de cada móvil al apuntar. Lo apuntado a las 10:00 sin
+   cobertura y subido a las 10:20 entra «por detrás» de quien ya bajó
+   algo de las 10:03, y no le baja nunca.
+
+   CÓMO. Cada fila que viaja lleva `recibido`: su número de orden de
+   llegada, que pone ESTE servidor.
+     · Quien escribe una fila la deja con `recibido` vacío: «pendiente
+       de numerar». Nada más: la subida no espera a nadie.
+     · Quien baja, antes de leer, numera lo pendiente: con el cerrojo
+       cogido, le pone a cada lote la marca siguiente de una serie que
+       solo sube (`recepcion_serie`, en meta).
+     · Después lee el tope (la última marca emitida) y trae de cada
+       tabla las filas entre su marca y el tope. La marca que devuelve
+       es la mayor que ha VISTO.
+     · Una fila pendiente no la ve NINGUNA bajada hasta que se numera.
+       Por eso la tanda solo dice «mas: false» si es una foto fija: al
+       acabar de leer no queda nada pendiente, nadie ha numerado
+       mientras tanto y nadie estaba numerando. Si no, dice «mas: true»
+       y el móvil vuelve a pedir (no da la bajada por completa).
+   Los relojes de los móviles no intervienen, ni el del servidor: la
+   serie sube aunque el reloj retroceda. `actualizado` no cambia de
+   papel: sigue decidiendo quién gana un conflicto.
+
+   LA MARCA QUE VIAJA. Es una fecha ISO como siempre, pero escrita con
+   «+00:00» en vez de «Z». La app la guarda y la devuelve tal cual. Una
+   marca que llega con «Z» es de la bajada de antes (medida en
+   `actualizado`): a esa petición se le contesta con todo desde el
+   principio, y así cada móvil rellena una vez los huecos que traía.
+   ¡NO «ARREGLAR» EL «+00:00»! Volverlo «Z» haría completa cada bajada.
+
+   SI SE VUELVE ATRÁS ESTE CÓDIGO DESPUÉS DE ENCENDER (o se restaura
+   una copia de la base): el código de antes modifica filas sin
+   dejarlas pendientes de numerar. La publicación que vuelva a traer
+   este código tiene que cambiar RESINCRONIZACION en js/store.js, para
+   que todos los móviles lo bajen todo una vez. (Si la vuelta atrás es
+   ANTES de encender no hay que hacer nada: la espera empieza de nuevo
+   sola; ver recepcion_encendida.)
+   ═══════════════════════════════════════════════════════════════ */
+
+/** ¿Tiene ya esa tabla la columna `recibido`? (ventana del despliegue) */
+function recepcion_hay(string $tabla): bool
+{
+    static $hay = [];
+    if (!isset($hay[$tabla])) {
+        $hay[$tabla] = in_array($tabla, TABLAS_QUE_VIAJAN, true)
+            && in_array('recibido', esquema_columnas(bd(), $tabla), true);
+    }
+    return $hay[$tabla];
+}
+
+/** Deja una fila pendiente de numerar, sin tocarle nada más. */
+function recepcion_pendiente(string $tabla, string $id): void
+{
+    if (recepcion_hay($tabla)) {
+        bd()->prepare("UPDATE {$tabla} SET recibido = '' WHERE id = ?")->execute([$id]);
+    }
+}
+
+/** El ahora del servidor con milisegundos, en el formato de la casa. */
+function ahora_ms_iso(): string
+{
+    $ahora = microtime(true);
+    return gmdate('Y-m-d\\TH:i:s', (int) $ahora) . sprintf('.%03dZ', (int) floor(($ahora - floor($ahora)) * 1000));
+}
+
+/**
+ * ¿Está encendida la bajada por recepción? Encendida = existe
+ * `recepcion_serie` en meta, y es para siempre. Si no lo está, aquí se
+ * pone en marcha el cronómetro (la primera vez que ESTE index.php ve la
+ * base con la columna en las siete tablas) y, pasada la espera, se
+ * enciende. La espera es para que no quede código de antes escribiendo:
+ * ese código modifica filas sin dejarlas pendientes de numerar.
+ *
+ * EL CRONÓMETRO ES DE ESTE FICHERO: junto a la hora se apunta la fecha
+ * de este index.php en el disco. Si no es la apuntada, el código se ha
+ * vuelto a subir desde que el cronómetro arrancó (otra publicación; o
+ * una vuelta atrás y su vuelta adelante, con el código de antes
+ * trabajando entre medias) y la espera empieza de nuevo.
+ */
+function recepcion_encendida(): bool
+{
+    static $encendida = null;
+    if ($encendida !== null) {
+        return $encendida;
+    }
+    $encendida = false;
+    try {
+        $pdo = bd();
+        $meta = $pdo->query(
+            "SELECT clave, valor FROM meta WHERE clave IN ('esquema', 'recepcion_serie', 'recepcion_vista')"
+        )->fetchAll(PDO::FETCH_KEY_PAIR);
+        if (isset($meta['recepcion_serie'])) {
+            return $encendida = true;
+        }
+        if ((int) ($meta['esquema'] ?? 0) < RECEPCION_ESQUEMA) {
+            return false;
+        }
+        clearstatcache(true, __FILE__);
+        $huella = (string) @filemtime(__FILE__);
+        [$vista, $deQuien] = array_pad(explode('|', (string) ($meta['recepcion_vista'] ?? ''), 2), 2, '');
+        if ($vista === '' || $deQuien !== $huella) {
+            foreach (TABLAS_QUE_VIAJAN as $tabla) {
+                if (!recepcion_hay($tabla)) {
+                    return false;
+                }
+            }
+            // La espera empieza (o vuelve a empezar) ahora.
+            $habia = isset($meta['recepcion_vista']);
+            $vista = (string) time();
+            if ($habia) {
+                $pdo->prepare("UPDATE meta SET valor = ? WHERE clave = 'recepcion_vista'")->execute(["{$vista}|{$huella}"]);
+            } else {
+                try {
+                    $pdo->prepare("INSERT INTO meta (clave, valor) VALUES ('recepcion_vista', ?)")->execute(["{$vista}|{$huella}"]);
+                } catch (PDOException $e) {
+                    // Otra petición lo apuntó a la vez: vale el suyo.
+                }
+            }
+        }
+        $espera = (int) (config()['recepcion_espera'] ?? RECEPCION_ESPERA);
+        if (time() - (int) $vista < $espera) {
+            return false;
+        }
+        return $encendida = recepcion_encender($pdo);
+    } catch (Throwable $e) {
+        error_log('UNIK Works · recepción, sin encender: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/** Enciende: crea la serie, por encima de todo número ya puesto. */
+function recepcion_encender(PDO $pdo): bool
+{
+    if (!recepcion_cerrar($pdo)) {
+        error_log('UNIK Works · recepción: no se consigue el cerrojo para encender. Se sigue como siempre.');
+        return false;
+    }
+    $bien = false;
+    try {
+        $hay = $pdo->query("SELECT valor FROM meta WHERE clave = 'recepcion_serie'")->fetchColumn();
+        if ($hay === false) {
+            $base = ahora_ms_iso();
+            foreach (TABLAS_QUE_VIAJAN as $tabla) {
+                $mayor = (string) $pdo->query("SELECT MAX(recibido) FROM {$tabla}")->fetchColumn();
+                if ($mayor > $base) {
+                    $base = $mayor;
+                }
+            }
+            $pdo->prepare("INSERT INTO meta (clave, valor) VALUES ('recepcion_serie', ?)")->execute([$base]);
+            error_log("UNIK Works · la bajada por recepción queda encendida (serie desde {$base}).");
+        }
+        $bien = true;
+    } finally {
+        recepcion_abrir($pdo, $bien);
+    }
+    return true;
+}
+
+/** El nombre del cerrojo: es de todo el servidor de base de datos, así que lleva la base dentro. */
+function recepcion_nombre_cerrojo(): string
+{
+    return 'unik-recepcion-' . substr(sha1((string) (config()['db']['nombre'] ?? '')), 0, 16);
+}
+
+/** Toma el cerrojo de numerar. Falso si no se consigue a tiempo. */
+function recepcion_cerrar(PDO $pdo): bool
+{
+    try {
+        if (motor() === 'sqlite') {
+            $pdo->exec('BEGIN IMMEDIATE');
+            return true;
+        }
+        $sent = $pdo->prepare('SELECT GET_LOCK(?, ?)');
+        $sent->execute([recepcion_nombre_cerrojo(), RECEPCION_CERROJO]);
+        $dado = $sent->fetchColumn();
+        $sent->closeCursor();
+        if ((string) $dado !== '1') {
+            return false;
+        }
+        // Con el cerrojo cogido, ninguna sentencia espera más que eso
+        // por una tabla que otro tenga bloqueada (una copia del
+        // alojamiento, por ejemplo): mejor dejar lo pendiente para la
+        // bajada siguiente que tener esta colgada.
+        try {
+            $pdo->exec('SET SESSION lock_wait_timeout = ' . RECEPCION_CERROJO . ', innodb_lock_wait_timeout = ' . RECEPCION_CERROJO);
+        } catch (Throwable $e) {
+            // Sin ese ajuste se sigue igual, con las esperas de siempre.
+        }
+        return true;
+    } catch (Throwable $e) {
+        return false;
+    }
+}
+
+function recepcion_abrir(PDO $pdo, bool $bien): void
+{
+    try {
+        if (motor() === 'sqlite') {
+            $pdo->exec($bien ? 'COMMIT' : 'ROLLBACK');
+            return;
+        }
+        $sent = $pdo->prepare('SELECT RELEASE_LOCK(?)');
+        $sent->execute([recepcion_nombre_cerrojo()]);
+        $sent->closeCursor();
+        $pdo->exec('SET SESSION lock_wait_timeout = DEFAULT, innodb_lock_wait_timeout = DEFAULT');
+    } catch (Throwable $e) {
+        error_log('UNIK Works · recepción, al soltar el cerrojo: ' . $e->getMessage());
+    }
+}
+
+/** La marca siguiente de la serie. SOLO con el cerrojo cogido. */
+function recepcion_emitir(PDO $pdo): string
+{
+    $ultima = (string) $pdo->query("SELECT valor FROM meta WHERE clave = 'recepcion_serie'")->fetchColumn();
+    $ahora = ahora_ms_iso();
+    $nueva = $ahora > $ultima ? $ahora : un_milisegundo_despues($ultima);
+    $pdo->prepare("UPDATE meta SET valor = ? WHERE clave = 'recepcion_serie'")->execute([$nueva]);
+    return $nueva;
+}
+
+/** ¿Queda alguna fila pendiente de numerar? Por índice y sin escribir. */
+function recepcion_queda(PDO $pdo): bool
+{
+    foreach (TABLAS_QUE_VIAJAN as $tabla) {
+        $sent = $pdo->query("SELECT 1 FROM {$tabla} WHERE recibido = '' LIMIT 1");
+        $hay = $sent->fetchColumn() !== false;
+        $sent->closeCursor();
+        if ($hay) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * ¿Está libre el cerrojo de numerar? Si alguien lo tiene, la última
+ * marca emitida puede ser de un lote que aún no está puesto en sus
+ * filas. En SQLite no hace falta mirarlo: allí numerar es una
+ * transacción, y la marca y sus filas aparecen a la vez.
+ */
+function recepcion_cerrojo_libre(PDO $pdo): bool
+{
+    if (motor() === 'sqlite') {
+        return true;
+    }
+    $sent = $pdo->prepare('SELECT IS_FREE_LOCK(?)');
+    $sent->execute([recepcion_nombre_cerrojo()]);
+    $libre = (string) $sent->fetchColumn() === '1';
+    $sent->closeCursor();
+    return $libre;
+}
+
+/**
+ * Numera lo pendiente. Primero MIRA (por índice, sin escribir): en una
+ * bajada sin novedades no pasa de ahí. Si hay algo, toma el cerrojo y
+ * numera por lotes: cada lote, una marca y una sentencia.
+ *
+ * Con el cerrojo se repasan LAS SIETE tablas (no solo las que el
+ * «mirar» vio con algo: mientras se espera el cerrojo puede entrar
+ * algo en otra), y DE HIJAS A MADRES: la app sube el parte antes que
+ * su repaso y el repaso antes que su foto, así que si aquí recibe
+ * número una hija, su madre ya lo tiene o lo recibe en esta misma
+ * pasada. Lo que no se llegue a numerar (cerrojo ocupado, tope de
+ * lotes, un error) se queda pendiente, y quien llama lo ve al acabar
+ * de leer y lo dice en «mas». Nunca lanza: una bajada no se cae por esto.
+ */
+function recepcion_recoger(PDO $pdo): void
+{
+    try {
+        if (!recepcion_queda($pdo)) {
+            return;
+        }
+    } catch (Throwable $e) {
+        error_log('UNIK Works · recepción, al mirar lo pendiente: ' . $e->getMessage());
+        return;
+    }
+    if (!recepcion_cerrar($pdo)) {
+        error_log('UNIK Works · recepción: cerrojo ocupado, lo pendiente se numera en la bajada siguiente.');
+        return;
+    }
+    $bien = false;
+    try {
+        foreach (RECEPCION_ORDEN as $tabla) {
+            for ($lote = 0; $lote < RECEPCION_LOTES; $lote++) {
+                $sent = $pdo->query("SELECT id FROM {$tabla} WHERE recibido = '' LIMIT " . RECEPCION_LOTE);
+                $ids = $sent->fetchAll(PDO::FETCH_COLUMN);
+                $sent->closeCursor();
+                if (!$ids) {
+                    break;
+                }
+                $marca = recepcion_emitir($pdo);
+                $huecos = implode(', ', array_fill(0, count($ids), '?'));
+                $pdo->prepare("UPDATE {$tabla} SET recibido = ? WHERE recibido = '' AND id IN ({$huecos})")
+                    ->execute([$marca, ...$ids]);
+            }
+        }
+        $bien = true;
+    } catch (Throwable $e) {
+        error_log('UNIK Works · recepción, al numerar: ' . $e->getMessage());
+    } finally {
+        recepcion_abrir($pdo, $bien);
+    }
+}
+
+/**
+ * La marca «desde» que manda el móvil, en la forma de la serie.
+ * Vacía = desde el principio. Null = no es una fecha (400).
+ */
+function recepcion_marca_entrada(string $crudo): ?string
+{
+    if ($crudo === '') {
+        return '';
+    }
+    // De las nuestras: «…T10:20:00.123+00:00». Quien no codifica el «+»
+    // en la URL (una prueba a mano) lo manda convertido en espacio.
+    if (preg_match('/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3})[+ ]00:00$/', $crudo, $m)) {
+        return $m[1] . 'Z';
+    }
+    // De antes: la que daba la bajada por `actualizado`, o la que una app
+    // muy vieja ponía con su reloj. No se mide con la misma regla.
+    if (preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/', $crudo)) {
+        return '';
+    }
+    // Cualquier otra fecha, de quien prueba la API a mano.
+    return marca_normalizada($crudo);
+}
+
+/**
+ * Las filas de una tabla numeradas entre la marca del móvil y el tope,
+ * por orden de llegada. Con «>=» y no «>»: la marca del móvil es la
+ * mayor que VIO, y puede quedar por numerar parte de ese mismo lote.
+ * Volver a mandar una fila que ya tiene no hace daño; saltársela, sí.
+ */
+function traer_por_recepcion(string $tabla, string $desde, string $tope): array
+{
+    $stmt = bd()->prepare(
+        "SELECT * FROM {$tabla} WHERE recibido >= ? AND recibido <= ? ORDER BY recibido ASC LIMIT " . TOPE_CAMBIOS
+    );
+    $stmt->execute([$desde, $tope]);
+    return $stmt->fetchAll();
+}
+
+/** Todas las filas con EXACTAMENTE ese número, sin tope de filas. */
+function traer_marca_recepcion(string $tabla, string $marca): array
+{
+    $stmt = bd()->prepare("SELECT * FROM {$tabla} WHERE recibido = ? ORDER BY id ASC");
+    $stmt->execute([$marca]);
+    return $stmt->fetchAll();
+}
+
+/** La bajada, con la recepción encendida. No vuelve. */
+function cambios_por_recepcion(string $crudo): void
+{
+    $pdo = bd();
+    $desde = recepcion_marca_entrada($crudo);
+    if ($desde === null) {
+        responder_error(400, "La marca «desde» no es una fecha ISO 8601: {$crudo}", 'formato');
+    }
+    if ($desde === '') {
+        $desde = RECEPCION_PRINCIPIO;
+    }
+
+    $personas = $pdo->query('SELECT * FROM usuarios ORDER BY nombre')->fetchAll();
+
+    // 1 · Numerar lo pendiente. 2 · El tope, ANTES de leer ninguna tabla:
+    // lo que se numere mientras se leen lleva una marca mayor y queda
+    // fuera de TODAS, también de las que se lean después. 3 · ¿Hay
+    // alguien numerando? Entonces el tope puede ser de un lote que aún
+    // no está puesto, y esta tanda no será una foto fija.
+    recepcion_recoger($pdo);
+    $tope = (string) $pdo->query("SELECT valor FROM meta WHERE clave = 'recepcion_serie'")->fetchColumn();
+    try {
+        $enTransito = !recepcion_cerrojo_libre($pdo);
+    } catch (Throwable $e) {
+        $enTransito = true;
+    }
+    if ($desde > un_milisegundo_despues($tope)) {
+        // La marca más alta que esta serie puede haber dado es el tope
+        // más un milisegundo. Una mayor es de otro mundo (una base
+        // restaurada de la copia, por ejemplo): no se le puede hacer
+        // caso, y se sirve todo.
+        error_log("UNIK Works · recepción: marca ajena ({$desde}, tope {$tope}); se sirve desde el principio.");
+        $desde = RECEPCION_PRINCIPIO;
+    }
+
+    $conjuntos = [];
+    foreach (TABLAS_QUE_VIAJAN as $tabla) {
+        $conjuntos[$tabla] = traer_por_recepcion($tabla, $desde, $tope);
+    }
+
+    // ¿Ha sido una foto fija? Solo si al acabar de leer no queda nada
+    // pendiente y la serie no se ha movido. EN ESE ORDEN: mientras la
+    // serie siga en el tope nadie ha numerado, así que lo que alguien
+    // tocó mientras se leía sigue pendiente y se ve aquí. (Al revés,
+    // otra bajada podría numerarlo entre las dos preguntas.)
+    try {
+        if (recepcion_queda($pdo)
+            || (string) $pdo->query("SELECT valor FROM meta WHERE clave = 'recepcion_serie'")->fetchColumn() !== $tope) {
+            $enTransito = true;
+        }
+    } catch (Throwable $e) {
+        $enTransito = true;
+    }
+
+    // La frontera, como siempre: la tabla cortada que MENOS avanzó.
+    $frontera = null;
+    foreach ($conjuntos as $filas) {
+        if (count($filas) >= TOPE_CAMBIOS) {
+            $ultimo = (string) $filas[count($filas) - 1]['recibido'];
+            if ($frontera === null || $ultimo < $frontera) {
+                $frontera = $ultimo;
+            }
+        }
+    }
+
+    if ($frontera === null) {
+        // La mayor marca VISTA, no el tope: la última emitida puede ser
+        // de un lote que otra bajada todavía está numerando.
+        $marca = $desde;
+        foreach ($conjuntos as $filas) {
+            foreach ($filas as $fila) {
+                if ($fila['recibido'] > $marca) {
+                    $marca = (string) $fila['recibido'];
+                }
+            }
+        }
+    } elseif ($frontera > $desde) {
+        $marca = $frontera;
+        // Lo que pasa de la frontera se va a volver a pedir: no se manda.
+        foreach ($conjuntos as $tabla => $filas) {
+            $conjuntos[$tabla] = array_values(array_filter($filas, static fn ($f) => (string) $f['recibido'] <= $frontera));
+        }
+    } else {
+        // Más de un tope de filas con la MISMA marca (solo puede venir
+        // del relleno de la migración: lo que se numera aquí va en
+        // lotes más pequeños que el tope): se sirven todas las de esa
+        // marca y se sigue un milisegundo después.
+        foreach ($conjuntos as $tabla => $filas) {
+            if (count($filas) >= TOPE_CAMBIOS) {
+                $conjuntos[$tabla] = traer_marca_recepcion($tabla, $desde);
+            }
+        }
+        $marca = un_milisegundo_despues($desde);
+    }
+
+    responder([
+        'personas'    => array_map('persona_salida', $personas),
+        'listas'      => array_map('lista_salida', $conjuntos['listas']),
+        'tareas'      => array_map('tarea_salida', $conjuntos['tareas']),
+        'comentarios' => array_map('comentario_salida', $conjuntos['comentarios']),
+        'medios'      => array_map('medio_salida', $conjuntos['medios']),
+        'mensajes'    => array_map('mensaje_salida', $conjuntos['mensajes']),
+        'lecturas'    => array_map('lectura_salida', $conjuntos['lecturas']),
+        'entregas'    => array_map('entrega_salida', $conjuntos['entregas']),
+        // ¡Con «+00:00», no con «Z»! (ver la cabecera de este bloque)
+        'ahora'       => substr($marca, 0, 23) . '+00:00',
+        // «mas: false» quiere decir «con esto lo tienes todo»: la app
+        // lo toma por una bajada completa. Si la tanda no ha sido una
+        // foto fija, que vuelva a pedir.
+        'mas'         => $frontera !== null || $enTransito,
         'arranque'    => marca_de_arranque(),
     ]);
 }

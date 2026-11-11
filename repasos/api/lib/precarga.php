@@ -153,6 +153,13 @@ function precarga_aplicar(PDO $pdo, array $datos): int
         }
         // La marca de la fila sube hasta ahora para que los móviles se la bajen.
         $registro['actualizado'] = max((string) $registro['actualizado'], ahora_iso());
+        // La ficha leída trae su número de recepción (viene en el SELECT *):
+        // reescribirlo tal cual la dejaría sin bajar. Se vacía: pendiente
+        // de numerar. En una ficha nueva la columna toma su valor por
+        // defecto, que es ese mismo.
+        if (array_key_exists('recibido', $registro)) {
+            $registro['recibido'] = '';
+        }
         $columnas = array_keys($registro);
         if ($antes) {
             $sinId = $registro;
@@ -184,7 +191,8 @@ function precarga_corregir(PDO $pdo, array $reglas): int
 {
     $corregidas = 0;
     $leer = $pdo->prepare('SELECT compradores FROM entregas WHERE id = ?');
-    $poner = $pdo->prepare('UPDATE entregas SET compradores = ?, compradores_fijados_en = ?, actualizado = ? WHERE id = ?');
+    $vaciar = in_array('recibido', esquema_columnas($pdo, 'entregas'), true) ? ", recibido = ''" : '';
+    $poner = $pdo->prepare("UPDATE entregas SET compradores = ?, compradores_fijados_en = ?, actualizado = ?{$vaciar} WHERE id = ?");
     foreach ($reglas as $regla) {
         if (!is_array($regla)) {
             continue;

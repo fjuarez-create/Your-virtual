@@ -48,6 +48,12 @@ CREATE TABLE IF NOT EXISTS intentos (
   KEY ix_intentos_ip (ip, cuando)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Las siete tablas que bajan a los móviles (listas, tareas, comentarios,
+-- medios, mensajes, lecturas y entregas) llevan la columna `recibido`:
+-- el número de orden con el que la fila LLEGÓ al servidor, que es por
+-- donde se guía la bajada de cambios. Vacío = recién escrita, pendiente
+-- de numerar. Tiene forma de fecha, pero no es una hora: es una serie
+-- que solo sube (ver «La bajada por recepción» en index.php).
 CREATE TABLE IF NOT EXISTS listas (
   id                CHAR(36)     NOT NULL,
   unidad_id         VARCHAR(80)  NOT NULL,   -- p. ej. 'brassie:04'
@@ -58,11 +64,13 @@ CREATE TABLE IF NOT EXISTS listas (
   borrada           TINYINT(1)   NOT NULL DEFAULT 0,
   creado            CHAR(24)     NOT NULL,
   actualizado       CHAR(24)     NOT NULL,
+  recibido          CHAR(24)     NOT NULL DEFAULT '',
   creado_por        CHAR(36)     DEFAULT NULL,
   creado_por_nombre VARCHAR(120) NOT NULL,
   PRIMARY KEY (id),
   KEY ix_listas_unidad (unidad_id),
-  KEY ix_listas_actualizado (actualizado)
+  KEY ix_listas_actualizado (actualizado),
+  KEY ix_listas_recibido (recibido)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS tareas (
@@ -82,11 +90,13 @@ CREATE TABLE IF NOT EXISTS tareas (
   borrada           TINYINT(1)   NOT NULL DEFAULT 0,
   creado            CHAR(24)     NOT NULL,
   actualizado       CHAR(24)     NOT NULL,
+  recibido          CHAR(24)     NOT NULL DEFAULT '',
   creado_por        CHAR(36)     DEFAULT NULL,
   creado_por_nombre VARCHAR(120) NOT NULL,
   PRIMARY KEY (id),
   KEY ix_tareas_lista (lista_id),
-  KEY ix_tareas_actualizado (actualizado)
+  KEY ix_tareas_actualizado (actualizado),
+  KEY ix_tareas_recibido (recibido)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS comentarios (
@@ -97,12 +107,14 @@ CREATE TABLE IF NOT EXISTS comentarios (
   borrada            TINYINT(1)   NOT NULL DEFAULT 0,
   creado             CHAR(24)     NOT NULL,
   actualizado        CHAR(24)     NOT NULL,
+  recibido           CHAR(24)     NOT NULL DEFAULT '',
   creado_por         CHAR(36)     DEFAULT NULL,
   creado_por_nombre  VARCHAR(120) NOT NULL,
   creado_por_empresa VARCHAR(120) NOT NULL DEFAULT '',
   PRIMARY KEY (id),
   KEY ix_comentarios_tarea (tarea_id),
-  KEY ix_comentarios_actualizado (actualizado)
+  KEY ix_comentarios_actualizado (actualizado),
+  KEY ix_comentarios_recibido (recibido)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS medios (
@@ -119,9 +131,11 @@ CREATE TABLE IF NOT EXISTS medios (
   borrada     TINYINT(1)   NOT NULL DEFAULT 0,
   creado      CHAR(24)     NOT NULL,
   actualizado CHAR(24)     NOT NULL,
+  recibido    CHAR(24)     NOT NULL DEFAULT '',
   PRIMARY KEY (id),
   KEY ix_medios_tarea (tarea_id),
-  KEY ix_medios_actualizado (actualizado)
+  KEY ix_medios_actualizado (actualizado),
+  KEY ix_medios_recibido (recibido)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Tabla de control: guarda la versión del esquema para que el backend
@@ -140,12 +154,14 @@ CREATE TABLE IF NOT EXISTS mensajes (
   borrada            TINYINT(1)   NOT NULL DEFAULT 0,
   creado             CHAR(24)     NOT NULL,
   actualizado        CHAR(24)     NOT NULL,
+  recibido           CHAR(24)     NOT NULL DEFAULT '',
   creado_por         CHAR(36)     DEFAULT NULL,
   creado_por_nombre  VARCHAR(120) NOT NULL,
   creado_por_empresa VARCHAR(120) NOT NULL DEFAULT '',
   PRIMARY KEY (id),
   KEY ix_mensajes_unidad (unidad_id),
-  KEY ix_mensajes_actualizado (actualizado)
+  KEY ix_mensajes_actualizado (actualizado),
+  KEY ix_mensajes_recibido (recibido)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Quién ha leído qué. Una fila por mensaje y persona, con el id
@@ -158,9 +174,11 @@ CREATE TABLE IF NOT EXISTS lecturas (
   usuario_id   CHAR(36)    NOT NULL,
   creado       CHAR(24)    NOT NULL,
   actualizado  CHAR(24)    NOT NULL,
+  recibido     CHAR(24)    NOT NULL DEFAULT '',
   PRIMARY KEY (id),
   KEY ix_lecturas_mensaje (mensaje_id),
-  KEY ix_lecturas_actualizado (actualizado)
+  KEY ix_lecturas_actualizado (actualizado),
+  KEY ix_lecturas_recibido (recibido)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ═══ La obra: reuniones y encargos ═══════════════════════════════
@@ -330,11 +348,13 @@ CREATE TABLE IF NOT EXISTS entregas (
   borrada              TINYINT(1)   NOT NULL DEFAULT 0,
   creado               CHAR(24)     NOT NULL,
   actualizado          CHAR(24)     NOT NULL,
+  recibido             CHAR(24)     NOT NULL DEFAULT '',
   creado_por           CHAR(36)     DEFAULT NULL,
   creado_por_nombre    VARCHAR(120) NOT NULL DEFAULT '',
   PRIMARY KEY (id),
   KEY ix_entregas_promo (promo_id),
-  KEY ix_entregas_actualizado (actualizado)
+  KEY ix_entregas_actualizado (actualizado),
+  KEY ix_entregas_recibido (recibido)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Los móviles apuntados a los avisos push. Una fila por navegador

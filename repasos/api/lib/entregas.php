@@ -83,10 +83,13 @@ function entregas_de_antes_al_dia(PDO $pdo): void
               WHERE borrada = 0 AND firma <> '' AND firma < ? AND entregada_en = '' AND entregada_fijada_en = ''"
         );
         $filas->execute([ENTREGADAS_DE_ANTES_HASTA]);
+        // Con la columna de recepción, la ficha queda pendiente de numerar
+        // (ver «La bajada por recepción» en index.php).
+        $vaciar = in_array('recibido', esquema_columnas($pdo, 'entregas'), true) ? ", recibido = ''" : '';
         $poner = $pdo->prepare(
-            'UPDATE entregas
-                SET entregada_en = ?, entregada_fijada_en = ?, entregada_por = NULL, entregada_por_nombre = ?, actualizado = ?
-              WHERE id = ?'
+            "UPDATE entregas
+                SET entregada_en = ?, entregada_fijada_en = ?, entregada_por = NULL, entregada_por_nombre = ?, actualizado = ?{$vaciar}
+              WHERE id = ?"
         );
         $ahora = ahora_iso();
         $cuantas = 0;
@@ -155,7 +158,8 @@ function entregas_visitas_al_dia(PDO $pdo): void
             "UPDATE entregas
                 SET visitas_hechas = ?, visitas_fijadas_en = ?,
                     revisada_en = '', revisada_de = '', revisada_de_hora = '', revisada_fijada_en = ?,
-                    revisada_por = NULL, revisada_por_nombre = '', actualizado = ?
+                    revisada_por = NULL, revisada_por_nombre = '', actualizado = ?"
+            . (in_array('recibido', $columnas, true) ? ", recibido = ''" : '') . "
               WHERE id = ? AND revisada_en = ? AND revisada_fijada_en = ?"
         );
         $ahora = ahora_iso();
@@ -417,6 +421,7 @@ function guardar_entregas(): void
 
         $previa->execute([$unidad]);
         $antes = $previa->fetch() ?: null;
+        $previa->closeCursor();   // la lectura se suelta antes de escribir (ver upsert)
 
         // Lo que manda el móvil, ya saneado.
         $llega = [
@@ -486,8 +491,14 @@ function guardar_entregas(): void
                 }
             }
         }
-        // Nada nuevo sobre lo guardado: ni se toca ni se avisa.
+        // Nada nuevo sobre lo guardado: ni se toca ni se avisa. Pero la
+        // ficha queda pendiente de numerar, para que vuelva a bajar: quien
+        // la ha subido tiene en su móvil algo que aquí ha perdido, y sin
+        // esto se quedaría viéndolo.
         if ($antes && $adoptados === 0 && (int) $antes['borrada'] === $registro['borrada']) {
+            if (function_exists('recepcion_pendiente')) {
+                recepcion_pendiente('entregas', $unidad);
+            }
             continue;
         }
 

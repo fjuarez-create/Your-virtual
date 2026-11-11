@@ -41,8 +41,15 @@ declare(strict_types=1);
     cuando al darla por hecha se movió a hoy (`revisada_de` y su hora),
     para que deshacer la deje como estaba. Las fichas que venían con
     una visita hecha y una cita nueva encima se ponen al día aparte,
-    una sola vez: entregas_visitas_al_dia() en entregas.php. */
-const ESQUEMA_VERSION = 20;
+    una sola vez: entregas_visitas_al_dia() en entregas.php.
+    La 21 trae la recepción: la columna `recibido`, con su índice, en
+    las siete tablas que bajan a los móviles. Es el número de orden con
+    el que cada fila LLEGÓ al servidor, y por él se guía la bajada de
+    cambios en vez de por `actualizado`, que lo pone el reloj de cada
+    móvil: lo apuntado sin cobertura y subido más tarde no les bajaba
+    nunca a quienes ya habían sincronizado algo más nuevo (ver «La
+    bajada por recepción» en index.php y esquema_recepcion(), aquí). */
+const ESQUEMA_VERSION = 21;
 
 /**
  * Tablas que tienen que existir para dar la versión por puesta. Si
@@ -86,17 +93,36 @@ const ESQUEMA_CAMPOS = [
         // antes del campo se quedan en alta y la dirección facultativa
         // los va bajando a media uno a uno.
         'prioridad'    => "VARCHAR(10) NOT NULL DEFAULT 'alta'",
+        // El número de orden con el que la fila LLEGÓ al servidor, que
+        // es por donde se guía la bajada de cambios (ver «La bajada por
+        // recepción» en index.php). Vacío = recién escrita, pendiente
+        // de numerar. Va en las siete tablas que bajan a los móviles.
+        'recibido'     => "CHAR(24) NOT NULL DEFAULT ''",
     ],
     'listas' => [
         // Vacío = se muestra el nombre de la vivienda. Solo se guarda
         // aquí cuando alguien lo cambia a mano.
         'nombre' => "VARCHAR(120) NOT NULL DEFAULT ''",
+        // El número de orden de la recepción (ver `tareas`, arriba).
+        'recibido' => "CHAR(24) NOT NULL DEFAULT ''",
     ],
     'comentarios' => [
         'creado_por_empresa' => "VARCHAR(120) NOT NULL DEFAULT ''",
+        // El número de orden de la recepción (ver `tareas`, arriba).
+        'recibido' => "CHAR(24) NOT NULL DEFAULT ''",
     ],
     'medios' => [
         'comentario_id' => 'CHAR(36) DEFAULT NULL',
+        // El número de orden de la recepción (ver `tareas`, arriba).
+        'recibido' => "CHAR(24) NOT NULL DEFAULT ''",
+    ],
+    'mensajes' => [
+        // El número de orden de la recepción (ver `tareas`, arriba).
+        'recibido' => "CHAR(24) NOT NULL DEFAULT ''",
+    ],
+    'lecturas' => [
+        // El número de orden de la recepción (ver `tareas`, arriba).
+        'recibido' => "CHAR(24) NOT NULL DEFAULT ''",
     ],
     'entregas' => [
         // «La vivienda se ha entregado»: cuándo, cuándo se apuntó y
@@ -120,6 +146,8 @@ const ESQUEMA_CAMPOS = [
         // la cadena vacía.
         'visitas_hechas'       => 'TEXT',
         'visitas_fijadas_en'   => "CHAR(24) NOT NULL DEFAULT ''",
+        // El número de orden de la recepción (ver `tareas`, arriba).
+        'recibido'             => "CHAR(24) NOT NULL DEFAULT ''",
     ],
     'reuniones' => [
         // El acta que sale de la grabación: el resumen ya aceptado y,
@@ -133,6 +161,16 @@ const ESQUEMA_CAMPOS = [
         'acta_firmada' => 'VARCHAR(32) DEFAULT NULL',
     ],
 ];
+
+/**
+ * Las siete tablas que bajan a los móviles. Cada una lleva la columna
+ * `recibido` y un índice sobre ella. El índice NO va como sentencia
+ * suelta en schema-sqlite.sql: esquema_aplicar() pasa los CREATE del
+ * fichero ANTES de añadir columnas, y en una base que ya existe un
+ * índice sobre una columna que todavía no está reventaría la puesta al
+ * día entera, en cada petición. Lo crea esquema_recepcion(), después.
+ */
+const ESQUEMA_TABLAS_QUE_VIAJAN = ['listas', 'tareas', 'comentarios', 'medios', 'mensajes', 'lecturas', 'entregas'];
 
 /**
  * Deja la base de datos al día si no lo está. Se llama sola al abrir la
@@ -250,6 +288,7 @@ function esquema_aplicar(PDO $pdo): array
     }
 
     $hechos = array_merge($hechos, esquema_arreglar_datos($pdo));
+    $hechos = array_merge($hechos, esquema_recepcion($pdo));
 
     foreach (ESQUEMA_TABLAS as $tabla) {
         if (!esquema_columnas($pdo, $tabla)) {
@@ -287,8 +326,12 @@ function esquema_arreglar_datos(PDO $pdo): array
     // saldrían en el contador de rechazadas ni en su filtro, que es justo
     // para lo que se hizo el estado.
     if (in_array('rechazada', esquema_columnas($pdo, 'tareas'), true)) {
+        // Con la columna de recepción puesta, la fila queda además
+        // «pendiente de numerar»: sin eso, este cambio no bajaba a
+        // ningún móvil (ni siquiera tocaba `actualizado`).
+        $vaciar = in_array('recibido', esquema_columnas($pdo, 'tareas'), true) ? ", recibido = ''" : '';
         $sent = $pdo->prepare(
-            "UPDATE tareas SET estado = 'rechazada' WHERE estado = 'pendiente' AND rechazada = 1"
+            "UPDATE tareas SET estado = 'rechazada'{$vaciar} WHERE estado = 'pendiente' AND rechazada = 1"
         );
         $sent->execute();
         $cuantas = $sent->rowCount();
@@ -298,6 +341,98 @@ function esquema_arreglar_datos(PDO $pdo): array
     }
 
     return $hechos;
+}
+
+/**
+ * La recepción: índice sobre `recibido` en las siete tablas que viajan
+ * y, mientras la bajada por recepción no esté encendida, el número de
+ * orden de las filas que ya había.
+ *
+ * Se puede pasar las veces que haga falta: solo crea el índice que
+ * falte y solo numera lo que esté sin numerar. Si a alguna tabla le
+ * falta la columna lanza una excepción, la versión no se sella y el
+ * siguiente arranque lo reintenta.
+ *
+ * EL RELLENO. A las filas de antes se les pone como número de orden su
+ * propio `actualizado` (acotado entre 1970 y ahora): conserva el
+ * reparto que la bajada por tandas ya sabe paginar. No hace falta más
+ * finura: la primera bajada de cada móvil después de encender es
+ * completa. Una vez encendido (existe `recepcion_serie` en meta) esto
+ * ya no numera nada: lo que quede vacío lo numera la bajada, con un
+ * número nuevo, que es lo que hace que le llegue a todo el mundo.
+ *
+ * SOLO SE COPIA UN `actualizado` CON LA FORMA DE LA CASA
+ * (AAAA-MM-DDTHH:MM:SS.mmmZ); cualquier otro va al principio (1970).
+ * El número de una fila acaba viajando como marca de un móvil, y el
+ * servidor rechaza con un 400 la marca que no sabe leer: una sola fila
+ * con la fecha de otra forma (sin milisegundos, con un espacio, vacía)
+ * dejaría a ese móvil sin bajar nada, en cada sincronización y para
+ * siempre. Hoy no debería haber ninguna —iso() no las deja entrar—,
+ * pero la base de producción no se ha mirado fila a fila. Las dos
+ * condiciones van en positivo (LIKE, y no NOT LIKE) para que tampoco
+ * un valor nulo acabe copiado: lo que no casa cae al ELSE.
+ */
+function esquema_recepcion(PDO $pdo): array
+{
+    $hechos = [];
+    foreach (ESQUEMA_TABLAS_QUE_VIAJAN as $tabla) {
+        $columnas = esquema_columnas($pdo, $tabla);
+        if (!$columnas) {
+            throw new RuntimeException("Falta la tabla {$tabla}.");
+        }
+        if (!in_array('recibido', $columnas, true)) {
+            throw new RuntimeException("A la tabla {$tabla} le falta la columna recibido.");
+        }
+        $indice = "ix_{$tabla}_recibido";
+        if (!esquema_hay_indice($pdo, $tabla, $indice)) {
+            $pdo->exec("CREATE INDEX {$indice} ON {$tabla} (recibido)");
+            $hechos[] = "{$tabla}: índice {$indice}";
+        }
+    }
+
+    $encendido = $pdo->query("SELECT 1 FROM meta WHERE clave = 'recepcion_serie'")->fetchColumn();
+    if ($encendido === false) {
+        $ahora = esquema_ahora_ms();
+        foreach (ESQUEMA_TABLAS_QUE_VIAJAN as $tabla) {
+            // Cada «_» del LIKE es un carácter cualquiera: 24 en total,
+            // con los signos y las dos letras en su sitio.
+            $sent = $pdo->prepare(
+                "UPDATE {$tabla}
+                    SET recibido = CASE
+                          WHEN actualizado LIKE '____-__-__T__:__:__.___Z' AND actualizado > ? THEN ?
+                          WHEN actualizado LIKE '____-__-__T__:__:__.___Z'
+                               AND actualizado >= '1970-01-01T00:00:00.000Z' THEN actualizado
+                          ELSE '1970-01-01T00:00:00.000Z' END
+                  WHERE recibido = ''"
+            );
+            $sent->execute([$ahora, $ahora]);
+            if ($sent->rowCount() > 0) {
+                $hechos[] = "{$tabla}: {$sent->rowCount()} filas numeradas";
+            }
+        }
+    }
+    return $hechos;
+}
+
+/** ¿Tiene ya la tabla ese índice? */
+function esquema_hay_indice(PDO $pdo, string $tabla, string $indice): bool
+{
+    if (!preg_match('/^[a-z_]+$/', $tabla)) {
+        return false;
+    }
+    if (motor() === 'sqlite') {
+        return in_array($indice, array_column($pdo->query("PRAGMA index_list({$tabla})")->fetchAll(), 'name'), true);
+    }
+    // Sin preparar y filtrando aquí, como esquema_columnas(): así no
+    // depende de que la versión del servidor deje preparar un SHOW.
+    return in_array($indice, array_column($pdo->query("SHOW INDEX FROM {$tabla}")->fetchAll(), 'Key_name'), true);
+}
+
+/** El ahora del servidor con milisegundos, en el formato de la casa. */
+function esquema_ahora_ms(): string
+{
+    $ahora = microtime(true);
+    return gmdate('Y-m-d\TH:i:s', (int) $ahora) . sprintf('.%03dZ', (int) floor(($ahora - floor($ahora)) * 1000));
 }
 
 /** SQLite no entiende TINYINT ni longitudes de VARCHAR: se traducen. */

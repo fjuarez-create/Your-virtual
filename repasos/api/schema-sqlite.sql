@@ -42,6 +42,15 @@ CREATE TABLE IF NOT EXISTS intentos (
 CREATE INDEX IF NOT EXISTS ix_intentos_email ON intentos (email, cuando);
 CREATE INDEX IF NOT EXISTS ix_intentos_ip ON intentos (ip, cuando);
 
+-- Las siete tablas que bajan a los móviles (listas, tareas, comentarios,
+-- medios, mensajes, lecturas y entregas) llevan la columna `recibido`:
+-- el número de orden con el que la fila LLEGÓ al servidor (ver «La
+-- bajada por recepción» en index.php).
+-- OJO: su índice (ix_TABLA_recibido) NO va en este fichero, y no es un
+-- olvido. esquema_aplicar() pasa todos los CREATE de aquí ANTES de
+-- añadir columnas: en una base que ya existía y todavía no tiene la
+-- columna, un CREATE INDEX sobre ella reventaría la puesta al día, en
+-- cada petición y para siempre. Lo crea esquema_recepcion(), después.
 CREATE TABLE IF NOT EXISTS listas (
   id                TEXT NOT NULL PRIMARY KEY,
   unidad_id         TEXT NOT NULL,
@@ -52,6 +61,7 @@ CREATE TABLE IF NOT EXISTS listas (
   borrada           INTEGER NOT NULL DEFAULT 0,
   creado            TEXT NOT NULL,
   actualizado       TEXT NOT NULL,
+  recibido          TEXT NOT NULL DEFAULT '',
   creado_por        TEXT,
   creado_por_nombre TEXT NOT NULL
 );
@@ -75,6 +85,7 @@ CREATE TABLE IF NOT EXISTS tareas (
   borrada           INTEGER NOT NULL DEFAULT 0,
   creado            TEXT NOT NULL,
   actualizado       TEXT NOT NULL,
+  recibido          TEXT NOT NULL DEFAULT '',
   creado_por        TEXT,
   creado_por_nombre TEXT NOT NULL
 );
@@ -89,6 +100,7 @@ CREATE TABLE IF NOT EXISTS comentarios (
   borrada            INTEGER NOT NULL DEFAULT 0,
   creado             TEXT NOT NULL,
   actualizado        TEXT NOT NULL,
+  recibido           TEXT NOT NULL DEFAULT '',
   creado_por         TEXT,
   creado_por_nombre  TEXT NOT NULL,
   creado_por_empresa TEXT NOT NULL DEFAULT ''
@@ -109,7 +121,8 @@ CREATE TABLE IF NOT EXISTS medios (
   ruta        TEXT NOT NULL,
   borrada     INTEGER NOT NULL DEFAULT 0,
   creado      TEXT NOT NULL,
-  actualizado TEXT NOT NULL
+  actualizado TEXT NOT NULL,
+  recibido    TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS ix_medios_tarea ON medios (tarea_id);
 CREATE INDEX IF NOT EXISTS ix_medios_actualizado ON medios (actualizado);
@@ -129,6 +142,7 @@ CREATE TABLE IF NOT EXISTS mensajes (
   borrada            INTEGER NOT NULL DEFAULT 0,
   creado             TEXT NOT NULL,
   actualizado        TEXT NOT NULL,
+  recibido           TEXT NOT NULL DEFAULT '',
   creado_por         TEXT,
   creado_por_nombre  TEXT NOT NULL,
   creado_por_empresa TEXT NOT NULL DEFAULT ''
@@ -141,7 +155,8 @@ CREATE TABLE IF NOT EXISTS lecturas (
   mensaje_id  TEXT NOT NULL,
   usuario_id  TEXT NOT NULL,
   creado      TEXT NOT NULL,
-  actualizado TEXT NOT NULL
+  actualizado TEXT NOT NULL,
+  recibido    TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS ix_lecturas_mensaje ON lecturas (mensaje_id);
 CREATE INDEX IF NOT EXISTS ix_lecturas_actualizado ON lecturas (actualizado);
@@ -283,6 +298,7 @@ CREATE TABLE IF NOT EXISTS entregas (
   borrada              INTEGER NOT NULL DEFAULT 0,
   creado               TEXT NOT NULL,
   actualizado          TEXT NOT NULL,
+  recibido             TEXT NOT NULL DEFAULT '',
   creado_por           TEXT,
   creado_por_nombre    TEXT NOT NULL DEFAULT ''
 );
