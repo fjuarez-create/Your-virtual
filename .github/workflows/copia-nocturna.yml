@@ -54,7 +54,12 @@ concurrency:
 jobs:
   copiar:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Dos horas de plazo. Los ficheros se bajan de uno en uno y cada uno
+    # cuesta alrededor de un segundo: el 11-11-2026, con 1.447 fotos y
+    # audios, la copia tardó 26 minutos y entró en su plazo de entonces
+    # (30) por cuatro. Y una copia que se corta por el plazo no guarda
+    # NADA, ni la base de datos.
+    timeout-minutes: 120
     env:
       DOMINIO: https://repasos.unikdi.com
     steps:
