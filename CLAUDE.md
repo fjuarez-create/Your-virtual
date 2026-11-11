@@ -85,6 +85,26 @@ Y la marca de sincronización viaja escrita con «+00:00», no con «Z»:
 no es un descuido y no se «arregla». Todo está contado en la cabecera
 «La bajada por recepción» de `api/index.php`.
 
+Lo vigila el propio despliegue: `.github/scripts/comprobar-recepcion.mjs`
+lee el PHP de la API antes de subir nada y para la publicación si una
+escritura en esas tablas no deja `recibido = ''`. No tiene interruptor,
+a propósito. Si salta sin razón, su cabecera dice qué falsas alarmas se
+le conocen y cómo salir de cada una.
+
+Y dos cosas más que cuelgan de la sincronización:
+
+- **El directorio viaja entero.** La lista de personas va completa en
+  cada respuesta de `cambios`, y la app BORRA de cada móvil a quien no
+  venga en ella (`acatarDirectorio`, en `js/store.js`): así llegan las
+  bajas a los demás. Quien filtre, pagine o recorte esa consulta deja a
+  los móviles sin la gente que falte.
+- **El taller vive en el mismo origen que la app de verdad**
+  (`/taller`), así que el navegador les da a las dos lo mismo de todo
+  lo que guarda «por origen». Por eso lo que se sirve desde `/taller/`
+  abre su propia base local, `unik-repasos-taller` (`js/db.js`). La de
+  la app de verdad se llama `unik-repasos` y NO se renombra nunca: en
+  ella está el trabajo sin subir de cada móvil.
+
 ## Lo que no se hace nunca
 
 - **No se cambia la contraseña de Fran** (f.juarez@unikdi.com). Lo ha

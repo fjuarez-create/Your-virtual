@@ -20,6 +20,7 @@ on:
     paths:
       - 'repasos/**'
       - '.github/workflows/deploy-repasos.yml'
+      - '.github/scripts/comprobar-recepcion.mjs'
   workflow_dispatch:
     inputs:
       primera_instalacion:
@@ -81,6 +82,12 @@ jobs:
       # pasó por esa fila. Como no avisa él, esto lee el PHP de la API y
       # lo caza antes de subir nada (y antes se prueba a sí mismo, para
       # no dar un visto bueno a ciegas).
+      #
+      # No tiene interruptor, a propósito. Con el código de antes de la
+      # recepción falla siempre: si un día hay que VOLVER a él, este paso
+      # se quita en ese mismo commit, y su mensaje de fallo dice qué hay
+      # que leer antes. Su guion va en los «paths» de arriba para que
+      # arreglar solo la guardia vuelva a lanzar el despliegue.
       - name: Comprobar que ninguna escritura se salta la recepción
         run: node ../.github/scripts/comprobar-recepcion.mjs .
 

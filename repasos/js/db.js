@@ -21,15 +21,21 @@
    leían y escribían la misma base: lo apuntado sin cobertura en la app
    de verdad se lo llevaba el taller en cuanto se abría en el mismo
    navegador —lo subía a SU servidor y vaciaba la cola—, y el servidor
-   de verdad no lo recibía nunca (visto en noviembre de 2026). Y desde
-   que el directorio se acata al pie de la letra (acatarDirectorio, en
-   store.js), el de cada servidor habría borrado a la gente del otro.
-   Por eso el taller tiene su base aparte.
+   de verdad no lo recibía nunca (visto en noviembre de 2026). Y no era
+   solo la cola: aquí van también la marca de la bajada y el directorio,
+   que son de UN servidor. Con la marca del taller, la app de verdad
+   preguntaba «desde» un punto que no era suyo y se saltaba lo que
+   había llegado entre medias; y desde que el directorio se acata al
+   pie de la letra (acatarDirectorio, en store.js), el de cada servidor
+   habría borrado a la gente del otro. Por eso el taller tiene su base
+   aparte.
 
    La de la app de verdad NO cambia de nombre, ni puede cambiar: en
    ella está el trabajo sin subir de cada móvil. Solo se aparta lo que
    se sirve desde /taller, que es un banco de pruebas y empieza de cero
-   sin perder nada. */
+   sin perder nada. OJO: quien la aparta es el código que corre EN el
+   taller. Mientras el taller publicado no lleve este fichero, sigue
+   abriendo la base de la app de verdad. */
 const EN_EL_TALLER = new URL('..', import.meta.url).pathname.startsWith('/taller/');
 const NOMBRE = EN_EL_TALLER ? 'unik-repasos-taller' : 'unik-repasos';
 

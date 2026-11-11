@@ -25,7 +25,9 @@
    un heredoc) que EMPIEZAN por un verbo que cambia filas:
      · UPDATE …                          el caso de todos los días;
      · INSERT … ON DUPLICATE KEY UPDATE  (o ON CONFLICT … DO UPDATE): si la fila ya existe, la
-                                         cambia y le conserva el número;
+                                         cambia y le conserva el número. Esa cola se busca
+                                         también en las cadenas siguientes de la instrucción
+                                         (una lista que luego se une), hasta otra sentencia;
      · DELETE FROM, TRUNCATE, DROP TABLE la fila desaparece del servidor y ningún móvil se
                                          entera: la sigue enseñando para siempre.
    Solo cuentan las que tocan una de las siete tablas, o una tabla que no se puede leer porque
@@ -128,7 +130,9 @@
      · rehacer una tabla en una migración (copiarla, DROP TABLE de la vieja y renombrar): las
        filas no se pierden, pero la guardia ve un borrado. Apunta la función en EXENTAS con
        vale: 'borra' y dilo en su porqué;
-     · un texto que no es SQL y empieza por «UPDATE tareas …»: que no empiece así;
+     · un texto que no es SQL y empieza por un verbo de escritura: «UPDATE tareas …», «UPDATE »
+       con algo pegado detrás (error_log('UPDATE ' . $n . ' filas')) o el verbo solo en su cadena
+       y pegado a otra cosa ('UPDATE' . ': ' . $que). Que no empiece así;
      · y una falsa «ceguera»: un texto largo (un heredoc, o una página con su JavaScript) con
        una línea que empiece por «function algo(». La guardia cree que se ha perdido leyendo.
        Que esa línea no empiece así.
@@ -140,6 +144,16 @@
 
    Sin carpeta, mira «repasos». No necesita nada más que Node (vale desde la versión 18): ni
    dependencias, ni git, ni base de datos. Sale con 0 si todo está bien y con 1 si no.
+
+   SI LO QUE SE QUIERE ES VOLVER AL CÓDIGO DE ANTES DE LA RECEPCIÓN. Con ese código este paso
+   falla siempre: es justo el que no deja las filas pendientes (lo publicado antes del
+   11-11-2026 es el control con el que se prueba esta guardia). Y no tiene interruptor para
+   saltárselo, a propósito: un interruptor acabaría puesto un día cualquiera. Una vuelta atrás
+   de urgencia se hace a sabiendas. Primero se lee «SI SE VUELVE ATRÁS ESTE CÓDIGO DESPUÉS DE
+   ENCENDER», en la cabecera «La bajada por recepción» de repasos/api/index.php (la del código
+   que LLEVA la recepción; en el de antes no está), que dice qué les pasa a los móviles y qué
+   hay que hacer al volver. Y después se quita este paso de deploy-repasos.yml, en ese mismo
+   commit, y se vuelve a poner cuando vuelva la recepción. El mensaje de fallo lo dice al final.
 
    SI TOCAS EL LECTOR: la forma de olvido que quieras que vea, a OLVIDOS; el código bueno que no
    deba asustarla, a LEGITIMOS. Y haz la prueba al revés: estropea a propósito la pieza que has
@@ -397,6 +411,10 @@ const EMPIEZA = new RegExp(
   + String.raw`)(?:${BLANCO}+|$)`,
   'gi',
 );
+/** ¿Empieza esa cadena por una sentencia? (La misma expresión, sin la «g»: para preguntar por una cadena suelta.) */
+const EMPIEZA_LA_CADENA = new RegExp(`^${EMPIEZA.source.replace('(^|;)', '()')}`, 'i');
+/** La cola de un INSERT que, si la fila ya existe, la cambia. */
+const COLA_DE_INSERT = /\bON\s+DUPLICATE\s+KEY\s+UPDATE\b|\bON\s+CONFLICT\b[\s\S]*?\bDO\s+UPDATE\s+SET\b/i;
 const VIAJA = new RegExp(String.raw`\b(${TABLAS.join('|')})\b`, 'i');
 const COLUMNA = String.raw`(?:[\x60"]?\w+[\x60"]?\s*\.\s*)?[\x60"]?recibido[\x60"]?`;
 /** El vacío de SQL, como se escribe ('') y como queda dentro de unas comillas simples de PHP (\'\'). */
@@ -584,10 +602,28 @@ function mirar(texto, fichero) {
       if (verbo === 'INSERT') {
         // Un INSERT deja la fila pendiente él solo (la columna nace vacía). Lo que no vale es
         // que, si la fila ya existe, la cambie conservándole el número.
-        const cola = /\bON\s+DUPLICATE\s+KEY\s+UPDATE\b|\bON\s+CONFLICT\b[\s\S]*?\bDO\s+UPDATE\s+SET\b/i.exec(instruccion);
+        let entero = instruccion;
+        let cola = COLA_DE_INSERT.exec(entero);
+        if (!cola && !partida) {
+          // La cola puede ir en OTRA cadena que no se le pega con «.»: el elemento siguiente de
+          // una lista que luego se une (implode(' ', ['INSERT INTO mensajes …', 'ON DUPLICATE
+          // KEY UPDATE …'])). Al cortar la sentencia en la coma dejaba de verse, y ese INSERT
+          // pasaba por uno sin más (noviembre de 2026). Se busca en las cadenas que siguen
+          // dentro de la misma instrucción, hasta la que empieza otra sentencia: lo de esa es suyo.
+          for (const otra of cadenas) {
+            if (otra.desde < suya) continue;
+            if (otra.desde >= fin) break;
+            const cuerpoDeOtra = limpio.slice(otra.cuerpo[0], otra.cuerpo[1]);
+            if (EMPIEZA_LA_CADENA.test(cuerpoDeOtra)) break;
+            if (!COLA_DE_INSERT.test(cuerpoDeOtra)) continue;
+            entero = sinComentariosDeSql(limpio, clase, en, finDeSentencia(limpio, clase, otra.hasta, fin));
+            cola = COLA_DE_INSERT.exec(entero);
+            break;
+          }
+        }
         if (!cola || (tabla && !TABLAS.includes(tabla)) || ajena()) continue;
-        const asignaciones = hastaElWhere(instruccion.slice(cola.index + cola[0].length));
-        apuntar(quedaPendiente(asignaciones, instruccion, tabla, pendientes, conArgumentos) ?? { bien: false, tipo: 'insert' });
+        const asignaciones = hastaElWhere(entero.slice(cola.index + cola[0].length));
+        apuntar(quedaPendiente(asignaciones, entero, tabla, pendientes, conArgumentos) ?? { bien: false, tipo: 'insert' });
         continue;
       }
 
@@ -906,6 +942,36 @@ const OLVIDOS = [
     {
         bd()->prepare("INSERT INTO {$tabla} (id, texto) VALUES (?, ?) ON DUPLICATE KEY UPDATE texto = VALUES(texto)")->execute([$id, 'x']);
     }`],
+  ['un «INSERT … ON DUPLICATE KEY UPDATE» partido entre los elementos de una lista que luego se une (la cola va en el tercero)', php`
+    function guardia_olvido(PDO $pdo, string $id): void
+    {
+        $pdo->prepare(implode(' ', ['INSERT INTO mensajes (id, texto)', 'VALUES (?, ?)', 'ON DUPLICATE KEY UPDATE texto = VALUES(texto)']))->execute([$id, 'x']);
+    }`],
+  // El nombre de la tabla y la clave del registro, escritos de formas que se parecen a las buenas.
+  ['un «INSERT … ON DUPLICATE KEY UPDATE» con el nombre de la tabla con mayúsculas («INSERT INTO Mensajes …»: SQLite no las distingue)', php`
+    function guardia_olvido(string $id): void
+    {
+        bd()->prepare('INSERT INTO Mensajes (id, texto) VALUES (?, ?) ON DUPLICATE KEY UPDATE texto = VALUES(texto)')->execute([$id, 'x']);
+    }`],
+  ['otro con el nombre de la base delante («INSERT INTO repasos.mensajes …»)', php`
+    function guardia_olvido(string $id): void
+    {
+        bd()->prepare('INSERT INTO repasos.mensajes (id, texto) VALUES (?, ?) ON DUPLICATE KEY UPDATE texto = VALUES(texto)')->execute([$id, 'x']);
+    }`],
+  ["uno con un SET genérico al que se le pone una clave que solo se le parece (['recibido_por'] = '')", php`
+    function guardia_olvido(array $registro): void
+    {
+        $registro['recibido_por'] = '';
+        $asignaciones = implode(', ', array_map(static fn ($c) => "{$c} = ?", array_keys($registro)));
+        bd()->prepare("UPDATE tareas SET {$asignaciones} WHERE id = ?")->execute([...array_values($registro), $registro['id']]);
+    }`],
+  ["uno con un SET genérico al que se le pone un número en la clave (['recibido'] = $marca) en vez de dejarla vacía", php`
+    function guardia_olvido(array $registro, string $marca): void
+    {
+        $registro['recibido'] = $marca;
+        $asignaciones = implode(', ', array_map(static fn ($c) => "{$c} = ?", array_keys($registro)));
+        bd()->prepare("UPDATE tareas SET {$asignaciones} WHERE id = ?")->execute([...array_values($registro), $registro['id']]);
+    }`],
 ];
 
 /**
@@ -1047,6 +1113,19 @@ const LEGITIMOS = [
     {
         $pdo->exec('DELETE s FROM sesiones s JOIN usuarios u ON u.id = s.usuario_id WHERE u.activo = 0');
     }`],
+  ["un «INSERT … ON DUPLICATE KEY UPDATE» partido entre dos elementos de una lista, con su «recibido = ''»", 1, php`
+    function guardia_legitimo(PDO $pdo, string $id): void
+    {
+        $pdo->prepare(implode(' ', ['INSERT INTO mensajes (id, texto) VALUES (?, ?)', "ON DUPLICATE KEY UPDATE texto = VALUES(texto), recibido = ''"]))->execute([$id, 'x']);
+    }`],
+  ['dos INSERT en una lista: uno sin más en una tabla que viaja y, detrás, otro con su cola en una que no', 0, php`
+    function guardia_legitimo(PDO $pdo): void
+    {
+        $sentencias = ['INSERT INTO tareas (id, titulo) VALUES (?, ?)', 'INSERT INTO usuarios (id, nombre) VALUES (?, ?) ON DUPLICATE KEY UPDATE nombre = VALUES(nombre)'];
+        foreach ($sentencias as $sentencia) {
+            $pdo->prepare($sentencia)->execute(['1', 'x']);
+        }
+    }`],
   ['el vacío de la clave del registro entre comillas dobles, y la columna en mayúsculas', 2, php`
     function guardia_legitimo(array $registro, string $id): void
     {
@@ -1179,7 +1258,7 @@ function explicar(v, rutas) {
       return {
         titulo: 'La recepción: una escritura que no deja la fila pendiente',
         pasa: `Este UPDATE cambia filas de ${tabla}, que es una de las siete tablas que bajan a los móviles, y no las deja con «recibido = ''».${v.enExenta ? ` (${v.funcion}() está en EXENTAS, pero la exención solo vale para su sentencia que numera: la que empieza su SET por «recibido =».)` : ''}`,
-        hacer: `Añade «recibido = ''» al SET de esta sentencia. En la casa se escribe así: «… SET borrada = 1, actualizado = ?' . (recepcion_hay('${v.tabla}') ? ", recibido = ''" : '') . ' WHERE id = ?» (recepcion_hay() pregunta por la tabla de la sentencia). Y si lo que guardas es un registro entero, usa upsert(), en ${rutas.indice}, que ya lo pone.`,
+        hacer: `Añade «recibido = ''» al SET de esta sentencia. En la casa se escribe así: «… SET borrada = 1, actualizado = ?' . (recepcion_hay('${v.tabla}') ? ", recibido = ''" : '') . ' WHERE id = ?» (recepcion_hay() pregunta por la tabla de la sentencia). Y si lo que guardas es un registro entero, usa upsert(), en ${rutas.indice}, que ya lo pone.${v.nombraRecibido ? '' : ` Si esta sentencia YA deja la fila pendiente por un camino que la guardia no sabe leer (un ayudante que devuelve el trozo, una constante, una propiedad), es una de las falsas alarmas que cuenta la cabecera de ${ESTE_GUION}: la guardia no entra en las funciones a las que se llama, así que escríbelo de la forma que sí entiende.`}`,
       };
   }
 }
@@ -1192,6 +1271,16 @@ function explicar(v, rutas) {
 function avisoDeRecibido(v) {
   if (!v.nombraRecibido || !['update', 'variable', 'numera', 'insert'].includes(v.tipo)) return '';
   return `La instrucción NOMBRA «recibido», pero no de una manera que la guardia dé por buena. Vale escrito en la propia sentencia como una asignación más de su SET («…, recibido = ''», con dos comillas simples), o de las maneras b) y c) de «CUÁNDO DA UNA SENTENCIA POR BUENA», en la cabecera de ${ESTE_GUION}. No vale detrás del WHERE ni dentro de un CASE (ahí se compara, no se asigna), ni en un comentario, ni en otra sentencia de la misma instrucción, ni entre comillas dobles («recibido = ""»), ni como parámetro («recibido = ?»). Y si de verdad deja la fila pendiente de otra forma (con un ayudante o una constante, o con un «;» o un «where» dentro de un texto del SET), es una de las falsas alarmas que cuenta esa cabecera: escríbelo de la forma que sí entiende.`;
+}
+
+/**
+ * Lo último que dice un fallo: qué hacer si lo que se quiere es volver al código de antes de la
+ * recepción. Ese código hace fallar la guardia siempre (es su control), así que una vuelta atrás
+ * de urgencia se encontraría el despliegue cerrado y, con la prisa, sin saber si esto es un
+ * estorbo o un aviso. Es las dos cosas: se quita, pero después de leer lo que cuesta volver.
+ */
+function siSeVuelveAtras(rutas) {
+  return `¿LO QUE QUIERES ES VOLVER AL CÓDIGO DE ANTES DE LA RECEPCIÓN (una vuelta atrás de urgencia)? Con ese código este paso falla SIEMPRE, porque es justo el que no deja las filas pendientes, y no tiene interruptor para saltárselo. Haz dos cosas, por este orden. UNA: lee «SI SE VUELVE ATRÁS ESTE CÓDIGO DESPUÉS DE ENCENDER», en la cabecera «La bajada por recepción» de ${rutas.indice} (en la versión que LLEVA la recepción, que es la que vas a quitar: en el código de antes esa cabecera no está). Dice qué les pasa a los móviles mientras mande el código de antes y qué hay que hacer el día que la recepción vuelva. DOS: quita A PROPÓSITO este paso («Comprobar que ninguna escritura se salta la recepción») de .github/workflows/deploy-repasos.yml, en ese mismo commit, y vuelve a ponerlo cuando vuelva la recepción. Si NO estás volviendo atrás, nada de esto va contigo: arregla lo que se dice más arriba.`;
 }
 
 const enUnaLinea = (texto) => String(texto).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
@@ -1332,7 +1421,7 @@ function principal() {
   const igual = (lista) => lista.length === TABLAS.length && [...lista].sort().join() === [...TABLAS].sort().join();
   if (!listas.some((l) => /TABLAS_QUE_VIAJAN$/.test(l.nombre))) {
     mal = true;
-    anotar(`El servidor ya no declara TABLAS_QUE_VIAJAN (la lista de las tablas que bajan a los móviles) en ningún fichero de api/. La guardia de la recepción mira ${TABLAS.join(', ')} y no puede comprobar que sigan siendo esas. Si la lista ha cambiado de nombre o de sitio, enséñaselo a ${ESTE_GUION} (busca TABLAS_QUE_VIAJAN). Si es que esta API no tiene la bajada por recepción, no es la de hoy.`, { titulo: 'La recepción: no encuentro la lista de tablas del servidor', fichero: rutas.indice });
+    anotar(`El servidor ya no declara TABLAS_QUE_VIAJAN (la lista de las tablas que bajan a los móviles) en ningún fichero de api/. La guardia de la recepción mira ${TABLAS.join(', ')} y no puede comprobar que sigan siendo esas. Si la lista ha cambiado de nombre o de sitio, enséñaselo a ${ESTE_GUION} (busca TABLAS_QUE_VIAJAN). Si es que esta API no tiene la bajada por recepción, no es la de hoy. ${siSeVuelveAtras(rutas)}`, { titulo: 'La recepción: no encuentro la lista de tablas del servidor', fichero: rutas.indice });
   }
   for (const l of listas.filter((x) => !igual(x.tablas))) {
     mal = true;
@@ -1394,6 +1483,12 @@ function principal() {
     console.log(renglones(`Está contado en CLAUDE.md («Una regla del servidor que no se puede olvidar»), en la cabecera «La bajada por recepción» de ${rutas.indice} y en la cabecera de ${ESTE_GUION}. En el despliegue, este paso va antes de subir nada: lo publicado sigue como estaba.`, ''));
     console.log(`\n${leidos} · ${miradas}.`);
     console.log('LA RECEPCIÓN NO PASA.');
+    // Lo último, para que sea lo primero que se lea al abrir el paso que ha fallado. En el
+    // resumen del despliegue GitHub solo enseña las diez primeras anotaciones de un paso, y con
+    // el código de antes salen más: por eso lo lleva también el aviso de que falta
+    // TABLAS_QUE_VIAJAN, que es el primero y la seña de ese código.
+    console.log(`\n${renglones(siSeVuelveAtras(rutas), '')}`);
+    anotar(siSeVuelveAtras(rutas), { titulo: 'La recepción: si lo que quieres es volver al código de antes' });
     process.exit(1);
   }
   console.log(`${leidos} · ${miradas}.`);
