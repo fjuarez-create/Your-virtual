@@ -363,14 +363,18 @@ function esquema_arreglar_datos(PDO $pdo): array
  *
  * SOLO SE COPIA UN `actualizado` CON LA FORMA DE LA CASA
  * (AAAA-MM-DDTHH:MM:SS.mmmZ); cualquier otro va al principio (1970).
- * El número de una fila acaba viajando como marca de un móvil, y el
- * servidor rechaza con un 400 la marca que no sabe leer: una sola fila
- * con la fecha de otra forma (sin milisegundos, con un espacio, vacía)
- * dejaría a ese móvil sin bajar nada, en cada sincronización y para
- * siempre. Hoy no debería haber ninguna —iso() no las deja entrar—,
- * pero la base de producción no se ha mirado fila a fila. Las dos
- * condiciones van en positivo (LIKE, y no NOT LIKE) para que tampoco
- * un valor nulo acabe copiado: lo que no casa cae al ELSE.
+ * El número de una fila acaba viajando como marca de un móvil y
+ * vuelve en su petición siguiente. Si no tiene esa forma, el servidor
+ * ya no la reconoce como suya y la lee como una fecha cualquiera: un
+ * «2026-10-30 10:08:12» (con espacio) vuelve convertido en las
+ * 10:08:12 con «T», que ordena DESPUÉS, y las filas que quedan entre
+ * los dos no le bajan nunca a ese móvil, sin ningún error (visto en
+ * el banco de pruebas); y una que PHP no sepa leer sería un 400 en
+ * cada sincronización. Hoy no debería haber ninguna —iso() no las
+ * deja entrar—, pero la base de producción no se ha mirado fila a
+ * fila. Las dos condiciones van en positivo (LIKE, y no NOT LIKE)
+ * para que tampoco un valor nulo acabe copiado: lo que no casa cae al
+ * ELSE.
  */
 function esquema_recepcion(PDO $pdo): array
 {
