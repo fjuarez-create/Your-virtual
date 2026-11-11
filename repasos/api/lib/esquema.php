@@ -48,8 +48,15 @@ declare(strict_types=1);
     cambios en vez de por `actualizado`, que lo pone el reloj de cada
     móvil: lo apuntado sin cobertura y subido más tarde no les bajaba
     nunca a quienes ya habían sincronizado algo más nuevo (ver «La
-    bajada por recepción» en index.php y esquema_recepcion(), aquí). */
-const ESQUEMA_VERSION = 21;
+    bajada por recepción» en index.php y esquema_recepcion(), aquí).
+    La 22 guarda, junto a los asistentes de cada reunión de obra, el
+    nombre de cada uno (`asistentes_nombres`): la reunión los guardaba
+    solo por identificador, y al dar de baja a alguien el acta de una
+    reunión ya cerrada le perdía (su bolita pasaba a «?» y su nombre
+    desaparecía de la tarjeta del archivo). A las reuniones que ya
+    había se les pone el nombre de cada asistente una sola vez:
+    esquema_nombres_de_asistentes(), aquí. */
+const ESQUEMA_VERSION = 22;
 
 /**
  * Tablas que tienen que existir para dar la versión por puesta. Si
@@ -159,6 +166,14 @@ const ESQUEMA_CAMPOS = [
         // blanco, así que el resumen no sirve para saber si está
         // firmada: hace falta su propio sello.
         'acta_firmada' => 'VARCHAR(32) DEFAULT NULL',
+        // El nombre de cada asistente, junto a su identificador: un
+        // objeto JSON {identificador: nombre}. Un acta no puede perder a
+        // quien asistió porque meses después se le dé de baja (ver «El
+        // nombre de cada asistente» en index.php). Sin valor por
+        // defecto, como las demás columnas de texto largo: en las filas
+        // que ya había queda en NULL, que el código lee como «ningún
+        // nombre guardado», igual que la cadena vacía.
+        'asistentes_nombres' => 'MEDIUMTEXT',
     ],
 ];
 
@@ -343,7 +358,157 @@ function esquema_arreglar_datos(PDO $pdo): array
         }
     }
 
+    // El nombre de cada asistente, en las reuniones que ya había (ver
+    // la función): solo rellena lo que falta, así que repetirlo no
+    // cambia nada.
+    return array_merge($hechos, esquema_nombres_de_asistentes($pdo));
+}
+
+/**
+ * Pone, en las reuniones que ya había, el nombre de cada asistente que
+ * todavía no lo tenga guardado.
+ *
+ * EL CASO. Hasta la versión 22 una reunión guardaba a sus asistentes
+ * solo por identificador, y el nombre se buscaba en `usuarios` al
+ * pintar. Al dar de baja a alguien se borra su fila, y el acta de una
+ * reunión ya CERRADA le perdía. Desde la 22 el nombre se guarda al
+ * escribir los asistentes (index.php); aquí se les pone a las reuniones
+ * de antes, que ya no se van a volver a escribir: están selladas.
+ *
+ * DE DÓNDE SALE CADA NOMBRE. De `usuarios`, si esa persona sigue en
+ * ella. Y si ya no está, de lo que la obra dejó escrito con su
+ * identificador (esquema_nombre_de_quien_falta). Si tampoco, se queda
+ * sin nombre: la app le pinta como hasta ahora, y un nombre inventado
+ * en un acta sería peor que un hueco.
+ *
+ * Se puede pasar las veces que haga falta: a quien ya tiene nombre
+ * guardado no se le toca (tampoco para «ponerle al día» el de
+ * `usuarios`: eso lo hace index.php cuando se escribe la reunión), y
+ * una reunión a la que no le falta ninguno no se escribe. No toca ni la
+ * lista de asistentes ni `actualizado`: la reunión no ha cambiado.
+ */
+function esquema_nombres_de_asistentes(PDO $pdo): array
+{
+    if (!in_array('asistentes_nombres', esquema_columnas($pdo, 'reuniones'), true)) {
+        return [];   // sin la tabla (o sin la columna) no hay dónde guardar nada
+    }
+    // Primero se lee todo y se suelta la lectura; después se escribe
+    // (ver upsert() en index.php).
+    $reuniones = $pdo->query('SELECT id, asistentes, asistentes_nombres FROM reuniones')->fetchAll();
+    $usuarios = $pdo->query('SELECT id, nombre FROM usuarios')->fetchAll(PDO::FETCH_KEY_PAIR);
+
+    $guardar = $pdo->prepare('UPDATE reuniones SET asistentes_nombres = ? WHERE id = ?');
+    $rescatados = [];   // identificador → nombre ('' = no hay de dónde): se busca una vez
+    $cuantas = 0;
+    foreach ($reuniones as $r) {
+        // Lo que no sea una lista (un JSON roto, vacío o raro) se deja
+        // como está: aquí no se arregla la lista, solo se le ponen
+        // nombres a los identificadores que tenga.
+        $asistentes = json_decode((string) $r['asistentes'], true);
+        if (!is_array($asistentes)) {
+            continue;
+        }
+        $nombres = json_decode((string) ($r['asistentes_nombres'] ?? ''), true);
+        if (!is_array($nombres)) {
+            $nombres = [];
+        }
+        $faltaba = false;
+        foreach ($asistentes as $id) {
+            if (!is_string($id) || $id === '' || (is_string($nombres[$id] ?? null) && $nombres[$id] !== '')) {
+                continue;
+            }
+            if (isset($usuarios[$id])) {
+                $nombre = trim((string) $usuarios[$id]);
+            } else {
+                if (!isset($rescatados[$id])) {
+                    $rescatados[$id] = esquema_nombre_de_quien_falta($pdo, $id);
+                }
+                $nombre = $rescatados[$id];
+            }
+            if ($nombre !== '') {
+                $nombres[$id] = $nombre;
+                $faltaba = true;
+            }
+        }
+        if ($faltaba) {
+            $guardar->execute([json_encode($nombres, JSON_UNESCAPED_UNICODE), $r['id']]);
+            $cuantas++;
+        }
+    }
+
+    $hechos = [];
+    if ($cuantas > 0) {
+        $hechos[] = "reuniones: {$cuantas} con el nombre de sus asistentes";
+    }
+    $deLaObra = count(array_filter($rescatados, static fn ($n) => $n !== ''));
+    if ($deLaObra > 0) {
+        $hechos[] = "reuniones: {$deLaObra} nombres de quien ya no está, sacados de lo que dejó escrito";
+    }
     return $hechos;
+}
+
+/**
+ * El nombre de alguien que ya NO está en `usuarios`, sacado de lo que
+ * la obra dejó escrito con su identificador. Vacío si no hay de dónde.
+ *
+ * Solo vale lo que une un identificador con un nombre SIN lugar a
+ * dudas, y por este orden:
+ *   1. Las firmas que pone el propio servidor con la sesión de quien
+ *      escribe: quien empezó una reunión, apuntó una tarea de reunión,
+ *      grabó o subió un adjunto (`creado_por` y `creado_por_nombre`).
+ *      Son el nombre que esa cuenta tenía ese día.
+ *   2. El registro de voces: al apuntar la voz de alguien del equipo,
+ *      el servidor escribe el nombre que tiene en `usuarios`.
+ *   3. El responsable de una tarea de reunión: la app le elige de la
+ *      lista del equipo y manda juntos su identificador y su nombre.
+ * De cada fuente, lo más reciente; y manda la primera que tenga algo.
+ * (Las firmas de los repasos, las notas y los mensajes no se miran: su
+ * nombre lo escribe cada móvil, no el servidor.)
+ *
+ * Si una de esas tablas no se pudiera leer, esa fuente no cuenta y se
+ * sigue con las demás: quedarse sin el nombre de quien ya no está no
+ * puede dejar la base sin poner al día.
+ */
+function esquema_nombre_de_quien_falta(PDO $pdo, string $id): string
+{
+    $fuentes = [
+        // [tabla, columna del identificador, columna del nombre, columna de la fecha]
+        [
+            ['reuniones', 'creado_por', 'creado_por_nombre', 'creado'],
+            ['encargos', 'creado_por', 'creado_por_nombre', 'creado'],
+            ['grabaciones', 'creado_por', 'creado_por_nombre', 'creado'],
+            ['adjuntos', 'creado_por', 'creado_por_nombre', 'creado'],
+        ],
+        [['voces', 'persona_id', 'persona_nombre', 'actualizado']],
+        [['encargos', 'responsable_id', 'responsable_nombre', 'actualizado']],
+    ];
+    foreach ($fuentes as $tablas) {
+        $nombre = '';
+        $cuando = '';
+        foreach ($tablas as [$tabla, $quien, $como, $fecha]) {
+            try {
+                $sent = $pdo->prepare(
+                    "SELECT {$como} AS nombre, {$fecha} AS cuando FROM {$tabla}
+                      WHERE {$quien} = ? AND {$como} <> '' ORDER BY {$fecha} DESC LIMIT 1"
+                );
+                $sent->execute([$id]);
+                $fila = $sent->fetch();
+                $sent->closeCursor();
+            } catch (Throwable $e) {
+                error_log("UNIK Works · nombres de asistentes: no se puede leer {$tabla} ({$e->getMessage()}).");
+                continue;
+            }
+            $suyo = $fila ? trim((string) $fila['nombre']) : '';
+            if ($suyo !== '' && ($nombre === '' || (string) $fila['cuando'] > $cuando)) {
+                $nombre = $suyo;
+                $cuando = (string) $fila['cuando'];
+            }
+        }
+        if ($nombre !== '') {
+            return $nombre;
+        }
+    }
+    return '';
 }
 
 /**

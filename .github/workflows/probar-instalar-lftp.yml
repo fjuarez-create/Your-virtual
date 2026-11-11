@@ -1,0 +1,344 @@
+name: Probar que lftp se instala sin los servidores de Ubuntu
+
+# Un robot de PRUEBA. No publica nada, no usa ningún secreto y no toca el
+# servidor de la app: solo comprueba, en máquinas de GitHub de verdad,
+# la acción con la que el despliegue, el taller y la copia nocturna
+# instalan lftp (.github/actions/instalar-lftp).
+#
+# POR QUÉ. El 11-11-2026 los servidores de paquetes de Ubuntu estuvieron
+# unos cuarenta minutos caídos vistos desde GitHub y tres despliegues
+# seguidos murieron en «Instalar lftp». La acción guarda los paquetes de
+# lftp en la caché de GitHub para instalarlos sin red la vez siguiente.
+# Eso solo se puede ver funcionar aquí, en GitHub: en ningún otro sitio
+# hay caché de Actions.
+#
+# QUÉ DEMUESTRA, cada cosa en su máquina recién estrenada:
+#
+#   1 · Sin caché: instala con apt, como siempre, y guarda.
+#   2 · Con caché: instala SIN llamar a apt-get ni una vez.
+#   3 · Con apt-get ROTO a propósito y caché: instala igual.
+#   4 · Control: con apt-get roto y sin caché, falla como fallaba (si
+#       esto no fallara, la 3 no probaría nada).
+#   5 · Con los servidores de Ubuntu cortados y sin caché: los paquetes
+#       salen de otro espejo. Es la puerta de más; si esta no va, las
+#       otras cuatro siguen valiendo lo mismo.
+#
+# CÓMO SE LEE. En el resumen de la ejecución hay un veredicto por
+# situación —BIEN, MAL o NO CONCLUYENTE— y debajo una frase que dice si
+# la caché sirve. Los pasos «Lo que se prueba» pueden salir con un aviso
+# naranja: en la situación 4 el fallo es justo lo que se espera.
+#
+# NUNCA ACABA EN ROJO por lo que está probando: a Fran le llega un correo
+# por cada ejecución fallida, y esta existe para mirar un fallo, no para
+# dar otro. (Si saliera en rojo es que GitHub no ha podido ni bajar el
+# repositorio.)
+#
+# Solo se lanza a mano (Actions → este robot → «Run workflow»), en la
+# rama que se quiera probar. Usa una caché propia, con el número de la
+# ejecución en la clave: ni lee ni pisa la de los robots de verdad, y
+# GitHub la borra sola a los siete días.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: probar-instalar-lftp
+  cancel-in-progress: false
+
+env:
+  # Lo que aparta la caché de esta ejecución de todas las demás.
+  CLAVE_DE_LA_PRUEBA: prueba-${{ github.run_id }}-${{ github.run_attempt }}
+
+jobs:
+  sin-cache:
+    name: 1 · Sin caché (apt, y guarda)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      veredicto: ${{ steps.veredicto.outputs.veredicto }}
+      frase: ${{ steps.veredicto.outputs.frase }}
+    steps:
+      - name: Bajar del repositorio la acción que se prueba
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/actions
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Preparar la máquina (apt-get con chivato)
+        continue-on-error: true
+        run: bash .github/actions/instalar-lftp/prueba.sh preparar chivato
+
+      - name: Lo que se prueba · instalar lftp sin nada guardado
+        id: instalar
+        continue-on-error: true
+        timeout-minutes: 8
+        uses: ./.github/actions/instalar-lftp
+        with:
+          clave-extra: ${{ env.CLAVE_DE_LA_PRUEBA }}
+
+      - name: Veredicto
+        id: veredicto
+        if: always()
+        continue-on-error: true
+        env:
+          RESULTADO: ${{ steps.instalar.outcome }}
+          CON: ${{ steps.instalar.outputs.instalado-con }}
+          RECUPERADO: ${{ steps.instalar.outputs.recuperado }}
+          RECOGIDO: ${{ steps.instalar.outputs.recogido }}
+          GUARDADO: ${{ steps.instalar.outputs.guardado }}
+        run: bash .github/actions/instalar-lftp/prueba.sh veredicto 1
+
+  con-cache:
+    name: 2 · Con caché (sin red)
+    needs: sin-cache
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      veredicto: ${{ steps.veredicto.outputs.veredicto }}
+      frase: ${{ steps.veredicto.outputs.frase }}
+    steps:
+      - name: Bajar del repositorio la acción que se prueba
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/actions
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Preparar la máquina (apt-get con chivato)
+        continue-on-error: true
+        run: bash .github/actions/instalar-lftp/prueba.sh preparar chivato
+
+      - name: Lo que se prueba · instalar lftp de lo guardado
+        id: instalar
+        continue-on-error: true
+        timeout-minutes: 8
+        uses: ./.github/actions/instalar-lftp
+        with:
+          clave-extra: ${{ env.CLAVE_DE_LA_PRUEBA }}
+
+      - name: Veredicto
+        id: veredicto
+        if: always()
+        continue-on-error: true
+        env:
+          RESULTADO: ${{ steps.instalar.outcome }}
+          CON: ${{ steps.instalar.outputs.instalado-con }}
+          RECUPERADO: ${{ steps.instalar.outputs.recuperado }}
+          RECOGIDO: ${{ steps.instalar.outputs.recogido }}
+          GUARDADO: ${{ steps.instalar.outputs.guardado }}
+        run: bash .github/actions/instalar-lftp/prueba.sh veredicto 2
+
+  apt-roto:
+    name: 3 · apt roto y caché (instala igual)
+    needs: sin-cache
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      veredicto: ${{ steps.veredicto.outputs.veredicto }}
+      frase: ${{ steps.veredicto.outputs.frase }}
+    steps:
+      - name: Bajar del repositorio la acción que se prueba
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/actions
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Preparar la máquina (apt-get ROTO a propósito)
+        continue-on-error: true
+        run: bash .github/actions/instalar-lftp/prueba.sh preparar pega
+
+      - name: Lo que se prueba · instalar lftp con apt-get roto
+        id: instalar
+        continue-on-error: true
+        timeout-minutes: 8
+        uses: ./.github/actions/instalar-lftp
+        with:
+          clave-extra: ${{ env.CLAVE_DE_LA_PRUEBA }}
+
+      - name: Veredicto
+        id: veredicto
+        if: always()
+        continue-on-error: true
+        env:
+          RESULTADO: ${{ steps.instalar.outcome }}
+          CON: ${{ steps.instalar.outputs.instalado-con }}
+          RECUPERADO: ${{ steps.instalar.outputs.recuperado }}
+          RECOGIDO: ${{ steps.instalar.outputs.recogido }}
+          GUARDADO: ${{ steps.instalar.outputs.guardado }}
+        run: bash .github/actions/instalar-lftp/prueba.sh veredicto 3
+
+  control:
+    name: 4 · Control (apt roto y sin caché, falla)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      veredicto: ${{ steps.veredicto.outputs.veredicto }}
+      frase: ${{ steps.veredicto.outputs.frase }}
+    steps:
+      - name: Bajar del repositorio la acción que se prueba
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/actions
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Preparar la máquina (apt-get ROTO a propósito)
+        continue-on-error: true
+        run: bash .github/actions/instalar-lftp/prueba.sh preparar pega
+
+      # Con otra clave (no hay caché que recuperar) y sin espejos: aquí
+      # el fallo es lo que se espera, por eso el paso sale con aviso.
+      - name: Lo que se prueba · sin caché y con apt-get roto TIENE que fallar
+        id: instalar
+        continue-on-error: true
+        timeout-minutes: 8
+        uses: ./.github/actions/instalar-lftp
+        with:
+          clave-extra: ${{ env.CLAVE_DE_LA_PRUEBA }}-control
+          espejos: ''
+
+      - name: Veredicto
+        id: veredicto
+        if: always()
+        continue-on-error: true
+        env:
+          RESULTADO: ${{ steps.instalar.outcome }}
+          CON: ${{ steps.instalar.outputs.instalado-con }}
+          RECUPERADO: ${{ steps.instalar.outputs.recuperado }}
+          RECOGIDO: ${{ steps.instalar.outputs.recogido }}
+          GUARDADO: ${{ steps.instalar.outputs.guardado }}
+        run: bash .github/actions/instalar-lftp/prueba.sh veredicto 4
+
+  espejo:
+    name: 5 · Ubuntu cortado y sin caché (otro espejo)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      veredicto: ${{ steps.veredicto.outputs.veredicto }}
+      frase: ${{ steps.veredicto.outputs.frase }}
+    steps:
+      - name: Bajar del repositorio la acción que se prueba
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/actions
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      # Antes de cortar nada: a cada espejo de los que la acción trae
+      # puestos se le pide el paquete de lftp, para saber cuáles
+      # contestan desde las máquinas de GitHub. Solo informa.
+      - name: Preguntar a cada espejo si tiene el paquete de lftp
+        continue-on-error: true
+        run: |
+          set -u
+          camino="$(apt-cache show lftp 2> /dev/null | awk '/^Filename:/ { print $2; exit }')"
+          espejos="$(awk '/^  espejos:/ { dentro = 1; next } dentro && /^    default:/ { leer = 1; next } leer && /^      / { print $1; next } leer { exit }' .github/actions/instalar-lftp/action.yml)"
+          {
+            echo "### Los espejos, vistos desde esta máquina de GitHub"
+            echo ""
+            if [ -z "$camino" ]; then
+              echo "La lista de paquetes de la imagen no dice dónde está lftp: no se puede preguntar."
+            fi
+            for espejo in $espejos; do
+              [ -n "$camino" ] || break
+              codigo="$(curl -s -L -o /dev/null -w '%{http_code}' --connect-timeout 8 --max-time 30 "$espejo/$camino" || true)"
+              echo "- \`$espejo\`: contesta ${codigo:-nada}"
+            done
+            echo ""
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          exit 0
+
+      - name: Preparar la máquina (servidores de Ubuntu cortados)
+        continue-on-error: true
+        run: bash .github/actions/instalar-lftp/prueba.sh preparar cortado
+
+      - name: Lo que se prueba · instalar lftp con Ubuntu cortado y sin nada guardado
+        id: instalar
+        continue-on-error: true
+        timeout-minutes: 8
+        uses: ./.github/actions/instalar-lftp
+        with:
+          clave-extra: ${{ env.CLAVE_DE_LA_PRUEBA }}-espejo
+          # Solo los espejos que NO son de Ubuntu: los otros dos de la
+          # lista de la acción están cortados en esta máquina.
+          espejos: https://mirrors.kernel.org/ubuntu https://mirrors.mit.edu/ubuntu
+
+      - name: Veredicto
+        id: veredicto
+        if: always()
+        continue-on-error: true
+        env:
+          RESULTADO: ${{ steps.instalar.outcome }}
+          CON: ${{ steps.instalar.outputs.instalado-con }}
+          RECUPERADO: ${{ steps.instalar.outputs.recuperado }}
+          RECOGIDO: ${{ steps.instalar.outputs.recogido }}
+          GUARDADO: ${{ steps.instalar.outputs.guardado }}
+        run: bash .github/actions/instalar-lftp/prueba.sh veredicto 5
+
+  resumen:
+    name: El veredicto, todo junto
+    needs: [sin-cache, con-cache, apt-roto, control, espejo]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Decir si la caché sirve
+        continue-on-error: true
+        env:
+          V1: ${{ needs.sin-cache.outputs.veredicto }}
+          F1: ${{ needs.sin-cache.outputs.frase }}
+          R1: ${{ needs.sin-cache.result }}
+          V2: ${{ needs.con-cache.outputs.veredicto }}
+          F2: ${{ needs.con-cache.outputs.frase }}
+          R2: ${{ needs.con-cache.result }}
+          V3: ${{ needs.apt-roto.outputs.veredicto }}
+          F3: ${{ needs.apt-roto.outputs.frase }}
+          R3: ${{ needs.apt-roto.result }}
+          V4: ${{ needs.control.outputs.veredicto }}
+          F4: ${{ needs.control.outputs.frase }}
+          R4: ${{ needs.control.result }}
+          V5: ${{ needs.espejo.outputs.veredicto }}
+          F5: ${{ needs.espejo.outputs.frase }}
+          R5: ${{ needs.espejo.result }}
+        run: |
+          set -u
+          fila() {   # fila TÍTULO VEREDICTO FRASE CÓMO_ACABÓ_EL_TRABAJO
+            local veredicto="$2" frase="$3"
+            if [ -z "$veredicto" ]; then
+              veredicto="SIN VEREDICTO"
+              frase="El trabajo acabó en «$4» sin llegar a decir nada."
+            fi
+            echo "| $1 | **$veredicto** | $frase |"
+          }
+          {
+            echo "## lftp sin los servidores de Ubuntu: lo que ha salido"
+            echo ""
+            echo "| Situación | Veredicto | Lo que ha pasado |"
+            echo "|---|---|---|"
+            fila "1 · Sin caché: apt, y guarda" "${V1:-}" "${F1:-}" "${R1:-}"
+            fila "2 · Con caché: sin red" "${V2:-}" "${F2:-}" "${R2:-}"
+            fila "3 · apt roto y caché: instala igual" "${V3:-}" "${F3:-}" "${R3:-}"
+            fila "4 · Control: apt roto y sin caché, falla" "${V4:-}" "${F4:-}" "${R4:-}"
+            fila "5 · Ubuntu cortado y sin caché: otro espejo" "${V5:-}" "${F5:-}" "${R5:-}"
+            echo ""
+            if [ "${V1:-}" = BIEN ] && [ "${V2:-}" = BIEN ] && [ "${V3:-}" = BIEN ] && [ "${V4:-}" = BIEN ]; then
+              echo "**LA CACHÉ SIRVE:** con lo guardado, lftp se instala sin red y con apt roto, y el control confirma que la prueba prueba algo."
+            else
+              echo "**OJO: la caché NO ha quedado demostrada** (alguna de las situaciones 1 a 4 no ha salido BIEN). Mientras tanto la acción hace lo de siempre: instalar con apt."
+            fi
+            if [ "${V5:-}" = BIEN ]; then
+              echo ""
+              echo "Y la puerta de más también va: sin caché y con Ubuntu cortado, los paquetes salen de otro espejo."
+            else
+              echo ""
+              echo "La puerta de más (otro espejo, situación 5) NO ha quedado demostrada: sin caché y con Ubuntu caído, un despliegue seguiría fallando como el 11-11-2026."
+            fi
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          exit 0

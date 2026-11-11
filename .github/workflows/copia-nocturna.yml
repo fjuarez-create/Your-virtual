@@ -98,31 +98,27 @@ jobs:
           fi
           echo "Los cuatro secretos están puestos."
 
-      # Mismo cuidado que en el despliegue: lftp casi siempre viene ya en
-      # la imagen, y cuando no, el «apt-get update» es lo que se cuelga.
+      # La acción que instala lftp vive en el repositorio, y GitHub solo
+      # la encuentra si antes se ha bajado. De todo el repositorio (184
+      # MB, con el showroom dentro) la copia no necesita más que esa
+      # carpeta: se baja solo ella. Y sin dejar la credencial de GitHub
+      # en la máquina, que aquí no hace falta para nada más.
+      - name: Bajar del repositorio la acción que instala lftp
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/actions
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      # Con la acción de la casa, la misma que usan el despliegue y el
+      # taller: la primera vez instala lftp con apt, como siempre, y
+      # guarda los paquetes en la caché de GitHub; las siguientes, de lo
+      # guardado y sin red. El 11-11-2026 los servidores de paquetes de
+      # Ubuntu estuvieron cuarenta minutos caídos vistos desde GitHub:
+      # si llega a coincidir con las 03:14, esa noche no hay copia.
       - name: Instalar lftp
         timeout-minutes: 6
-        run: |
-          set -eu
-          if command -v lftp > /dev/null; then
-            echo "lftp ya está en la imagen: $(lftp --version | head -1)"
-            exit 0
-          fi
-          if timeout 120 sudo apt-get install -y -qq lftp; then
-            echo "lftp instalado con la lista que ya traía la imagen."
-            exit 0
-          fi
-          for intento in 1 2 3; do
-            echo "Instalando lftp (intento $intento de 3)…"
-            if timeout 120 sudo apt-get update -qq \
-               && timeout 120 sudo apt-get install -y -qq lftp; then
-              echo "lftp instalado."
-              exit 0
-            fi
-            sleep $((intento * 10))
-          done
-          echo "No se ha podido instalar lftp tras tres intentos." >&2
-          exit 1
+        uses: ./.github/actions/instalar-lftp
 
       # Las mismas mañas que .github/scripts/ftp-deploy.sh: probar FTPS y
       # caer a FTP plano si el servidor no lo admite, y dar con la

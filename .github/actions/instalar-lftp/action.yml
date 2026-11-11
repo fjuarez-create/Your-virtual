@@ -1,0 +1,121 @@
+name: Instalar lftp
+description: >-
+  Instala lftp, la herramienta con la que se sube todo por FTP, sin
+  depender de que respondan los servidores de paquetes de Ubuntu: si ya
+  se instaló otra vez, de los paquetes guardados en la caché de GitHub
+  Actions y sin tocar la red.
+
+# POR QUÉ EXISTE. El 11-11-2026 tres despliegues seguidos murieron en el
+# paso «Instalar lftp» («Temporary failure resolving
+# 'security.ubuntu.com'»): los servidores de paquetes de Ubuntu
+# estuvieron unos cuarenta minutos caídos vistos desde GitHub. Durante
+# ese rato no se habría podido publicar un arreglo urgente, y a Fran le
+# llegaron tres correos de «Run failed».
+#
+# El despliegue, la publicación del taller y la copia nocturna
+# instalaban lftp cada uno con su copia del mismo paso. Ahora lo hacen
+# los tres con esta acción, escrita una vez. Todo el porqué de cada
+# decisión está en la cabecera de lftp.sh, que es quien hace el trabajo.
+#
+# CÓMO SE USA. Es una acción LOCAL: el robot tiene que haber hecho antes
+# su «actions/checkout», o GitHub no la encuentra.
+#
+#       - name: Instalar lftp
+#         timeout-minutes: 6
+#         uses: ./.github/actions/instalar-lftp
+#
+# LO QUE HAY QUE SABER DE LA CACHÉ:
+#   · Va por rama: el despliegue llena la de su rama y el taller la de
+#     la suya. La primera vez de cada una se instala con apt, como
+#     siempre, y se guarda.
+#   · Caduca a los siete días sin usarse, y GitHub la puede tirar antes.
+#     Sin caché todo funciona como funcionaba: apt con sus reintentos.
+#   · Una caché no se puede reescribir. Por eso cada vez que se guarda
+#     es con una clave nueva (lleva la fecha y un número al azar) y se
+#     recupera «la más reciente que empiece por…»: si lo guardado saliera
+#     malo, la siguiente instalación con apt lo sustituye sola.
+#   · Los pasos de caché llevan continue-on-error: que GitHub no pueda
+#     leer o guardar la caché nunca tumba un despliegue.
+#   · Dentro solo hay paquetes públicos de Ubuntu. Ningún secreto.
+
+inputs:
+  clave-extra:
+    description: >-
+      Texto que aparta esta caché de la de los demás. Solo lo usa el
+      robot de prueba, para no leer ni pisar la caché de los de verdad.
+    required: false
+    default: ''
+  espejos:
+    description: >-
+      Otros espejos de Ubuntu de los que bajar los paquetes cuando apt
+      no puede, separados por espacios. Lo bajado solo se instala si su
+      huella es la de la lista firmada que la máquina ya trae. Vacío:
+      no se prueba ningún espejo.
+    required: false
+    default: >-
+      https://mirrors.kernel.org/ubuntu
+      https://mirrors.mit.edu/ubuntu
+      http://azure.archive.ubuntu.com/ubuntu
+      http://archive.ubuntu.com/ubuntu
+
+outputs:
+  instalado-con:
+    description: 'De dónde ha salido lftp: imagen, guardado (sin red), apt o espejo.'
+    value: ${{ steps.instalar.outputs.instalado-con || steps.mirar.outputs.instalado-con }}
+  recuperado:
+    description: 'La clave de la caché que se ha recuperado; vacío si no había ninguna.'
+    value: ${{ steps.recuperar.outputs.cache-matched-key }}
+  recogido:
+    description: '«si» cuando se han podido recoger los paquetes de lo instalado, para guardarlos.'
+    value: ${{ steps.instalar.outputs.guardar }}
+  guardado:
+    description: '«si» cuando esta ejecución ha dejado esos paquetes en la caché para la próxima.'
+    value: ${{ steps.guardar.outcome == 'success' && 'si' || 'no' }}
+
+runs:
+  using: composite
+  steps:
+    - name: Mirar si lftp ya viene en la máquina
+      id: mirar
+      shell: bash
+      env:
+        LFTP_CLAVE_EXTRA: ${{ inputs.clave-extra }}
+      run: bash "$GITHUB_ACTION_PATH/lftp.sh" mirar
+
+    # Trae lo guardado la última vez, si lo hay. La clave exacta no
+    # existe nunca (lleva la fecha de ESTA ejecución): lo que casa es
+    # el prefijo, y GitHub da la más reciente. El tope de un minuto es
+    # para que una descarga colgada (son menos de 2 MB) no se coma los
+    # seis minutos del paso.
+    - name: Recuperar los paquetes guardados
+      id: recuperar
+      if: steps.mirar.outputs.hace-falta == 'si'
+      continue-on-error: true
+      uses: actions/cache/restore@v4
+      env:
+        SEGMENT_DOWNLOAD_TIMEOUT_MINS: '1'
+      with:
+        path: ${{ runner.temp }}/lftp-guardado
+        key: ${{ steps.mirar.outputs.clave-nueva }}
+        restore-keys: |
+          ${{ steps.mirar.outputs.clave }}-
+
+    - name: Instalar (de lo guardado o, si no, con apt)
+      id: instalar
+      if: steps.mirar.outputs.hace-falta == 'si'
+      shell: bash
+      env:
+        LFTP_GUARDADO: ${{ runner.temp }}/lftp-guardado
+        LFTP_ESPEJOS: ${{ inputs.espejos }}
+      run: bash "$GITHUB_ACTION_PATH/lftp.sh" instalar
+
+    # Solo cuando ha hecho falta la red y se han podido recoger los
+    # paquetes. Si lftp salió de lo guardado, no se guarda nada nuevo.
+    - name: Guardar los paquetes para la próxima vez
+      id: guardar
+      if: steps.instalar.outputs.guardar == 'si'
+      continue-on-error: true
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ runner.temp }}/lftp-guardado
+        key: ${{ steps.mirar.outputs.clave-nueva }}

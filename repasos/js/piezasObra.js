@@ -19,6 +19,26 @@ import { fechaDeActa, diaDeLaSemana } from './views/historial.js';
 import { ir } from './app.js';
 
 /**
+ * La ficha de un asistente de esa reunión, para pintarle: la del
+ * directorio si sigue en él y, si no, el nombre que la reunión le
+ * guardó cuando se sentó (`asistentesNombres`, identificador → nombre).
+ *
+ * El caso: el administrador da de baja a alguien que asistió a una
+ * reunión ya cerrada. El directorio deja de conocerle, y con solo su
+ * identificador el acta le perdía: su bolita pasaba de sus iniciales a
+ * «?» y la tarjeta del archivo se quedaba sin su nombre (noviembre de
+ * 2026). Un acta es un documento: conserva a quien asistió.
+ *
+ * Con todos en el directorio no cambia nada: el nombre guardado solo se
+ * mira cuando el identificador no aparece, que es como store.persona()
+ * trata ya la firma de un repaso o de un mensaje. Y un servidor que
+ * todavía no manda los nombres deja esto como estaba.
+ */
+export function asistenteDe(r, id) {
+  return store.persona(id, r.asistentesNombres?.[id]);
+}
+
+/**
  * La tarjeta VIVA de una reunión, con la misma piel que las tarjetas
  * de vivienda: el cuándo arriba (sin icono: lo quitó Fran el día del
  * estreno), las caras de la mesa, los dos chips con las cuentas de sus
@@ -34,7 +54,7 @@ export function tarjetaReunionViva(r, hoy) {
   // sale la bolita «+n», que esta piel no lleva y que en un móvil
   // estrecho choca con el cuándo.
   const gente = [
-    ...(r.asistentes || []).map((id) => store.persona(id)),
+    ...(r.asistentes || []).map((id) => asistenteDe(r, id)),
     ...(r.invitados || []).map((nombre) => ({ nombre })),
   ].slice(0, 3);
   const hechas = r.encargos - r.pendientes;
@@ -85,7 +105,7 @@ export function tarjetaReunionViva(r, hoy) {
 /** «Fran, Alba y Paco (invitado)» — la línea de gente de una reunión. */
 export function lineaDeGente(r) {
   const nombres = (r.asistentes || [])
-    .map((id) => String(store.persona(id).nombre || '').trim().split(/\s+/)[0])
+    .map((id) => String(asistenteDe(r, id).nombre || '').trim().split(/\s+/)[0])
     .filter(Boolean);
   for (const inv of r.invitados || []) {
     nombres.push(`${String(inv).split(/\s+/)[0]} (invitado)`);

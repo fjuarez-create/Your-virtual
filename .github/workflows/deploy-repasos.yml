@@ -229,44 +229,24 @@ jobs:
           fi
           echo "Sin credenciales ni páginas de instalación en la carpeta de publicación."
 
-      # lftp suele venir ya en la imagen del runner. Cuando no viene, el
-      # «apt-get update» es lo que se cuelga: los espejos de paquetes de
-      # GitHub fallan cada cierto tiempo y el paso se queda colgado hasta
-      # agotar los veinte minutos del job, con el despliegue a medias.
+      # lftp es con lo que se sube todo, y la imagen del runner no lo
+      # trae: había que bajarlo de los servidores de paquetes de Ubuntu
+      # en cada despliegue. El 11-11-2026 esos servidores estuvieron
+      # unos cuarenta minutos caídos vistos desde GitHub («Temporary
+      # failure resolving 'security.ubuntu.com'») y tres despliegues
+      # seguidos murieron aquí, agotando los seis minutos del paso. No
+      # se subió nada, pero en ese rato no se habría podido publicar un
+      # arreglo urgente.
       #
-      # Así que primero se mira si ya está —el caso normal, y cero red—,
-      # y si hay que instalarlo se hace con un tope de tiempo y tres
-      # intentos, para que un espejo malo cueste un minuto y no el
-      # despliegue entero.
+      # Ahora lo instala una acción de la casa, la misma para el
+      # despliegue, el taller y la copia nocturna: la primera vez, con
+      # apt como siempre, y guarda los paquetes en la caché de GitHub;
+      # las siguientes, de lo guardado y sin tocar la red. Sin caché (va
+      # por rama, caduca a los siete días sin uso) hace lo de siempre.
+      # El detalle, en .github/actions/instalar-lftp/.
       - name: Instalar lftp
         timeout-minutes: 6
-        run: |
-          set -eu
-          if command -v lftp > /dev/null; then
-            echo "lftp ya está en la imagen: $(lftp --version | head -1)"
-            exit 0
-          fi
-          # Primero, instalar SIN actualizar la lista de paquetes: la
-          # imagen del runner ya la trae y lo que se cuelga es el
-          # «update», no el «install». Esto salvó el despliegue del día
-          # que los espejos estuvieron caídos cuatro minutos y medio.
-          if timeout 120 sudo apt-get install -y -qq lftp; then
-            echo "lftp instalado con la lista que ya traía la imagen."
-            exit 0
-          fi
-          echo "No estaba en la lista de la imagen; toca actualizarla." >&2
-          for intento in 1 2 3; do
-            echo "Instalando lftp (intento $intento de 3)…"
-            if timeout 120 sudo apt-get update -qq \
-               && timeout 120 sudo apt-get install -y -qq lftp; then
-              echo "lftp instalado."
-              exit 0
-            fi
-            echo "Ha fallado o se ha colgado; se reintenta." >&2
-            sleep $((intento * 10))
-          done
-          echo "No se ha podido instalar lftp tras tres intentos." >&2
-          exit 1
+        uses: ./.github/actions/instalar-lftp
 
       # Antes de escribir nada: comprobar que la carpeta a la que apuntan
       # los secretos es la de repasos. Es la red que evita el peor
@@ -360,6 +340,32 @@ jobs:
           fi
           echo "::error::El servidor sigue sirviendo una portada sin el sello ${BUILD}. Puede ser una caché del hosting."
           exit 1
+
+      # Lo que NO puede cambiar nunca: la cookie de la sesión de la app
+      # de verdad, «repasos_sesion» con camino «/». El equipo lleva
+      # meses con la sesión abierta en el móvil; con otro nombre u otro
+      # camino se quedarían todos fuera a la vez, y hay quien no
+      # recuerda su contraseña. Desde que el taller lleva su propia
+      # cookie (noviembre de 2026), cuál pone cada uno lo decide una
+      # línea de api/lib/auth.php que mira desde qué carpeta se sirve.
+      # Si un día se tuerce no da ningún error, así que aquí se entra
+      # con la cuenta de revisión en lo recién publicado y se mira. Del
+      # valor de la cookie no se escribe nada.
+      #
+      # Va antes que la comprobación del revisor porque es la más grave
+      # de las dos. Si no se puede preguntar (sin red, sin los secretos
+      # de la cuenta), avisa y sigue: el rojo es solo para una cookie
+      # que se ha visto y no es la de siempre.
+      - name: Comprobar que la cookie de la sesión es la de siempre
+        timeout-minutes: 3
+        uses: ./.github/actions/comprobar-sesion
+        with:
+          api: https://repasos.unikdi.com/api/
+          nombre: repasos_sesion
+          camino: /
+          de-quien: la app de verdad
+          email: ${{ secrets.REVISION_EMAIL }}
+          password: ${{ secrets.REVISION_PASSWORD }}
 
       # La comprobación que decide si Apple aprueba o rechaza: que el
       # revisor pueda ENTRAR. Que el fichero de la cuenta esté subido no

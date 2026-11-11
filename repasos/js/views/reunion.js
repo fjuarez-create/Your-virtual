@@ -22,6 +22,7 @@ import { grabarAudio, elegirAdjuntos } from '../media.js';
 import { fechaDeActa, diaDeLaSemana } from './historial.js';
 import {
   filaEncargo, tacharEncargo, hojaEncargo, hojaDatosDeTarea, avisarDeError, subDeEncargo, pedirNombre,
+  asistenteDe,
 } from '../piezasObra.js';
 import { empezarGrabadora, hayGrabacionEnMarcha } from '../grabadora.js';
 import { ir, refrescar } from '../app.js';
@@ -175,7 +176,9 @@ export async function render({ reunionId }) {
     /* ─── La mesa ─── */
     h('p.d-epigrafe', null, 'Asistentes'),
     h('div.d-mesa', null,
-      (r.asistentes || []).map((id) => avatar(store.persona(id), { tam: 48 })),
+      // Quien ya no está en el directorio sale con el nombre que la
+      // reunión le guardó, no como una bolita «?» (ver asistenteDe).
+      (r.asistentes || []).map((id) => avatar(asistenteDe(r, id), { tam: 48 })),
       (r.invitados || []).map((n) => h('span.d-invitado', null, `${n} (invitado)`)),
       edita
         ? h('button.d-mesa-mas', {
@@ -764,13 +767,15 @@ function bloqueQuienEsQuien(g, { reunion, voces, hayServicioVoces, escuchar = tr
           ...(reunion.asistentes || []).map((id) => {
             const p = store.persona(id);
             // A quien se sentó y luego se dio de baja no se le puede
-            // poner una voz: de él solo queda el identificador. Salía
-            // como una cara «?» de nombre «Alguien», y tocarla dejaba
-            // la voz a nombre de nadie —le borraba el que tuviera
-            // puesto—, apuntaba en el registro una voz sin dueño y
-            // ofrecía un «Aprender la voz de» sin nombre (noviembre de
-            // 2026). Su nombre, si hace falta, se escribe a mano en
-            // «Otra persona…».
+            // poner una voz: en el directorio de él no queda nada.
+            // Salía como una cara «?» de nombre «Alguien», y tocarla
+            // dejaba la voz a nombre de nadie —le borraba el que
+            // tuviera puesto—, apuntaba en el registro una voz sin
+            // dueño y ofrecía un «Aprender la voz de» sin nombre
+            // (noviembre de 2026). Aquí no se usa el nombre que la
+            // reunión le guarda: la cara apunta la voz a una CUENTA, y
+            // la suya ya no existe. Su nombre, si hace falta, se
+            // escribe a mano en «Otra persona…».
             if (!p.nombre) return null;
             return cara(p, p.nombre.split(/\s+/)[0], () => {
               cerrar(true);
@@ -999,13 +1004,13 @@ function hojaMesa(r) {
 
     /* Quien está sentado y ya no está en el equipo también tiene fila.
 
-       El caso: el administrador da de baja a alguien que asistió. La
-       reunión guarda a sus asistentes solo por identificador, así que
-       esa persona sigue sentada —en la mesa sale como una bolita «?»—,
-       pero esta hoja pintaba solo el equipo de hoy: sin fila, no había
-       manera de levantarla (noviembre de 2026). Y lo mismo con quien
-       tiene el acceso desactivado: sigue en el directorio, con su
-       nombre, pero no en el equipo que se puede elegir.
+       El caso: el administrador da de baja a alguien que asistió. Esa
+       persona sigue sentada —la reunión la guarda con su identificador
+       y con su nombre—, pero esta hoja pintaba solo el equipo de hoy:
+       sin fila, no había manera de levantarla (noviembre de 2026). Y
+       lo mismo con quien tiene el acceso desactivado: sigue en el
+       directorio, con su nombre, pero no en el equipo que se puede
+       elegir.
 
        Van aparte, al final, y solo quien ESTÁ sentado: a quien ya no
        está se le puede levantar (y volver a sentar mientras la hoja
@@ -1013,20 +1018,40 @@ function hojaMesa(r) {
        Guardar sin tocarle le deja donde estaba: al servidor viajan
        solo las diferencias (ver abajo).
 
-       Y de nadie a quien este móvil no conozca se dice que ya no está
+       Cada uno lleva debajo lo que le pasa:
+         · «Inactivo», quien sigue en el directorio con el acceso
+           desactivado: la palabra que le pone la pantalla de Usuarios.
+           Se dice sin preguntar: lo dice el directorio de este móvil,
+           que puede ir un minuto atrasado, como en cualquier otra
+           pantalla.
+         · «Ya no está en el equipo», quien ya no está en el
+           directorio: sobre el rótulo, el nombre que la reunión le
+           guardó. Si de esa persona no hay nombre guardado (o el
+           servidor todavía no los manda), la fila sale como salía: la
+           bolita «?» y el rótulo en el sitio del nombre.
+
+       De nadie a quien este móvil no conozca se dice que ya no está
        sin preguntar antes. Que no le conozca puede ser una baja, o un
        alta de hace un minuto que aquí todavía no ha bajado: la reunión
        se lee en directo, y el directorio llega con la sincronización.
-       Por eso su fila nace sin nombre —la misma bolita «?» de la mesa—
-       y la hoja sincroniza: si era un alta, la fila se queda con su
-       nombre; si no, con el rótulo. La sincronización es la de
-       siempre, que primero sube lo pendiente y después baja: con fotos
-       en la cola el rótulo tarda lo que tarden en subir, y si no llega
-       a bajar —sin cobertura, o una subida que falla— la fila se queda
-       como está, que sin respuesta no se sabe. (De quien tiene el
-       acceso desactivado sí se dice sin preguntar: lo dice el
-       directorio de este móvil, que puede ir un minuto atrasado, como
-       en cualquier otra pantalla.)
+       Por eso su fila nace sin rótulo y la hoja sincroniza: si era un
+       alta, se queda como una más del equipo; si no, con el rótulo.
+
+       «Preguntar» es una sincronización que EMPIEZA con la hoja ya
+       abierta. store.sincronizar() no empieza otra si hay una en
+       marcha: devuelve esa, y su bajada pudo salir del servidor antes
+       del alta. Dándola por respuesta, la hoja llamaba «Ya no está en
+       el equipo» a alguien recién llegado (reproducido en el banco de
+       pruebas, noviembre de 2026). Así que a la que ya viniera de
+       camino se la deja acabar, sin hacerle caso, y se pregunta de
+       nuevo.
+
+       La sincronización es la de siempre, que primero sube lo
+       pendiente y después baja: con fotos en la cola el rótulo tarda
+       lo que tarden en subir (y, si había otra en marcha, lo que le
+       quedara a esa), y si no llega a bajar —sin cobertura, o una
+       subida que falla— la fila se queda sin rótulo, que sin respuesta
+       no se sabe.
 
        Con esa respuesta NO se rehace la lista: solo se rotula a los de
        aparte. La bajada puede traer más cambios del directorio —otra
@@ -1034,10 +1059,18 @@ function hojaMesa(r) {
        con la lista rehecha entera las filas del equipo cambiaban de
        sitio justo cuando el dedo iba hacia ellas: iba a levantar a uno
        y sentaba al de al lado. Esos otros cambios entran con el
-       siguiente toque, como siempre. A uno mismo, nunca se le aparta:
-       si no sale en el equipo es que el directorio todavía no ha
-       llegado. */
+       siguiente toque, como siempre. Tampoco cambia de alto ninguna
+       fila: la de quien trae nombre guardado nace ya con su renglón de
+       debajo, en blanco, y el rótulo lo ocupa cuando llega; y si
+       resulta ser un alta, conserva el renglón en blanco hasta el
+       siguiente toque, que la deja como las demás del equipo. A uno
+       mismo, nunca se le aparta: si no sale en el equipo es que el
+       directorio todavía no ha llegado. */
     const IDO = 'Ya no está en el equipo';
+    const INACTIVO = 'Inactivo';
+    const EN_BLANCO = '\u00a0';   // un espacio que no parte: ocupa el alto del rótulo
+    const debajo = (texto) => h('div.row-sub', null, texto);
+    const conRenglon = new Set();   // de los de aparte, quién tiene pintado su renglón de debajo
     const yo = store.sesion()?.id;
     const aparte = new Set();
     let delEquipo = [];   // las filas del equipo que hay pintadas
@@ -1064,10 +1097,25 @@ function hojaMesa(r) {
         ...delEquipo.map((p) => fila(p, p.id, p.nombre)),
         ...[...aparte].map((id) => {
           const p = store.persona(id);
-          // Era un alta que no había bajado: ya es una más del equipo.
-          if (enEquipo(id)) return fila(p, id, p.nombre);
-          // Con nombre y fuera del equipo: tiene el acceso desactivado.
-          if (p.nombre) return fila(p, id, p.nombre, h('div.row-sub', null, IDO));
+          const guardado = r.asistentesNombres?.[id] || '';
+          if (enEquipo(id)) {
+            // Era un alta que no había bajado: ya es una más del
+            // equipo. Con la respuesta conserva, en blanco, el renglón
+            // que tuviera; un toque la deja como las demás.
+            if (!quietas) conRenglon.delete(id);
+            return fila(p, id, p.nombre, conRenglon.has(id) ? debajo(EN_BLANCO) : null);
+          }
+          // En el directorio y fuera del equipo: tiene el acceso desactivado.
+          if (p.nombre) {
+            conRenglon.add(id);
+            return fila(p, id, p.nombre, debajo(INACTIVO));
+          }
+          // Este móvil no le conoce. Con el nombre que la reunión le
+          // guardó y, debajo, el rótulo cuando el servidor ha contestado.
+          if (guardado) {
+            conRenglon.add(id);
+            return fila(asistenteDe(r, id), id, guardado, debajo(preguntado ? IDO : EN_BLANCO));
+          }
           return fila(p, id, preguntado ? IDO : '');
         }),
       );
@@ -1083,7 +1131,14 @@ function hojaMesa(r) {
     };
     pintar();
     if (!preguntado) {
-      store.sincronizar().catch(() => {}).then(() => {
+      // La que ya viniera de camino se deja acabar y no cuenta; la
+      // pregunta es la que se lanza después. (Con «?.»: si este
+      // fichero llegara a un móvil antes que el store.js que trae la
+      // función —media aplicación de cada, en pleno despliegue—, se
+      // pregunta como antes en vez de romper la hoja.)
+      const laQueVenia = store.haySincronizacionEnCurso?.()
+        ? store.sincronizar().catch(() => {}) : Promise.resolve();
+      laQueVenia.then(() => store.sincronizar()).catch(() => {}).then(() => {
         preguntado = navigator.onLine && !store.estadoSync.error;
         pintar({ quietas: true });
       });

@@ -30,6 +30,7 @@ on:
       - 'repasos/**'
       - '.github/workflows/publicar-taller.yml'
       - '.github/scripts/sembrar-taller.php'
+      - '.github/scripts/comprobar-recepcion.mjs'
   workflow_dispatch:
     inputs:
       resembrar:
@@ -83,12 +84,46 @@ jobs:
       - name: Comprobar que el service worker guarda todo el código
         run: python3 ../.github/scripts/comprobar-armazon.py .
 
+      # La misma guardia que lleva el despliegue de la app de verdad
+      # (deploy-repasos.yml cuenta el porqué entero): toda escritura del
+      # servidor en una de las siete tablas que bajan a los móviles
+      # tiene que dejar la fila con recibido = '', o ese cambio no le
+      # baja nunca a quien ya pasó por esa fila, y sin dar ningún error.
+      # El taller también tiene móviles que sincronizan, y es donde lo
+      # nuevo se prueba PRIMERO: una escritura que se salte la recepción
+      # tiene que pararse aquí, antes de subir nada, y no llegar a
+      # probarse a medias. Su guion va en los «paths» de arriba para que
+      # arreglar solo la guardia vuelva a publicar el taller.
+      - name: Comprobar que ninguna escritura se salta la recepción
+        run: node ../.github/scripts/comprobar-recepcion.mjs .
+
       - name: Sellar la versión
         run: |
           set -eu
           BUILD="taller-${GITHUB_SHA::8}"
           sed -i "s/__BUILD__/${BUILD}/g" index.html sw.js
           echo "Versión: ${BUILD}"
+
+      # El «taller-» de delante del sello NO es un adorno: repasos/sw.js
+      # reparte las cachés del navegador por ese prefijo (las del taller
+      # son las «unik-repasos-taller-…»; todo lo demás es de la app de
+      # verdad, que vive en el mismo origen). Con otro sello, el taller
+      # dejaría de limpiar sus versiones viejas (2,3 MB cada una) y la
+      # app de verdad se las llevaría todas, también la vigente, en su
+      # siguiente despliegue. Se mira lo que ha quedado ESCRITO en los
+      # ficheros que se van a subir, no la variable del paso de arriba.
+      - name: Comprobar que el sello es el del taller
+        run: |
+          set -eu
+          if ! grep -q "^const VERSION = 'taller-[^']\+';" sw.js; then
+            echo "::error::El sello de sw.js no empieza por «taller-»: sw.js reparte las cachés del navegador por ese prefijo, y con otro el taller y la app de verdad se pisarían las suyas. No se sube nada."
+            exit 1
+          fi
+          if ! grep -q "build: 'taller-[^']\+'," index.html; then
+            echo "::error::El sello de index.html no empieza por «taller-»: no es el mismo que el de sw.js. No se sube nada."
+            exit 1
+          fi
+          echo "El sello empieza por «taller-»: las cachés del taller y las de la app de verdad no se mezclan."
 
       - name: Preparar la carpeta del taller
         run: |
@@ -165,22 +200,16 @@ jobs:
           fi
           echo "Sin credenciales en la carpeta del taller."
 
+      # Con la acción de la casa, la misma que usan el despliegue y la
+      # copia nocturna: la primera vez instala lftp con apt, como
+      # siempre, y guarda los paquetes en la caché de GitHub; las
+      # siguientes, de lo guardado y sin red. Es para que una caída de
+      # los servidores de paquetes de Ubuntu (el 11-11-2026, cuarenta
+      # minutos y tres despliegues muertos en este paso) no impida
+      # publicar. La caché va por rama: la del taller es la suya.
       - name: Instalar lftp
         timeout-minutes: 6
-        run: |
-          set -eu
-          if command -v lftp > /dev/null; then
-            echo "lftp ya está en la imagen: $(lftp --version | head -1)"
-            exit 0
-          fi
-          if timeout 120 sudo apt-get install -y -qq lftp; then exit 0; fi
-          for intento in 1 2 3; do
-            if timeout 120 sudo apt-get update -qq \
-               && timeout 120 sudo apt-get install -y -qq lftp; then exit 0; fi
-            sleep $((intento * 10))
-          done
-          echo "No se ha podido instalar lftp tras tres intentos." >&2
-          exit 1
+        uses: ./.github/actions/instalar-lftp
 
       # Las mismas mañas que el resto de robots FTP de la casa, en un
       # fichero compartido: varios pasos las necesitan, incluida la
@@ -407,6 +436,32 @@ jobs:
           echo "$RESPUESTA" | grep -q '"rol":"admin"' \
             || { echo "::error::La cuenta del taller no entra como administradora." >&2; exit 1; }
           echo "La cuenta del taller entra y es administradora."
+
+      # El taller vive en el mismo dominio que la app de verdad, y una
+      # cookie con camino «/» es de todo el dominio: mientras compartían
+      # la de la sesión, entrar en el taller sacaba de la app de verdad
+      # (y al revés). Desde noviembre de 2026 el taller lleva la SUYA
+      # (api/lib/auth.php): «repasos_sesion_taller» con camino
+      # «/taller/», que ni siquiera viaja a la app de verdad. Lo decide
+      # una línea de PHP que mira desde qué carpeta se sirve; si un día
+      # se tuerce, el taller volvería a pisar la sesión del equipo sin
+      # dar ningún error. Aquí se entra en el taller recién publicado,
+      # se mira qué cookie pone y se comprueba que con ella una petición
+      # con sesión contesta. Del valor de la cookie no se escribe nada.
+      #
+      # Si un día hubiera que publicar en el taller un código anterior a
+      # noviembre de 2026, este paso se quita en ese mismo commit: ese
+      # código pone la cookie de la app de verdad, y aquí saldría rojo.
+      - name: Comprobar que el taller lleva su propia cookie de sesión
+        timeout-minutes: 3
+        uses: ./.github/actions/comprobar-sesion
+        with:
+          api: https://repasos.unikdi.com/taller/api/
+          nombre: repasos_sesion_taller
+          camino: /taller/
+          de-quien: el taller
+          email: ${{ secrets.REVISION_EMAIL }}
+          password: ${{ secrets.REVISION_PASSWORD }}
 
       - name: Contarlo en el resumen
         run: |
