@@ -763,9 +763,18 @@ function bloqueQuienEsQuien(g, { reunion, voces, hayServicioVoces, escuchar = tr
         h('div.d-caras-voz', null,
           ...(reunion.asistentes || []).map((id) => {
             const p = store.persona(id);
-            return cara(p, (p.nombre || 'Alguien').split(/\s+/)[0], () => {
+            // A quien se sentó y luego se dio de baja no se le puede
+            // poner una voz: de él solo queda el identificador. Salía
+            // como una cara «?» de nombre «Alguien», y tocarla dejaba
+            // la voz a nombre de nadie —le borraba el que tuviera
+            // puesto—, apuntaba en el registro una voz sin dueño y
+            // ofrecía un «Aprender la voz de» sin nombre (noviembre de
+            // 2026). Su nombre, si hace falta, se escribe a mano en
+            // «Otra persona…».
+            if (!p.nombre) return null;
+            return cara(p, p.nombre.split(/\s+/)[0], () => {
               cerrar(true);
-              asignar(etiqueta, { personaId: id, nombre: p.nombre || '' });
+              asignar(etiqueta, { personaId: id, nombre: p.nombre });
             });
           }),
           ...(reunion.invitados || []).map((n) => cara({ nombre: n }, n, () => {
@@ -988,14 +997,56 @@ function hojaMesa(r) {
     const listaEquipo = h('div.stack');
     const listaInvitados = h('div.stack');
 
+    /* Quien está sentado y ya no está en el equipo también tiene fila.
+
+       El caso: el administrador da de baja a alguien que asistió. La
+       reunión guarda a sus asistentes solo por identificador, así que
+       esa persona sigue sentada —en la mesa sale como una bolita «?»—,
+       pero esta hoja pintaba solo el equipo de hoy: sin fila, no había
+       manera de levantarla (noviembre de 2026). Y lo mismo con quien
+       tiene el acceso desactivado: sigue en el directorio, con su
+       nombre, pero no en el equipo que se puede elegir.
+
+       Van al final, diciendo lo que pasa, y solo quien ESTABA sentado
+       al abrir la hoja: a quien ya no está se le puede levantar (y
+       volver a sentar mientras la hoja siga abierta, por si se fue el
+       dedo), no sentar de nuevas. Guardar sin tocarle le deja donde
+       estaba: al servidor viajan solo las diferencias (ver abajo).
+
+       Y de nadie se dice que ya no está sin preguntar antes. Que este
+       móvil no conozca a alguien puede ser una baja, o un alta de hace
+       un minuto que aquí todavía no ha bajado: la reunión se lee en
+       directo, y el directorio llega con la sincronización. A esos se
+       les pinta después de sincronizar —si era un alta, sale ya en el
+       equipo, con su nombre—, y si el servidor no contesta no se les
+       pinta: sin respuesta no se sabe. A uno mismo, nunca: si no sale
+       en el equipo es que el directorio todavía no ha llegado. */
+    const IDO = 'Ya no está en el equipo';
+    const yo = store.sesion()?.id;
+    const sinFicha = (id) => !store.persona(id).nombre;
+    let preguntado = !(r.asistentes || []).some(sinFicha);
+
+    const fila = (p, id, titulo, pie = null) => h('button.row', {
+      onclick: () => { if (dentro.has(id)) dentro.delete(id); else dentro.add(id); pintar(); },
+    },
+      avatar(p, { tam: 34 }),
+      h('div.grow', null, h('div.row-title', null, titulo), pie),
+      dentro.has(id) ? icon('check', 20) : h('span', { style: { width: '20px' } }),
+    );
+
     const pintar = () => {
-      listaEquipo.replaceChildren(...store.equipo().map((p) => h('button.row', {
-        onclick: () => { if (dentro.has(p.id)) dentro.delete(p.id); else dentro.add(p.id); pintar(); },
-      },
-        avatar(p, { tam: 34 }),
-        h('div.grow', null, h('div.row-title', null, p.nombre)),
-        dentro.has(p.id) ? icon('check', 20) : h('span', { style: { width: '20px' } }),
-      )));
+      const equipo = store.equipo();
+      const idos = (r.asistentes || []).filter((id) => id !== yo
+        && !equipo.some((p) => p.id === id) && (preguntado || !sinFicha(id)));
+      listaEquipo.replaceChildren(
+        ...equipo.map((p) => fila(p, p.id, p.nombre)),
+        ...idos.map((id) => {
+          const p = store.persona(id);
+          return p.nombre
+            ? fila(p, id, p.nombre, h('div.row-sub', null, IDO))
+            : fila(p, id, IDO);
+        }),
+      );
       listaInvitados.replaceChildren(
         ...invitados.map((n, i) => h('div.row', null,
           h('div.grow', null, h('div.row-title', null, n)),
@@ -1007,6 +1058,12 @@ function hojaMesa(r) {
       );
     };
     pintar();
+    if (!preguntado) {
+      store.sincronizar().catch(() => {}).then(() => {
+        preguntado = navigator.onLine && !store.estadoSync.error;
+        pintar();
+      });
+    }
 
     const caja = h('input.input', { type: 'text', placeholder: 'Invitado de fuera (nombre y empresa)…', maxlength: 80 });
     const meter = () => {

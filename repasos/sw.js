@@ -12,6 +12,21 @@
 const VERSION = '__BUILD__';
 const CACHE = 'unik-repasos-' + VERSION;
 
+/* DOS APPS EN EL MISMO ORIGEN. La de verdad se sirve desde la raíz y
+   el taller —la rama de pruebas— desde /taller: el mismo código, cada
+   una con su service worker (el de la raíz con ámbito «/», el del
+   taller con «/taller/») y su caché, que el despliegue del taller sella
+   con «taller-» delante: «unik-repasos-taller-<sha>».
+
+   Pero el navegador no reparte por carpetas, reparte por ORIGEN: las
+   cachés de las dos salen juntas en caches.keys() y las ventanas de las
+   dos en clients.matchAll(). Así que lo que este fichero haga «con
+   todas» tiene que saber antes cuál de las dos es (se mira igual que en
+   js/db.js, por la carpeta desde la que se sirve) y dejar en paz lo de
+   la otra. */
+const EN_EL_TALLER = self.location.pathname.startsWith('/taller/');
+const CACHES_DEL_TALLER = 'unik-repasos-taller-';
+
 /* EL CÓDIGO: o entra entero, o esta versión no se instala.
    Si faltara una pieza, el hueco se rellenaría más tarde desde la red
    —o sea, desde el despliegue que hubiera ese día— y volveríamos a
@@ -153,8 +168,21 @@ self.addEventListener('install', (e) => {
 
 self.addEventListener('activate', (e) => {
   e.waitUntil((async () => {
+    // Se tiran las cachés viejas, pero SOLO LAS DE ESTA APP. Antes se
+    // tiraba todo lo que no fuera la caché de esta versión, y «todo»
+    // eran también las de la otra app (ver EN_EL_TALLER, arriba):
+    // bastaba abrir el taller para que la app de verdad se quedara sin
+    // armazón y, sin cobertura, diera una página en blanco hasta su
+    // siguiente despliegue; y cada despliegue de la app de verdad le
+    // hacía lo mismo al taller.
+    //
+    // Las del taller son las que empiezan por «unik-repasos-taller-».
+    // Todo lo demás —las versiones anteriores y cualquier nombre
+    // antiguo— es de la app de verdad, que lo sigue limpiando como
+    // siempre.
     const nombres = await caches.keys();
-    await Promise.all(nombres.filter((n) => n !== CACHE).map((n) => caches.delete(n)));
+    const deEstaApp = nombres.filter((n) => n.startsWith(CACHES_DEL_TALLER) === EN_EL_TALLER);
+    await Promise.all(deEstaApp.filter((n) => n !== CACHE).map((n) => caches.delete(n)));
   })());
   // Tampoco clients.claim(): si esta versión acaba de activarse es
   // porque no quedaba ninguna pantalla abierta, y la primera que se
@@ -199,6 +227,11 @@ self.addEventListener('notificationclick', (e) => {
       // Solo las ventanas de ESTE ámbito: matchAll devuelve todas las
       // del origen, y una copia en otra carpeta no es esta app.
       if (!v.url.startsWith(self.registration.scope)) continue;
+      // Y el ámbito «/» de la app de verdad abarca también /taller: sin
+      // esta línea, tocar un aviso de la app de verdad con el taller
+      // abierto traía delante el TALLER y lo llevaba a la pantalla del
+      // aviso, que allí se pinta con los datos de pruebas.
+      if (!EN_EL_TALLER && new URL(v.url).pathname.startsWith('/taller/')) continue;
       try { await v.focus(); } catch { /* algunos navegadores no dejan */ }
       v.postMessage({ tipo: 'ir', ruta });
       return;

@@ -8,7 +8,42 @@
  */
 declare(strict_types=1);
 
-const COOKIE_SESION = 'repasos_sesion';
+/* La cookie de la sesión, y el taller. La app de verdad vive en la raíz
+   del dominio y el taller —la rama de pruebas— en /taller/, en el MISMO
+   origen; y una cookie con path «/» es de todo el origen, no de una
+   carpeta. Con una sola para las dos, entrar en el taller le pisaba la
+   sesión a la app de verdad: su servidor no conoce ese token, contesta
+   401 y la app manda a la pantalla de entrar (y al revés). No se perdía
+   nada, pero quien usa las dos —Fran, sobre todo— tenía que volver a
+   entrar cada vez que cambiaba de una a otra (noviembre de 2026).
+
+   Por eso la API que se sirve desde /taller/ lleva SU cookie: con path
+   «/taller/», para que ni siquiera viaje a la app de verdad, y con OTRO
+   nombre, porque la de la app de verdad sí le llega al taller (su path
+   «/» lo abarca) y el taller no tiene que mirarla nunca, ni aunque
+   dentro viniera un token suyo.
+
+   La de la app de verdad NO cambia, ni puede cambiar: ni el nombre, ni
+   el path, ni un atributo. Con otro nombre, el equipo entero se
+   quedaría fuera a la vez y tendría que volver a entrar, y hay quien no
+   recuerda su contraseña.
+
+   Que esto es el taller se sabe por SCRIPT_NAME: la dirección del
+   index.php que está corriendo, tal como la ha resuelto el servidor
+   («/api/index.php» o «/taller/api/index.php», lo mismo en Apache con
+   su .htaccess que con php -S). NO por REQUEST_URI, que es lo que
+   escribió quien pide, sin resolver: «/taller/../api/auth/login»
+   empieza por /taller/ y la contesta la app de verdad.
+
+   OJO: quien aparta la sesión es el código que corre EN el taller.
+   Mientras el taller publicado no lleve este fichero, sigue poniendo y
+   leyendo la cookie de la app de verdad. Y el día que lo lleve, quien
+   estuviera dentro del taller tendrá que entrar en él una vez más: su
+   sesión iba en la cookie de la app de verdad, que el taller deja de
+   mirar. */
+define('EN_EL_TALLER', strpos((string) ($_SERVER['SCRIPT_NAME'] ?? ''), '/taller/') === 0);
+define('COOKIE_SESION', EN_EL_TALLER ? 'repasos_sesion_taller' : 'repasos_sesion');
+define('COOKIE_CAMINO', EN_EL_TALLER ? '/taller/' : '/');
 // Seis meses: se entra una vez y el móvil de obra no vuelve a pedir
 // nada hasta pasado ese plazo.
 const DIAS_SESION = 183;
@@ -29,7 +64,7 @@ function crear_sesion(string $usuarioId): string
 
     setcookie(COOKIE_SESION, $token, [
         'expires'  => time() + DIAS_SESION * 86400,
-        'path'     => '/',
+        'path'     => COOKIE_CAMINO,
         'secure'   => (bool) (config()['cookie_segura'] ?? true),
         'httponly' => true,
         'samesite' => 'Lax',
@@ -45,7 +80,7 @@ function cerrar_sesion(): void
     }
     setcookie(COOKIE_SESION, '', [
         'expires'  => time() - 3600,
-        'path'     => '/',
+        'path'     => COOKIE_CAMINO,
         'secure'   => (bool) (config()['cookie_segura'] ?? true),
         'httponly' => true,
         'samesite' => 'Lax',
