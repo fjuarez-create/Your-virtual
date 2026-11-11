@@ -13,6 +13,9 @@ cuántas filas de cada tipo, cuánto pesa, y con qué forma viene la marca:
   · acabada en «Z»       → la bajada de siempre (por fecha del apunte);
   · acabada en «+00:00»  → la bajada por recepción, ya encendida.
 
+Y de la sesión, qué cookie pone la app de verdad y cuál el taller: solo
+el nombre y el camino de cada una, nunca su valor.
+
 Ni nombres, ni textos, ni la contraseña: esta sale de los secretos y va
 al servidor sin pasar por ningún fichero ni por la línea de órdenes.
 """
@@ -35,6 +38,10 @@ TOPE_TANDAS = 600
 # se encendió la bajada por recepción en producción. Se puede cambiar
 # con MEDIR_DESPUES_DE para mirar otro tramo.
 DESPUES_DE = os.environ.get("MEDIR_DESPUES_DE", "2026-11-11T12:14:00")
+
+# El taller vive en el mismo dominio, en /taller. Solo se le pregunta
+# qué cookie de sesión pone (ver «LA SESIÓN», abajo); no se entra en él.
+BASE_TALLER = os.environ.get("MEDIR_BASE_TALLER", BASE.replace("/api/", "/taller/api/", 1))
 
 galletas = http.cookiejar.CookieJar()
 abridor = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(galletas))
@@ -60,6 +67,52 @@ def pedir(ruta, cuerpo=None):
         return codigo, len(crudo), json.loads(crudo)
     except Exception:
         return codigo, len(crudo), None
+
+
+def galleta_de_salir(base):
+    """Qué cookie de sesión lleva esa API, SIN entrar: se le pide salir
+    sin estar dentro y contesta borrando la suya. Devuelve una lista de
+    (nombre, camino); el valor no se mira (es «deleted») ni se escribe.
+
+    Va con un abridor aparte, sin las cookies de la medición: con ellas,
+    pedir salir cerraría la sesión con la que se está midiendo."""
+    peticion = urllib.request.Request(base + "auth/logout", data=b"{}")
+    peticion.add_header("Content-Type", "application/json")
+    peticion.add_header("User-Agent", "medir-bajada")
+    suelto = urllib.request.build_opener()
+    try:
+        with suelto.open(peticion, timeout=40) as respuesta:
+            crudas = respuesta.headers.get_all("Set-Cookie") or []
+    except urllib.error.HTTPError as e:
+        crudas = e.headers.get_all("Set-Cookie") or []
+    except Exception:
+        return None
+    vistas = []
+    for cruda in crudas:
+        trozos = [x.strip() for x in cruda.split(";")]
+        nombre = trozos[0].split("=", 1)[0]
+        if not nombre.replace("_", "").isalnum():
+            nombre = "(nombre raro)"
+        camino = ""
+        for trozo in trozos[1:]:
+            if trozo.lower().startswith("path="):
+                camino = trozo[5:]
+        vistas.append((nombre, camino))
+    return vistas
+
+
+def de_sesion(vistas):
+    """De esas cookies, las de la sesión de la app. El alojamiento puede
+    poner alguna suya delante, y esa no se juzga."""
+    return [par for par in (vistas or []) if par[0].startswith("repasos_sesion")]
+
+
+def decir_galletas(vistas):
+    if vistas is None:
+        return "no contesta"
+    if not vistas:
+        return "no pone ninguna"
+    return ", ".join("«%s» con camino «%s»" % par for par in vistas)
 
 
 def forma(marca):
@@ -156,6 +209,31 @@ def main():
         return 1
 
     lineas = []
+
+    # LA SESIÓN · La app de verdad y el taller comparten dominio, y una
+    #     cookie con camino «/» es de todo el dominio: con una sola para
+    #     las dos, entrar en una sacaba de la otra. Desde noviembre de
+    #     2026 el taller lleva la suya (api/lib/auth.php). Lo que NO
+    #     puede cambiar nunca es la de la app de verdad —«repasos_sesion»
+    #     con camino «/»—: con otro nombre u otro camino, el equipo
+    #     entero se quedaría fuera a la vez. Aquí salen solo el nombre y
+    #     el camino; el valor no se escribe.
+    puestas = sorted((g.name, g.path) for g in galletas)
+    lineas.append("LA SESIÓN, al entrar en la app de verdad: %s." % decir_galletas(puestas))
+    if de_sesion(puestas) != [("repasos_sesion", "/")]:
+        lineas.append("::error::La cookie de sesión de la app de verdad NO es «repasos_sesion» con camino «/».")
+    de_verdad = galleta_de_salir(BASE)
+    del_taller = galleta_de_salir(BASE_TALLER)
+    lineas.append("LA SESIÓN, al pedir salir sin estar dentro: la app de verdad borra %s; el taller, %s."
+                  % (decir_galletas(de_verdad), decir_galletas(del_taller)))
+    if de_sesion(de_verdad) != [("repasos_sesion", "/")]:
+        lineas.append("::error::Al salir, la app de verdad no borra «repasos_sesion» con camino «/».")
+    if de_sesion(del_taller) == [("repasos_sesion_taller", "/taller/")]:
+        lineas.append("El taller lleva SU cookie: entrar en él ya no saca de la app de verdad, ni al revés.")
+    elif de_sesion(del_taller) == [("repasos_sesion", "/")]:
+        lineas.append("El taller comparte todavía la cookie de la app de verdad: entrar en uno saca del otro.")
+    else:
+        lineas.append("::warning::La cookie del taller no es ninguna de las dos que se esperan.")
 
     # 0 · ¿Deja pasar el alojamiento una marca escrita con «+00:00»? La
     #     bajada por recepción manda la marca así, con el «+» codificado
