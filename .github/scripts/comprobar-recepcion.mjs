@@ -99,6 +99,9 @@
         borrar, sale exento.
     10. Una variable que lleve «recibido = ''» como CONDICIÓN y se use dentro del SET («SET
         estado = CASE WHEN {$cuando} THEN …»): la toma por la que lleva el pendiente.
+    11. Un ALTER TABLE … RENAME (o un RENAME TABLE) de una de las siete: no está entre los
+        verbos que mira. Para los móviles es como un DROP —sus filas dejan de bajar y ninguno
+        se entera— y lo que después se escriba en ella, con su nombre nuevo, ya no se juzga.
    Para lo primero y lo tercero sirve una guardia VIVA, que no lee texto (se usó en el banco de
    pruebas al construir la recepción): un disparador por tabla que da error si una fila ya
    numerada cambia y conserva su número. Con él puesto, cualquier batería de pruebas caza el

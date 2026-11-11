@@ -104,6 +104,18 @@ Y dos cosas más que cuelgan de la sincronización:
   abre su propia base local, `unik-repasos-taller` (`js/db.js`). La de
   la app de verdad se llama `unik-repasos` y NO se renombra nunca: en
   ella está el trabajo sin subir de cada móvil.
+- **Y lo mismo con la sesión, las cachés y los avisos.** El taller
+  lleva su cookie (`repasos_sesion_taller`, con camino `/taller/`, en
+  `api/lib/auth.php`), cada service worker borra solo las cachés de su
+  familia (las del taller empiezan por `unik-repasos-taller-`, y por
+  eso `publicar-taller.yml` sella con «taller-» delante) y los avisos
+  del taller llevan su etiqueta (`sw.js`). La cookie de la app de
+  verdad, `repasos_sesion` con camino `/`, NO se cambia nunca: con otro
+  nombre u otro camino el equipo entero se quedaría fuera a la vez.
+  OJO: quien protege a la app de verdad es el código que corre EN el
+  taller, así que lo que toque esta convivencia se publica primero en
+  el taller. La medición (`.github/scripts/medir-bajada.py`) dice qué
+  cookie pone cada una.
 
 ## Lo que no se hace nunca
 

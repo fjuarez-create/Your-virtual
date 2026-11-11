@@ -19,12 +19,28 @@ const CACHE = 'unik-repasos-' + VERSION;
    con «taller-» delante: «unik-repasos-taller-<sha>».
 
    Pero el navegador no reparte por carpetas, reparte por ORIGEN: las
-   cachés de las dos salen juntas en caches.keys() y las ventanas de las
-   dos en clients.matchAll(). Así que lo que este fichero haga «con
+   cachés de las dos salen juntas en caches.keys(), las ventanas de las
+   dos en clients.matchAll(), y un aviso sustituye a otro con la misma
+   etiqueta sea de la app que sea. Así que lo que este fichero haga «con
    todas» tiene que saber antes cuál de las dos es (se mira igual que en
    js/db.js, por la carpeta desde la que se sirve) y dejar en paz lo de
-   la otra. */
-const EN_EL_TALLER = self.location.pathname.startsWith('/taller/');
+   la otra.
+
+   OJO con el sello: cuál de las dos es ESTE service worker se sabe por
+   la carpeta, pero de cuál es cada caché se sabe por su nombre. Las dos
+   cosas casan mientras publicar-taller.yml selle con «taller-» delante.
+   Si un día sellara con otra cosa, el taller dejaría de limpiar sus
+   versiones viejas (2,3 MB cada una) y se las llevaría todas, también
+   la vigente, el siguiente despliegue de la app de verdad.
+
+   Y con las barras que la ruta traiga delante: por «//taller/» —un
+   enlace mal escrito— el servidor sirve el taller igual, y el navegador
+   lo tiene por otra carpeta. Mirando «/taller/» tal cual, el service
+   worker que se apuntaba desde ahí se tenía por la app de verdad y le
+   borraba la caché, y el de la app de verdad contestaba esa dirección
+   con SU portada. */
+const delTaller = (ruta) => /^\/+taller\//.test(ruta);
+const EN_EL_TALLER = delTaller(self.location.pathname);
 const CACHES_DEL_TALLER = 'unik-repasos-taller-';
 
 /* EL CÓDIGO: o entra entero, o esta versión no se instala.
@@ -171,10 +187,12 @@ self.addEventListener('activate', (e) => {
     // Se tiran las cachés viejas, pero SOLO LAS DE ESTA APP. Antes se
     // tiraba todo lo que no fuera la caché de esta versión, y «todo»
     // eran también las de la otra app (ver EN_EL_TALLER, arriba):
-    // bastaba abrir el taller para que la app de verdad se quedara sin
-    // armazón y, sin cobertura, diera una página en blanco hasta su
-    // siguiente despliegue; y cada despliegue de la app de verdad le
-    // hacía lo mismo al taller.
+    // bastaba que el taller estrenara versión en un navegador —la
+    // primera vez que se abría, y después con cada despliegue suyo—
+    // para que la app de verdad se quedara sin armazón y, sin
+    // cobertura, diera una página en blanco hasta su siguiente
+    // despliegue; y cada despliegue de la app de verdad le borraba la
+    // suya al taller.
     //
     // Las del taller son las que empiezan por «unik-repasos-taller-».
     // Todo lo demás —las versiones anteriores y cualquier nombre
@@ -211,7 +229,11 @@ self.addEventListener('push', (e) => {
     lang: 'es',
     data: { ruta: datos.ruta || '#/entregas' },
   };
-  if (datos.etiqueta) { opciones.tag = String(datos.etiqueta); opciones.renotify = true; }
+  // La del taller, con «taller-» delante: el navegador lleva las
+  // etiquetas por origen, y las viviendas se llaman igual en las dos
+  // apps. Sin eso, un aviso del taller sustituía al de la app de verdad
+  // de la misma vivienda, y al tocarlo se abría el taller.
+  if (datos.etiqueta) { opciones.tag = (EN_EL_TALLER ? 'taller-' : '') + String(datos.etiqueta); opciones.renotify = true; }
   e.waitUntil(self.registration.showNotification(datos.titulo || 'UNIK Works', opciones));
 });
 
@@ -231,7 +253,7 @@ self.addEventListener('notificationclick', (e) => {
       // esta línea, tocar un aviso de la app de verdad con el taller
       // abierto traía delante el TALLER y lo llevaba a la pantalla del
       // aviso, que allí se pinta con los datos de pruebas.
-      if (!EN_EL_TALLER && new URL(v.url).pathname.startsWith('/taller/')) continue;
+      if (!EN_EL_TALLER && delTaller(new URL(v.url).pathname)) continue;
       try { await v.focus(); } catch { /* algunos navegadores no dejan */ }
       v.postMessage({ tipo: 'ir', ruta });
       return;
@@ -256,7 +278,15 @@ self.addEventListener('fetch', (e) => {
   // se toca: sin esta línea, la regla de navegación de abajo contestaría
   // /taller con la portada de ESTA app, y el taller sería invisible
   // desde cualquier navegador que ya la tuviera en caché.
-  if (url.pathname === '/taller' || url.pathname.startsWith('/taller/')) return;
+  //
+  // OJO: este mismo fichero es también el service worker DEL taller, y
+  // allí esta línea lo aparta de TODO lo suyo. El taller guarda su
+  // armazón con cada versión, pero no lo sirve nunca: carga siempre de
+  // la red —lo último publicado, sin relevo de versiones— y sin
+  // cobertura no arranca. Está así desde que existe esta línea; que el
+  // taller sirva su caché es otra decisión, porque cambia cómo le
+  // entra cada versión nueva.
+  if (/^\/+taller$/.test(url.pathname) || delTaller(url.pathname)) return;
 
   // Navegación: la portada sale de esta misma caché, no de la red.
   //

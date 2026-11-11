@@ -1007,24 +1007,41 @@ function hojaMesa(r) {
        tiene el acceso desactivado: sigue en el directorio, con su
        nombre, pero no en el equipo que se puede elegir.
 
-       Van al final, diciendo lo que pasa, y solo quien ESTABA sentado
-       al abrir la hoja: a quien ya no está se le puede levantar (y
-       volver a sentar mientras la hoja siga abierta, por si se fue el
-       dedo), no sentar de nuevas. Guardar sin tocarle le deja donde
-       estaba: al servidor viajan solo las diferencias (ver abajo).
+       Van aparte, al final, y solo quien ESTÁ sentado: a quien ya no
+       está se le puede levantar (y volver a sentar mientras la hoja
+       siga abierta, por si se fue el dedo), no sentar de nuevas.
+       Guardar sin tocarle le deja donde estaba: al servidor viajan
+       solo las diferencias (ver abajo).
 
-       Y de nadie se dice que ya no está sin preguntar antes. Que este
-       móvil no conozca a alguien puede ser una baja, o un alta de hace
-       un minuto que aquí todavía no ha bajado: la reunión se lee en
-       directo, y el directorio llega con la sincronización. A esos se
-       les pinta después de sincronizar —si era un alta, sale ya en el
-       equipo, con su nombre—, y si el servidor no contesta no se les
-       pinta: sin respuesta no se sabe. A uno mismo, nunca: si no sale
-       en el equipo es que el directorio todavía no ha llegado. */
+       Y de nadie a quien este móvil no conozca se dice que ya no está
+       sin preguntar antes. Que no le conozca puede ser una baja, o un
+       alta de hace un minuto que aquí todavía no ha bajado: la reunión
+       se lee en directo, y el directorio llega con la sincronización.
+       Por eso su fila nace sin nombre —la misma bolita «?» de la mesa—
+       y la hoja sincroniza: si era un alta, la fila se queda con su
+       nombre; si no, con el rótulo. La sincronización es la de
+       siempre, que primero sube lo pendiente y después baja: con fotos
+       en la cola el rótulo tarda lo que tarden en subir, y si no llega
+       a bajar —sin cobertura, o una subida que falla— la fila se queda
+       como está, que sin respuesta no se sabe. (De quien tiene el
+       acceso desactivado sí se dice sin preguntar: lo dice el
+       directorio de este móvil, que puede ir un minuto atrasado, como
+       en cualquier otra pantalla.)
+
+       Con esa respuesta NO se rehace la lista: solo se rotula a los de
+       aparte. La bajada puede traer más cambios del directorio —otra
+       alta, otra baja: las de una contrata llegan de dos en dos—, y
+       con la lista rehecha entera las filas del equipo cambiaban de
+       sitio justo cuando el dedo iba hacia ellas: iba a levantar a uno
+       y sentaba al de al lado. Esos otros cambios entran con el
+       siguiente toque, como siempre. A uno mismo, nunca se le aparta:
+       si no sale en el equipo es que el directorio todavía no ha
+       llegado. */
     const IDO = 'Ya no está en el equipo';
     const yo = store.sesion()?.id;
-    const sinFicha = (id) => !store.persona(id).nombre;
-    let preguntado = !(r.asistentes || []).some(sinFicha);
+    const aparte = new Set();
+    let delEquipo = [];   // las filas del equipo que hay pintadas
+    let preguntado = !(r.asistentes || []).some((id) => !store.persona(id).nombre);
 
     const fila = (p, id, titulo, pie = null) => h('button.row', {
       onclick: () => { if (dentro.has(id)) dentro.delete(id); else dentro.add(id); pintar(); },
@@ -1034,17 +1051,24 @@ function hojaMesa(r) {
       dentro.has(id) ? icon('check', 20) : h('span', { style: { width: '20px' } }),
     );
 
-    const pintar = () => {
+    const pintar = ({ quietas = false } = {}) => {
       const equipo = store.equipo();
-      const idos = (r.asistentes || []).filter((id) => id !== yo
-        && !equipo.some((p) => p.id === id) && (preguntado || !sinFicha(id)));
+      const enEquipo = (id) => equipo.some((p) => p.id === id);
+      if (!quietas) {
+        for (const id of r.asistentes || []) {
+          if (id !== yo && !enEquipo(id)) aparte.add(id);
+        }
+        delEquipo = equipo.filter((p) => !aparte.has(p.id));
+      }
       listaEquipo.replaceChildren(
-        ...equipo.map((p) => fila(p, p.id, p.nombre)),
-        ...idos.map((id) => {
+        ...delEquipo.map((p) => fila(p, p.id, p.nombre)),
+        ...[...aparte].map((id) => {
           const p = store.persona(id);
-          return p.nombre
-            ? fila(p, id, p.nombre, h('div.row-sub', null, IDO))
-            : fila(p, id, IDO);
+          // Era un alta que no había bajado: ya es una más del equipo.
+          if (enEquipo(id)) return fila(p, id, p.nombre);
+          // Con nombre y fuera del equipo: tiene el acceso desactivado.
+          if (p.nombre) return fila(p, id, p.nombre, h('div.row-sub', null, IDO));
+          return fila(p, id, preguntado ? IDO : '');
         }),
       );
       listaInvitados.replaceChildren(
@@ -1061,7 +1085,7 @@ function hojaMesa(r) {
     if (!preguntado) {
       store.sincronizar().catch(() => {}).then(() => {
         preguntado = navigator.onLine && !store.estadoSync.error;
-        pintar();
+        pintar({ quietas: true });
       });
     }
 

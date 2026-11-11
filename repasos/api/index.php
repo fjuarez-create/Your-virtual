@@ -2031,6 +2031,11 @@ function cambios(): void
     // última vez» dejaba sin directorio a quien ya estaba sincronizado:
     // las fichas se crearon el primer día y no vuelven a tocarse, así
     // que no aparecían nunca.
+    //
+    // Y desde noviembre de 2026, ENTERO por algo más serio: la app BORRA
+    // de cada móvil a quien no venga en esta lista (acatarDirectorio, en
+    // js/store.js). Quien un día filtre, pagine o recorte esta consulta
+    // deja a los móviles sin la gente que falte.
     $personas = bd()->query('SELECT * FROM usuarios ORDER BY nombre')->fetchAll();
 
     $listas = traer('listas', $desde);
@@ -2550,6 +2555,10 @@ function cambios_por_recepcion(string $crudo): void
         $desde = RECEPCION_PRINCIPIO;
     }
 
+    // El directorio, ENTERO en cada respuesta, como en cambios(): la app
+    // borra de cada móvil a quien no venga en esta lista
+    // (acatarDirectorio, en js/store.js). Esta consulta no se filtra, ni
+    // se pagina, ni se recorta.
     $personas = $pdo->query('SELECT * FROM usuarios ORDER BY nombre')->fetchAll();
 
     // 1 · Numerar lo pendiente. 2 · El tope, ANTES de leer ninguna tabla:

@@ -35,8 +35,13 @@
    se sirve desde /taller, que es un banco de pruebas y empieza de cero
    sin perder nada. OJO: quien la aparta es el código que corre EN el
    taller. Mientras el taller publicado no lleve este fichero, sigue
-   abriendo la base de la app de verdad. */
-const EN_EL_TALLER = new URL('..', import.meta.url).pathname.startsWith('/taller/');
+   abriendo la base de la app de verdad.
+
+   Y con las barras que la ruta traiga delante: por «//taller/» —un
+   enlace mal escrito— el servidor sirve el taller igual, y mirando
+   «/taller/» tal cual el taller abría ahí la base de la app de verdad
+   y le quitaba la sesión. */
+const EN_EL_TALLER = /^\/+taller\//.test(new URL('..', import.meta.url).pathname);
 const NOMBRE = EN_EL_TALLER ? 'unik-repasos-taller' : 'unik-repasos';
 
 /* Los almacenes que la app necesita para funcionar. La versión numérica
