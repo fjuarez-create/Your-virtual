@@ -329,7 +329,9 @@ export async function render({ promoId, unidadId }) {
       hayFiltros ? { id: 'pdf-filtrado', icono: 'cursores', rotulo: 'PDF con los filtros puestos',
         sub: `${fraseFiltros} · ${conFiltro.length} ${conFiltro.length === 1 ? 'repaso' : 'repasos'}` } : null,
       { id: 'pdf-historico', icono: 'listaChecks', rotulo: 'PDF con todo el histórico',
-        sub: `Lo por cerrar primero y ${hechas9.length === 1 ? 'el ejecutado' : `los ${hechas9.length} ejecutados`} al final` },
+        sub: hechas9.length === 0
+          ? 'Lo por cerrar; todavía no hay ejecutados'
+          : `Lo por cerrar primero y ${hechas9.length === 1 ? 'el ejecutado' : `los ${hechas9.length} ejecutados`} al final` },
     ].filter(Boolean), { extra, destacada });
 
     if (elegido === 'reconocimiento') bajarReconocimiento(unidadId);

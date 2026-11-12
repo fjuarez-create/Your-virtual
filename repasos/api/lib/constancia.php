@@ -136,7 +136,7 @@ const CONSTANCIA_DELICADO = '/'
     . '|\b(?:d[ií]as?|semanas?|mes|meses|años?|quincenas?|hoy|mañana)\b'
     . '|\b(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|sep?tiembre|octubre|noviembre|diciembre)\b'
     . '|\b(?:lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bados?|domingos?)\b'
-    . '|\bantes del?\s+(?:la\s+)?(?:firma|entrega|escritura)'
+    . '|\bantes del?\s+(?:la\s+)?(?:firma|entrega|escritura|\d)'
     . '|\bmil\b|\bcien(?:to)?\b|\b\p{L}*cient[oa]s\b|\bmill[oó]n'
     . '/iu';
 
