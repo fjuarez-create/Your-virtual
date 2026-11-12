@@ -40,6 +40,13 @@ Y una quinta, de noviembre de 2026:
   `constancias`, las rutas `constancias/…`, `js/constancia.js` y
   `js/pdfConstancia.js`.
 
+  Dos trampas de este documento. Por dentro, la columna `zona` de la
+  tabla `tareas` guarda la ESTANCIA del repaso; las «zonas» del
+  reconocimiento son otra cosa: los ocho apartados del papel
+  (`CONSTANCIA_ZONAS`, en `api/lib/constancia.php`). Y las páginas 2 y
+  3 del papel son copia letra a letra del modelo que aprobó Fran: por
+  eso la hoja final dice «Descripción de la tarea», y NO se cambia.
+
 Y una regla sobre una palabra que ya existía:
 
 - **Entregada**: una vivienda está entregada cuando lo apuntan el
