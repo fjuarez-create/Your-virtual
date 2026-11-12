@@ -27,6 +27,9 @@ comprueba que el revisor de Apple puede entrar):
   3. Con ESA cookie pide «quién soy»: tiene que contestar la cuenta.
   4. Sale, y mira que se borre esa misma cookie y que ya no valga.
 
+La sesión que abre al entrar la cierra SIEMPRE, también cuando la cookie
+no es la que tiene que ser y todo acaba en rojo (ver cerrar()).
+
 Del valor de la cookie no se escribe NADA, ni en el registro ni en
 ningún fichero: es una sesión abierta. Solo salen su nombre y su camino.
 Tampoco la contraseña: va de los secretos al servidor sin pasar por la
@@ -162,6 +165,60 @@ def es_la_buena(galletas):
             and galletas[0]["dominio"] == "")
 
 
+# Lo que hay que devolverle al servidor para que cierre la sesión que esta
+# guardia abre al entrar: la cabecera «Cookie», con el valor dentro. Solo
+# viaja de vuelta al servidor que lo puso; no se escribe en ningún sitio.
+# Vacío cuando no queda ninguna sesión por cerrar.
+POR_CERRAR = [""]
+
+
+def lo_que_puso(crudas):
+    """La cabecera «Cookie» con TODO lo que el servidor acaba de poner al
+    entrar, sea o no una cookie de la casa y tenga el nombre que tenga: es
+    lo que le devolvería un navegador. Con ello se le pide salir también
+    cuando la cookie de sesión no es la que tiene que ser."""
+    pares = []
+    for cruda in crudas:
+        par = cruda.split(";", 1)[0].strip()
+        if par.partition("=")[0].strip() and "=" in par and par not in pares:
+            pares.append(par)
+    return "; ".join(pares)
+
+
+def cerrar(avisos):
+    """Cierra la sesión que esta guardia abrió, cuando la cookie que le
+    pusieron al entrar NO es la que tiene que ser.
+
+    EL CASO (noviembre de 2026). Salir solo se pedía si la cookie era la
+    buena. En rojo —la raíz poniendo la cookie del taller, o la de siempre
+    con otro camino— la guardia se iba dejando en el servidor una sesión
+    abierta de la cuenta de revisión, viva hasta caducar: 30 días. Su valor
+    no lo tenía nadie, pero una sesión abierta que no es de nadie no tiene
+    por qué quedarse, y menos el día en que algo va mal con las cookies.
+
+    Se le devuelve al servidor todo lo que puso (lo_que_puso()) y se le
+    pide salir. Si antes esa sesión valía y después ya no, queda dicho. Lo
+    que NO se puede cerrar es una sesión de la que el servidor no ha dado
+    nada con qué pedirlo (entró sin poner ninguna cookie): se avisa."""
+    devolver, POR_CERRAR[0] = POR_CERRAR[0], ""
+    if not devolver:
+        avisos.append("La sesión que ha abierto la comprobación NO se ha podido cerrar: al entrar, el servidor no ha puesto ninguna cookie con la que pedírselo. Caduca sola, y su valor no lo tiene nadie.")
+        return
+    valia, _, _ = pedir("auth/me", galleta=devolver)
+    codigo, _, cuerpo = pedir("auth/logout", {}, galleta=devolver)
+    if not (codigo == 200 and isinstance(cuerpo, dict) and cuerpo.get("ok") is True):
+        avisos.append("No se ha podido cerrar la sesión de la comprobación (%s)." % (codigo or "sin red"))
+        return
+    codigo, _, _ = pedir("auth/me", galleta=devolver)
+    if codigo == 200:
+        avisos.append("Después de salir, la sesión de la comprobación SIGUE valiendo: salir no la ha cerrado.")
+    elif codigo == 401 and valia == 200:
+        print("La sesión que abrió la comprobación queda cerrada igualmente (valía, y ya no: 401).")
+    else:
+        print("Se ha pedido salir con lo que el servidor puso al entrar. Que la sesión quede cerrada no se puede comprobar desde aquí (antes de salir contestaba %s)."
+              % (valia or "sin red"))
+
+
 def main():
     if not API.endswith("/") or not NOMBRE or not CAMINO:
         print("::error::A la guardia de la sesión le faltan SESION_API (acabada en «/»), SESION_NOMBRE o SESION_CAMINO.")
@@ -196,6 +253,7 @@ def main():
             codigo, crudas, cuerpo = pedir("auth/login", {"email": CORREO, "password": CLAVE})
             if codigo == 200 and isinstance(cuerpo, dict) and isinstance(cuerpo.get("usuario"), dict):
                 al_entrar = leer_galletas(crudas)
+                POR_CERRAR[0] = lo_que_puso(crudas)
                 break
             print("Intento %d de entrar: el servidor contesta %s." % (intento, codigo or "sin red"))
             if intento < 3:
@@ -207,6 +265,8 @@ def main():
         print("Al entrar, el servidor pone: %s." % decir(al_entrar))
         if not es_la_buena(al_entrar):
             fallos.append("Al entrar, %s NO pone %s, sino %s." % (QUIEN, esperada, decir(al_entrar)))
+            # Rojo; pero la sesión que se acaba de abrir se cierra igual.
+            cerrar(avisos)
         else:
             la_mia = al_entrar[0]
             # Los atributos de siempre. Que falte uno no deja a nadie
@@ -248,6 +308,8 @@ def main():
                               % (codigo or "sin red"))
 
             # 4 · Salir de verdad: se borra la misma, y deja de valer.
+            valia = codigo == 200
+            POR_CERRAR[0] = ""
             codigo, crudas, cuerpo = pedir("auth/logout", {}, galleta=par)
             if codigo == 200 and isinstance(cuerpo, dict) and cuerpo.get("ok") is True:
                 borrada = leer_galletas(crudas)
@@ -256,8 +318,12 @@ def main():
                 else:
                     fallos.append("Al salir de verdad, %s NO borra %s, sino %s." % (QUIEN, esperada, decir(borrada)))
                 codigo, _, _ = pedir("auth/me", galleta=par)
-                if codigo == 401:
+                if codigo == 401 and valia:
                     print("Y la sesión de la comprobación queda cerrada (401).")
+                elif codigo == 401:
+                    # Ya contestaba que no antes de salir: un 401 ahora no
+                    # demuestra nada, y no se dice lo que no se ha visto.
+                    print("Se ha pedido salir con esa cookie. Que la sesión quede cerrada no se puede comprobar desde aquí: el servidor ya no la reconocía antes de salir.")
                 elif codigo == 200:
                     avisos.append("Después de salir, la sesión de la comprobación SIGUE valiendo: salir no la ha cerrado.")
             else:
@@ -294,6 +360,15 @@ def principal():
         print("::warning::La guardia de la cookie de sesión ha tropezado (%s) y no ha podido mirar: revísala."
               % type(tropiezo).__name__)
         return 0
+    finally:
+        # Si tropezó DESPUÉS de entrar y antes de salir, la sesión sigue
+        # abierta: se pide salir aquí, sin mirar nada más y sin que un
+        # segundo tropiezo cambie cómo acaba la guardia.
+        if POR_CERRAR[0]:
+            try:
+                pedir("auth/logout", {}, galleta=POR_CERRAR[0])
+            except Exception:
+                pass
 
 
 if __name__ == "__main__":

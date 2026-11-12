@@ -1016,6 +1016,14 @@ function borrar_usuario(string $id): void
     $stmt = bd()->prepare('SELECT rol FROM usuarios WHERE id = ?');
     $stmt->execute([$id]);
     $rol = $stmt->fetchColumn();
+    // La lectura se suelta aquí, antes de escribir nada. En SQLite, una
+    // lectura a medias deja a esta petición mirando la base «como
+    // estaba», y si entre tanto otro escribe (alguien tocando la mesa
+    // de una reunión), ya no se le deja escribir ni esperando: medido,
+    // una de cada diez bajas hechas en ese instante acababa en «Error
+    // en la base de datos» y la persona seguía de alta. En MariaDB no
+    // cambia nada.
+    $stmt->closeCursor();
     if ($rol === false) {
         responder_error(404, 'Usuario no encontrado.');
     }
@@ -3459,11 +3467,11 @@ function apuntar_nombre_antes_de_la_baja(string $id): void
    otra lea lo mismo en el mismo instante; las dos partían de la misma
    lista y la segunda en escribir borraba lo de la primera. Medido en
    MariaDB (noviembre de 2026), con dos personas sentando cada una a
-   alguien a la vez: en 92 de 300 intentos se perdía uno de los dos
+   alguien a la vez: en 194 de 300 intentos se perdía uno de los dos
    asientos, y el servidor les había contestado «hecho» a las dos. Con
-   cinco a la vez, en 285 de 300. En SQLite no se perdía nada, pero
-   cuatro de cada diez contestaban «Error en la base de datos»: la
-   segunda en llegar no esperaba, fallaba.
+   cinco a la vez, en 299 de 300. En SQLite no se perdía nada, pero
+   casi la mitad de las peticiones acababa en «Error en la base de
+   datos»: la segunda en llegar no esperaba, fallaba.
 
    CÓMO. Quien relee una reunión para reescribirla lo hace con el
    candado puesto, y el siguiente ESPERA a que acabe y lee ya lo que
@@ -3483,7 +3491,10 @@ function apuntar_nombre_antes_de_la_baja(string $id): void
    ni espera a nadie) y se escribe esa misma fila: nadie tiene cogida
    una cosa mientras espera otra. Y no se espera más que antes: sin el
    candado, la segunda escritura ya esperaba a la primera; ahora espera
-   un paso antes, al leer.
+   un paso antes, al leer. Medido en MariaDB con veinte personas
+   tocando la misma mesa en el mismo instante, 300 veces: la última
+   en recibir respuesta la tiene en unos 25 milisegundos, y la peor
+   vez en menos de 60; lo mismo que tardaba sin el candado.
 
    QUIÉN LO LLEVA. Los dos sitios que releen y reescriben: tocar_mesa()
    y apuntar_nombre_antes_de_la_baja(). empezar_reunion() no relee nada
