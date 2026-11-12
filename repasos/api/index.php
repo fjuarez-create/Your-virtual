@@ -3380,13 +3380,13 @@ function nombres_de_asistentes(array $asistentes, $guardados): string
  * el directorio; al darle de baja pasa a llamarle como diga lo guardado
  * con la reunión, que es su nombre del último día en que se escribió la
  * mesa, y la mesa de una reunión sellada ya no se escribe. Medido: se
- * sienta como «Juan Perez», se sella la reunión, el administrador le
- * corrige el nombre a «Juanjo Pérez Gómez» (el acta dice «Juanjo…»),
- * meses después se le da de baja, y el acta volvía a decir «Juan
- * Perez»: la errata corregida reaparecía el día de la baja. Es también
- * la última ocasión de ponerle nombre en las reuniones que no se lo
- * guardaron (las que escribiera un index.php de antes con la base ya
- * en la 22: una vuelta atrás).
+ * sienta como «Persona Ejenplo», se sella la reunión, el administrador
+ * le corrige el nombre a «Persona Ejemplo» (el acta dice ya «Persona
+ * Ejemplo»), meses después se le da de baja, y el acta volvía a decir
+ * «Persona Ejenplo»: la errata corregida reaparecía el día de la baja.
+ * Es también la última ocasión de ponerle nombre en las reuniones que
+ * no se lo guardaron (las que escribiera un index.php de antes con la
+ * base ya en la 22: una vuelta atrás).
  *
  * En todas las que le guardan: donde está sentado, y donde lo estuvo y
  * conserva el nombre. No toca la lista ni `actualizado` —la reunión no

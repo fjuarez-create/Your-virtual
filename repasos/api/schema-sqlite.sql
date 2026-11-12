@@ -181,7 +181,8 @@ CREATE TABLE IF NOT EXISTS reuniones (
   actualizado       TEXT NOT NULL,
   creado_por        TEXT,
   creado_por_nombre TEXT NOT NULL DEFAULT '',
-  acta_firmada      TEXT
+  acta_firmada      TEXT,
+  asistentes_nombres TEXT
 );
 CREATE UNIQUE INDEX IF NOT EXISTS ix_reuniones_dia ON reuniones (promo_id, fecha);
 

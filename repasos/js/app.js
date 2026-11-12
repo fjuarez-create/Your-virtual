@@ -777,37 +777,40 @@ arrancar().catch((e) => {
    worker, y recarga. Es el botón de «apagar y encender» para cuando el
    almacenamiento del navegador queda en un estado que ni el arranque
    tolerante sabe curar. */
-/* Tira lo de ESTA app y nada más. La de verdad y el taller —la rama de
-   pruebas, en /taller— comparten origen, y el navegador da juntos los
-   service workers y las cachés de las dos: cuando se llevaba «todos» y
-   «todas», el botón pulsado en el taller dejaba a la app de verdad sin
-   service worker y sin caché, y sin cobertura daba una página en blanco
-   hasta abrirla otra vez con ella (y pulsado en la app de verdad, lo
-   mismo al taller). Lo del taller es su registro (ver «Cada app, con su
-   registro» en js/push.js) y las cachés «unik-repasos-taller-…», el
-   mismo reparto que hace sw.js; todo lo demás es de la app de verdad,
-   que se lo sigue llevando entero, como siempre. La base ya era de
-   cada una (js/db.js). */
+/* Se lleva TODO lo del origen: todos los service workers y todas las
+   cachés, también los de la otra app. La de verdad y el taller —la rama
+   de pruebas, en /taller— comparten origen, y el navegador los da
+   juntos: pulsado en el taller, el botón deja a la app de verdad sin
+   service worker y sin caché, y sin cobertura da una página en blanco
+   hasta abrirla otra vez con ella (y al revés).
+
+   Se probó a que se llevara solo lo de SU app (noviembre de 2026) y la
+   pulsación suelta mejoraba, pero había un caso que quedaba PEOR: se
+   pulsa en el taller; su pestaña, al recargarse sin registro propio,
+   queda gobernada por el service worker de la app de verdad (su ámbito
+   «/» abarca /taller/); con esa pestaña abierta se pulsa en la app de
+   verdad, y su service worker no vuelve a instalarse —la pestaña del
+   taller lo mantiene vivo— pero su caché sí se ha borrado y nadie la
+   rehace. La app de verdad no arrancaba sin cobertura y no se curaba
+   abriéndola con ella: solo con el siguiente despliegue (medido: 1 de
+   3; llevándoselo todo, 3 de 3). Es el mismo mal que ya da este botón
+   con dos pestañas de la app abiertas: un service worker que sobrevive
+   al rescate se queda sin caché.
+
+   Así que se queda como estaba. El día que el service worker sepa
+   rehacer su caché cuando le falte, este botón podrá llevarse solo lo
+   suyo (el reparto está escrito en js/push.js: «Cada app, con su
+   registro»). */
 async function rescateLocal() {
   const seguro = confirm(
     'Se borra la copia local de este dispositivo (lo pendiente de subir se pierde). '
     + 'Lo ya sincronizado se recupera del servidor. ¿Seguir?');
   if (!seguro) return;
   try {
-    // Qué es lo de esta app lo dice js/push.js. Y si no lo dijera —este
-    // fichero con un push.js de antes: la media versión de
-    // registroDeEstaApp, arriba— o diera un error, TODO, como siempre:
-    // este botón es la salida de emergencia y no puede quedarse sin
-    // hacer nada por no saber qué es suyo. Ejecutado con esa mezcla: se
-    // quedaba en recargar, con el service worker, las cachés y la base
-    // donde estaban.
-    const esMio = (reg) => { try { return push.esDeEstaApp(reg); } catch { return true; } };
-    const esMia = (nombre) => typeof push.EN_EL_TALLER !== 'boolean'
-      || nombre.startsWith('unik-repasos-taller-') === push.EN_EL_TALLER;
     const registros = await (navigator.serviceWorker?.getRegistrations?.() ?? []);
-    await Promise.all([...registros].filter(esMio).map((r) => r.unregister().catch(() => {})));
+    await Promise.all([...registros].map((r) => r.unregister().catch(() => {})));
     const nombres = await (window.caches?.keys?.() ?? []);
-    await Promise.all([...nombres].filter(esMia).map((n) => caches.delete(n).catch(() => {})));
+    await Promise.all([...nombres].map((n) => caches.delete(n).catch(() => {})));
     await borrarBase();
   } finally {
     location.reload();
