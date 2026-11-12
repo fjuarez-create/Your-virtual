@@ -7,7 +7,7 @@
    los repasos, mira las fotos y redacta, un velo a pantalla completa
    cuenta por qué paso va. Al acabar se quita solo y entrega el PDF.
 
-   Tres reglas que este fichero no se salta:
+   Cuatro reglas que este fichero no se salta:
 
    · El velo NUNCA se queda colgado. Cualquier tropiezo acaba en una
      frase, «Volver a intentarlo» y «Cerrar».
@@ -15,7 +15,13 @@
      guardado —fotos miradas, el documento redactado— se aprovecha la
      próxima vez, así que cancelar no tira el dinero.
    · La IA se gasta lo justo: si el documento de la vivienda está al
-     día, se descarga sin volver a llamarla.
+     día, se descarga sin volver a llamarla. Y si la redacción se corta
+     por el camino (se apaga la pantalla, un bache de cobertura), se
+     espera a la que el servidor ya tiene en marcha en vez de pedir otra.
+   · El papel no sale viejo. Si alguien toca un repaso de la vivienda
+     mientras se prepara, el servidor lo dice (`alDia: false`) y el
+     documento se rehace con lo de ahora, una vez; si siguen cambiando,
+     se dice y no se entrega.
 
    En pantalla se llama «Reconocimiento de repasos pendientes»; por
    dentro, «constancia» (ver CLAUDE.md: «acta» es solo el documento de
@@ -42,31 +48,71 @@ const PASOS = {
 const ORDEN = Object.keys(PASOS);
 
 const FRASES = {
-  espera: 'La primera vez puede tardar uno o dos minutos. No cierres la app.',
+  // La redacción es una llamada larga y el teléfono la corta si la
+  // pantalla se apaga o la app pasa a segundo plano: por eso se pide.
+  espera: 'La primera vez puede tardar uno o dos minutos. No cierres la app ni dejes que se apague la pantalla.',
   sinConexion: 'Hace falta conexión para preparar el documento.',
   sinClaveAdmin: 'Falta la clave de la IA. Se pone en Ajustes.',
   sinClave: 'Falta la clave de la IA. Avisa al administrador.',
+  // Los fallos de la IA, dichos para quien los lee aquí. El servidor los
+  // escribió para el administrador («La clave de Anthropic… Vuelve a
+  // ponerla en Ajustes»); el comercial no tiene Ajustes ni sabe quién
+  // es Anthropic (ver fraseDeLaIA).
+  claveMalaAdmin: 'La clave de la IA no es válida. Vuelve a ponerla en Ajustes.',
+  claveMala: 'La clave de la IA no es válida. Avisa al administrador.',
+  sinCupo: 'La IA ha llegado a su límite por ahora. Prueba dentro de un rato; si sigue igual, avisa al administrador.',
+  iaNoContesta: 'La IA no ha contestado bien{codigo}. Vuelve a intentarlo dentro de un momento.',
+  sinSalida: 'No se ha podido hablar con la IA. Vuelve a intentarlo dentro de un momento; si sigue igual, avisa al administrador.',
+  // La sesión caducada no se arregla reintentando: hay que volver a entrar.
+  sinSesion: 'La sesión ha caducado. Cierra y vuelve a entrar: después se descarga el documento.',
   sinRepasos: 'Esta vivienda no tiene repasos pendientes ahora mismo: no hay documento que generar.',
+  // La redacción se cortó por el camino y el documento no ha aparecido
+  // en el servidor (ver recogerRedaccion).
+  seApago: 'La pantalla se apagó o la app pasó a segundo plano mientras se redactaba el documento. Vuelve a intentarlo: lo que el servidor ya tenga hecho se aprovecha.',
+  seCorto: 'Se ha cortado la conexión mientras se redactaba el documento. Vuelve a intentarlo: lo que el servidor ya tenga hecho se aprovecha.',
+  // Alguien ha tocado los repasos de la vivienda mientras se preparaba el
+  // papel, dos veces seguidas: no se entrega un documento que ya nace
+  // viejo; se dice y se espera.
+  haCambiado: 'Alguien está apuntando o cambiando repasos de esta vivienda ahora mismo, y el documento saldría sin lo último. Espera a que termine y vuelve a intentarlo.',
   tarda: 'El servidor está tardando demasiado en contestar. Vuelve a intentarlo dentro de un momento.',
   sinFrase: 'El servidor no ha contestado bien (error {codigo}). Vuelve a intentarlo dentro de un momento.',
   // Contesta, pero no es la app quien contesta: la página de entrada
   // de un wifi con portal, un hosting a medio publicar.
   sinRespuesta: 'El servidor no ha contestado bien. Comprueba la conexión y vuelve a intentarlo dentro de un momento.',
   // Un módulo que no llegó a bajar, hay navegadores que no lo vuelven a
-  // pedir hasta que la app se abre de nuevo: por eso la segunda mitad.
-  sinTaller: 'No se ha podido cargar lo necesario para montar el PDF. Comprueba la conexión y vuelve a intentarlo; si sigue igual, cierra la app y ábrela de nuevo.',
+  // pedir hasta que la app se abre de nuevo: por eso la segunda mitad
+  // (y por eso se pide por otra dirección: ver pedirModuloPdf).
+  sinImprenta: 'No se ha podido cargar lo necesario para montar el PDF. Comprueba la conexión y vuelve a intentarlo; si sigue igual, cierra la app y ábrela de nuevo.',
   // Lo que significa «Seguir sin mirar las fotos», debajo del fallo.
   sinFotos: 'Sin las fotos, el documento se redacta solo con lo anotado en cada repaso.',
-  // Lo apuntado en este teléfono que no ha conseguido subir: el papel
-  // saldría sin ello. Se dice y se pregunta; no se sigue callado.
+  // Lo apuntado en este aparato que no ha conseguido subir: el papel
+  // saldría sin ello. Se dice y se pregunta; no se sigue callado. Sin
+  // nombrar el aparato: el documento se saca también desde el ordenador.
   sinSubir: (n) => (n === 1
-    ? 'Este teléfono tiene 1 cambio de esta vivienda sin subir. El documento saldría sin él.'
-    : `Este teléfono tiene ${n} cambios de esta vivienda sin subir. El documento saldría sin ellos.`),
+    ? 'Hay 1 cambio de esta vivienda sin subir. El documento saldría sin él.'
+    : `Hay ${n} cambios de esta vivienda sin subir. El documento saldría sin ellos.`),
   sinSubirAclaracion: 'Comprueba la conexión y vuelve a intentarlo para que suban antes de redactar.',
+  // Lo que se le dice a quien descarga cuando algún repaso ha acabado
+  // solo en la fórmula general («Repasos de terminación y acabado de los
+  // puntos anotados…»). El papel sale igual; lo que cambia es que
+  // alguien que lo entienda lo lea antes de llevarlo a firmar. A quien
+  // ve las notas internas se le manda a ellas; al comercial, que no las
+  // ve, a quien sí.
+  general: (n, veNotas) => (n === 1
+    ? '1 repaso va citado solo de forma general, sin redacción propia.'
+    : `${n} repasos van citados solo de forma general, sin redacción propia.`)
+    + (veNotas
+      ? ' Míralo en las notas internas antes de la firma.'
+      : ' Conviene que la dirección facultativa o el administrador lean el documento antes de la firma.'),
   generica: 'No se ha podido preparar el documento.',
 };
 
-/** El tipo de cada nota interna, en palabras llanas. */
+/** El tipo de cada nota interna, en palabras llanas. OJO con dos
+    palabras del servidor que se parecen y no son lo mismo: una nota
+    `sensible` (fisuras, humedades, un interrogante) es lo que aquí se
+    rotula «Punto delicado»; los párrafos «delicados» de constancia.php
+    (`CONSTANCIA_DELICADO`) son otra cosa: los que no pueden ir al papel
+    y se retiran al sellar. */
 const TIPOS_DE_NOTA = {
   duda: 'Duda de la redacción',
   generico: 'Citado solo de forma general',
@@ -105,6 +151,62 @@ class Tropiezo extends Error {
 }
 const CANCELADO = 'cancelado';
 const esRed = (e) => e instanceof api.ApiError && e.status === 0 && e.codigo !== 'tarda' && e.codigo !== CANCELADO;
+/* Un error sin frase: lo corta el hosting antes de que conteste la app
+   (un 502, un 504) y llega como «Error 504» a secas. */
+const sinFrase = (e) => e instanceof api.ApiError && (!e.message || /^Error \d+$/.test(e.message));
+const sinSesion = (e) => e instanceof api.ApiError && e.status === 401 && e.codigo === 'sin-sesion';
+
+/* Las esperas con tope. Ninguna deja el flujo parado para siempre:
+   · TOPE_SUBIDA: lo que se espera a la sincronización del primer paso.
+     Sube TODA la cola del aparato —también fotos y vídeos de otras
+     viviendas— y con mala cobertura puede tardar lo que quiera. Pasado
+     el tope se mira solo lo de ESTA vivienda (sinSubirDeUnidad).
+   · TOPE_LETRA: lo que se espera a la letra del PDF, contado desde que
+     se pide (nada más pulsar). Si no ha llegado, el papel sale con la
+     de reserva, igual que cuando la descarga falla.
+   · La recogida de una redacción cortada: una lectura al momento y
+     después una cada CADA_RECOGIDA, hasta VECES_RECOGIDA (dos minutos). */
+const TOPE_SUBIDA = 30000;
+const TOPE_LETRA = 10000;
+const CADA_RECOGIDA = 5000;
+const VECES_RECOGIDA = 25;
+
+/** Una espera que «Cancelar» corta: con la señal cortada, acaba ya. */
+const pausa = (ms, senal) => new Promise((listo) => {
+  if (senal?.aborted) { listo(); return; }
+  const fin = () => {
+    clearTimeout(reloj);
+    senal?.removeEventListener('abort', fin);
+    listo();
+  };
+  const reloj = setTimeout(fin, ms);
+  senal?.addEventListener('abort', fin);
+});
+
+/** Espera a que algo acabe —bien o mal—, pero solo hasta el tope o hasta
+    que se cancele. No lanza: lo que venga detrás dirá si hacía falta. */
+const hastaElTope = (promesa, ms, senal) => {
+  // El corte propio sirve para dos cosas: llevarle «Cancelar» a la
+  // pausa y pararle el reloj cuando lo esperado acaba antes.
+  const corte = new AbortController();
+  const cancelar = () => corte.abort();
+  if (senal?.aborted) corte.abort();
+  else senal?.addEventListener('abort', cancelar);
+  return Promise.race([Promise.resolve(promesa).catch(() => {}), pausa(ms, corte.signal)])
+    .finally(() => { senal?.removeEventListener('abort', cancelar); corte.abort(); });
+};
+
+/** ¿Ha dejado de verse la app mientras duraba algo? Devuelve la función
+    que deja de mirar y lo contesta. */
+function vigilarSiSeOculta() {
+  let oculta = document.visibilityState === 'hidden';
+  const mirar = () => { if (document.visibilityState === 'hidden') oculta = true; };
+  document.addEventListener('visibilitychange', mirar);
+  return () => {
+    document.removeEventListener('visibilitychange', mirar);
+    return oculta;
+  };
+}
 
 /* ¿Es esto lo que contesta la app? Un 200 no lo garantiza: la página
    de entrada de un wifi con portal o un hosting a medio publicar
@@ -286,20 +388,44 @@ function mantenerDespierta() {
 }
 
 /* ─── Lo que hace falta para montar el PDF ────────────────────── */
+/* El módulo del PDF, una sola copia para toda la sesión. Un módulo que
+   no llegó a bajar (sin cobertura y sin caché), hay navegadores que lo
+   recuerdan como fallido y no lo vuelven a pedir hasta que la app se
+   abre de nuevo: «Volver a intentarlo» no arreglaba nada. Si la
+   dirección de siempre falla, se pide por otra —la misma con una
+   coletilla—, que el navegador no tiene apuntada. Y lo que baje se
+   guarda aquí para no pedirlo dos veces: dos copias del módulo serían
+   dos memorias de la letra. */
+let moduloPdf = null;
+function pedirModuloPdf() {
+  if (!moduloPdf) {
+    moduloPdf = import('./pdfConstancia.js')
+      .catch(() => import(`./pdfConstancia.js?otra=${Date.now()}`))
+      .catch((e) => { moduloPdf = null; throw e; });
+  }
+  return moduloPdf;
+}
+
 /**
- * El módulo del PDF y su letra, pedidos nada más empezar para que
- * bajen mientras el servidor trabaja. La letra puede faltar (el PDF
- * sale con la de reserva); el módulo, no.
+ * La imprenta: el módulo del PDF y su letra, pedidos nada más empezar
+ * para que bajen mientras el servidor trabaja. La letra puede faltar
+ * —si falla o tarda más de TOPE_LETRA, el PDF sale con la de reserva—;
+ * el módulo, no.
+ *
+ * (Se llama «imprenta» y no «taller»: en esta casa el taller es la app
+ * de pruebas, la que vive en /taller.)
  */
-function cargarTaller() {
-  const modulo = import('./pdfConstancia.js');
-  const taller = modulo.then(async (pdf) => ({
+function cargarImprenta() {
+  const imprenta = pedirModuloPdf().then(async (pdf) => ({
     pdf,
-    fuente: await pdf.cargarTipografia().catch(() => null),
-  }), () => { throw new Tropiezo(FRASES.sinTaller); });
-  // Si se cancela antes de usarlo, que no quede un rechazo sin recoger.
-  taller.catch(() => {});
-  return taller;
+    fuente: await Promise.race([
+      pdf.cargarTipografia().catch(() => null),
+      pausa(TOPE_LETRA).then(() => null),
+    ]),
+  }), () => { throw new Tropiezo(FRASES.sinImprenta); });
+  // Si se cancela antes de usarla, que no quede un rechazo sin recoger.
+  imprenta.catch(() => {});
+  return imprenta;
 }
 
 /** El documento tal como lo quiere pdfConstancia.js. */
@@ -341,6 +467,44 @@ async function mirarFotos(unidadId, ids, senal, alAvanzar) {
   if (error) throw error;
 }
 
+/* ─── La redacción que se corta por el camino ─────────────────── */
+/**
+ * Redactar es la llamada larga —un minuto o dos— y en un teléfono se
+ * corta con facilidad: se apaga la pantalla, entra una llamada, se
+ * cambia de app, un bache de cobertura, o el hosting suelta la conexión
+ * antes de tiempo. El servidor no se entera y sigue redactando. Si
+ * entonces se pregunta, «Volver a intentarlo» lanza una SEGUNDA
+ * redacción entera encima de la primera (otro minuto y otra factura).
+ *
+ * Así que no se pregunta todavía: se espera a la que ya está en marcha.
+ * Se relee la vivienda —una vez al momento y después cada pocos
+ * segundos— hasta que aparece un documento que antes no estaba, y con
+ * él se sigue como si nada. `anterior` es el id del que había antes de
+ * pedir la redacción ('' si no había).
+ *
+ * Si no aparece en dos minutos, o no hay conexión ni para leer, lanza
+ * el tropiezo con la frase de lo que ha pasado.
+ */
+async function recogerRedaccion(m, anterior, seOculto) {
+  const { unidadId, senal } = m;
+  let sinRed = 0;
+  for (let vez = 0; vez < VECES_RECOGIDA && sinRed < 3; vez++) {
+    if (vez) await pausa(CADA_RECOGIDA, senal);
+    if (m.cancelada) throw new Tropiezo('Descarga cancelada', CANCELADO);
+    try {
+      const estado = await api.constanciaVer(unidadId, { senal });
+      sinRed = 0;
+      if (esEstado(estado) && estado.actual && estado.actual.id !== anterior) return estado;
+    } catch (e) {
+      // Sin conexión se insiste un poco (tres lecturas seguidas); lo
+      // demás —la sesión, un error con su frase— se enseña tal cual.
+      if (m.cancelada || !esRed(e)) throw e;
+      sinRed++;
+    }
+  }
+  throw new Tropiezo(sinRed ? FRASES.sinConexion : seOculto ? FRASES.seApago : FRASES.seCorto);
+}
+
 /* ─── Un intento, de principio a fin ──────────────────────────── */
 /**
  * Los ocho pasos. Devuelve { fichero, nombre, actual } o lanza. `m` es
@@ -353,17 +517,31 @@ async function intentar(m) {
   const seguir = () => { if (m.cancelada) throw new Tropiezo('Descarga cancelada', CANCELADO); };
   const empezarPaso = (paso, entre) => { m.paso = paso; velo.poner(paso, 'curso', entre); };
 
-  const taller = cargarTaller();
+  const imprenta = cargarImprenta();
 
   for (let vuelta = 0; ; vuelta++) {
+    /* ¿Sigue valiendo lo que acaba de contestar el servidor? Redactar,
+       ajustar y sellar releen la vivienda al acabar y dicen
+       `alDia: false` si alguien ha tocado un repaso mientras tanto (la
+       dirección facultativa apuntando en esa misma vivienda, por
+       ejemplo). Ese documento ya nace viejo: no se entrega. La primera
+       vez se da una vuelta más —se relee y se redacta con lo de ahora—;
+       si a la segunda sigue cambiando, se dice y se espera. */
+    const alDia = (respuesta, pasoHecho) => {
+      if (respuesta?.alDia !== false) return true;
+      if (vuelta === 0) return false;
+      throw new Tropiezo(FRASES.haCambiado, 'ha-cambiado', { pasoHecho });
+    };
+
     velo.empezar();
     m.paso = 'leer';
 
-    // 1. Lo último apuntado en este teléfono tiene que estar en el
+    // 1. Lo último apuntado en este aparato tiene que estar en el
     //    servidor antes de redactar. Si la sincronización falla, se
-    //    sigue: el paso siguiente dirá si hay conexión o no.
+    //    sigue: el paso siguiente dirá si hay conexión o no. Y si tarda
+    //    (ver TOPE_SUBIDA), tampoco se la espera para siempre.
     if (vuelta === 0) {
-      try {
+      await hastaElTope((async () => {
         await store.sincronizar({ forzar: true });
         // Si ya había una sincronización en marcha, la llamada de arriba
         // se sube a esa, que pudo empezar antes del último apunte. Si
@@ -371,12 +549,12 @@ async function intentar(m) {
         if (store.estadoSync.pendientes > 0 && !store.estadoSync.error) {
           await store.sincronizar({ forzar: true });
         }
-      } catch { /* no corta */ }
+      })(), TOPE_SUBIDA, senal);
       seguir();
-      // Que la sincronización falle no corta, pero tampoco se calla: si
-      // algo de ESTA vivienda sigue sin subir, el servidor no lo conoce
-      // y el documento saldría sin ello. Se pregunta, y la respuesta
-      // («Seguir sin ellos») sobrevive al reintento.
+      // Que la sincronización falle o no acabe no corta, pero tampoco
+      // se calla: si algo de ESTA vivienda sigue sin subir, el servidor
+      // no lo conoce y el documento saldría sin ello. Se pregunta, y la
+      // respuesta («Seguir sin ellos») sobrevive al reintento.
       if (!m.sinLoSuyo) {
         let sinSubir = 0;
         try { sinSubir = await store.sinSubirDeUnidad(unidadId); } catch { /* sin memoria: se sigue */ }
@@ -394,13 +572,15 @@ async function intentar(m) {
     }
     seguir();
     if (!esEstado(estado)) throw new Tropiezo(FRASES.sinRespuesta);
+    // Primero, si hay algo que redactar: sin repasos pendientes no hace
+    // falta la clave para nada, y no se manda a nadie a por ella.
+    if (!((estado.cuenta?.pendientes || 0) + (estado.cuenta?.rechazados || 0))) {
+      throw new Tropiezo(FRASES.sinRepasos, 'sin-repasos', { pasoHecho: true });
+    }
     // Sin clave solo se corta si de verdad hay que redactar: un
     // documento ya redactado y al día se vuelve a bajar sin la IA.
     if (!estado.hayClave && (m.forzar || !(estado.actual && estado.alDia))) {
       throw new Tropiezo(store.esAdmin() ? FRASES.sinClaveAdmin : FRASES.sinClave, 'sin-clave', { pasoHecho: true });
-    }
-    if (!((estado.cuenta?.pendientes || 0) + (estado.cuenta?.rechazados || 0))) {
-      throw new Tropiezo(FRASES.sinRepasos, 'sin-repasos', { pasoHecho: true });
     }
     velo.poner('leer', 'hecho');
 
@@ -423,9 +603,19 @@ async function intentar(m) {
         velo.poner('fotos', 'hecho', cuenta());
       }
 
-      // 5. Redactar.
+      // 5. Redactar. Si la llamada se corta por el camino, no se
+      //    pregunta: se espera a la redacción que ya está en marcha.
       empezarPaso('redactar');
-      estado = await api.constanciaRedactar(unidadId, { sinFotos: m.sinFotos, forzar: m.forzar }, { senal });
+      const anterior = estado.actual?.id || '';
+      const seOculto = vigilarSiSeOculta();
+      try {
+        estado = await api.constanciaRedactar(unidadId, { sinFotos: m.sinFotos, forzar: m.forzar }, { senal });
+      } catch (e) {
+        if (m.cancelada || !(esRed(e) || (sinFrase(e) && [502, 504].includes(e.status)))) throw e;
+        estado = await recogerRedaccion(m, anterior, seOculto());
+      } finally {
+        seOculto();
+      }
       seguir();
       // Si no ha contestado la app, no se ha redactado nada: se dice, y
       // el reintento lo pide igual que ahora.
@@ -436,12 +626,15 @@ async function intentar(m) {
       actual = estado.actual;
       if (!actual) throw new Tropiezo(FRASES.generica);
       velo.poner('redactar', 'hecho');
+      // Han tocado un repaso mientras se redactaba: ni se ajusta ni se
+      // sella un documento que ya nace viejo.
+      if (!alDia(estado, true)) continue;
     }
 
     // 6. Medir con el mismo motor que pinta el PDF y, si hace falta,
     //    UNA segunda pasada.
     m.paso = 'pdf';
-    const { pdf, fuente } = await taller;
+    const { pdf, fuente } = await imprenta;
     seguir();
     const medida = pdf.medirConstancia(montarDoc(m.u, m.promo, actual, estado.compradores));
     if (!actual.ajustado && (actual.pideAjuste || !medida.cabe)) {
@@ -459,7 +652,8 @@ async function intentar(m) {
         // vivienda, una sola vez.
         if (e?.codigo === 'ha-cambiado' && vuelta === 0) continue;
         // Cualquier otro fallo del ajuste no impide descargar: se
-        // sigue con lo que hay.
+        // sigue con lo que hay (y si lo que hay se ha quedado viejo, lo
+        // dirá el sellado).
         velo.poner('ajustar', 'saltado');
       }
     }
@@ -470,6 +664,10 @@ async function intentar(m) {
     seguir();
     if (!esObjeto(sellado)) throw new Tropiezo(FRASES.sinRespuesta);
     if (!sellado.actual) throw new Tropiezo(FRASES.generica);
+    // La última guarda: lo sellado tiene que ser lo de ahora. Un repaso
+    // apuntado mientras se ajustaba o se sellaba no puede faltar en el
+    // papel sin que nadie se entere.
+    if (!alDia(sellado, false)) continue;
     const doc = montarDoc(m.u, m.promo, sellado.actual, sellado.compradores);
 
     // 8. El PDF.
@@ -480,29 +678,60 @@ async function intentar(m) {
   }
 }
 
+/**
+ * Los fallos de la IA, dichos para quien los lee en el velo. El servidor
+ * los manda con la frase que escribió para quien administra la clave
+ * («La clave de Anthropic no es válida. Vuelve a ponerla en Ajustes.»),
+ * que es la que ven el dictado y las actas de reunión. Aquí la lee
+ * también el comercial, que no tiene Ajustes ni sabe quién es Anthropic.
+ * Devuelve '' si ese fallo no tiene frase propia (y vale la del servidor).
+ */
+function fraseDeLaIA(e) {
+  const admin = store.esAdmin();
+  switch (e.codigo) {
+    case 'sin-clave': return admin ? FRASES.sinClaveAdmin : FRASES.sinClave;
+    case 'clave-mala': return admin ? FRASES.claveMalaAdmin : FRASES.claveMala;
+    // Al administrador, la del servidor: la cuenta es cosa suya.
+    case 'sin-cupo': return admin ? '' : FRASES.sinCupo;
+    // «La API ha contestado con un error (529).»: se dice en llano y se
+    // conserva el número, que es lo único que sirve para preguntar.
+    case 'api-error': {
+      const numero = /\((\d{3})\)/.exec(e.message || '')?.[1];
+      return FRASES.iaNoContesta.replace('{codigo}', numero ? ` (error ${numero})` : '');
+    }
+    // El servidor no consigue salir a internet: al administrador, el
+    // motivo que dé el servidor; a los demás no les dice nada.
+    case 'sin-salida':
+    case 'php-curl': return admin ? '' : FRASES.sinSalida;
+    default: return '';
+  }
+}
+
 /** La frase que se enseña cuando un intento tropieza. */
 function fraseDe(e) {
   if (e instanceof Tropiezo) return e.message;
   if (e instanceof api.ApiError) {
     if (e.codigo === 'tarda') return FRASES.tarda;
     if (e.status === 0) return FRASES.sinConexion;
+    if (sinSesion(e)) return FRASES.sinSesion;
     // Un error sin frase (lo corta el hosting antes de que conteste la
     // app: un 502, un 504) llega como «Error 504» a secas. Se dice en
     // llano; muchas veces el servidor acabó igualmente y el reintento
     // se encuentra el trabajo hecho.
-    if (!e.message || /^Error \d+$/.test(e.message)) return FRASES.sinFrase.replace('{codigo}', e.status);
-    // 403, 409, los de la IA…: la frase la manda el servidor.
-    return e.message;
+    if (sinFrase(e)) return FRASES.sinFrase.replace('{codigo}', e.status);
+    // 403, 409, «declinado»…: la frase la manda el servidor. Los fallos
+    // de la clave, del cupo y de la salida a la IA, la de la casa.
+    return fraseDeLaIA(e) || e.message;
   }
-  // Las pegas del propio PDF («Los compradores no caben…») vienen ya
-  // escritas para leerlas. Lo demás es un fallo del programa y su
-  // mensaje no le dice nada a quien está delante.
+  // Las pegas del propio PDF («Los nombres de los compradores son
+  // demasiado largos…») vienen ya escritas para leerlas. Lo demás es un
+  // fallo del programa y su mensaje no le dice nada a quien está delante.
   return e?.constructor === Error && e.message ? e.message : FRASES.generica;
 }
 
-/** Sin repasos pendientes, o con algo sin subir, no hay nada roto: se
-    dice sin pintarlo de fallo. */
-const esAviso = (e) => e?.codigo === 'sin-repasos' || e?.codigo === 'sin-subir';
+/** Sin repasos pendientes, con algo sin subir o con alguien apuntando
+    en la vivienda, no hay nada roto: se dice sin pintarlo de fallo. */
+const esAviso = (e) => ['sin-repasos', 'sin-subir', 'ha-cambiado'].includes(e?.codigo);
 
 /* ─── Lo que queda a mano después de descargar ────────────────── */
 /**
@@ -544,7 +773,8 @@ function hojaNotas(notas, alCerrar) {
  * Las filas de más de la hoja del PDF, según quién descarga: las notas
  * internas para la dirección facultativa y el administrador (si las
  * hay) y «Redactar de nuevo» solo para el administrador. Al comercial
- * no le sale ninguna.
+ * no le sale ninguna (lo único que puede leer de más es la nota de la
+ * fórmula general: ver FRASES.general).
  */
 function extrasDe(actual, unidadId) {
   const usuario = store.sesion();
@@ -552,6 +782,7 @@ function extrasDe(actual, unidadId) {
   const extras = [];
   if (puedeVerificar(usuario) && notas.length) {
     extras.push({
+      notas: true,
       icono: 'clipboard',
       rotulo: notas.length === 1 ? 'Ver 1 nota interna' : `Ver ${notas.length} notas internas`,
       accion: (volver) => hojaNotas(notas, volver),
@@ -614,6 +845,9 @@ export async function descargarReconocimiento({ unidadId, forzar = false } = {})
       corte.abort();
       m.velo.quitar();
       soltar();
+      // Y la pantalla deja de mantenerse despierta ya, sin esperar a
+      // que acabe lo que estuviera en camino.
+      despierta();
     });
     despierta = mantenerDespierta();
 
@@ -626,22 +860,32 @@ export async function descargarReconocimiento({ unidadId, forzar = false } = {})
         if (!(e instanceof Tropiezo) && !(e instanceof api.ApiError)) {
           console.error('No se pudo preparar el reconocimiento de repasos pendientes:', e);
         }
+        // La sesión caducada no se arregla reintentando: solo «Cerrar».
+        const caducada = sinSesion(e);
         // «Seguir sin mirar las fotos» solo se ofrece cuando arregla
-        // algo: si lo que falla es la clave o el cupo de la IA, redactar
-        // fallaría igual.
-        const enFotos = m.paso === 'fotos' && !['clave-mala', 'sin-clave', 'sin-cupo'].includes(e?.codigo);
+        // algo: si lo que falla es la clave de la IA (o la sesión),
+        // redactar fallaría igual. Con el cupo sí se ofrece: el límite
+        // que salta mirando fotos es el de peticiones por minuto —salen
+        // de dieciocho en dieciocho—, y redactar es una sola llamada.
+        const enFotos = m.paso === 'fotos' && !caducada && !['clave-mala', 'sin-clave'].includes(e?.codigo);
         const sinSubir = e?.codigo === 'sin-subir';
         const aviso = esAviso(e);
         if (m.velo.estadoDe(m.paso)) {
           m.velo.poner(m.paso, e?.pasoHecho ? 'hecho' : aviso ? 'saltado' : 'fallo');
         }
         const eleccion = await m.velo.preguntar(fraseDe(e), [
-          { id: 'otra', rotulo: 'Volver a intentarlo' },
+          caducada ? null : { id: 'otra', rotulo: 'Volver a intentarlo' },
           enFotos ? { id: 'sin-fotos', rotulo: 'Seguir sin mirar las fotos' } : null,
           sinSubir ? { id: 'sin-lo-suyo', rotulo: 'Seguir sin ellos' } : null,
           { id: 'cerrar', rotulo: 'Cerrar' },
         ].filter(Boolean), { aclaracion: enFotos ? FRASES.sinFotos : sinSubir ? FRASES.sinSubirAclaracion : '', aviso });
-        if (eleccion === 'cerrar' || m.cancelada) return false;
+        if (eleccion === 'cerrar' || m.cancelada) {
+          // Con la sesión caducada, al cerrar se va a la pantalla de
+          // entrar por el camino de siempre: la sincronización, que es
+          // quien sabe quitar la sesión de este aparato.
+          if (caducada) Promise.resolve(store.sincronizar({ forzar: true })).catch(() => {});
+          return false;
+        }
         if (eleccion === 'sin-fotos') m.sinFotos = true;
         if (eleccion === 'sin-lo-suyo') m.sinLoSuyo = true;
       }
@@ -654,7 +898,15 @@ export async function descargarReconocimiento({ unidadId, forzar = false } = {})
     m.velo.quitar();
     despierta();
     soltar();
-    entregarFichero(hecho.fichero, hecho.nombre, { extras: extrasDe(hecho.actual, unidadId) });
+    const extras = extrasDe(hecho.actual, unidadId);
+    // Si algún repaso ha acabado solo en la fórmula general, se le dice
+    // a quien descarga, sea quien sea: es quien lleva el papel a firmar.
+    const general = Number(hecho.actual?.genericos) || 0;
+    const veNotas = extras.some((x) => x.notas);
+    entregarFichero(hecho.fichero, hecho.nombre, {
+      extras,
+      nota: general > 0 ? FRASES.general(general, veNotas) : '',
+    });
     return true;
   } catch (e) {
     // Aquí no debería llegar nada; si llega, se dice y no se deja el

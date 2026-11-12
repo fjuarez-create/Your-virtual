@@ -861,10 +861,15 @@ export function filaMenu(icono, rotulo, accion, { rojo = false } = {}) {
  * sale una hoja pequeña «PDF descargado» con esas filas y «Cerrar».
  * Al tocar una, la hoja se quita y su `accion` recibe `volver`, que la
  * pone otra vez (sin descargar de nuevo): quien abre unas notas y las
- * cierra no se queda sin haber compartido el PDF. Sin `extras` no cambia
- * nada de lo de arriba.
+ * cierra no se queda sin haber compartido el PDF.
+ *
+ * `nota` es opcional: una frase que quien recibe el papel tiene que
+ * leer antes de usarlo. Va debajo del titular de la hoja; en el
+ * ordenador, basta con que haya nota para que salga la hoja pequeña.
+ *
+ * Sin `extras` y sin `nota` no cambia nada de lo de arriba.
  */
-export function entregarFichero(fichero, nombre, { extras } = {}) {
+export function entregarFichero(fichero, nombre, { extras, nota = '' } = {}) {
   const bajar = () => {
     const url = URL.createObjectURL(fichero);
     const enlace = h('a', { href: url, download: nombre, style: { display: 'none' } });
@@ -874,6 +879,7 @@ export function entregarFichero(fichero, nombre, { extras } = {}) {
     toast('PDF descargado', '', { icono: 'documento', detalle: nombre });
   };
   const deMas = (extras || []).filter(Boolean);
+  const parrafoNota = () => (nota ? [h('p.d-hoja-nota', null, nota)] : []);
   const filasDeMas = (cerrar, volver, clase = '') => deMas.map((x) => {
     const fila = filaMenu(x.icono, x.rotulo, () => { cerrar(); x.accion?.(volver); });
     if (clase) fila.classList.add(clase);
@@ -881,9 +887,10 @@ export function entregarFichero(fichero, nombre, { extras } = {}) {
   });
   if (!navigator.canShare?.({ files: [fichero] })) {
     bajar();
-    if (deMas.length) {
+    if (deMas.length || nota) {
       const hojaDescargado = () => menuFlotante((cerrar) => [
         h('p.d-hoja-titulo', null, 'PDF descargado'),
+        ...parrafoNota(),
         ...filasDeMas(cerrar, hojaDescargado),
         filaMenu('x', 'Cerrar', cerrar),
       ], { conX: false });
@@ -893,6 +900,7 @@ export function entregarFichero(fichero, nombre, { extras } = {}) {
   }
   const hojaListo = () => menuFlotante((cerrar) => [
     h('p.d-hoja-titulo', null, 'El PDF está listo'),
+    ...parrafoNota(),
     filaMenu('share', 'Compartir', () => {
       cerrar();
       // La llamada sale aquí mismo, dentro del toque: es lo que iOS pide.

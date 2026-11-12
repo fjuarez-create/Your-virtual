@@ -329,7 +329,7 @@ export async function render({ promoId, unidadId }) {
       hayFiltros ? { id: 'pdf-filtrado', icono: 'cursores', rotulo: 'PDF con los filtros puestos',
         sub: `${fraseFiltros} · ${conFiltro.length} ${conFiltro.length === 1 ? 'repaso' : 'repasos'}` } : null,
       { id: 'pdf-historico', icono: 'listaChecks', rotulo: 'PDF con todo el histórico',
-        sub: `Lo por cerrar primero y las ${hechas9.length} ejecutadas al final` },
+        sub: `Lo por cerrar primero y ${hechas9.length === 1 ? 'el ejecutado' : `los ${hechas9.length} ejecutados`} al final` },
     ].filter(Boolean), { extra, destacada });
 
     if (elegido === 'reconocimiento') bajarReconocimiento(unidadId);
@@ -572,6 +572,24 @@ function cuandoReconocimiento(entrega, hoy = E.hoyIso()) {
   return `revisión ${revision >= hoy ? viene(revision) : paso(revision)}`;
 }
 
+/* El módulo de la descarga, una sola copia para toda la sesión. Un
+   módulo que no llegó a bajar (se pulsó sin cobertura y sin caché), hay
+   navegadores que lo recuerdan como fallido y no lo vuelven a pedir
+   hasta que la app se abre de nuevo: la tarjeta negra se quedaba muerta
+   aunque volviera la conexión. Si la dirección de siempre falla, se
+   pide por otra —la misma con una coletilla—, que el navegador no tiene
+   apuntada. Lo que baje se guarda aquí: con dos copias del módulo, su
+   guarda de «ya hay una descarga en marcha» no valdría de nada. */
+let moduloConstancia = null;
+function pedirModuloConstancia() {
+  if (!moduloConstancia) {
+    moduloConstancia = import('../constancia.js')
+      .catch(() => import(`../constancia.js?otra=${Date.now()}`))
+      .catch((e) => { moduloConstancia = null; throw e; });
+  }
+  return moduloConstancia;
+}
+
 /**
  * Descarga el reconocimiento de repasos pendientes de la vivienda. El
  * módulo se pide ahora y no al abrir la app: solo lo usan tres
@@ -587,12 +605,12 @@ async function bajarReconocimiento(unidadId) {
   document.body.append(escudo);
   setTimeout(() => escudo.remove(), 500);
   try {
-    const { descargarReconocimiento } = await import('../constancia.js');
+    const { descargarReconocimiento } = await pedirModuloConstancia();
     await descargarReconocimiento({ unidadId });
   } catch (e) {
     console.error('No se pudo abrir la descarga del reconocimiento:', e);
-    // Un módulo que no llegó a bajar, hay navegadores que no lo vuelven
-    // a pedir hasta que la app se abre de nuevo: por eso se dice.
+    // Si tampoco baja por la otra dirección, es que no hay conexión. Y
+    // por si el navegador se empeña, lo de abrir la app de nuevo.
     toast('No se ha podido abrir la descarga', 'err', { detalle: 'Comprueba la conexión. Si sigue igual, cierra la app y ábrela de nuevo' });
   }
 }

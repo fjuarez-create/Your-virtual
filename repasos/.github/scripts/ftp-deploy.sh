@@ -383,11 +383,18 @@ case "$QUE" in
     # que Apple tiene que poder leer para dejar la app en la tienda, y
     # sus direcciones están escritas en la ficha. Si un día dejan de
     # subir, que se entere el despliegue y no el revisor.
+    #
+    # Y las cuatro piezas del reconocimiento de repasos pendientes, el
+    # papel que se firma en la notaría: si un día faltara la letra del
+    # documento, el PDF saldría con la de reserva sin que nadie lo viera;
+    # si faltara cualquiera de las otras tres, no saldría.
     for f in index.html sw.js manifest.webmanifest \
              privacidad.html soporte.html marketing.html \
              assets/marketing/inicio.jpg \
              css/app.css js/app.js js/store.js \
-             api/index.php api/lib/nucleo.php assets/fonts/opensans-var.woff2; do
+             api/index.php api/lib/nucleo.php assets/fonts/opensans-var.woff2 \
+             js/constancia.js js/pdfConstancia.js api/lib/constancia.php \
+             assets/fonts/liberation-sans-pdf.ttf; do
       if [ "$(contar_remoto "$f")" -ge 1 ]; then
         echo "ok     $f"
       else

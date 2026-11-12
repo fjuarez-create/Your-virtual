@@ -395,8 +395,12 @@ export async function sinSubirDeUnidad(unidadId) {
     let listaId = null;
     if (item.tipo === 'lista') listaId = item.id;
     else if (item.tipo === 'tarea') listaId = (await db.get('tareas', item.id))?.listaId;
-    else if (item.tipo === 'comentario' || item.tipo === 'medio') {
-      const registro = await db.get(item.tipo === 'medio' ? 'medios' : 'comentarios', item.id);
+    else if (item.tipo === 'comentario' || item.tipo === 'medio' || item.tipo === 'medio-borrado') {
+      // Una foto borrada aquí y todavía sin borrar en el servidor también
+      // cuenta: mientras no suba, la IA la sigue mirando. Su registro
+      // sigue en la base de este aparato (marcado como borrado), con su
+      // repaso.
+      const registro = await db.get(item.tipo === 'comentario' ? 'comentarios' : 'medios', item.id);
       listaId = registro?.tareaId ? (await db.get('tareas', registro.tareaId))?.listaId : null;
     }
     if (!listaId) continue;

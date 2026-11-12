@@ -3791,6 +3791,15 @@ body.es-taller::before {
    para que no compitan con Compartir y Guardar. */
 .d-hoja-fila.discreta { height: 48px; font-size: 15px; color: var(--d-beige-tinta); }
 .d-hoja-fila.discreta svg { width: 20px; height: 20px; }
+/* La nota de la hoja del PDF: lo que quien recibe el papel tiene que
+   leer antes de usarlo (que algún repaso va citado solo de forma
+   general, por ejemplo). Debajo del titular, en tinta y sin gritar. */
+.d-hoja-nota {
+  margin: 0; padding: 4px 20px 14px;
+  font-size: 14px; line-height: 20px; color: var(--d-tinta, #000);
+  text-align: center;
+}
+.d-hoja-nota + .d-hoja-fila { border-top: 1px solid #ececec; }
 
 /* ── Las notas internas del reconocimiento ──
    En la tarjeta de los menús. Cada nota dice de qué tipo es, qué pasa

@@ -1326,15 +1326,32 @@ function guardar_tareas(): void
 /**
  * Hilo de una tarea: rechazos y notas. Mismo protocolo de upsert que el
  * resto; el texto de un rechazo no se puede editar después, pero sí
- * borrar, y eso viaja como borrada = 1.
+ * borrar, y eso viaja como borrada = 1. Quién puede qué, dentro.
  */
 function guardar_comentarios(): void
 {
-    exigir_sesion();
+    $yo = exigir_sesion();
     $entrada = cuerpo()['comentarios'] ?? [];
     if (!is_array($entrada)) {
         responder_error(400, 'Formato incorrecto.', 'formato');
     }
+    // Quién es a efectos de permisos, como en guardar_tareas: rechazar
+    // un repaso es cosa de quien verifica, y el motivo que deja escrito
+    // es su palabra (el reconocimiento de repasos pendientes redacta
+    // con él). El navegador no es de fiar, así que se comprueba aquí:
+    //
+    //   - un comentario nuevo solo nace como «rechazo» si lo sube
+    //     quien verifica; a los demás se les guarda como nota;
+    //   - lo que ya está escrito conserva su tipo y su firma, lo suba
+    //     quien lo suba;
+    //   - el texto de un rechazo no se cambia después, y el de una
+    //     nota solo lo cambia quien la escribió o quien verifica;
+    //   - borrar lo ajeno es cosa de quien verifica, igual que borrar
+    //     un repaso.
+    //
+    // En vez de rechazar la subida entera —que dejaría la app sin
+    // sincronizar y sin saber por qué— se conserva lo guardado.
+    $decide = (bool) $yo['verifica'] || $yo['rol'] === 'admin';
     $guardados = 0;
     foreach ($entrada as $c) {
         if (!is_array($c) || !es_uuid($c['id'] ?? null) || !es_uuid($c['tareaId'] ?? null)) {
@@ -1352,6 +1369,33 @@ function guardar_comentarios(): void
             'creado_por_nombre'  => texto($c, 'creadoPorNombre', 120, 'Sin identificar'),
             'creado_por_empresa' => texto($c, 'creadoPorEmpresa', 120),
         ];
+
+        // Se relee dentro del bucle y se suelta antes de escribir (ver upsert).
+        $previo = bd()->prepare(
+            'SELECT tarea_id, texto, tipo, borrada, creado, creado_por, creado_por_nombre, creado_por_empresa
+               FROM comentarios WHERE id = ?'
+        );
+        $previo->execute([$c['id']]);
+        $fila = $previo->fetch() ?: null;
+        $previo->closeCursor();
+
+        if ($fila) {
+            $esSuyo = (string) ($fila['creado_por'] ?? '') === (string) $yo['id'];
+            $registro['tarea_id'] = $fila['tarea_id'] ?? $registro['tarea_id'];
+            $registro['tipo'] = $fila['tipo'] === 'rechazo' ? 'rechazo' : 'nota';
+            $registro['creado'] = $fila['creado'] ?? $registro['creado'];
+            $registro['creado_por'] = $fila['creado_por'];
+            $registro['creado_por_nombre'] = $fila['creado_por_nombre'] ?? $registro['creado_por_nombre'];
+            $registro['creado_por_empresa'] = $fila['creado_por_empresa'] ?? $registro['creado_por_empresa'];
+            if ($fila['tipo'] === 'rechazo' || !($esSuyo || $decide)) {
+                $registro['texto'] = (string) $fila['texto'];
+            }
+            if (!($esSuyo || $decide)) {
+                $registro['borrada'] = (int) $fila['borrada'];
+            }
+        } elseif ($registro['tipo'] === 'rechazo' && !$decide) {
+            $registro['tipo'] = 'nota';
+        }
         if (upsert('comentarios', $registro)) {
             $guardados++;
         }

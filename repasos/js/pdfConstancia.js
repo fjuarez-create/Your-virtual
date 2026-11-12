@@ -213,6 +213,42 @@ function descomponer(letra) {
   return suelta;
 }
 
+// Lo que se escribe por una letra de fuera: ella misma, su parecido, nada
+// (lo invisible) o la marca de que no hay manera de escribirla.
+function escritoDe(letra) {
+  const punto = letra.codePointAt(0);
+  if (esBlanco(punto)) return ' ';
+  if (codigoWinAnsi(punto)) return letra;
+  if (esInvisible(punto)) return '';
+  if (EQUIVALENCIAS[punto]) return EQUIVALENCIAS[punto];
+  return descomponer(letra) || CENTINELA;
+}
+
+// «Letra» de cualquier alfabeto (sin las marcas sueltas de transcripción).
+// Va hecha con RegExp() y no escrita a pelo: escrita a pelo, un navegador
+// que no la entendiera dejaría de cargar el módulo entero; así, en ese
+// solo se miran las letras que tienen mayúscula y minúscula.
+let LETRA = null;
+try { LETRA = new RegExp('[\\p{Lu}\\p{Ll}\\p{Lt}\\p{Lo}]', 'u'); } catch { LETRA = null; }
+
+function esLetra(letra) {
+  return LETRA ? LETRA.test(letra) : letra.toLowerCase() !== letra.toUpperCase();
+}
+
+// ¿Se le caería a este texto alguna letra al limpiarlo? Un emoji o un
+// signo raro se quitan sin más; una letra de un alfabeto que la tabla no
+// tiene (cirílico, griego, chino, árabe…) no es lo mismo: con ella se va
+// un nombre, o medio.
+function pierdeLetras(valor) {
+  if (typeof valor !== 'string') return false;
+  let texto = valor;
+  try { texto = texto.normalize('NFC'); } catch { /* se queda como está */ }
+  for (const letra of texto) {
+    if (escritoDe(letra) === CENTINELA && esLetra(letra)) return true;
+  }
+  return false;
+}
+
 function limpiar(valor) {
   // Solo se escriben cadenas y números: de una lista o de un objeto
   // saldría un «[object Object]» en un papel que se firma.
@@ -220,14 +256,7 @@ function limpiar(valor) {
   let texto = String(valor);
   try { texto = texto.normalize('NFC'); } catch { /* se queda como está */ }
   let limpio = '';
-  for (const letra of texto) {
-    const punto = letra.codePointAt(0);
-    if (esBlanco(punto)) limpio += ' ';
-    else if (codigoWinAnsi(punto)) limpio += letra;
-    else if (esInvisible(punto)) continue;
-    else if (EQUIVALENCIAS[punto]) limpio += EQUIVALENCIAS[punto];
-    else limpio += descomponer(letra) || CENTINELA;
-  }
+  for (const letra of texto) limpio += escritoDe(letra);
   // Donde había algo imposible de escribir no se deja ni doble espacio ni
   // un espacio colgando delante de una coma.
   limpio = limpio.replace(/( *)\uE000(?:[ \uE000]*\uE000)?( *)/g, (todo, antes, despues, lugar, entero) => {
@@ -425,6 +454,8 @@ function leerDatos(doc) {
     fecha,
     fechaLarga: fecha ? fecha.larga : '',
     compradores: limpiar(origen.compradores),
+    // Si a los compradores se les cae alguna letra por el camino.
+    faltanLetras: pierdeLetras(origen.compradores),
     zonas,
     realizadas: limpiar(origen.realizadas),
   };
@@ -436,8 +467,8 @@ function leerDatos(doc) {
    Cada trozo de texto es un «bloque» con su letra, su interlínea y el
    aire que pide por arriba y por abajo. Entre dos bloques se deja el
    mayor de los dos aires, no la suma. Un párrafo que no cabe se parte
-   entre páginas, pero nunca deja una sola línea al pie; un título o un
-   epígrafe pasan enteros.
+   entre páginas, pero nunca deja una sola línea al pie ni manda una
+   sola a la página siguiente; un título o un epígrafe pasan enteros.
    ─────────────────────────────────────────────────────────────────── */
 
 function bloqueDe(tipo, texto, estilo, alineacion, extras) {
@@ -533,12 +564,13 @@ function fluir(bloques) {
       const libre = inicio - suelo;
       const alto = lineas.length * bloque.interlinea;
       // Un epígrafe no se queda solo al pie: detrás tienen que caber al
-      // menos dos líneas de lo que encabeza.
+      // menos dos líneas de lo que encabeza. Y si es un párrafo de tres,
+      // las tres: ese no se parte (dejaría una sola a un lado o al otro).
       let compania = 0;
       const siguiente = utiles[i + 1];
       if (bloque.tipo === 'epigrafe' && siguiente && !arriba) {
-        compania = Math.max(bloque.despues, siguiente.antes)
-          + Math.min(2, siguiente.lineas.length) * siguiente.interlinea;
+        const juntas = siguiente.partible && siguiente.lineas.length === 3 ? 3 : Math.min(2, siguiente.lineas.length);
+        compania = Math.max(bloque.despues, siguiente.antes) + juntas * siguiente.interlinea;
       }
       if (alto + compania <= libre + holgura) {
         colocar(bloque, lineas, inicio, false);
@@ -549,6 +581,9 @@ function fluir(bloques) {
         break;
       }
       let caben = Math.floor((libre + holgura) / bloque.interlinea);
+      // Tampoco sube una sola línea a la página siguiente (a veces, una
+      // sola palabra bajo la cabecera): se lleva con ella la de antes.
+      if (bloque.partible && caben > 1 && lineas.length - caben === 1) caben -= 1;
       if (arriba) caben = Math.max(1, caben);
       else if (!bloque.partible || caben <= 1) caben = 0;
       if (caben === 0) {
@@ -598,9 +633,10 @@ function componerZonas(datos, textos) {
   // «sobran» son las líneas que hay que QUITAR de las zonas para que todo
   // quepa en la página 1: es lo que se le pide a la IA cuando ajusta. No es
   // lo mismo que las líneas que se ven en la página siguiente: un párrafo no
-  // deja una línea suelta al pie (bajan más) y el aire entre las zonas que
-  // bajan ya no se gasta en la primera (bajan menos). Nunca más de 200, que
-  // es lo más que admite el servidor al ajustar, y nunca 0 si no cabe.
+  // deja una línea suelta al pie ni manda una sola arriba (bajan más) y el
+  // aire entre las zonas que bajan ya no se gasta en la primera (bajan
+  // menos). Nunca más de 200, que es lo más que admite el servidor al
+  // ajustar, y nunca 0 si no cabe.
   let sobran = Math.min(TOPE_DE_SOBRAN, Math.max(0, lineasZonas - lineasCaben));
   if (cabe) sobran = 0;
   else if (sobran < 1) sobran = 1;
@@ -1185,8 +1221,16 @@ export function pdfConstancia(doc, opciones = {}) {
   const datos = compuesto.datos;
   if (!datos.vivienda) throw new Error('Falta el número de la vivienda.');
   if (!datos.fecha) throw new Error('La fecha del documento no es válida.');
-  // Antes que dejar un nombre fuera del papel sin que nadie lo vea.
-  if (!compuesto.hojaCabe) throw new Error('Los compradores no caben en la hoja de repasos.');
+  // Antes que dejar un nombre fuera del papel sin que nadie lo vea. Las dos
+  // frases dicen qué hacer: volver a intentarlo, sin más, no lo arregla.
+  if (datos.faltanLetras) {
+    throw new Error('Los nombres de los compradores llevan letras que el documento no sabe escribir. '
+      + 'Escríbelos con letras latinas en las fechas de la vivienda y vuelve a descargarlo.');
+  }
+  if (!compuesto.hojaCabe) {
+    throw new Error('Los nombres de los compradores son demasiado largos para la hoja de repasos. '
+      + 'Acórtalos en las fechas de la vivienda y vuelve a descargarlo.');
+  }
   const ficha = {
     titulo: rellenar(compuesto.textos.tituloInfo, {
       vivienda: datos.vivienda, promocion: datos.promocion, fecha: datos.fechaLarga,
