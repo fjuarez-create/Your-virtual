@@ -16,6 +16,11 @@ cuántas filas de cada tipo, cuánto pesa, y con qué forma viene la marca:
 Y de la sesión, qué cookie pone la app de verdad y cuál el taller: solo
 el nombre y el camino de cada una, nunca su valor.
 
+Al final pregunta, con una sola lectura, si contesta el reconocimiento
+de repasos pendientes de una vivienda: escribe el estado, el código de
+error si lo hay y tres síes o noes. Nunca el texto del documento ni los
+compradores, y esa línea no pone la medición en rojo.
+
 Ni nombres, ni textos, ni la contraseña: esta sale de los secretos y va
 al servidor sin pasar por ningún fichero ni por la línea de órdenes.
 """
@@ -42,6 +47,11 @@ DESPUES_DE = os.environ.get("MEDIR_DESPUES_DE", "2026-11-11T12:14:00")
 # El taller vive en el mismo dominio, en /taller. Solo se le pregunta
 # qué cookie de sesión pone (ver «LA SESIÓN», abajo); no se entra en él.
 BASE_TALLER = os.environ.get("MEDIR_BASE_TALLER", BASE.replace("/api/", "/taller/api/", 1))
+
+# La vivienda por la que se pregunta si contesta el reconocimiento de
+# repasos pendientes (ver mirar_reconocimiento). Viaja codificada en la
+# dirección («brassie%3A22»), como la manda la app.
+VIVIENDA = os.environ.get("MEDIR_VIVIENDA", "brassie:22")
 
 galletas = http.cookiejar.CookieJar()
 abridor = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(galletas))
@@ -190,6 +200,52 @@ def contar(b):
     return total, ", ".join("%s %d" % (t, b["distintas"][t]) for t in TABLAS)
 
 
+def si_o_no(valor):
+    return "sí" if valor is True else "no"
+
+
+def mirar_reconocimiento():
+    """El reconocimiento de repasos pendientes contesta. UN GET, que solo
+    lee: ni redacta, ni sella, ni llama a la IA (es lo mismo que pide la
+    app al abrir el menú «···» de una vivienda).
+
+    Devuelve UNA línea con el estado HTTP, el código de error si lo hay
+    y, si contesta 200, tres síes o noes. La respuesta trae el texto del
+    documento y los compradores: de ahí NO se escribe nada. Pase lo que
+    pase devuelve una línea que no pone la medición en rojo."""
+    rotulo = "EL RECONOCIMIENTO DE REPASOS PENDIENTES"
+    try:
+        ruta = "constancias/" + urllib.parse.quote(VIVIENDA, safe="")
+        peticion = urllib.request.Request(BASE + ruta)
+        try:
+            with abridor.open(peticion, timeout=20) as respuesta:
+                crudo = respuesta.read()
+                codigo = respuesta.status
+        except urllib.error.HTTPError as e:
+            crudo = e.read()
+            codigo = e.code
+        try:
+            r = json.loads(crudo)
+        except Exception:
+            r = None
+        if not isinstance(r, dict):
+            return "%s contesta %s, sin datos que se puedan leer." % (rotulo, codigo)
+        if codigo == 200:
+            return ("%s contesta 200: hay con qué redactar (hayClave), %s; hay documento vigente, %s; está al día, %s."
+                    % (rotulo, si_o_no(r.get("hayClave")),
+                       si_o_no(isinstance(r.get("actual"), dict)), si_o_no(r.get("alDia"))))
+        # Del error, solo su código (una palabra con guiones); la frase no.
+        clave = r.get("codigo")
+        if not (isinstance(clave, str) and 0 < len(clave) <= 40 and clave.replace("-", "").isalnum()):
+            clave = ""
+        if codigo == 403 and clave == "sin-permiso":
+            return ("%s contesta 403 «sin-permiso»: la ruta llega y el módulo carga "
+                    "(la cuenta de revisión no es de las que lo descargan)." % rotulo)
+        return "%s contesta %s%s." % (rotulo, codigo, " «%s»" % clave if clave else ", sin código de error")
+    except Exception as e:  # sin red, tarda, corte…: se dice y se sigue
+        return "%s no se ha podido mirar (%s); la medición sigue igual." % (rotulo, type(e).__name__)
+
+
 def main():
     correo = os.environ.get("REVISION_EMAIL", "").strip()
     clave = os.environ.get("REVISION_PASSWORD", "")
@@ -301,6 +357,10 @@ def main():
                       % (vieja["tandas"], total3, total))
         if not vieja["completa"] or total3 < total:
             lineas.append("::error::Con una marca de las de antes no baja todo.")
+
+    # 4 · El reconocimiento de repasos pendientes contesta. Solo lee, y
+    #     su línea nunca pone la medición en rojo (ver mirar_reconocimiento).
+    lineas.append(mirar_reconocimiento())
 
     pedir("auth/logout", {})
 
