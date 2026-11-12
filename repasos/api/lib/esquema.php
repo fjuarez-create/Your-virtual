@@ -401,9 +401,12 @@ function esquema_nombres_de_asistentes(PDO $pdo): array
     $rescatados = [];   // identificador → nombre ('' = no hay de dónde): se busca una vez
     $cuantas = 0;
     foreach ($reuniones as $r) {
-        // Lo que no sea una lista (un JSON roto, vacío o raro) se deja
-        // como está: aquí no se arregla la lista, solo se le ponen
-        // nombres a los identificadores que tenga.
+        // Lo que no se lea como JSON, o no sea ni una lista ni un
+        // objeto (roto, vacío, «null», un número suelto), se deja como
+        // está. Y a lo que se lee no se le arregla la forma: solo se le
+        // ponen nombres a los identificadores que tenga. Una lista que
+        // estuviera guardada como objeto ({"a": "<id>"}) recibe los de
+        // sus valores, que es añadir y no estropea nada.
         $asistentes = json_decode((string) $r['asistentes'], true);
         if (!is_array($asistentes)) {
             continue;

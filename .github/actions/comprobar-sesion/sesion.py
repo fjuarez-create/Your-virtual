@@ -55,10 +55,16 @@ import urllib.request
 API = os.environ.get("SESION_API", "")
 NOMBRE = os.environ.get("SESION_NOMBRE", "")
 CAMINO = os.environ.get("SESION_CAMINO", "")
-DE_QUIEN = os.environ.get("SESION_DE_QUIEN", "") or "esta API"
+QUIEN = os.environ.get("SESION_DE_QUIEN", "") or "esta API"
+# «de el taller» y «a el taller» no se dicen: «del taller», «al taller».
+DE_QUIEN = "del " + QUIEN[3:] if QUIEN.startswith("el ") else "de " + QUIEN
+A_QUIEN = "al " + QUIEN[3:] if QUIEN.startswith("el ") else "a " + QUIEN
 CORREO = os.environ.get("SESION_EMAIL", "").strip()
 CLAVE = os.environ.get("SESION_PASSWORD", "")
-PAUSA = float(os.environ.get("SESION_PAUSA", "5") or 5)
+try:
+    PAUSA = float(os.environ.get("SESION_PAUSA", "") or 5)
+except ValueError:
+    PAUSA = 5.0
 
 # Todas las cookies de sesión de la casa empiezan así. Las demás (las que
 # pueda poner el alojamiento por su cuenta) no se juzgan.
@@ -87,7 +93,7 @@ def pedir(ruta, cuerpo=None, galleta=None):
     if galleta is not None:
         peticion.add_header("Cookie", galleta)
     try:
-        with abridor.open(peticion, timeout=25) as respuesta:
+        with abridor.open(peticion, timeout=15) as respuesta:
             codigo, cabeceras, crudo = respuesta.status, respuesta.headers, respuesta.read()
     except urllib.error.HTTPError as e:
         codigo, cabeceras, crudo = e.code, e.headers, e.read()
@@ -103,7 +109,12 @@ def pedir(ruta, cuerpo=None, galleta=None):
 def leer_galletas(crudas):
     """De las cabeceras Set-Cookie, las de sesión de la casa: una lista de
     diccionarios con nombre, valor (que no se escribe nunca), camino,
-    dominio y atributos."""
+    dominio y atributos.
+
+    La misma cabecera repetida tal cual cuenta UNA vez: para el navegador
+    es la misma cookie puesta dos veces, y un proxy que repita cabeceras
+    no es que la cookie haya cambiado (en las pruebas ponía el despliegue
+    en rojo con un mensaje que no se entendía: «NO pone X, sino X, X»)."""
     vistas = []
     for cruda in crudas:
         trozos = [t.strip() for t in cruda.split(";")]
@@ -121,7 +132,8 @@ def leer_galletas(crudas):
                 galleta["dominio"] = dato.strip()
             elif clave:
                 galleta["atributos"][clave] = dato.strip().lower()
-        vistas.append(galleta)
+        if galleta not in vistas:
+            vistas.append(galleta)
     return vistas
 
 
@@ -158,7 +170,7 @@ def main():
     esperada = "«%s» con camino «%s»" % (NOMBRE, CAMINO)
     fallos = []
     avisos = []
-    print("La cookie de sesión de %s tiene que ser %s." % (DE_QUIEN, esperada))
+    print("La cookie de sesión %s tiene que ser %s." % (DE_QUIEN, esperada))
 
     # 1 · Salir sin estar dentro: el servidor borra SU cookie, y se ve cuál es.
     #     Solo cuenta si quien contesta es la API («ok»): un 200 con la
@@ -172,7 +184,7 @@ def main():
     else:
         print("Al pedir salir sin estar dentro, el servidor borra: %s." % decir(al_salir))
         if not es_la_buena(al_salir):
-            fallos.append("Al salir, %s NO borra %s, sino %s." % (DE_QUIEN, esperada, decir(al_salir)))
+            fallos.append("Al salir, %s NO borra %s, sino %s." % (QUIEN, esperada, decir(al_salir)))
 
     # 2 · Entrar con la cuenta de revisión.
     al_entrar = None
@@ -194,29 +206,46 @@ def main():
     if al_entrar is not None:
         print("Al entrar, el servidor pone: %s." % decir(al_entrar))
         if not es_la_buena(al_entrar):
-            fallos.append("Al entrar, %s NO pone %s, sino %s." % (DE_QUIEN, esperada, decir(al_entrar)))
+            fallos.append("Al entrar, %s NO pone %s, sino %s." % (QUIEN, esperada, decir(al_entrar)))
         else:
             la_mia = al_entrar[0]
             # Los atributos de siempre. Que falte uno no deja a nadie
-            # fuera, pero la cookie de la app de verdad no cambia «ni un
-            # atributo»: se avisa.
+            # fuera hoy, pero la cookie de la app de verdad no cambia «ni
+            # un atributo»: se avisa. La caducidad es el que más duele:
+            # sin ella la cookie es «de sesión del navegador», y el móvil
+            # olvida a quien había entrado en cuanto cierra la app.
             faltan = [a for a in ("httponly", "secure") if a not in la_mia["atributos"]]
             if la_mia["atributos"].get("samesite") != "lax":
                 faltan.append("samesite=lax")
+            if "expires" not in la_mia["atributos"] and "max-age" not in la_mia["atributos"]:
+                faltan.append("la caducidad (expires o max-age: sin ella, el móvil olvida la sesión al cerrar la app)")
             if faltan:
-                avisos.append("A la cookie de sesión de %s le falta: %s." % (DE_QUIEN, ", ".join(faltan)))
+                avisos.append("A la cookie de sesión %s le falta: %s." % (DE_QUIEN, ", ".join(faltan)))
 
             # 3 · Con ESA cookie, una petición con sesión tiene que contestar.
+            #     Rojo si el servidor NO la reconoce (401: pone una cookie
+            #     y lee otra) o si contesta otra cuenta. Una avería
+            #     pasajera (500, 502, sin red) no dice nada de la cookie:
+            #     se insiste dos veces más y, si sigue, se avisa.
             par = "%s=%s" % (la_mia["nombre"], la_mia["valor"])
-            codigo, _, yo = pedir("auth/me", galleta=par)
+            codigo, yo = 0, None
+            for intento in (1, 2, 3):
+                codigo, _, yo = pedir("auth/me", galleta=par)
+                if codigo in (200, 401, 403):
+                    break
+                if intento < 3:
+                    time.sleep(intento * PAUSA)
             correo = str(((yo or {}).get("usuario") or {}).get("email") or "").strip().lower()
             if codigo == 200 and correo == CORREO.lower():
                 print("Con esa cookie, una petición con sesión contesta bien (200, y es la cuenta de revisión).")
-            elif codigo == 0:
-                avisos.append("No se ha podido probar la cookie en una petición con sesión (sin red).")
+            elif codigo == 200:
+                fallos.append("Con la cookie recién puesta, quien contesta %s NO es la cuenta de revisión." % A_QUIEN)
+            elif codigo in (401, 403):
+                fallos.append("La cookie que %s acaba de poner NO la reconoce su propio servidor: una petición con sesión contesta %s."
+                              % (QUIEN, codigo))
             else:
-                fallos.append("Con la cookie recién puesta, una petición con sesión a %s contesta %s%s."
-                              % (DE_QUIEN, codigo, "" if codigo != 200 else ", y no es la cuenta de revisión"))
+                avisos.append("No se ha podido probar la cookie en una petición con sesión: el servidor contesta %s."
+                              % (codigo or "sin red"))
 
             # 4 · Salir de verdad: se borra la misma, y deja de valer.
             codigo, crudas, cuerpo = pedir("auth/logout", {}, galleta=par)
@@ -225,12 +254,12 @@ def main():
                 if es_la_buena(borrada):
                     print("Al salir de verdad se borra esa misma cookie.")
                 else:
-                    fallos.append("Al salir de verdad, %s NO borra %s, sino %s." % (DE_QUIEN, esperada, decir(borrada)))
+                    fallos.append("Al salir de verdad, %s NO borra %s, sino %s." % (QUIEN, esperada, decir(borrada)))
                 codigo, _, _ = pedir("auth/me", galleta=par)
                 if codigo == 401:
                     print("Y la sesión de la comprobación queda cerrada (401).")
-                elif codigo != 0:
-                    avisos.append("Después de salir, la sesión de la comprobación sigue contestando %s." % codigo)
+                elif codigo == 200:
+                    avisos.append("Después de salir, la sesión de la comprobación SIGUE valiendo: salir no la ha cerrado.")
             else:
                 avisos.append("No se ha podido cerrar la sesión de la comprobación (%s)." % (codigo or "sin red"))
 
@@ -239,20 +268,33 @@ def main():
     if fallos:
         for fallo in fallos:
             print("::error::" + fallo)
-        print("::error::La cookie de sesión de %s ha cambiado. Con otro nombre u otro camino, quien tenía la sesión abierta se queda fuera: hay que arreglarlo (o volver atrás) YA." % DE_QUIEN)
+        print("::error::La cookie de sesión %s NO es la que tiene que ser. Con otro nombre u otro camino, quien tenía la sesión abierta se queda fuera: hay que arreglarlo (o volver atrás) YA." % DE_QUIEN)
         return 1
 
     if al_entrar is not None:
-        print("BIEN: %s guarda la sesión en %s." % (DE_QUIEN, esperada))
+        print("BIEN: %s guarda la sesión en %s." % (QUIEN, esperada))
     elif al_salir is not None:
         # Sin los secretos de la cuenta no es un aviso: de que faltan ya
         # avisa quien los necesita de verdad (el paso del revisor).
-        print("%sLa cookie de sesión de %s solo se ha podido mirar al pedir salir (es %s, la que tiene que ser); al entrar, no."
+        print("%sLa cookie de sesión %s solo se ha podido mirar al pedir salir (es %s, la que tiene que ser); al entrar, no."
               % ("::warning::" if CORREO and CLAVE else "", DE_QUIEN, esperada))
     else:
-        print("::warning::No se ha podido preguntar a %s por su cookie de sesión: no contesta." % DE_QUIEN)
+        print("::warning::No se ha podido preguntar %s por su cookie de sesión: no contesta." % A_QUIEN)
     return 0
 
 
+def principal():
+    """main(), sin que un tropiezo de la propia guardia tiña de rojo un
+    despliegue que ha salido bien: eso no es un fallo de la cookie. Se
+    avisa, para que alguien la mire."""
+    try:
+        return main()
+    except Exception as tropiezo:
+        # Solo el tipo del error: en su detalle podría venir algo de la respuesta.
+        print("::warning::La guardia de la cookie de sesión ha tropezado (%s) y no ha podido mirar: revísala."
+              % type(tropiezo).__name__)
+        return 0
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(principal())

@@ -29,13 +29,25 @@ import { ir } from './app.js';
  * «?» y la tarjeta del archivo se quedaba sin su nombre (noviembre de
  * 2026). Un acta es un documento: conserva a quien asistió.
  *
+ * A quien ya no está NO se le busca por su nombre en el directorio,
+ * que es lo que haría store.persona(id, nombre): un asistente es una
+ * cuenta, y otra cuenta que se llame igual es otra persona. Medido:
+ * «Antonio», el que asistió (sin foto), se dio de baja; quedaba otro
+ * «Antonio», con foto, que no asistió, y el acta cerrada enseñaba la
+ * foto de este, y la hoja de la mesa ponía «Ya no está en el equipo»
+ * bajo la cara de alguien que sí está. De quien ya no está se pinta lo
+ * que se sabe: su nombre, con sus iniciales. (También si es la misma
+ * persona vuelta a dar de alta con otra cuenta: sale con sus iniciales
+ * y no con su foto de ahora.)
+ *
  * Con todos en el directorio no cambia nada: el nombre guardado solo se
- * mira cuando el identificador no aparece, que es como store.persona()
- * trata ya la firma de un repaso o de un mensaje. Y un servidor que
- * todavía no manda los nombres deja esto como estaba.
+ * mira cuando el identificador no aparece. Y un servidor que todavía no
+ * manda los nombres deja esto como estaba.
  */
 export function asistenteDe(r, id) {
-  return store.persona(id, r.asistentesNombres?.[id]);
+  const p = store.persona(id);
+  const guardado = r.asistentesNombres?.[id];
+  return p.nombre || !guardado ? p : { id, nombre: guardado };
 }
 
 /**

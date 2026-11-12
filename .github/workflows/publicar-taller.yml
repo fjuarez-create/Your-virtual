@@ -437,32 +437,6 @@ jobs:
             || { echo "::error::La cuenta del taller no entra como administradora." >&2; exit 1; }
           echo "La cuenta del taller entra y es administradora."
 
-      # El taller vive en el mismo dominio que la app de verdad, y una
-      # cookie con camino «/» es de todo el dominio: mientras compartían
-      # la de la sesión, entrar en el taller sacaba de la app de verdad
-      # (y al revés). Desde noviembre de 2026 el taller lleva la SUYA
-      # (api/lib/auth.php): «repasos_sesion_taller» con camino
-      # «/taller/», que ni siquiera viaja a la app de verdad. Lo decide
-      # una línea de PHP que mira desde qué carpeta se sirve; si un día
-      # se tuerce, el taller volvería a pisar la sesión del equipo sin
-      # dar ningún error. Aquí se entra en el taller recién publicado,
-      # se mira qué cookie pone y se comprueba que con ella una petición
-      # con sesión contesta. Del valor de la cookie no se escribe nada.
-      #
-      # Si un día hubiera que publicar en el taller un código anterior a
-      # noviembre de 2026, este paso se quita en ese mismo commit: ese
-      # código pone la cookie de la app de verdad, y aquí saldría rojo.
-      - name: Comprobar que el taller lleva su propia cookie de sesión
-        timeout-minutes: 3
-        uses: ./.github/actions/comprobar-sesion
-        with:
-          api: https://repasos.unikdi.com/taller/api/
-          nombre: repasos_sesion_taller
-          camino: /taller/
-          de-quien: el taller
-          email: ${{ secrets.REVISION_EMAIL }}
-          password: ${{ secrets.REVISION_PASSWORD }}
-
       - name: Contarlo en el resumen
         run: |
           {
@@ -477,3 +451,33 @@ jobs:
             fi
             echo "- Nada de esto toca la app de la raíz ni sus datos: carpeta aparte, banco aparte, caché aparte."
           } >> "$GITHUB_STEP_SUMMARY"
+
+      # El taller vive en el mismo dominio que la app de verdad, y una
+      # cookie con camino «/» es de todo el dominio: mientras compartían
+      # la de la sesión, entrar en el taller sacaba de la app de verdad
+      # (y al revés). Desde noviembre de 2026 el taller lleva la SUYA
+      # (api/lib/auth.php): «repasos_sesion_taller» con camino
+      # «/taller/», que ni siquiera viaja a la app de verdad. Lo decide
+      # una línea de PHP que mira desde qué carpeta se sirve; si un día
+      # se tuerce, el taller volvería a pisar la sesión del equipo sin
+      # dar ningún error. Aquí se entra en el taller recién publicado,
+      # se mira qué cookie pone y se comprueba que con ella una petición
+      # con sesión contesta. Del valor de la cookie no se escribe nada.
+      #
+      # Va el ÚLTIMO, detrás del resumen: a estas alturas el taller ya
+      # está publicado, y este paso es nuevo. Si un día diera una falsa
+      # alarma, que no deje sin escribir el resumen de siempre.
+      #
+      # Si un día hubiera que publicar en el taller un código anterior a
+      # noviembre de 2026, este paso se quita en ese mismo commit: ese
+      # código pone la cookie de la app de verdad, y aquí saldría rojo.
+      - name: Comprobar que el taller lleva su propia cookie de sesión
+        timeout-minutes: 3
+        uses: ./.github/actions/comprobar-sesion
+        with:
+          api: https://repasos.unikdi.com/taller/api/
+          nombre: repasos_sesion_taller
+          camino: /taller/
+          de-quien: el taller
+          email: ${{ secrets.REVISION_EMAIL }}
+          password: ${{ secrets.REVISION_PASSWORD }}

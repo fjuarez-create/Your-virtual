@@ -35,8 +35,25 @@ description: >-
 #     recupera «la más reciente que empiece por…»: si lo guardado saliera
 #     malo, la siguiente instalación con apt lo sustituye sola.
 #   · Los pasos de caché llevan continue-on-error: que GitHub no pueda
-#     leer o guardar la caché nunca tumba un despliegue.
+#     leer o guardar la caché (un ERROR) no tumba un despliegue.
+#     Un CUELGUE sí puede: los pasos de dentro de una acción compuesta
+#     no admiten plazo propio, y el tope de un minuto de abajo solo
+#     cubre la descarga. Si el servicio de caché se quedara colgado al
+#     consultar o al subir, se comería los seis minutos que el robot le
+#     da a «Instalar lftp» (al guardar, con lftp ya instalado). Y la
+#     acción de caché se baja de GitHub en el momento: si GitHub no la
+#     sirve, el paso falla antes de llegar a apt. Cerrarlo del todo
+#     pide sacar esos dos pasos a cada robot, con su plazo, y dejar de
+#     tenerlo escrito una sola vez; no se ha hecho.
 #   · Dentro solo hay paquetes públicos de Ubuntu. Ningún secreto.
+#   · Y lo que salga de ella no se instala a ciegas: cada paquete tiene
+#     que ser, por su huella, el que dice la lista de paquetes que la
+#     máquina ya trae (la que apt verificó con la firma de Ubuntu). Una
+#     caché la puede escribir cualquier ejecución de la rama, y dpkg
+#     corre como root (el detalle, en lftp.sh).
+#   · La acción de caché va en su versión 5, la hecha para el Node 24
+#     con el que corren hoy las máquinas de GitHub (la 4 es de Node 20,
+#     que GitHub ya da por retirado y ejecuta «a la fuerza» con el 24).
 
 inputs:
   clave-extra:
@@ -69,7 +86,12 @@ outputs:
     description: '«si» cuando se han podido recoger los paquetes de lo instalado, para guardarlos.'
     value: ${{ steps.instalar.outputs.guardar }}
   guardado:
-    description: '«si» cuando esta ejecución ha dejado esos paquetes en la caché para la próxima.'
+    description: >-
+      «si» cuando el paso de guardar ha corrido sin error. OJO: no prueba
+      que la caché los aceptara (cuando actions/cache no consigue
+      guardar, avisa y sale bien igual). Lo que lo prueba es la línea
+      «Cache saved with key: …» de su registro, y que la ejecución
+      siguiente los recupere.
     value: ${{ steps.guardar.outcome == 'success' && 'si' || 'no' }}
 
 runs:
@@ -82,6 +104,10 @@ runs:
         LFTP_CLAVE_EXTRA: ${{ inputs.clave-extra }}
       run: bash "$GITHUB_ACTION_PATH/lftp.sh" mirar
 
+    # (Los pasos de abajo corren salvo que el de arriba haya dicho que
+    # NO hace falta: si un día ese paso tropezara sin decir nada, se
+    # instala igual, que es lo seguro.)
+    #
     # Trae lo guardado la última vez, si lo hay. La clave exacta no
     # existe nunca (lleva la fecha de ESTA ejecución): lo que casa es
     # el prefijo, y GitHub da la más reciente. El tope de un minuto es
@@ -89,9 +115,9 @@ runs:
     # seis minutos del paso.
     - name: Recuperar los paquetes guardados
       id: recuperar
-      if: steps.mirar.outputs.hace-falta == 'si'
+      if: steps.mirar.outputs.hace-falta != 'no'
       continue-on-error: true
-      uses: actions/cache/restore@v4
+      uses: actions/cache/restore@v5
       env:
         SEGMENT_DOWNLOAD_TIMEOUT_MINS: '1'
       with:
@@ -102,7 +128,7 @@ runs:
 
     - name: Instalar (de lo guardado o, si no, con apt)
       id: instalar
-      if: steps.mirar.outputs.hace-falta == 'si'
+      if: steps.mirar.outputs.hace-falta != 'no'
       shell: bash
       env:
         LFTP_GUARDADO: ${{ runner.temp }}/lftp-guardado
@@ -110,12 +136,14 @@ runs:
       run: bash "$GITHUB_ACTION_PATH/lftp.sh" instalar
 
     # Solo cuando ha hecho falta la red y se han podido recoger los
-    # paquetes. Si lftp salió de lo guardado, no se guarda nada nuevo.
+    # paquetes. Si lftp salió de lo guardado, no se guarda nada nuevo
+    # (salvo que lo guardado no entrara entero: entonces se guarda solo
+    # lo que entró, para que la próxima vez entre limpio).
     - name: Guardar los paquetes para la próxima vez
       id: guardar
       if: steps.instalar.outputs.guardar == 'si'
       continue-on-error: true
-      uses: actions/cache/save@v4
+      uses: actions/cache/save@v5
       with:
         path: ${{ runner.temp }}/lftp-guardado
         key: ${{ steps.mirar.outputs.clave-nueva }}

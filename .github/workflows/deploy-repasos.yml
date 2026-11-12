@@ -341,32 +341,6 @@ jobs:
           echo "::error::El servidor sigue sirviendo una portada sin el sello ${BUILD}. Puede ser una caché del hosting."
           exit 1
 
-      # Lo que NO puede cambiar nunca: la cookie de la sesión de la app
-      # de verdad, «repasos_sesion» con camino «/». El equipo lleva
-      # meses con la sesión abierta en el móvil; con otro nombre u otro
-      # camino se quedarían todos fuera a la vez, y hay quien no
-      # recuerda su contraseña. Desde que el taller lleva su propia
-      # cookie (noviembre de 2026), cuál pone cada uno lo decide una
-      # línea de api/lib/auth.php que mira desde qué carpeta se sirve.
-      # Si un día se tuerce no da ningún error, así que aquí se entra
-      # con la cuenta de revisión en lo recién publicado y se mira. Del
-      # valor de la cookie no se escribe nada.
-      #
-      # Va antes que la comprobación del revisor porque es la más grave
-      # de las dos. Si no se puede preguntar (sin red, sin los secretos
-      # de la cuenta), avisa y sigue: el rojo es solo para una cookie
-      # que se ha visto y no es la de siempre.
-      - name: Comprobar que la cookie de la sesión es la de siempre
-        timeout-minutes: 3
-        uses: ./.github/actions/comprobar-sesion
-        with:
-          api: https://repasos.unikdi.com/api/
-          nombre: repasos_sesion
-          camino: /
-          de-quien: la app de verdad
-          email: ${{ secrets.REVISION_EMAIL }}
-          password: ${{ secrets.REVISION_PASSWORD }}
-
       # La comprobación que decide si Apple aprueba o rechaza: que el
       # revisor pueda ENTRAR. Que el fichero de la cuenta esté subido no
       # basta —la cuenta la crea el servidor al arrancar, leyéndolo— y si
@@ -442,3 +416,32 @@ jobs:
               print("::warning::Nadie lleva el chip «Comercial» todavía.")
           PY
           rm -f respuesta.json galletas.txt directorio.json
+
+      # Lo que NO puede cambiar nunca: la cookie de la sesión de la app
+      # de verdad, «repasos_sesion» con camino «/». El equipo lleva
+      # meses con la sesión abierta en el móvil; con otro nombre u otro
+      # camino se quedarían todos fuera a la vez, y hay quien no
+      # recuerda su contraseña. Desde que el taller lleva su propia
+      # cookie (noviembre de 2026), cuál pone cada uno lo decide una
+      # línea de api/lib/auth.php que mira desde qué carpeta se sirve.
+      # Si un día se tuerce no da ningún error, así que aquí se entra
+      # con la cuenta de revisión en lo recién publicado y se mira. Del
+      # valor de la cookie no se escribe nada.
+      #
+      # Va la ÚLTIMA, detrás de la comprobación del revisor de Apple: a
+      # estas alturas la app ya está publicada y comprobada, y este paso
+      # es nuevo. Si un día diera una falsa alarma, que no se lleve por
+      # delante un paso que ya existía (delante del revisor, ese día no
+      # se sabría si puede entrar). Si no se puede preguntar (sin red,
+      # sin los secretos de la cuenta), avisa y sigue: el rojo es solo
+      # para una cookie que se ha visto y no es la de siempre.
+      - name: Comprobar que la cookie de la sesión es la de siempre
+        timeout-minutes: 3
+        uses: ./.github/actions/comprobar-sesion
+        with:
+          api: https://repasos.unikdi.com/api/
+          nombre: repasos_sesion
+          camino: /
+          de-quien: la app de verdad
+          email: ${{ secrets.REVISION_EMAIL }}
+          password: ${{ secrets.REVISION_PASSWORD }}

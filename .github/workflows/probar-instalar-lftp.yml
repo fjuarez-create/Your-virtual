@@ -33,13 +33,24 @@ name: Probar que lftp se instala sin los servidores de Ubuntu
 # dar otro. (Si saliera en rojo es que GitHub no ha podido ni bajar el
 # repositorio.)
 #
-# Solo se lanza a mano (Actions → este robot → «Run workflow»), en la
-# rama que se quiera probar. Usa una caché propia, con el número de la
-# ejecución en la clave: ni lee ni pisa la de los robots de verdad, y
-# GitHub la borra sola a los siete días.
+# SOLO SE LANZA A MANO, y a mano aquí es empujar su fichero-señal
+# (.github/LANZAR-PRUEBA-LFTP.txt, con cualquier cambio dentro: la fecha,
+# por ejemplo) a la rama de la app, como los demás robots de la casa. El
+# botón «Run workflow» de GitHub solo aparece para los robots que están
+# en la rama principal, y la app vive en la suya; y por la API tampoco
+# se deja lanzar un robot de una rama de trabajo que no haya corrido
+# nunca. No corre con ningún otro empujón: ni al cambiar este fichero,
+# ni la acción, ni la app.
+#
+# Usa una caché propia, con el número de la ejecución en la clave: ni
+# lee ni pisa la de los robots de verdad, y GitHub la borra sola a los
+# siete días.
 
 on:
   workflow_dispatch:
+  push:
+    branches: [claude/uniq-repasos-app-2ja8y2]
+    paths: ['.github/LANZAR-PRUEBA-LFTP.txt']
 
 permissions:
   contents: read

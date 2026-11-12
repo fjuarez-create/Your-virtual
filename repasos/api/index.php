@@ -1024,6 +1024,8 @@ function borrar_usuario(string $id): void
     }
     // Las listas y tareas conservan creado_por_nombre: la firma de los
     // repasos no se pierde aunque la cuenta desaparezca.
+    // Y las reuniones de obra en las que se sentó, su nombre de hoy.
+    apuntar_nombre_antes_de_la_baja($id);
     bd()->prepare('DELETE FROM usuarios WHERE id = ?')->execute([$id]);
     responder(['ok' => true]);
 }
@@ -3368,6 +3370,67 @@ function nombres_de_asistentes(array $asistentes, $guardados): string
     }
     // Un objeto también cuando no hay ninguno: «{}», no «[]».
     return json_encode($nombres ?: new stdClass(), JSON_UNESCAPED_UNICODE);
+}
+
+/**
+ * Antes de dar de baja a alguien, su nombre de HOY queda apuntado en
+ * las reuniones que le guardan.
+ *
+ * EL CASO. Mientras alguien sigue de alta, el acta le llama como diga
+ * el directorio; al darle de baja pasa a llamarle como diga lo guardado
+ * con la reunión, que es su nombre del último día en que se escribió la
+ * mesa, y la mesa de una reunión sellada ya no se escribe. Medido: se
+ * sienta como «Juan Perez», se sella la reunión, el administrador le
+ * corrige el nombre a «Juanjo Pérez Gómez» (el acta dice «Juanjo…»),
+ * meses después se le da de baja, y el acta volvía a decir «Juan
+ * Perez»: la errata corregida reaparecía el día de la baja. Es también
+ * la última ocasión de ponerle nombre en las reuniones que no se lo
+ * guardaron (las que escribiera un index.php de antes con la base ya
+ * en la 22: una vuelta atrás).
+ *
+ * En todas las que le guardan: donde está sentado, y donde lo estuvo y
+ * conserva el nombre. No toca la lista ni `actualizado` —la reunión no
+ * ha cambiado—, y si algo falla se apunta en el registro y la baja
+ * sigue adelante: no poder apuntar un nombre no puede impedir dar de
+ * baja a nadie.
+ */
+function apuntar_nombre_antes_de_la_baja(string $id): void
+{
+    try {
+        if (!hay_nombres_de_asistentes()) {
+            return;
+        }
+        $sent = bd()->prepare('SELECT id, nombre FROM usuarios WHERE id = ?');
+        $sent->execute([$id]);
+        $u = $sent->fetch();
+        $nombre = $u ? (string) $u['nombre'] : '';
+        if ($nombre === '') {
+            return;
+        }
+        // El identificador, como está escrito en `usuarios`, va entre
+        // comillas dentro del JSON de las dos columnas. Lo que traiga
+        // el LIKE se comprueba después, reunión a reunión; y primero se
+        // lee todo y se suelta la lectura, después se escribe.
+        $suyo = (string) $u['id'];
+        $patron = '%"' . $suyo . '"%';
+        $sent = bd()->prepare('SELECT id, asistentes, asistentes_nombres FROM reuniones
+                                WHERE asistentes LIKE ? OR asistentes_nombres LIKE ?');
+        $sent->execute([$patron, $patron]);
+        $reuniones = $sent->fetchAll();
+        $guardar = bd()->prepare('UPDATE reuniones SET asistentes_nombres = ? WHERE id = ?');
+        foreach ($reuniones as $r) {
+            $asistentes = json_decode((string) $r['asistentes'], true);
+            $nombres = nombres_guardados($r['asistentes_nombres']);
+            $leGuarda = isset($nombres[$suyo]) || (is_array($asistentes) && in_array($suyo, $asistentes, true));
+            if (!$leGuarda || ($nombres[$suyo] ?? null) === $nombre) {
+                continue;
+            }
+            $nombres[$suyo] = $nombre;
+            $guardar->execute([json_encode($nombres, JSON_UNESCAPED_UNICODE), $r['id']]);
+        }
+    } catch (Throwable $e) {
+        error_log('UNIK Works · no se pudo apuntar en sus reuniones el nombre de quien se da de baja: ' . $e->getMessage());
+    }
 }
 
 /** Una fecha de calendario «AAAA-MM-DD», o vacío si no viene o viene rara. */

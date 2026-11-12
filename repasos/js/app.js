@@ -622,6 +622,20 @@ async function relevoSilencioso() {
   return true;
 }
 
+/* El registro de ESTA app (ver «Cada app, con su registro» en
+   js/push.js). Se pide por aquí, y no a push.js a pelo, por la MEDIA
+   VERSIÓN: el despliegue de la app de verdad sube js/ fichero a
+   fichero, y quien carga la app de la red en esos segundos se lleva
+   este fichero de hoy con el js/push.js de ayer, que no sabe de
+   registros (y si es su primera instalación, su service worker se la
+   guarda así hasta el siguiente relevo). Ejecutado: con esa mezcla la
+   app dejaba de buscar y de ver la versión nueva, y el arranque soltaba
+   un «push.registroDeEstaApp is not a function». Con un push.js de
+   antes se pregunta como se preguntaba antes. */
+async function registroDeEstaApp() {
+  return push.registroDeEstaApp ? push.registroDeEstaApp() : navigator.serviceWorker.getRegistration();
+}
+
 /* Cuánto tiene que estar guardada la aplicación para que al volver se
    considere una vuelta y no un vistazo al reloj. */
 const RATO_FUERA = 5 * 60 * 1000;
@@ -654,7 +668,7 @@ function aplicarAlVolver() {
     // no tiene el suyo, «el de esta página» es el de la app de verdad
     // (ver «Cada app, con su registro» en js/push.js).
     try {
-      await (await push.registroDeEstaApp())?.update();
+      await (await registroDeEstaApp())?.update();
     } catch { /* sin red: otra vez será */ }
     // Con algo a medias, relevoSilencioso no hace nada ni avisa: el
     // siguiente cambio de pantalla la pondrá sin que se note.
@@ -683,7 +697,7 @@ export async function aplicarVersionEsperando(registro) {
   for (let intento = 0; intento < 6; intento++) {
     registro.waiting?.postMessage({ tipo: 'saltar-espera' });
     await new Promise((r) => setTimeout(r, 700));
-    const fresco = await push.registroDeEstaApp().catch(() => null);
+    const fresco = await registroDeEstaApp().catch(() => null);
     if (!fresco?.waiting) return true;   // ya está tomando el mando
     registro = fresco;
   }
@@ -704,7 +718,7 @@ export async function aplicarVersionEsperando(registro) {
 export async function versionEsperando() {
   if (!('serviceWorker' in navigator)) return null;
   try {
-    const r = await push.registroDeEstaApp();
+    const r = await registroDeEstaApp();
     return r?.waiting ? r : null;
   } catch { return null; }
 }
@@ -780,12 +794,20 @@ async function rescateLocal() {
     + 'Lo ya sincronizado se recupera del servidor. ¿Seguir?');
   if (!seguro) return;
   try {
+    // Qué es lo de esta app lo dice js/push.js. Y si no lo dijera —este
+    // fichero con un push.js de antes: la media versión de
+    // registroDeEstaApp, arriba— o diera un error, TODO, como siempre:
+    // este botón es la salida de emergencia y no puede quedarse sin
+    // hacer nada por no saber qué es suyo. Ejecutado con esa mezcla: se
+    // quedaba en recargar, con el service worker, las cachés y la base
+    // donde estaban.
+    const esMio = (reg) => { try { return push.esDeEstaApp(reg); } catch { return true; } };
+    const esMia = (nombre) => typeof push.EN_EL_TALLER !== 'boolean'
+      || nombre.startsWith('unik-repasos-taller-') === push.EN_EL_TALLER;
     const registros = await (navigator.serviceWorker?.getRegistrations?.() ?? []);
-    await Promise.all([...registros].filter(push.esDeEstaApp)
-      .map((r) => r.unregister().catch(() => {})));
+    await Promise.all([...registros].filter(esMio).map((r) => r.unregister().catch(() => {})));
     const nombres = await (window.caches?.keys?.() ?? []);
-    await Promise.all([...nombres].filter((n) => n.startsWith('unik-repasos-taller-') === push.EN_EL_TALLER)
-      .map((n) => caches.delete(n).catch(() => {})));
+    await Promise.all([...nombres].filter(esMia).map((n) => caches.delete(n).catch(() => {})));
     await borrarBase();
   } finally {
     location.reload();

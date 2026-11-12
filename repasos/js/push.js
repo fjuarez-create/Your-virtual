@@ -122,13 +122,19 @@ async function suscripcionActual() {
  * El service worker activo de ESTA app, o null si en diez segundos no
  * lo hay.
  *
- * En el taller, «ready» puede traer el de la app de verdad: si se le
- * pregunta antes de que el taller tenga registro, el navegador contesta
- * con el único que casa, y esa respuesta ya no la cambia en lo que dure
- * la página, ni cuando el del taller termina de instalarse. Por eso, si
- * el que trae no es de esta app, se mira si el propio está ya activo:
- * así «vuelve a intentarlo en un momento» es verdad sin tener que
- * recargar. En la app de verdad esa rama no se pisa nunca.
+ * En el taller, «ready» puede traer el de la app de verdad, y lo que
+ * contesta una vez ya no lo cambia en lo que dure la página. Pero solo
+ * lo trae si se le pregunta cuando el taller NO tiene registro: antes
+ * de que esta página llame a register() —que es el mismo arranque,
+ * milisegundos después de pintar— o cuando su register() falló. Que su
+ * sw.js tarde no basta: medido con uno que tardaba 15 s, el registro
+ * del taller existe desde que se llama a register(), y «ready» le
+ * espera a él. Así que lo de abajo es un cinturón para un caso
+ * estrecho —a esta pestaña le falló register() y el registro lo apuntó
+ * después otra pestaña del taller—: si el que trae «ready» no es de
+ * esta app, se mira si el propio está ya activo, y los avisos se
+ * pueden activar sin recargar. En la app de verdad esa rama no se pisa
+ * nunca.
  */
 function registro() {
   return Promise.race([

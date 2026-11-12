@@ -22,6 +22,18 @@
 #   1. Si lftp ya viene en la máquina, nada (como siempre).
 #   2. Si hay paquetes guardados de otra vez (los .deb de lftp y de lo
 #      que arrastró), se instalan con dpkg: CERO red.
+#      Pero solo si cada uno es, por su huella, el que dice la lista de
+#      paquetes que la máquina ya trae (la que apt verificó con la firma
+#      de Ubuntu): dpkg corre como root, en la máquina que dos pasos
+#      después recibe la contraseña del FTP, y una caché de GitHub la
+#      puede escribir cualquier ejecución de la rama. Con esto el
+#      despliegue se sigue fiando de quien se fiaba antes de haber
+#      caché: de Ubuntu. Tampoco cuesta red.
+#      Y con una salvedad, para que lo guardado no sea para siempre: si
+#      la lista de paquetes de la imagen dice que Ubuntu ya tiene un
+#      lftp MÁS NUEVO (un arreglo de seguridad, por ejemplo), antes se
+#      prueba UNA vez con apt, que es quien lo trae; y si apt no puede,
+#      vale el guardado. Saberlo no cuesta red: es mirar una lista.
 #   3. Si no los hay, o no se dejan instalar, el camino de siempre con
 #      apt y sus reintentos, sin cambiarle una orden.
 #   4. Entre el primer intento de apt y los reintentos, una puerta más:
@@ -38,6 +50,10 @@
 # el paso de siempre. Por eso lo guardado se comprueba antes de tocar
 # nada, lo que dpkg deje a medias se retira antes de llamar a apt, y
 # guardar para la próxima es un «si se puede»: nunca tumba el paso.
+# (Lo que sí puede pasar es que lo guardado NO se use y se acabe en apt,
+# como antes de haber caché: cuando la lista de la imagen ya no conoce
+# esa versión de un paquete —la sustituyó otra—, no hay con qué
+# cotejarlo.)
 #
 # En la carpeta guardada y en el registro no va ningún secreto: solo
 # paquetes públicos de Ubuntu y sus nombres. Este repositorio es público
@@ -49,7 +65,12 @@
 #   LFTP_ESPEJOS      (opcional) los otros espejos, separados por espacios
 #   LFTP_PAUSA        (opcional) segundos de espera entre reintentos (10)
 
-set -eu
+# Sin «set -e», a propósito. Todo lo que este guion añade a lo de
+# siempre (mirar la clave, comprobar lo guardado, recoger los .deb) es
+# un «si se puede»: un tropiezo ahí —una herramienta que en la imagen
+# de mañana se porte distinto— no puede cortar el guion antes de llegar
+# a apt. Cada decisión mira ella misma si lo suyo ha salido bien.
+set -u
 
 FASE="${1:?uso: lftp.sh mirar|instalar}"
 
@@ -90,8 +111,9 @@ mirar() {
   fi
 
   # La clave lleva la versión de Ubuntu y la arquitectura: el día que
-  # GitHub cambie de imagen (de 24.04 a la siguiente), los .deb de la
-  # vieja no casan con sus bibliotecas y hay que bajarlos otra vez.
+  # GitHub cambie de imagen (en noviembre de 2026 va con Ubuntu 26.04),
+  # los .deb de la vieja no casan con las bibliotecas de la nueva y hay
+  # que bajarlos otra vez.
   local id=desconocido version=0 arquitectura extra clave
   if [ -r /etc/os-release ]; then
     id="$(. /etc/os-release; printf '%s' "${ID:-desconocido}")"
@@ -101,9 +123,10 @@ mirar() {
   # La parte extra va DELANTE: la acción busca «la más reciente que
   # empiece por la clave», y con el extra detrás los robots de verdad
   # se llevarían también las cachés del robot de prueba.
-  extra="$(printf '%s' "${LFTP_CLAVE_EXTRA:-}" | tr -c 'A-Za-z0-9._-' '-')"
-  clave="$(printf 'lftp-deb%s-%s-%s-%s-v1' "${extra:+-$extra}" "$id" "$version" "$arquitectura" \
-    | tr -c 'A-Za-z0-9._-' '-')"
+  extra="${LFTP_CLAVE_EXTRA:-}"
+  extra="${extra//[!A-Za-z0-9._-]/-}"
+  clave="lftp-deb${extra:+-$extra}-${id}-${version}-${arquitectura}-v1"
+  clave="${clave//[!A-Za-z0-9._-]/-}"
   echo "lftp no viene en la máquina ($id $version, $arquitectura): hay que instalarlo."
   echo "Clave de lo guardado: $clave"
   salida hace-falta si
@@ -112,15 +135,26 @@ mirar() {
   # guarda con una clave que no exista (la fecha y un número al azar), y
   # al recuperar se pide «la más reciente que empiece por la clave». Así
   # un guardado malo se sustituye solo con el siguiente bueno.
-  salida clave-nueva "$clave-$(date -u +%Y%m%dT%H%M%S)-$RANDOM"
+  salida clave-nueva "$clave-$(date -u +%Y%m%dT%H%M%S 2> /dev/null || echo sin-fecha)-$RANDOM"
+  return 0
+}
+
+# ¿Ha quedado ese paquete instalado DEL TODO (desempaquetado y
+# configurado)? Es lo que dpkg llama «installed».
+instalado_del_todo() {
+  [ "$(dpkg-query -W -f '${db:Status-Status}' "$1" 2> /dev/null || true)" = installed ]
 }
 
 # ─── instalar un lote de .deb con dpkg, o dejarlo todo como estaba ──
 # instalar_lote FICHERO.deb…   → 0 solo si lftp queda funcionando.
+# Si lftp queda funcionando pero no ha entrado el lote entero, lo deja
+# dicho en LOTE_A_MEDIAS.
+LOTE_A_MEDIAS=no
 instalar_lote() {
   local arquitectura deb paquete version suya estado
-  local elegidos=() estrenados=()
+  local elegidos=() estrenados=() a_medias=()
   local hay_lftp=no
+  LOTE_A_MEDIAS=no
   arquitectura="$(dpkg --print-architecture)"
 
   for deb in "$@"; do
@@ -162,10 +196,35 @@ instalar_lote() {
     return 0
   fi
 
-  # dpkg se ha quedado a medias. Se retira lo que ha ESTRENADO (nunca
-  # lo que la máquina ya traía) para que apt arranque desde donde
-  # habría arrancado sin lo guardado, y no desde un paquete roto.
-  echo "  dpkg no ha podido instalarlos; se retira lo que haya dejado a medias." >&2
+  # dpkg se ha quedado a medias. Primero se retira lo que ha dejado a
+  # medio poner (de lo que ha ESTRENADO, nunca de lo que la máquina ya
+  # traía).
+  echo "  dpkg no ha podido instalarlos todos; se retira lo que haya dejado a medias." >&2
+  for paquete in ${estrenados[@]+"${estrenados[@]}"}; do
+    instalado_del_todo "$paquete" || a_medias+=("$paquete")
+  done
+  if [ "${#a_medias[@]}" -gt 0 ]; then
+    timeout 120 sudo dpkg --remove --force-depends "${a_medias[@]}" > /dev/null 2>&1 || true
+  fi
+
+  # Si lftp ha quedado instalado del todo y arranca, VALE: el tropiezo
+  # ha sido de otro paquete del lote. Visto en las pruebas: a lo
+  # guardado le faltaba una dependencia de openssh-client, que lftp solo
+  # recomienda; dpkg dejó lftp puesto y funcionando, se atascó en el
+  # otro y dio error; y aquí se retiraban los dos. Con apt funcionando
+  # no pasaba nada (lo instalaba apt), pero con apt roto —el día para el
+  # que esto existe— el paso fallaba teniendo un lftp bueno en la mano.
+  # (dpkg solo da un paquete por instalado del todo cuando lo están
+  # también todos los que necesita.)
+  if instalado_del_todo lftp && lftp_va; then
+    echo "  lftp sí ha quedado instalado y arranca: vale."
+    LOTE_A_MEDIAS=si
+    return 0
+  fi
+
+  # lftp no ha quedado bien: fuera todo lo estrenado, para que apt
+  # arranque desde donde habría arrancado sin lo guardado, y no desde
+  # un paquete roto.
   if [ "${#estrenados[@]}" -gt 0 ]; then
     timeout 120 sudo dpkg --remove --force-depends "${estrenados[@]}" > /dev/null 2>&1 || true
   fi
@@ -173,9 +232,38 @@ instalar_lote() {
 }
 
 # ─── 2 · de lo guardado, sin red ────────────────────────────────
-de_lo_guardado() {
+# Los .deb guardados que han pasado la comprobación (los deja guardado_vale).
+LO_GUARDADO=()
+
+# es_de_ubuntu FICHERO.deb → 0 si ese .deb es, por su huella SHA-256,
+# uno de los que la lista de paquetes de la máquina da para ese paquete.
+# La lista es la que apt verificó con la firma de Ubuntu, y se mira sin
+# red. El nombre del paquete lo dice el propio fichero, que podría
+# mentir; lo que no puede es dar la huella de otro.
+#
+# Se piden TODAS las fichas del paquete («apt-cache show», sin decir
+# versión) y vale la huella de cualquiera. Con «paquete=versión» apt
+# enseña UNA sola ficha, y de una misma versión puede haber dos: en las
+# máquinas de GitHub (Ubuntu 26.04) el lftp que se instala es
+# «…_amd64v3.deb», la variante, y la otra ficha —«…_amd64.deb»— lleva
+# otra huella. Con la ficha equivocada lo guardado no valdría nunca.
+es_de_ubuntu() {
+  local paquete huella
+  paquete="$(dpkg-deb -f "$1" Package 2> /dev/null || true)"
+  # Con forma de nombre de paquete, y nada más: va a la línea de órdenes
+  # de apt-cache.
+  printf '%s' "$paquete" | grep -q -E '^[a-z0-9][a-z0-9+.-]*$' || return 1
+  huella="$(sha256sum < "$1" 2> /dev/null | awk '{ print $1 }')"
+  printf '%s' "$huella" | grep -q -E '^[0-9a-f]{64}$' || return 1
+  apt-cache show --all-versions "$paquete" 2> /dev/null \
+    | awk -v huella="$huella" '/^SHA256:/ && $2 == huella { esta = 1 } END { exit !esta }'
+}
+
+# guardado_vale CARPETA → 0 si lo guardado es de fiar. NO toca la máquina.
+guardado_vale() {
   local carpeta="$1" deb
   local paquetes=()
+  LO_GUARDADO=()
   for deb in "$carpeta"/*.deb; do
     if [ -f "$deb" ]; then paquetes+=("$deb"); fi
   done
@@ -183,7 +271,7 @@ de_lo_guardado() {
     echo "No hay paquetes guardados de otra vez."
     return 1
   fi
-  echo "Hay ${#paquetes[@]} paquete(s) guardado(s) de otra vez: se instalan sin tocar la red."
+  echo "Hay ${#paquetes[@]} paquete(s) guardado(s) de otra vez."
 
   # Antes de darle nada a dpkg (que corre como root): que lo guardado
   # sea, octeto a octeto, lo que se guardó. Una caché a medio escribir
@@ -205,7 +293,38 @@ de_lo_guardado() {
     fi
   done
 
-  instalar_lote "${paquetes[@]}"
+  # Y que cada uno sea el que dice Ubuntu, no solo «el que se guardó»:
+  # la lista de huellas de arriba viaja en la misma caché que los
+  # paquetes, y quien pudiera cambiar unos podría rehacer la otra.
+  # Probado: un «lftp» de pega con sus huellas rehechas se instalaba, y
+  # el guion de su paquete corría como root.
+  for deb in "${paquetes[@]}"; do
+    if ! es_de_ubuntu "$deb"; then
+      echo "  $(basename "$deb") no es el que dice la lista de paquetes de Ubuntu que trae la máquina (o la lista ya no conoce esa versión): no se usa lo guardado." >&2
+      return 1
+    fi
+  done
+
+  LO_GUARDADO=("${paquetes[@]}")
+}
+
+# ¿Tiene Ubuntu un lftp MÁS NUEVO que el guardado? Lo dice la lista de
+# paquetes que la imagen ya trae: se mira sin red. Si no se sabe, no.
+hay_uno_mas_nuevo() {
+  local deb guardada="" candidata
+  for deb in "${LO_GUARDADO[@]}"; do
+    if [ "$(dpkg-deb -f "$deb" Package 2> /dev/null || true)" = lftp ]; then
+      guardada="$(dpkg-deb -f "$deb" Version 2> /dev/null || true)"
+    fi
+  done
+  [ -n "$guardada" ] || return 1
+  candidata="$(LC_ALL=C apt-cache policy lftp 2> /dev/null | awk '/^ *Candidate:/ && !visto { print $2; visto = 1 }' || true)"
+  case "$candidata" in "" | "(none)") return 1 ;; esac
+  if dpkg --compare-versions "$candidata" gt "$guardada"; then
+    echo "Ubuntu tiene un lftp más nuevo ($candidata) que el guardado ($guardada)."
+    return 0
+  fi
+  return 1
 }
 
 # ─── 4 · de otro espejo, con la huella de la lista firmada ──────
@@ -219,7 +338,7 @@ del_espejo() {
   command -v curl > /dev/null 2>&1 || return 1
 
   local empezado=$SECONDS tope=45
-  local lineas linea fichero resto paquete version ficha camino huella espejo bajado
+  local lineas linea direccion fichero resto paquete version ficha camino huella espejo bajado
   lineas="$(timeout 60 sudo apt-get install --print-uris -y -qq lftp 2> /dev/null | grep "^'" || true)"
   if [ -z "$lineas" ]; then
     echo "apt no sabe decir qué paquetes harían falta: no se puede probar otro espejo."
@@ -227,25 +346,38 @@ del_espejo() {
   fi
 
   CARPETA_DE_PASO="$(mktemp -d)"
-  echo "Se prueba a bajar los paquetes de otro espejo (como mucho $tope segundos)…"
+  echo "Se prueba a bajar los paquetes de otro espejo (no se le dan más de unos $tope segundos)…"
   while IFS= read -r linea; do
-    # «'dirección' fichero tamaño huella»: de aquí solo se toma el fichero.
+    # «'dirección' fichero tamaño huella». De la dirección se toma el
+    # camino dentro del espejo (de «pool/» en adelante, que es igual en
+    # todos), y del fichero, el paquete y la versión.
+    direccion="$(printf '%s\n' "$linea" | awk '{ print $1 }' | tr -d "'")"
     fichero="$(printf '%s\n' "$linea" | awk '{ print $2 }')"
     case "$fichero" in
       *_*_*.deb) ;;
       *) echo "  Línea de apt que no se entiende; se deja el espejo." >&2; return 1 ;;
     esac
     case "$fichero" in */* | .*) return 1 ;; esac
+    case "$direccion" in
+      */pool/*) camino="pool/${direccion#*/pool/}" ;;
+      *) echo "  apt no dice de dónde se baja $fichero; se deja el espejo." >&2; return 1 ;;
+    esac
+    case "$camino" in *..* | *[!A-Za-z0-9._+~%/-]*) return 1 ;; esac
     paquete="${fichero%%_*}"
     resto="${fichero#*_}"
     version="$(printf '%s' "${resto%_*}" | sed 's/%3[aA]/:/g')"
-    ficha="$(apt-cache show "$paquete=$version" 2> /dev/null || true)"
-    # (Sin «exit» en awk: que lea hasta el final, o quien le escribe
-    # puede morir de un «tubo roto».)
-    camino="$(printf '%s\n' "$ficha" | awk '/^Filename:/ && !visto { print $2; visto = 1 }')"
-    huella="$(printf '%s\n' "$ficha" | awk '/^SHA256:/ && !visto { print $2; visto = 1 }')"
-    case "$camino" in pool/*) ;; *) echo "  $paquete no dice de dónde se baja." >&2; return 1 ;; esac
-    case "$camino" in *..*) return 1 ;; esac
+    # La huella, de la ficha de ESE fichero: de una misma versión puede
+    # haber dos (en Ubuntu 26.04, «…_amd64.deb» y «…_amd64v3.deb»), cada
+    # una con la suya. Se piden todas las fichas del paquete y se busca
+    # la de este fichero: con «paquete=versión» apt enseña UNA sola, y
+    # si fuera la otra aquí no habría huella que cotejar (ver
+    # es_de_ubuntu). (Los awk leen hasta el final: si cortaran antes,
+    # quien les escribe puede morir de un «tubo roto».)
+    ficha="$(apt-cache show --all-versions "$paquete" 2> /dev/null || true)"
+    huella="$(printf '%s\n' "$ficha" | awk -v camino="$camino" '
+      /^$/ { suya = 0 }
+      /^Filename:/ { suya = ($2 == camino) }
+      /^SHA256:/ && suya && !vista { print $2; vista = 1 }')"
     if ! printf '%s' "$huella" | grep -q -E '^[0-9a-f]{64}$'; then
       echo "  $paquete no trae huella SHA-256 en la lista: no se baja de un espejo." >&2
       return 1
@@ -329,17 +461,56 @@ vaciar() {
     \( -name '*.deb' -o -name SHA256SUMS -o -name contenido.txt \) -delete 2> /dev/null || true
 }
 
+# Tras un lote que no ha entrado entero: deja en la carpeta solo los
+# .deb que SÍ han quedado instalados, con su lista de huellas rehecha,
+# para que la acción los guarde y la próxima vez el lote entre limpio
+# (si no, cada ejecución repetiría el tropiezo de dpkg y su limpieza).
+# Es un «si se puede»: lftp ya está instalado.
+podar() {
+  local carpeta="$1" deb paquete version cuantos=0
+  for deb in "$carpeta"/*.deb; do
+    [ -f "$deb" ] || continue
+    paquete="$(dpkg-deb -f "$deb" Package 2> /dev/null || true)"
+    version="$(dpkg-deb -f "$deb" Version 2> /dev/null || true)"
+    if [ -n "$paquete" ] \
+       && [ "$(dpkg-query -W -f '${db:Status-Status} ${Version}' "$paquete" 2> /dev/null || true)" = "installed $version" ]; then
+      cuantos=$((cuantos + 1))
+    else
+      rm -f "$deb" || return 1
+    fi
+  done
+  [ "$cuantos" -gt 0 ] || return 1
+  (cd "$carpeta" && sha256sum -- *.deb > SHA256SUMS) || return 1
+  echo "Se guarda para la próxima vez solo lo que ha entrado ($cuantos paquete(s))."
+}
+
+# es_el_paquete FICHERO PAQUETE VERSIÓN ARQUITECTURA → 0 si ese .deb dice
+# de sí mismo que es justo eso (o que vale para cualquier arquitectura).
+es_el_paquete() {
+  [ -f "$1" ] || return 1
+  [ "$(dpkg-deb -f "$1" Package 2> /dev/null || true)" = "$2" ] || return 1
+  [ "$(dpkg-deb -f "$1" Version 2> /dev/null || true)" = "$3" ] || return 1
+  case "$(dpkg-deb -f "$1" Architecture 2> /dev/null || true)" in
+    "$4" | all) return 0 ;;
+  esac
+  return 1
+}
+
 # Deja en la carpeta los .deb de lo que acaba de entrar en la máquina.
 # Es un «si se puede»: lftp ya está instalado, y pase lo que pase aquí
 # el paso sale bien. Si no se puede recoger todo, no se guarda nada (una
 # caché a la que le falta una dependencia es peor que no tener caché).
 recoger() {
   local carpeta="$1" antes="$2"
-  local despues nuevos paquete version arquitectura fichero origen donde cuantos=0 hay_lftp=no
+  local despues nuevos paquete version arquitectura origen donde candidato bajada="" cuantos=0 hay_lftp=no
 
   vaciar "$carpeta"
 
-  despues="$(mktemp)"
+  if [ -z "$antes" ] || [ ! -s "$antes" ]; then
+    echo "No se apuntó qué había instalado antes: no se guarda nada."
+    return 1
+  fi
+  despues="$(mktemp)" || return 1
   lista_instalados > "$despues"
   nuevos="$(LC_ALL=C comm -13 "$antes" "$despues")"
   rm -f "$despues"
@@ -354,30 +525,45 @@ recoger() {
 
   while read -r paquete version arquitectura; do
     [ -n "$paquete" ] || continue
-    # apt escribe los dos puntos de la versión como «%3a» en el nombre.
-    fichero="${paquete}_${version//:/%3a}_${arquitectura}.deb"
+    # El .deb de ese paquete en esa versión, se llame como se llame. El
+    # nombre NO se puede adivinar: apt escribe los dos puntos de la
+    # versión como «%3a», y desde Ubuntu 25.10 el final ya no es
+    # siempre la arquitectura (el lftp de las máquinas de GitHub, que
+    # van con Ubuntu 26.04, se llama «…_amd64v3.deb» y por dentro dice
+    # «Architecture: amd64»). Así que se busca por el principio del
+    # nombre y se da por bueno por lo que el paquete dice de sí mismo.
     origen=""
     for donde in "$CARPETA_DE_PASO" /var/cache/apt/archives; do
-      if [ -n "$donde" ] && [ -f "$donde/$fichero" ]; then
-        origen="$donde/$fichero"
-        break
-      fi
+      [ -n "$donde" ] || continue
+      for candidato in "$donde/${paquete}_${version//:/%3a}_"*.deb; do
+        if es_el_paquete "$candidato" "$paquete" "$version" "$arquitectura"; then
+          origen="$candidato"
+          break 2
+        fi
+      done
     done
-    if [ -n "$origen" ]; then
-      cp "$origen" "$carpeta/$fichero" || return 1
-    else
+    if [ -z "$origen" ]; then
       # Hay máquinas que borran los .deb nada más instalarlos. La red
-      # acaba de funcionar: se piden otra vez, sin instalar nada.
-      (cd "$carpeta" && timeout 60 apt-get download "$paquete=$version" > /dev/null 2>&1) || true
+      # acaba de funcionar: se piden otra vez, sin instalar nada, a una
+      # carpeta vacía (lo que aparezca en ella es lo bajado).
+      bajada="$(mktemp -d)"
+      (cd "$bajada" && timeout 60 apt-get download "$paquete=$version" > /dev/null 2>&1) || true
+      for candidato in "$bajada"/*.deb; do
+        if es_el_paquete "$candidato" "$paquete" "$version" "$arquitectura"; then
+          origen="$candidato"
+          break
+        fi
+      done
     fi
-    if [ ! -f "$carpeta/$fichero" ]; then
+    if [ -z "$origen" ]; then
       echo "No se ha podido recoger el paquete de $paquete: no se guarda nada."
       return 1
     fi
-    if [ "$(dpkg-deb -f "$carpeta/$fichero" Package 2> /dev/null || true)" != "$paquete" ] \
-       || [ "$(dpkg-deb -f "$carpeta/$fichero" Version 2> /dev/null || true)" != "$version" ]; then
-      echo "El paquete recogido de $paquete no es el que se ha instalado: no se guarda nada."
-      return 1
+    cp "$origen" "$carpeta/$(basename "$origen")" || return 1
+    if [ -n "${bajada:-}" ]; then
+      find "$bajada" -mindepth 1 -maxdepth 1 -type f -name '*.deb' -delete 2> /dev/null || true
+      rmdir "$bajada" 2> /dev/null || true
+      bajada=""
     fi
     [ "$paquete" = lftp ] && hay_lftp=si
     cuantos=$((cuantos + 1))
@@ -411,20 +597,42 @@ instalar() {
     return 0
   fi
 
-  mkdir -p "$carpeta"
-  antes="$(mktemp)"
-  lista_instalados > "$antes"
+  mkdir -p "$carpeta" 2> /dev/null || true
+  antes="$(mktemp 2> /dev/null || true)"
+  if [ -n "$antes" ]; then lista_instalados > "$antes"; fi
 
-  if de_lo_guardado "$carpeta"; then
-    echo "lftp instalado de lo guardado, sin red: $(lftp --version | head -1)"
-    salida instalado-con guardado
-    salida guardar no
-    rm -f "$antes"
-    return 0
+  if guardado_vale "$carpeta"; then
+    # Lo guardado no es para siempre: si Ubuntu ya tiene un lftp más
+    # nuevo, se prueba UNA vez con apt (y entonces se guarda el nuevo).
+    # Si apt no puede —la red, los servidores—, vale el guardado: más
+    # vale un lftp de hace un mes que no poder publicar.
+    if hay_uno_mas_nuevo; then
+      echo "Se prueba a instalarlo con apt; si no se puede, vale el guardado."
+      if timeout 120 sudo apt-get install -y -qq lftp && lftp_va; then
+        echo "lftp instalado con apt, en su versión nueva."
+        INSTALADO_CON=apt
+      else
+        echo "apt no ha podido: se instala el guardado." >&2
+      fi
+    fi
+    if [ -z "$INSTALADO_CON" ]; then
+      echo "Se instalan los paquetes guardados, sin tocar la red."
+      if instalar_lote "${LO_GUARDADO[@]}"; then
+        echo "lftp instalado de lo guardado, sin red: $(lftp --version | head -1)"
+        salida instalado-con guardado
+        if [ "$LOTE_A_MEDIAS" = si ] && podar "$carpeta"; then
+          salida guardar si
+        else
+          salida guardar no
+        fi
+        if [ -n "$antes" ]; then rm -f "$antes"; fi
+        return 0
+      fi
+    fi
   fi
 
-  if ! con_apt; then
-    rm -f "$antes"
+  if [ -z "$INSTALADO_CON" ] && ! con_apt; then
+    if [ -n "$antes" ]; then rm -f "$antes"; fi
     echo "No se ha podido instalar lftp tras tres intentos." >&2
     return 1
   fi
@@ -436,7 +644,7 @@ instalar() {
     vaciar "$carpeta"
     salida guardar no
   fi
-  rm -f "$antes"
+  if [ -n "$antes" ]; then rm -f "$antes"; fi
   if [ -n "$CARPETA_DE_PASO" ] && [ -d "$CARPETA_DE_PASO" ]; then
     find "$CARPETA_DE_PASO" -mindepth 1 -maxdepth 1 -type f -name '*.deb' -delete 2> /dev/null || true
     rmdir "$CARPETA_DE_PASO" 2> /dev/null || true
@@ -445,7 +653,7 @@ instalar() {
 }
 
 case "$FASE" in
-  mirar) mirar ;;
-  instalar) instalar ;;
+  mirar) mirar; exit $? ;;
+  instalar) instalar; exit $? ;;
   *) echo "Fase desconocida: $FASE" >&2; exit 1 ;;
 esac
