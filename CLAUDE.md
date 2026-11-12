@@ -117,10 +117,29 @@ Y dos cosas más que cuelgan de la sincronización:
   el taller. La medición (`.github/scripts/medir-bajada.py`) dice qué
   cookie pone cada una.
 
+## Las reuniones de obra: el candado y los nombres (noviembre de 2026)
+
+- **Quien relee una reunión para reescribirla lo hace con el candado
+  puesto**: `reunion_cerrar()`, `reunion_releer()` y `reunion_abrir()`,
+  en `api/index.php` (cabecera «El candado de la reunión»). La mesa se
+  toca por diferencias para que dos personas a la vez no se pisen, y
+  sin el candado se pisaban igual: las dos leían la misma lista, la
+  segunda en escribir borraba lo de la primera y el servidor les
+  contestaba «hecho» a las dos (medido: un asiento perdido en 194 de
+  300 intentos).
+- **Quien escribe `asistentes` escribe también `asistentes_nombres`**
+  (esquema 22). El acta guarda el nombre de cada asistente para que
+  siga saliendo cuando a esa persona se le da de baja, y antes de
+  cada baja lo deja apuntado `apuntar_nombre_antes_de_la_baja()`.
+
 ## Lo que no se hace nunca
 
 - **No se cambia la contraseña de Fran** (f.juarez@unikdi.com). Lo ha
   dicho más de una vez y va en serio.
+- **No se lanza la copia nocturna en horas de obra.** Baja las fotos
+  de una en una y, mientras dura, la app le contesta lenta a todo el
+  equipo (medido el 12-11-2026: veinte segundos lo que tarda uno).
+  Solo entre las 21:00 y las 06:30, hora canaria.
 - **No se pegan credenciales en la conversación**: ni claves de API, ni
   el host del FTP, ni contraseñas. Esos datos van de su bloc de notas a
   los secretos de GitHub sin pasar por el chat.
