@@ -3417,7 +3417,8 @@ function apuntar_nombre_antes_de_la_baja(string $id): void
                                 WHERE asistentes LIKE ? OR asistentes_nombres LIKE ?');
         $sent->execute([$patron, $patron]);
         $reuniones = $sent->fetchAll();
-        $guardar = bd()->prepare('UPDATE reuniones SET asistentes_nombres = ? WHERE id = ?');
+        $bd = bd();
+        $guardar = $bd->prepare('UPDATE reuniones SET asistentes_nombres = ? WHERE id = ?');
         foreach ($reuniones as $r) {
             $asistentes = json_decode((string) $r['asistentes'], true);
             $nombres = nombres_guardados($r['asistentes_nombres']);
@@ -3425,11 +3426,106 @@ function apuntar_nombre_antes_de_la_baja(string $id): void
             if (!$leGuarda || ($nombres[$suyo] ?? null) === $nombre) {
                 continue;
             }
-            $nombres[$suyo] = $nombre;
-            $guardar->execute([json_encode($nombres, JSON_UNESCAPED_UNICODE), $r['id']]);
+            // Hay un nombre que apuntar en esta. Lo leído arriba dice
+            // DÓNDE; lo que se reescribe sale de releerla con el candado
+            // puesto (ver «El candado de la reunión»). Medido: si entre
+            // aquella lectura y esta escritura alguien sentaba a otra
+            // persona en la mesa, esta escritura se llevaba por delante
+            // el nombre recién guardado de esa otra.
+            reunion_cerrar($bd);
+            try {
+                $fila = reunion_releer($bd, (string) $r['id'], 'asistentes_nombres');
+                if ($fila) {
+                    $nombres = nombres_guardados($fila['asistentes_nombres']);
+                    $nombres[$suyo] = $nombre;
+                    $guardar->execute([json_encode($nombres, JSON_UNESCAPED_UNICODE), $r['id']]);
+                }
+                reunion_abrir($bd, true);
+            } catch (Throwable $e) {
+                reunion_abrir($bd, false);
+                throw $e;
+            }
         }
     } catch (Throwable $e) {
         error_log('UNIK Works · no se pudo apuntar en sus reuniones el nombre de quien se da de baja: ' . $e->getMessage());
+    }
+}
+
+/* ─── El candado de la reunión ───────────────────────────────────
+   EL CASO. La mesa se toca por diferencias para que dos personas
+   apuntando a la vez a quién tienen al lado no se pisen (lo decidió
+   Fran en agosto de 2026). Y se pisaban: tocar_mesa() releía la fila
+   dentro de una transacción, pero una transacción sola no impide que
+   otra lea lo mismo en el mismo instante; las dos partían de la misma
+   lista y la segunda en escribir borraba lo de la primera. Medido en
+   MariaDB (noviembre de 2026), con dos personas sentando cada una a
+   alguien a la vez: en 92 de 300 intentos se perdía uno de los dos
+   asientos, y el servidor les había contestado «hecho» a las dos. Con
+   cinco a la vez, en 285 de 300. En SQLite no se perdía nada, pero
+   cuatro de cada diez contestaban «Error en la base de datos»: la
+   segunda en llegar no esperaba, fallaba.
+
+   CÓMO. Quien relee una reunión para reescribirla lo hace con el
+   candado puesto, y el siguiente ESPERA a que acabe y lee ya lo que
+   el anterior dejó escrito:
+   - en MariaDB, la relectura lleva FOR UPDATE: bloquea esa fila, y
+     solo esa, hasta que la transacción acaba;
+   - en SQLite no hay candado de fila: la transacción empieza con
+     BEGIN IMMEDIATE, que coge desde el principio el turno de escribir
+     en la base (como recepcion_cerrar()), y quien llega después espera
+     lo que diga `busy_timeout` (cinco segundos, en bd()) en vez de
+     fallar. Con el BEGIN a secas de beginTransaction() la transacción
+     empezaba leyendo, y al ir a escribir SQLite la rechazaba sin
+     esperar si otro había escrito entre medias.
+
+   SIN ABRAZOS MORTALES. Con el candado cogido solo se relee esa fila,
+   se miran nombres en `usuarios` (una lectura corriente: ni bloquea
+   ni espera a nadie) y se escribe esa misma fila: nadie tiene cogida
+   una cosa mientras espera otra. Y no se espera más que antes: sin el
+   candado, la segunda escritura ya esperaba a la primera; ahora espera
+   un paso antes, al leer.
+
+   QUIÉN LO LLEVA. Los dos sitios que releen y reescriben: tocar_mesa()
+   y apuntar_nombre_antes_de_la_baja(). empezar_reunion() no relee nada
+   (inserta, y entre dos a la vez decide el índice único). Y
+   editar_reunion() NO lo lleva: escribe la lista ENTERA que le mandan
+   —ahí el último gana, y por eso existe la mesa—, y los nombres los
+   suma a los que leyó al entrar. Lo que eso puede perder es el nombre
+   guardado de alguien a quien otro acababa de sentar y esta lista
+   levanta; la app solo usa ese camino para terminar la reunión. */
+
+/** Empieza la transacción de quien va a releer una reunión para reescribirla. */
+function reunion_cerrar(PDO $bd): void
+{
+    if (motor() === 'sqlite') {
+        $bd->exec('BEGIN IMMEDIATE');
+        return;
+    }
+    $bd->beginTransaction();
+}
+
+/**
+ * La fila de la reunión como está AHORA, y con el candado puesto hasta
+ * reunion_abrir(). Solo después de reunion_cerrar(). Falso si no está.
+ */
+function reunion_releer(PDO $bd, string $id, string $columnas)
+{
+    $sent = $bd->prepare("SELECT {$columnas} FROM reuniones WHERE id = ?" . (motor() === 'sqlite' ? '' : ' FOR UPDATE'));
+    $sent->execute([$id]);
+    return $sent->fetch();
+}
+
+/** Acaba la transacción y suelta el candado: guarda lo escrito, o lo deshace. */
+function reunion_abrir(PDO $bd, bool $bien): void
+{
+    if (motor() === 'sqlite') {
+        $bd->exec($bien ? 'COMMIT' : 'ROLLBACK');
+        return;
+    }
+    if ($bien) {
+        $bd->commit();
+    } else {
+        $bd->rollBack();
     }
 }
 
@@ -3689,7 +3785,9 @@ function guardar_partes(string $id, array $partes, array $ademas = []): void
  * La mesa se toca POR DIFERENCIAS, no mandando la lista entera: así
  * dos personas añadiendo asistentes a la vez no se pisan (decidido
  * por Fran, agosto de 2026). `poner`/`quitar` llevan ids del equipo;
- * `invitar`/`desinvitar`, nombres de fuera.
+ * `invitar`/`desinvitar`, nombres de fuera. Para que sea verdad
+ * también cuando llegan en el mismo instante, la lista se relee con
+ * el candado puesto (ver «El candado de la reunión»).
  */
 function tocar_mesa(string $reunionId): void
 {
@@ -3709,16 +3807,18 @@ function tocar_mesa(string $reunionId): void
     $conNombres = hay_nombres_de_asistentes();
 
     $bd = bd();
-    $bd->beginTransaction();
+    reunion_cerrar($bd);
     try {
         // Se relee DENTRO de la transacción: la lista sobre la que se
         // aplican las diferencias es la última de verdad, no la que
         // tuviera el móvil al abrir la hoja. Y los nombres guardados,
         // lo mismo: a los últimos de verdad se les suman los de ahora.
-        $sent = $bd->prepare('SELECT asistentes, invitados' . ($conNombres ? ', asistentes_nombres' : '')
-            . ' FROM reuniones WHERE id = ?');
-        $sent->execute([$reunion['id']]);
-        $fila = $sent->fetch();
+        // Y CON EL CANDADO PUESTO: si otro está tocando esta mesa en
+        // este instante, aquí se le espera y se lee lo que deje (ver
+        // «El candado de la reunión»). Sin él, los dos leían la misma
+        // lista y el segundo en escribir borraba el asiento del primero.
+        $fila = reunion_releer($bd, (string) $reunion['id'],
+            'asistentes, invitados' . ($conNombres ? ', asistentes_nombres' : ''));
 
         $asistentes = json_decode((string) $fila['asistentes'], true) ?: [];
         $invitados = json_decode((string) $fila['invitados'], true) ?: [];
@@ -3740,9 +3840,9 @@ function tocar_mesa(string $reunionId): void
         $bd->prepare('UPDATE reuniones SET asistentes = ?, invitados = ?, '
             . ($conNombres ? 'asistentes_nombres = ?, ' : '') . 'actualizado = ? WHERE id = ?')
             ->execute($valores);
-        $bd->commit();
+        reunion_abrir($bd, true);
     } catch (Throwable $e) {
-        $bd->rollBack();
+        reunion_abrir($bd, false);
         throw $e;
     }
 
