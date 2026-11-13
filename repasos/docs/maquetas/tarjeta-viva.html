@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maqueta · Seis señales de que la reunión de hoy sigue viva</title>
+<link rel="stylesheet" href="../../css/app.css">
+<style>
+  body { background: #d9d6d0; margin: 0; padding: 24px; display: grid; gap: 40px; justify-content: center; }
+  .telefono {
+    width: 430px; box-sizing: border-box;
+    padding: 12px 12px 28px; background: var(--d-fondo);
+    border-radius: 24px; overflow: hidden;
+  }
+  .m-rotulo { font: 600 13px/1 var(--d-font); color: #6d6a64; margin: 0 0 8px 6px; letter-spacing: 0.04em; text-transform: uppercase; }
+
+  /* Piezas SOLO de maqueta: la señal de «viva» en sus seis trajes.
+     La premisa es de Fran: si la reunión de la portada es de HOY, está
+     necesariamente abierta hasta las 23:59, terminada o no, y eso se
+     tiene que ver sin leer nada dos veces. */
+  .m-bolita {
+    width: 9px; height: 9px; border-radius: 999px;
+    background: var(--d-verde); display: inline-block; flex: none;
+  }
+  .m-cuando { display: inline-flex; align-items: center; gap: 8px; }
+  /* B: la bolita late. En el móvil el halo respira (animación); en la
+     foto queda congelado a medio latido. */
+  .m-bolita.late {
+    box-shadow: 0 0 0 5px rgba(24, 82, 52, 0.18);
+    animation: m-late 1.8s ease-out infinite;
+  }
+  @keyframes m-late {
+    0% { box-shadow: 0 0 0 0 rgba(24, 82, 52, 0.35); }
+    70% { box-shadow: 0 0 0 9px rgba(24, 82, 52, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(24, 82, 52, 0); }
+  }
+  @media (prefers-reduced-motion: reduce) { .m-bolita.late { animation: none; } }
+  /* C: la pastilla que dice la regla. */
+  .m-chip-viva {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 6px 12px; border-radius: 999px;
+    background: var(--d-verde-suave); color: var(--d-verde);
+    font-size: 14px; font-weight: 500; white-space: nowrap;
+  }
+  /* D: el filete en el canto izquierdo. */
+  .m-filete {
+    position: absolute; left: 0; top: 16px; bottom: 17px; width: 4px;
+    border-radius: 0 4px 4px 0; background: var(--d-verde);
+  }
+  /* E: el puntito colgado de la grúa. */
+  .m-grua { position: relative; display: inline-flex; flex: none; }
+  .m-grua .m-bolita {
+    position: absolute; top: -3px; right: -4px;
+    width: 10px; height: 10px; border: 2px solid #fff; box-sizing: content-box;
+  }
+  /* F: el sello HOY en maciza. */
+  .m-hoy {
+    font: 600 12px/1 var(--d-font); letter-spacing: 0.06em;
+    background: var(--d-verde); color: #fff;
+    padding: 5px 10px; border-radius: 999px; flex: none;
+  }
+</style>
+</head>
+<body>
+  <div><p class="m-rotulo">A · La bolita fija, junto al cuándo</p><div class="telefono pantalla-diseno" id="pA"></div></div>
+  <div><p class="m-rotulo">B · La bolita que late</p><div class="telefono pantalla-diseno" id="pB"></div></div>
+  <div><p class="m-rotulo">C · La pastilla con la regla: «Hasta las 23:59»</p><div class="telefono pantalla-diseno" id="pC"></div></div>
+  <div><p class="m-rotulo">D · El filete verde en el canto</p><div class="telefono pantalla-diseno" id="pD"></div></div>
+  <div><p class="m-rotulo">E · El puntito colgado de la grúa</p><div class="telefono pantalla-diseno" id="pE"></div></div>
+  <div><p class="m-rotulo">F · El sello HOY</p><div class="telefono pantalla-diseno" id="pF"></div></div>
+
+<script type="module">
+import { h, icon, anillo, grupoAvatares } from '../../js/ui.js';
+
+const GENTE = [
+  { nombre: 'Francisco Juárez del Dago' },
+  { nombre: 'Alba García' },
+  { nombre: 'Felipe Remacha' },
+];
+
+/* La tarjeta tal como quedó construida (propuesta A de la ronda
+   anterior), terminada a las 9:31: la señal tiene que funcionar
+   también así, porque terminada-hoy sigue viva hasta las 23:59. */
+const tarjeta = ({ cab, extra = null }) => h('button.d-tarjeta.tramo-ambar', null,
+  h('span.d-mordida'), h('span.d-mordida-esquina'),
+  extra,
+  h('div.d-tarjeta-cab', null, ...cab,
+    h('span.d-tarjeta-caras', null, grupoAvatares(GENTE, { tam: 36, max: 3, solape: 12 }))),
+  h('div.d-tarjeta-titulo', null, 'Reunión de obra'),
+  h('div.d-tarjeta-pie', null,
+    h('span.d-chip.grande', null, icon('listaChecks'), '6 / 9'),
+    h('span.d-chip.grande.ambar', null, icon('fuego'), '67%'),
+  ),
+  h('span.d-tarjeta-anillo', null, anillo(67, { tam: 55, grosor: 5, etiqueta: false })),
+);
+
+const banda = () => h('button.d-banner.negro', null,
+  h('span.d-mordida'), h('span.d-mordida-esquina'),
+  h('span.d-banner-texto', null,
+    h('span.d-banner-rotulo', null, 'Tareas y órdenes pendientes'),
+    h('span.d-banner-cifra', null, '3'),
+  ),
+  h('span.d-banner-boton', null, icon('flechaSubir')),
+);
+
+const monta = (id, t) => document.getElementById(id).append(
+  h('p.d-epigrafe', null, 'Última reunión de obra'),
+  t,
+  banda(),
+);
+
+monta('pA', tarjeta({ cab: [icon('grua'),
+  h('span.m-cuando', null, h('span.m-bolita'), 'Hoy, 9:31 h')] }));
+
+monta('pB', tarjeta({ cab: [icon('grua'),
+  h('span.m-cuando', null, h('span.m-bolita.late'), 'Hoy, 9:31 h')] }));
+
+monta('pC', tarjeta({ cab: [icon('grua'),
+  h('span.m-chip-viva', null, h('span.m-bolita'), 'Hasta las 23:59')] }));
+
+monta('pD', tarjeta({
+  cab: [icon('grua'), h('span', null, 'Hoy, 9:31 h')],
+  extra: h('span.m-filete'),
+}));
+
+monta('pE', tarjeta({ cab: [
+  h('span.m-grua', null, icon('grua'), h('span.m-bolita')),
+  h('span', null, 'Hoy, 9:31 h')] }));
+
+monta('pF', tarjeta({ cab: [icon('grua'),
+  h('span.m-hoy', null, 'HOY'), h('span', null, '9:31 h')] }));
+</script>
+</body>
+</html>

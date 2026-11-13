@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Soporte · UNIK Works</title>
+<meta name="description" content="Ayuda de UNIK Works: cómo entrar, qué hacer si algo falla y a quién preguntar.">
+<link rel="icon" href="assets/icons/favicon.svg" type="image/svg+xml">
+<style>
+  /* Página suelta: la abre el revisor de Apple y cualquiera desde la
+     ficha de la tienda, sin haber entrado nunca en la aplicación. Por
+     eso no depende de la sesión, ni del service worker, ni de nada de
+     fuera. */
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: #f5f5f5; color: #000;
+    font: 400 16px/1.6 'Neue Haas Grotesk Display Pro', 'Inter Tight',
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    padding: calc(env(safe-area-inset-top) + 32px) 20px
+             calc(env(safe-area-inset-bottom) + 64px);
+  }
+  main { max-width: 640px; margin: 0 auto; }
+  .marca {
+    display: inline-flex; align-items: center; gap: 12px;
+    margin-bottom: 34px; text-decoration: none; color: inherit;
+  }
+  .marca span { font-weight: 500; letter-spacing: .02em; color: #8c8c8c; font-size: 14px; }
+  h1 { font-size: 34px; line-height: 1.15; letter-spacing: -.02em; font-weight: 500; margin: 0 0 8px; }
+  .entradilla { color: #8c8c8c; margin: 0 0 36px; }
+  h2 {
+    font-size: 20px; line-height: 1.3; font-weight: 500;
+    margin: 40px 0 10px; letter-spacing: -.01em;
+  }
+  h3 { font-size: 17px; font-weight: 500; margin: 24px 0 6px; }
+  p { margin: 0 0 14px; }
+  ul, ol { margin: 0 0 14px; padding-left: 22px; }
+  li { margin-bottom: 7px; }
+  strong { font-weight: 500; }
+  .caja { background: #fff; border-radius: 20px; padding: 20px 22px; margin: 22px 0; }
+  .caja p:last-child, .caja ul:last-child { margin-bottom: 0; }
+  .destacado { background: #d6cabc; }
+  .pie-enlaces { margin-top: 48px; color: #8c8c8c; font-size: 14px; }
+  a { color: #064d2d; }
+</style>
+</head>
+<body>
+<main>
+  <a class="marca" href="./">
+    <img src="assets/icons/favicon.svg" width="34" height="34" alt="" aria-hidden="true">
+    <span>UNIK WORKS</span>
+  </a>
+
+  <h1>Soporte</h1>
+  <p class="entradilla">Cómo entrar, qué hacer si algo no va, y a quién
+  preguntar cuando esto no resuelve.</p>
+
+  <div class="caja destacado">
+    <p><strong>UNIK Works es una herramienta de uso profesional.</strong>
+    Hace falta una cuenta que facilita la promotora: no hay registro
+    abierto. Si trabajas en una obra de UNIK y no tienes acceso, pídeselo
+    a tu contacto en la promotora.</p>
+  </div>
+
+  <h2>Cómo se entra</h2>
+  <ol>
+    <li>Abre la aplicación.</li>
+    <li>Escribe el correo y la contraseña que te dieron.</li>
+    <li>Ya está: la sesión se queda abierta y no hay que volver a
+    escribirla cada día.</li>
+  </ol>
+
+  <h2>Problemas más habituales</h2>
+
+  <h3>No me deja entrar</h3>
+  <p>Comprueba que el correo es el mismo que diste en la obra, sin
+  espacios delante ni detrás. Si has fallado la contraseña varias veces
+  seguidas, el acceso se frena unos minutos a propósito: espera y vuelve
+  a probarlo.</p>
+  <p>Si sigue sin entrar, pide que te la restablezcan: quien administra
+  la aplicación puede darte una nueva.</p>
+
+  <h3>He apuntado repasos y no aparecen en el móvil de mi compañero</h3>
+  <p>Es lo normal si estabas sin cobertura. La aplicación funciona
+  igual bajo tierra o en una planta sin señal: guarda lo que apuntas en
+  tu móvil y lo sube solo en cuanto vuelve la conexión. Sal a una zona
+  con cobertura, abre la aplicación y espera unos segundos.</p>
+
+  <h3>No me deja dar un repaso por completado</h3>
+  <p>Falta la foto. Completar y verificar exigen siempre una foto hecha
+  en el momento: es la prueba de que alguien estuvo delante del remate.
+  El botón se enciende en cuanto añades una.</p>
+
+  <h3>No puedo verificar repasos</h3>
+  <p>Verificar y rechazar son de la dirección facultativa y de la
+  propiedad. La constructora da los remates por completados; quien los
+  da por buenos es otra mano, a propósito. Si crees que tu permiso está
+  mal puesto, dilo y se corrige.</p>
+
+  <h3>La cámara o el micrófono no funcionan</h3>
+  <p>La primera vez, el iPhone pregunta si dejas que la aplicación los
+  use. Si dijiste que no, se cambia en
+  <strong>Ajustes → UNIK Works</strong> del propio móvil.</p>
+
+  <h3>Veo una versión antigua</h3>
+  <p>No hace falta actualizar nada desde la App Store: las mejoras
+  llegan solas. Si algo se ve raro, cierra la aplicación del todo y
+  vuelve a abrirla.</p>
+
+  <h2>Si nada de esto lo resuelve</h2>
+  <div class="caja">
+    <p>Escribe a <a href="mailto:info@unikdi.com">info@unikdi.com</a>
+    diciendo:</p>
+    <ul>
+      <li>Tu nombre y la obra en la que estás.</li>
+      <li>Qué estabas haciendo cuando falló.</li>
+      <li>Una captura de la pantalla, si puedes.</li>
+    </ul>
+  </div>
+
+  <p class="pie-enlaces">
+    UNIK Works · <a href="marketing.html">Sobre la aplicación</a> ·
+    <a href="privacidad.html">Privacidad</a> ·
+    <a href="./">Abrir la aplicación</a>
+  </p>
+</main>
+</body>
+</html>

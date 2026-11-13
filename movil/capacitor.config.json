@@ -1,0 +1,25 @@
+{
+  "appId": "com.unikdi.repasos",
+  "appName": "UNIK Works",
+  "webDir": "publico",
+  "server": {
+    "url": "https://repasos.unikdi.com",
+    "errorPath": "sin-conexion.html",
+    "androidScheme": "https"
+  },
+  "ios": {
+    "contentInset": "never",
+    "limitsNavigationsToAppBoundDomains": true,
+    "backgroundColor": "#f5f5f5",
+    "scrollEnabled": true
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchAutoHide": true,
+      "launchShowDuration": 5000,
+      "launchFadeOutDuration": 200,
+      "backgroundColor": "#736b5c",
+      "showSpinner": false
+    }
+  }
+}

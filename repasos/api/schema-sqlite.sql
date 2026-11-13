@@ -1,0 +1,359 @@
+-- ═══════════════════════════════════════════════════════════════
+-- UNIK repasos — esquema para SQLite.
+--
+-- Mismo modelo que schema.sql (MySQL), traducido: sin ENGINE ni
+-- COLLATE, los índices como sentencias aparte y el autoincremento con
+-- INTEGER PRIMARY KEY. Útil si el hosting no da base de datos, y es lo
+-- que se usa para probar la API en local.
+-- ═══════════════════════════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS usuarios (
+  id            TEXT NOT NULL PRIMARY KEY,
+  nombre        TEXT NOT NULL,
+  email         TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  rol           TEXT NOT NULL DEFAULT 'usuario',
+  empresa       TEXT NOT NULL DEFAULT '',
+  verifica      INTEGER NOT NULL DEFAULT 0,
+  comercial     INTEGER NOT NULL DEFAULT 0,
+  avatar        TEXT NOT NULL DEFAULT '',
+  activo        INTEGER NOT NULL DEFAULT 1,
+  creado        TEXT NOT NULL,
+  actualizado   TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS sesiones (
+  token      TEXT NOT NULL PRIMARY KEY,
+  usuario_id TEXT NOT NULL,
+  creado     TEXT NOT NULL,
+  visto      TEXT NOT NULL,
+  caduca     TEXT NOT NULL,
+  agente     TEXT,
+  FOREIGN KEY (usuario_id) REFERENCES usuarios (id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS ix_sesiones_usuario ON sesiones (usuario_id);
+
+CREATE TABLE IF NOT EXISTS intentos (
+  id     INTEGER PRIMARY KEY AUTOINCREMENT,
+  email  TEXT NOT NULL,
+  ip     TEXT NOT NULL,
+  cuando TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_intentos_email ON intentos (email, cuando);
+CREATE INDEX IF NOT EXISTS ix_intentos_ip ON intentos (ip, cuando);
+
+-- Las siete tablas que bajan a los móviles (listas, tareas, comentarios,
+-- medios, mensajes, lecturas y entregas) llevan la columna `recibido`:
+-- el número de orden con el que la fila LLEGÓ al servidor (ver «La
+-- bajada por recepción» en index.php).
+-- OJO: su índice (ix_TABLA_recibido) NO va en este fichero, y no es un
+-- olvido. esquema_aplicar() pasa todos los CREATE de aquí ANTES de
+-- añadir columnas: en una base que ya existía y todavía no tiene la
+-- columna, un CREATE INDEX sobre ella reventaría la puesta al día, en
+-- cada petición y para siempre. Lo crea esquema_recepcion(), después.
+CREATE TABLE IF NOT EXISTS listas (
+  id                TEXT NOT NULL PRIMARY KEY,
+  unidad_id         TEXT NOT NULL,
+  promo_id          TEXT NOT NULL,
+  fase              TEXT NOT NULL DEFAULT 'pre',
+  nombre            TEXT NOT NULL DEFAULT '',
+  cerrada           INTEGER NOT NULL DEFAULT 0,
+  borrada           INTEGER NOT NULL DEFAULT 0,
+  creado            TEXT NOT NULL,
+  actualizado       TEXT NOT NULL,
+  recibido          TEXT NOT NULL DEFAULT '',
+  creado_por        TEXT,
+  creado_por_nombre TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_listas_unidad ON listas (unidad_id);
+CREATE INDEX IF NOT EXISTS ix_listas_actualizado ON listas (actualizado);
+
+CREATE TABLE IF NOT EXISTS tareas (
+  id                TEXT NOT NULL PRIMARY KEY,
+  lista_id          TEXT NOT NULL,
+  texto             TEXT NOT NULL,
+  estado            TEXT NOT NULL DEFAULT 'pendiente',
+  oficio            TEXT NOT NULL DEFAULT 'general',
+  zona              TEXT NOT NULL DEFAULT '',
+  fecha_limite TEXT DEFAULT NULL,
+  prioridad TEXT NOT NULL DEFAULT 'alta',
+  orden             INTEGER NOT NULL DEFAULT 0,
+  portada_id        TEXT,
+  estado_por        TEXT,
+  estado_en         TEXT,
+  rechazada         INTEGER NOT NULL DEFAULT 0,
+  borrada           INTEGER NOT NULL DEFAULT 0,
+  creado            TEXT NOT NULL,
+  actualizado       TEXT NOT NULL,
+  recibido          TEXT NOT NULL DEFAULT '',
+  creado_por        TEXT,
+  creado_por_nombre TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_tareas_lista ON tareas (lista_id);
+CREATE INDEX IF NOT EXISTS ix_tareas_actualizado ON tareas (actualizado);
+
+CREATE TABLE IF NOT EXISTS comentarios (
+  id                 TEXT NOT NULL PRIMARY KEY,
+  tarea_id           TEXT NOT NULL,
+  texto              TEXT NOT NULL,
+  tipo               TEXT NOT NULL DEFAULT 'nota',
+  borrada            INTEGER NOT NULL DEFAULT 0,
+  creado             TEXT NOT NULL,
+  actualizado        TEXT NOT NULL,
+  recibido           TEXT NOT NULL DEFAULT '',
+  creado_por         TEXT,
+  creado_por_nombre  TEXT NOT NULL,
+  creado_por_empresa TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS ix_comentarios_tarea ON comentarios (tarea_id);
+CREATE INDEX IF NOT EXISTS ix_comentarios_actualizado ON comentarios (actualizado);
+
+CREATE TABLE IF NOT EXISTS medios (
+  id            TEXT NOT NULL PRIMARY KEY,
+  tarea_id      TEXT NOT NULL,
+  comentario_id TEXT,
+  tipo        TEXT NOT NULL,
+  mime        TEXT NOT NULL,
+  tam         INTEGER NOT NULL DEFAULT 0,
+  ancho       INTEGER NOT NULL DEFAULT 0,
+  alto        INTEGER NOT NULL DEFAULT 0,
+  duracion    INTEGER NOT NULL DEFAULT 0,
+  ruta        TEXT NOT NULL,
+  borrada     INTEGER NOT NULL DEFAULT 0,
+  creado      TEXT NOT NULL,
+  actualizado TEXT NOT NULL,
+  recibido    TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS ix_medios_tarea ON medios (tarea_id);
+CREATE INDEX IF NOT EXISTS ix_medios_actualizado ON medios (actualizado);
+
+-- Tabla de control: guarda la versión del esquema para que el backend
+-- sepa, al arrancar, si tiene que añadir algo por su cuenta.
+CREATE TABLE IF NOT EXISTS meta (
+  clave TEXT NOT NULL PRIMARY KEY,
+  valor TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS mensajes (
+  id                 TEXT NOT NULL PRIMARY KEY,
+  unidad_id          TEXT NOT NULL,
+  promo_id           TEXT NOT NULL DEFAULT '',
+  texto              TEXT NOT NULL,
+  borrada            INTEGER NOT NULL DEFAULT 0,
+  creado             TEXT NOT NULL,
+  actualizado        TEXT NOT NULL,
+  recibido           TEXT NOT NULL DEFAULT '',
+  creado_por         TEXT,
+  creado_por_nombre  TEXT NOT NULL,
+  creado_por_empresa TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS ix_mensajes_unidad ON mensajes (unidad_id);
+CREATE INDEX IF NOT EXISTS ix_mensajes_actualizado ON mensajes (actualizado);
+
+CREATE TABLE IF NOT EXISTS lecturas (
+  id          TEXT NOT NULL PRIMARY KEY,
+  mensaje_id  TEXT NOT NULL,
+  usuario_id  TEXT NOT NULL,
+  creado      TEXT NOT NULL,
+  actualizado TEXT NOT NULL,
+  recibido    TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS ix_lecturas_mensaje ON lecturas (mensaje_id);
+CREATE INDEX IF NOT EXISTS ix_lecturas_actualizado ON lecturas (actualizado);
+
+-- ═══ La obra: reuniones y encargos ═══════════════════════════════
+-- Una reunión de obra al día, con su acta. Los ENCARGOS son las tareas
+-- que nacen de una reunión: en pantalla se llaman «tareas», pero por
+-- dentro llevan nombre propio para no chocar jamás con la tabla
+-- `tareas`, que guarda repasos (ver CLAUDE.md, el diccionario).
+CREATE TABLE IF NOT EXISTS reuniones (
+  id                TEXT NOT NULL PRIMARY KEY,
+  promo_id          TEXT NOT NULL,
+  fecha             TEXT NOT NULL,
+  empezada          TEXT NOT NULL,
+  terminada         TEXT,
+  asistentes        TEXT NOT NULL,
+  invitados         TEXT NOT NULL,
+  resumen           TEXT,
+  propuesta         TEXT,
+  borrada           INTEGER NOT NULL DEFAULT 0,
+  creado            TEXT NOT NULL,
+  actualizado       TEXT NOT NULL,
+  creado_por        TEXT,
+  creado_por_nombre TEXT NOT NULL DEFAULT '',
+  acta_firmada      TEXT,
+  asistentes_nombres TEXT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS ix_reuniones_dia ON reuniones (promo_id, fecha);
+
+CREATE TABLE IF NOT EXISTS encargos (
+  id                 TEXT NOT NULL PRIMARY KEY,
+  reunion_id         TEXT NOT NULL,
+  promo_id           TEXT NOT NULL,
+  texto              TEXT NOT NULL,
+  general            INTEGER NOT NULL DEFAULT 1,
+  unidad_id          TEXT NOT NULL DEFAULT '',
+  responsable_id     TEXT,
+  responsable_nombre TEXT NOT NULL DEFAULT '',
+  fecha_limite       TEXT NOT NULL DEFAULT '',
+  estado             TEXT NOT NULL DEFAULT 'pendiente',
+  hecho_en           TEXT,
+  hecho_por_nombre   TEXT NOT NULL DEFAULT '',
+  borrada            INTEGER NOT NULL DEFAULT 0,
+  creado             TEXT NOT NULL,
+  actualizado        TEXT NOT NULL,
+  creado_por         TEXT,
+  creado_por_nombre  TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS ix_encargos_reunion ON encargos (reunion_id);
+CREATE INDEX IF NOT EXISTS ix_encargos_estado ON encargos (promo_id, estado);
+
+-- ═══ El audio de las reuniones y el registro de voces ═══════════
+-- (ver el comentario del esquema de MySQL: partes por fichero completo
+-- y JSON para lo que cambia de forma con el proveedor)
+CREATE TABLE IF NOT EXISTS grabaciones (
+  id                TEXT NOT NULL PRIMARY KEY,
+  reunion_id        TEXT NOT NULL,
+  promo_id          TEXT NOT NULL,
+  estado            TEXT NOT NULL DEFAULT 'grabando',
+  mime              TEXT NOT NULL DEFAULT '',
+  duracion          INTEGER NOT NULL DEFAULT 0,
+  tam               INTEGER NOT NULL DEFAULT 0,
+  partes            TEXT,
+  hablantes         TEXT,
+  audio_borrado     INTEGER NOT NULL DEFAULT 0,
+  borrada           INTEGER NOT NULL DEFAULT 0,
+  creado            TEXT NOT NULL,
+  actualizado       TEXT NOT NULL,
+  creado_por        TEXT,
+  creado_por_nombre TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS ix_grabaciones_reunion ON grabaciones (reunion_id);
+
+CREATE TABLE IF NOT EXISTS voces (
+  id                   TEXT NOT NULL PRIMARY KEY,
+  promo_id             TEXT NOT NULL,
+  persona_id           TEXT,
+  persona_nombre       TEXT NOT NULL DEFAULT '',
+  huella               TEXT,
+  huella_trabajo       TEXT NOT NULL DEFAULT '',
+  muestra_grabacion_id TEXT,
+  muestra_parte        INTEGER NOT NULL DEFAULT 0,
+  muestra_desde        REAL NOT NULL DEFAULT 0,
+  muestra_hasta        REAL NOT NULL DEFAULT 0,
+  borrada              INTEGER NOT NULL DEFAULT 0,
+  creado               TEXT NOT NULL,
+  actualizado          TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_voces_promo ON voces (promo_id);
+
+CREATE TABLE IF NOT EXISTS adjuntos (
+  id                TEXT NOT NULL PRIMARY KEY,
+  reunion_id        TEXT NOT NULL,
+  promo_id          TEXT NOT NULL,
+  tipo              TEXT NOT NULL DEFAULT 'otro',
+  nombre            TEXT NOT NULL DEFAULT '',
+  mime              TEXT NOT NULL DEFAULT '',
+  tam               INTEGER NOT NULL DEFAULT 0,
+  borrada           INTEGER NOT NULL DEFAULT 0,
+  creado            TEXT NOT NULL,
+  actualizado       TEXT NOT NULL,
+  creado_por        TEXT,
+  creado_por_nombre TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS ix_adjuntos_reunion ON adjuntos (reunion_id);
+
+-- Las entregas: una fila por vivienda, con la clave de la vivienda.
+-- Desde la versión 20 guarda todas las visitas hechas con el cliente
+-- (ver el comentario del esquema de MySQL). visitas_hechas va sin valor
+-- por defecto, igual que allí, para que una base nueva y una que sube
+-- de versión queden con la misma columna.
+CREATE TABLE IF NOT EXISTS entregas (
+  id                   TEXT NOT NULL PRIMARY KEY,
+  unidad_id            TEXT NOT NULL,
+  promo_id             TEXT NOT NULL,
+  compradores          TEXT NOT NULL DEFAULT '',
+  revision             TEXT NOT NULL DEFAULT '',
+  revision_hora        TEXT NOT NULL DEFAULT '',
+  firma                TEXT NOT NULL DEFAULT '',
+  firma_hora           TEXT NOT NULL DEFAULT '',
+  revisada_en          TEXT NOT NULL DEFAULT '',
+  compradores_fijados_en TEXT NOT NULL DEFAULT '',
+  revisada_fijada_en   TEXT NOT NULL DEFAULT '',
+  revision_fijada_en   TEXT NOT NULL DEFAULT '',
+  revision_por         TEXT,
+  revision_por_nombre  TEXT NOT NULL DEFAULT '',
+  firma_fijada_en      TEXT NOT NULL DEFAULT '',
+  firma_por            TEXT,
+  firma_por_nombre     TEXT NOT NULL DEFAULT '',
+  revisada_por         TEXT,
+  revisada_por_nombre  TEXT NOT NULL DEFAULT '',
+  revisada_de          TEXT NOT NULL DEFAULT '',
+  revisada_de_hora     TEXT NOT NULL DEFAULT '',
+  visitas_hechas       TEXT,
+  visitas_fijadas_en   TEXT NOT NULL DEFAULT '',
+  entregada_en         TEXT NOT NULL DEFAULT '',
+  entregada_fijada_en  TEXT NOT NULL DEFAULT '',
+  entregada_por        TEXT,
+  entregada_por_nombre TEXT NOT NULL DEFAULT '',
+  borrada              INTEGER NOT NULL DEFAULT 0,
+  creado               TEXT NOT NULL,
+  actualizado          TEXT NOT NULL,
+  recibido             TEXT NOT NULL DEFAULT '',
+  creado_por           TEXT,
+  creado_por_nombre    TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS ix_entregas_promo ON entregas (promo_id);
+CREATE INDEX IF NOT EXISTS ix_entregas_actualizado ON entregas (actualizado);
+
+-- Los móviles apuntados a los avisos push.
+CREATE TABLE IF NOT EXISTS suscripciones_push (
+  id          TEXT NOT NULL PRIMARY KEY,
+  usuario_id  TEXT,
+  endpoint    TEXT NOT NULL,
+  p256dh      TEXT NOT NULL,
+  auth        TEXT NOT NULL,
+  agente      TEXT NOT NULL DEFAULT '',
+  fallos      INTEGER NOT NULL DEFAULT 0,
+  creado      TEXT NOT NULL,
+  actualizado TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_suscripciones_usuario ON suscripciones_push (usuario_id);
+
+-- El reconocimiento de repasos pendientes (por dentro, constancia):
+-- una fila por redacción, con el borrador de la IA y el texto que se
+-- imprime en JSON. No viaja en la sincronización.
+CREATE TABLE IF NOT EXISTS constancias (
+  id                    TEXT NOT NULL PRIMARY KEY,
+  unidad_id             TEXT NOT NULL,
+  promo_id              TEXT NOT NULL,
+  huella                TEXT NOT NULL,
+  registro              TEXT NOT NULL DEFAULT '',
+  borrador              TEXT NOT NULL,
+  texto                 TEXT NOT NULL,
+  ajustado              INTEGER NOT NULL DEFAULT 0,
+  descargas             INTEGER NOT NULL DEFAULT 0,
+  descargado_en         TEXT,
+  descargado_por_nombre TEXT NOT NULL DEFAULT '',
+  gasto_entrada         INTEGER NOT NULL DEFAULT 0,
+  gasto_salida          INTEGER NOT NULL DEFAULT 0,
+  modelo                TEXT NOT NULL DEFAULT '',
+  borrada               INTEGER NOT NULL DEFAULT 0,
+  creado                TEXT NOT NULL,
+  actualizado           TEXT NOT NULL,
+  creado_por            TEXT,
+  creado_por_nombre     TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS ix_constancias_unidad ON constancias (unidad_id, actualizado);
+
+-- Lo que la IA vio en cada foto de un repaso, para pagarlo una vez.
+CREATE TABLE IF NOT EXISTS miradas (
+  medio_id  TEXT NOT NULL PRIMARY KEY,
+  tarea_id  TEXT NOT NULL,
+  texto     TEXT NOT NULL,
+  discrepa  INTEGER NOT NULL DEFAULT 0,
+  saltada   INTEGER NOT NULL DEFAULT 0,
+  modelo    TEXT NOT NULL DEFAULT '',
+  creado    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_miradas_tarea ON miradas (tarea_id);

@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maqueta · Cuatro maneras de ver cómo se exprime el audio</title>
+<link rel="stylesheet" href="../../css/app.css">
+<style>
+  body { background: #d9d6d0; margin: 0; padding: 24px; display: grid; gap: 40px; justify-content: center; }
+  .telefono {
+    width: 430px; min-height: 700px; box-sizing: border-box;
+    padding: 12px 12px 36px; background: var(--d-fondo);
+    border-radius: 24px; overflow: hidden; position: relative;
+  }
+  .m-rotulo { font: 600 13px/1 var(--d-font); color: #6d6a64; margin: 0 0 8px 6px; letter-spacing: 0.04em; text-transform: uppercase; }
+
+  /* ── Piezas SOLO de maqueta: el girito, la barra y el brillo ── */
+  .m-giro {
+    width: 18px; height: 18px; flex: none; border-radius: 999px;
+    border: 2.5px solid #e4d9c6; border-top-color: var(--d-beige-tinta);
+    animation: m-gira 0.9s linear infinite;
+  }
+  @keyframes m-gira { to { transform: rotate(360deg); } }
+
+  .m-barra { height: 5px; border-radius: 999px; background: #eceae6; margin-top: 12px; overflow: hidden; }
+  .m-barra i { display: block; height: 100%; width: 55%; border-radius: 999px; background: var(--d-beige-tinta); }
+
+  .m-paso { display: flex; align-items: center; gap: 12px; padding: 9px 0; }
+  .m-paso-bola {
+    width: 26px; height: 26px; flex: none; border-radius: 999px;
+    display: grid; place-items: center; color: #fff;
+  }
+  .m-paso-bola.hecha { background: var(--d-beige-tinta); }
+  .m-paso-bola.hecha svg { width: 15px; height: 15px; }
+  .m-paso-bola.espera { border: 2.5px solid #d9d2c4; background: transparent; }
+  .m-paso-texto { font: 500 15px/1.3 var(--d-font); color: var(--d-tinta); }
+  .m-paso-sub { font: 400 12.5px/1.35 var(--d-font); color: var(--d-beige-tinta); margin-top: 2px; }
+  .m-paso.espera .m-paso-texto { color: var(--d-gris); }
+
+  .m-banda {
+    position: absolute; left: 12px; right: 12px; bottom: 22px;
+    height: 54px; border-radius: 999px; background: #131211; color: #fff;
+    display: flex; align-items: center; gap: 10px; padding: 0 18px;
+    font: 500 15px/1 var(--d-font);
+    box-shadow: 0 8px 26px rgba(0, 0, 0, 0.35);
+  }
+  .m-banda .m-giro { border-color: #3a3835; border-top-color: #e8b64a; }
+  .m-banda-detalle { margin-left: auto; color: #9d9a96; font-variant-numeric: tabular-nums; }
+
+  .m-hueso { border-radius: 6px; background: linear-gradient(90deg, #eceae6 25%, #f4f2ee 45%, #eceae6 65%); background-size: 300% 100%; animation: m-brilla 1.4s ease-in-out infinite; }
+  @keyframes m-brilla { from { background-position: 120% 0; } to { background-position: -80% 0; } }
+</style>
+</head>
+<body>
+  <div><p class="m-rotulo">1 · La tarjeta que trabaja</p><div class="telefono pantalla-diseno" id="p1"></div></div>
+  <div><p class="m-rotulo">2 · La banda que te sigue por la app</p><div class="telefono pantalla-diseno" id="p2"></div></div>
+  <div><p class="m-rotulo">3 · El conducto a la vista, paso a paso</p><div class="telefono pantalla-diseno" id="p3"></div></div>
+  <div><p class="m-rotulo">4 · El acta se escribe delante de ti</p><div class="telefono pantalla-diseno" id="p4"></div></div>
+
+<script type="module">
+import { h, icon, avatar, grupoAvatares } from '../../js/ui.js';
+
+const F = { nombre: 'Francisco Juárez del Dago' };
+const A = { nombre: 'Alba García' };
+
+const cabDentro = () => h('div.d-cab', null,
+  h('button.d-bola', null, icon('arrowLeft')),
+  h('div.d-cab-menu', null, avatar(F, { tam: 55 })),
+);
+const epigrafe = (t) => h('p.d-epigrafe', null, t);
+const notaPie = (t, estilo) => h('p.d-nota-pie', { style: estilo || null }, t);
+const giro = () => h('span.m-giro');
+
+const cabReunion = () => [
+  cabDentro(),
+  h('h1.d-saludo', null, 'Reunión de hoy'),
+  notaPie('Martes, 25 de agosto de 2026 · empezada a las 09:02 h · terminada a las 09:31 h', { margin: '-4px 6px 0' }),
+  epigrafe('En la mesa'),
+  h('div.d-mesa', null, grupoAvatares([F, A], { tam: 44, max: 6, solape: 12 })),
+];
+
+/* ─── 1 · La tarjeta que trabaja ───
+   La fila de la grabación se convierte en la obrera: girito en vez de
+   micro, la fase en el título, el detalle debajo y una barra de lo que
+   lleva. Todo pasa dentro de la tarjeta, sin piezas nuevas alrededor. */
+document.getElementById('p1').append(
+  ...cabReunion(),
+  epigrafe('La grabación'),
+  h('div.d-encargo', null,
+    h('div.d-grab-fila-icono', null, giro()),
+    h('div.grow', null,
+      h('div.d-encargo-texto', null, 'Exprimiendo el audio…'),
+      h('div.d-encargo-sub', null, 'Transcribiendo la parte 2 de 3 · 29 min de reunión'),
+      h('div.m-barra', null, h('i')),
+    ),
+  ),
+  notaPie('Al terminar saldrá aquí la propuesta del acta, con sus tareas, para que la firmes.'),
+  epigrafe('Tareas de esta reunión'),
+  notaPie('Todavía ninguna. En un momento las propone la IA de lo que se habló.', { margin: '0 6px' }),
+);
+
+/* ─── 2 · La banda que te sigue ───
+   Como la barrita de la grabadora, pero exprimiendo: puedes irte a
+   cualquier pantalla y siempre sabes que está trabajando y cuánto le
+   queda. Al terminar, la banda dice «Acta propuesta» y tocándola te
+   lleva de vuelta a firmar. */
+document.getElementById('p2').append(
+  h('div.d-cab', null,
+    avatar(F, { tam: 55 }),
+    h('div.d-cab-menu', null,
+      ...[['inicio', 'brujula'], ['obra', 'grua'], ['viviendas', 'casa'], ['listas', 'periodico']]
+        .map(([id, ic]) => h('button.d-bola', { class: id === 'viviendas' ? 'activa' : '' }, icon(ic))),
+    ),
+  ),
+  h('h1.d-saludo', null, 'Repasos de viviendas'),
+  notaPie('Mientras tanto, tú a lo tuyo: la reunión se exprime sola.', { margin: '-2px 6px 14px' }),
+  h('button.d-acta-dia', null,
+    h('div.d-acta-dia-cab', null,
+      h('div.grow', null,
+        h('p.d-acta-dia-cuando', null, 'Villa 07'),
+        h('p.d-acta-dia-fecha', null, '3 repasos pendientes'),
+      ),
+    ),
+  ),
+  h('button.d-acta-dia', { style: { marginTop: '12px' } },
+    h('div.d-acta-dia-cab', null,
+      h('div.grow', null,
+        h('p.d-acta-dia-cuando', null, 'Villa 14'),
+        h('p.d-acta-dia-fecha', null, '1 repaso pendiente'),
+      ),
+    ),
+  ),
+  h('div.m-banda', null,
+    giro(),
+    h('span', null, 'Exprimiendo la reunión…'),
+    h('span.m-banda-detalle', null, 'parte 2 de 3'),
+  ),
+);
+
+/* ─── 3 · El conducto a la vista ───
+   La tarjeta beige de «en curso» con los tres pasos y su estado: lo
+   hecho con su check, lo que trabaja con su girito, lo que espera en
+   gris. No hay que adivinar nada: se ve el camino entero. */
+document.getElementById('p3').append(
+  ...cabReunion(),
+  epigrafe('La grabación'),
+  h('div.d-acta-dia.hoy', { style: { padding: '16px' } },
+    h('p.d-acta-dia-cuando', null, 'Reunión de 29 min · grabada a las 09:31'),
+    h('div', { style: { marginTop: '10px' } },
+      h('div.m-paso', null,
+        h('span.m-paso-bola.hecha', null, icon('check')),
+        h('div', null,
+          h('div.m-paso-texto', null, 'Transcrita'),
+          h('div.m-paso-sub', null, 'Las 3 partes, palabra por palabra'),
+        ),
+      ),
+      h('div.m-paso', null,
+        giro(),
+        h('div', { style: { marginLeft: '4px' } },
+          h('div.m-paso-texto', null, 'Reconociendo las voces…'),
+          h('div.m-paso-sub', null, 'Con las huellas de la obra'),
+        ),
+      ),
+      h('div.m-paso.espera', null,
+        h('span.m-paso-bola.espera'),
+        h('div', null,
+          h('div.m-paso-texto', null, 'Proponer el acta y sus tareas'),
+        ),
+      ),
+    ),
+  ),
+  notaPie('Cuando acabe el tercer paso, la propuesta aparece aquí debajo para que la firmes.'),
+);
+
+/* ─── 4 · El acta se escribe delante de ti ───
+   Nada de estados técnicos: en cuanto paras, aparece «La propuesta del
+   acta» con los renglones en hueso brillando, y se van rellenando de
+   verdad. La línea de abajo dice en qué está. */
+document.getElementById('p4').append(
+  ...cabReunion(),
+  epigrafe('La propuesta del acta'),
+  h('div.d-acta-prosa', null,
+    h('div.m-hueso', { style: { height: '13px', width: '92%' } }),
+    h('div.m-hueso', { style: { height: '13px', width: '86%', marginTop: '9px' } }),
+    h('div.m-hueso', { style: { height: '13px', width: '95%', marginTop: '9px' } }),
+    h('div.m-hueso', { style: { height: '13px', width: '58%', marginTop: '9px' } }),
+  ),
+  h('div.d-encargo', { style: { marginTop: '12px' } },
+    h('span.m-paso-bola.espera', { style: { marginLeft: '5px' } }),
+    h('div.grow', null,
+      h('div.m-hueso', { style: { height: '13px', width: '70%' } }),
+      h('div.m-hueso', { style: { height: '10px', width: '45%', marginTop: '7px' } }),
+    ),
+  ),
+  h('div.d-encargo', null,
+    h('span.m-paso-bola.espera', { style: { marginLeft: '5px' } }),
+    h('div.grow', null,
+      h('div.m-hueso', { style: { height: '13px', width: '62%' } }),
+      h('div.m-hueso', { style: { height: '10px', width: '52%', marginTop: '7px' } }),
+    ),
+  ),
+  h('div', { style: { display: 'flex', alignItems: 'center', gap: '10px', margin: '14px 6px 0' } },
+    giro(),
+    h('span', { style: { font: '500 13px/1.4 var(--d-font)', color: 'var(--d-gris)' } },
+      'La IA está escuchando la reunión: transcribiendo la parte 2 de 3…'),
+  ),
+);
+</script>
+</body>
+</html>

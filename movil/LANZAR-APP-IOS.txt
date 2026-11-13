@@ -1,0 +1,2 @@
+2026-08-20 05:38:34 — seguro de la pantalla de arranque
+2026-08-22 12:27:00 — la pantalla de «no se llega al servidor» ya no acusa a la primera: sondea, reintenta y entra sola

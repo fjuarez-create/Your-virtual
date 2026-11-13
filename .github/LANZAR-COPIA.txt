@@ -1,0 +1,5 @@
+Este fichero es un interruptor: al cambiarlo y empujarlo se pone en
+marcha el robot «Copia nocturna de UNIK repasos» sin esperar a la
+noche. La línea de abajo solo existe para poder cambiar algo.
+
+Último toque: 2026-08-22 — estreno del robot de copias.
