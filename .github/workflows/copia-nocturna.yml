@@ -315,10 +315,12 @@ jobs:
           BAJADAS=$(find copia/fotos -type f | wc -l)
           TABLAS=$(jq '.tablas | length' copia/base-de-datos.json)
           TAREAS=$(jq '(.tablas.tareas // []) | length' copia/base-de-datos.json)
-          CARPETA=$(jq -r '.carpeta_medios // "?"' copia/base-de-datos.json)
           EN_DISCO=$(jq -r '.ficheros_en_disco // -1' copia/base-de-datos.json)
           echo "La base habla de $ESPERADAS ficheros vivos; se han bajado $BAJADAS."
-          echo "El servidor ve $EN_DISCO ficheros en su carpeta de medios ($CARPETA)."
+          # La ruta de esa carpeta NO se escribe: el registro de este robot es
+          # público. Va dentro de la copia cifrada (carpeta_medios), que es
+          # donde hace falta el día de restaurar.
+          echo "El servidor ve $EN_DISCO ficheros en su carpeta de medios."
           {
             echo "ESPERADAS=$ESPERADAS"
             echo "BAJADAS=$BAJADAS"
