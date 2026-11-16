@@ -1365,6 +1365,15 @@ function guardar_tareas(): void
         if (!empty($red['borrada'])) {
             $borrada = 1;
         }
+        // NINGÚN REPASO DE UNA VISITA LLEVA FECHA PROPIA (decidido el
+        // 16-11-2026): la única fecha es la orientativa del conforme,
+        // una para todos. La app nueva no la manda; un móvil con la app
+        // de antes ve la visita como un parte más y ofrece «Indicar
+        // fecha» al apuntar un repaso. Aquí no se guarda, venga de quien
+        // venga.
+        if ($esDeVisita) {
+            $fechaLimite = null;
+        }
         if (!$decide) {
             // Quien no decide no fija prioridad: se queda la guardada, y
             // un repaso nuevo nace en alta.

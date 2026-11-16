@@ -608,6 +608,14 @@ function subir_conforme(): void
         responder_error(503, 'Todavía no se pueden guardar conformes. Vuelve a intentarlo en un momento.', 'esquema');
     }
 
+    // Si el envío entero pasa del tope de PHP (post_max_size), PHP vacía
+    // el formulario: no llega ni un campo. Sin esta pregunta se
+    // contestaría «no trae su identificador», que no es lo que ha pasado.
+    if ($_POST === [] && $_FILES === [] && (int) ($_SERVER['CONTENT_LENGTH'] ?? 0) > 0
+        && stripos((string) ($_SERVER['CONTENT_TYPE'] ?? ''), 'multipart/form-data') === 0) {
+        responder_error(413, 'El documento firmado pesa demasiado.', 'grande');
+    }
+
     // La forma de lo que llega.
     $id = (string) ($_POST['id'] ?? '');
     $listaId = (string) ($_POST['listaId'] ?? '');
@@ -646,6 +654,18 @@ function subir_conforme(): void
         $codigo = $_FILES['fichero']['error'] ?? -1;
         if (in_array($codigo, [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true)) {
             responder_error(413, 'El documento firmado pesa demasiado.', 'grande');
+        }
+        // Un fichero que llegó A MEDIAS (la cobertura se cortó) no es un
+        // rechazo del conforme: es «todavía no», y el móvil lo reintenta.
+        // Si se contestara 400, el móvil apartaría un papel ya firmado
+        // por un corte de red.
+        if ($codigo === UPLOAD_ERR_PARTIAL) {
+            responder_error(503, 'El documento firmado ha llegado incompleto. Se volverá a intentar.', 'fichero-incompleto');
+        }
+        // Y si es el servidor el que no ha podido recogerlo (sin carpeta
+        // temporal, sin sitio en el disco), tampoco: es un fallo de aquí.
+        if (in_array($codigo, [UPLOAD_ERR_NO_TMP_DIR, UPLOAD_ERR_CANT_WRITE, UPLOAD_ERR_EXTENSION], true)) {
+            responder_error(500, 'No se pudo guardar el documento firmado.', 'guardar');
         }
         responder_error(400, 'No llegó el documento firmado.', 'fichero');
     }
