@@ -169,6 +169,11 @@ export function vistaPreviaDeFirma(firma, { ancho = VISTA_PREVIA.ancho, alto = V
 
 const dosCifras = (valor) => (`0${valor}`).slice(-2);
 
+/* ¿Hay ya un papel abierto? Solo cabe uno: dos a la vez (un doble toque
+   en «Firmar») se pisarían el historial y dejarían una capa colgada debajo
+   de la otra. Vale desde que se abre hasta que su promesa contesta. */
+let abierta = false;
+
 /**
  * Abre el papel a pantalla completa y espera a que firmen.
  *
@@ -190,7 +195,8 @@ const dosCifras = (valor) => (`0${valor}`).slice(-2);
  *   }>
  *
  * null = se cerró sin firmar (la X, la tecla Escape o el botón de atrás
- * sin nada firmado).
+ * sin nada firmado). También contesta null, sin abrir nada, si se pide
+ * mientras hay otra firma abierta (un doble toque): la primera sigue.
  *
  * Mientras está abierta pone una entrada en el historial, para que el
  * botón de atrás del teléfono cierre la capa en vez de cambiar la pantalla
@@ -198,8 +204,10 @@ const dosCifras = (valor) => (`0${valor}`).slice(-2);
  * quitarla: quien la espera puede navegar a continuación sin sorpresas.
  */
 export function pedirFirma({ titulo = FRASES.titulo, nombre = '', comprobarNombre = null, sinHistorial = false } = {}) {
-  if (typeof document === 'undefined') return Promise.resolve(null);
-  return new Promise((resolver) => {
+  if (typeof document === 'undefined' || abierta) return Promise.resolve(null);
+  return new Promise((resolverDeVerdad) => {
+    // Al contestar, el sitio queda libre para la firma siguiente.
+    const resolver = (valor) => { abierta = false; resolverDeVerdad(valor); };
     const campo = h('input.d-firma-nombre', {
       type: 'text', maxlength: String(NOMBRE_MAXIMO), autocomplete: 'off', autocapitalize: 'words',
       autocorrect: 'off', spellcheck: 'false', enterkeyhint: 'done', placeholder: FRASES.huecoNombre,
@@ -498,5 +506,8 @@ export function pedirFirma({ titulo = FRASES.titulo, nombre = '', comprobarNombr
     }
     repintar(true);
     alDia();
+    // Lo último, con el papel ya puesto: si algo de arriba fallara, no se
+    // queda el sitio ocupado para siempre.
+    abierta = true;
   });
 }

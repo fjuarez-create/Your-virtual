@@ -13,8 +13,8 @@
 
    Cuatro cosas hay que saber antes de tocar nada:
 
-   · Plantilla FIJA, la que aprobó Fran (la «B»): aquí no redacta nadie.
-     Los textos están todos en TEXTOS_CONFORME y las medidas en
+   · Plantilla FIJA, la que aprobó la promotora (la «B»): aquí no redacta
+     nadie. Los textos están todos en TEXTOS_CONFORME y las medidas en
      MEDIDAS_CONFORME. Ni «acta» ni «tarea» en nada que se lea.
    · El papel y la pantalla dicen LO MISMO: el PDF se pinta con las frases
      de frasesDeConforme(), que son las que la pantalla enseña antes de
@@ -92,8 +92,8 @@ function congelar(cosa) {
   return cosa;
 }
 
-// La plantilla que eligió Fran el 16-11-2026. Es el dato que se apunta
-// con cada conforme, por si algún día hubiera otra.
+// La plantilla que eligió la promotora el 16-11-2026. Es el dato que se
+// apunta con cada conforme, por si algún día hubiera otra.
 export const VARIANTE_CONFORME = 'B';
 
 // Los topes que la pantalla tiene que respetar al recoger los datos.
@@ -722,19 +722,25 @@ function piezaTitulo(frases, m) {
 }
 
 // El cuadro de los datos: dos columnas, y tantas filas como haga falta.
+// Si los datos son impares (falta la fecha de la escritura, por ejemplo),
+// el último se queda con todo el ancho de su fila: ni celda vacía ni raya.
 function piezaCuadro(frases, m) {
   const c = m.cuadro;
   const columna = CAJA.ancho / 2;
   const filas = [];
   for (let i = 0; i < frases.datos.length; i += 2) {
-    const par = frases.datos.slice(i, i + 2).map((celda) => ({
+    const pareja = frases.datos.slice(i, i + 2);
+    const anchoDeCelda = (pareja.length === 2 ? columna : CAJA.ancho) - 2 * c.relleno;
+    const par = pareja.map((celda) => ({
       rotulo: enMayusculas(celda[0]),
-      lineas: partir(celda[1], c.cuerpo, columna - 2 * c.relleno, false),
+      lineas: partir(celda[1], c.cuerpo, anchoDeCelda, false),
     }));
     const lineas = Math.max(...par.map((celda) => Math.max(1, celda.lineas.length)));
     filas.push({ par, alto: c.arriba + c.entre + (lineas - 1) * c.interlinea + c.abajo });
   }
   const alto = filas.reduce((suma, fila) => suma + fila.alto, 0);
+  // Hasta dónde baja la raya de en medio: lo que ocupan las filas de dos.
+  const altoDeDos = filas.reduce((suma, fila) => suma + (fila.par.length === 2 ? fila.alto : 0), 0);
   return {
     alto,
     antes: c.antes,
@@ -755,7 +761,9 @@ function piezaCuadro(frases, m) {
         if (f < filas.length - 1) filete(ordenes, CAJA.izquierda, y, CAJA.derecha, y, c.filete, c.grisFilete);
       });
       marco(ordenes, CAJA.izquierda, techo - alto, CAJA.ancho, alto, c.filete, c.grisFilete);
-      filete(ordenes, CAJA.izquierda + columna, techo - alto, CAJA.izquierda + columna, techo, c.filete, c.grisFilete);
+      if (altoDeDos > 0) {
+        filete(ordenes, CAJA.izquierda + columna, techo - altoDeDos, CAJA.izquierda + columna, techo, c.filete, c.grisFilete);
+      }
     },
   };
 }

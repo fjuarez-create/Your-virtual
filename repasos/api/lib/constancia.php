@@ -343,7 +343,11 @@ function constancia_titulo(string $zona, array $estancias): string
 function constancia_material(string $unidad): array
 {
     $pdo = bd();
-    $filtro = "l.unidad_id = ? AND l.borrada = 0 AND t.borrada = 0 AND t.estado IN ('pendiente', 'rechazada')";
+    // Los repasos de una visita de repasos («Entregadas», la de DESPUÉS
+    // de entregar: listas con fase «visita») NO entran en este papel: es
+    // el de la notaría, con lo que queda por terminar al entregar. Si
+    // entraran, saldrían en él y le cambiarían la huella.
+    $filtro = "l.unidad_id = ? AND l.borrada = 0 AND l.fase <> 'visita' AND t.borrada = 0 AND t.estado IN ('pendiente', 'rechazada')";
 
     $stmt = $pdo->prepare(
         "SELECT t.id, t.lista_id, t.texto, t.estado, t.zona, t.creado
@@ -1537,9 +1541,10 @@ function constancia_fichas(array $ids, array $material, string $unidad): array
         if ($r === null) {
             if ($stmt === null) {
                 $stmt = bd()->prepare(
-                    'SELECT t.id, t.lista_id, t.texto, t.zona
+                    // Sin los de una visita de repasos (ver constancia_material).
+                    "SELECT t.id, t.lista_id, t.texto, t.zona
                        FROM tareas t JOIN listas l ON l.id = t.lista_id
-                      WHERE t.id = ? AND l.unidad_id = ? AND t.borrada = 0 AND l.borrada = 0'
+                      WHERE t.id = ? AND l.unidad_id = ? AND t.borrada = 0 AND l.borrada = 0 AND l.fase <> 'visita'"
                 );
             }
             $stmt->execute([$id, $unidad]);

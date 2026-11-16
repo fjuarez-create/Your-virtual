@@ -3941,3 +3941,7 @@ body.es-taller::before {
 @media (prefers-reduced-motion: reduce) {
   .d-velo.d-firma { animation: none; }
 }
+/* En el taller, el sello «TALLER · datos de prueba» va abajo a la
+   izquierda y por encima de todo: sin esto tapaba media palabra de
+   «Borrar». El pie le deja su sitio (el sello llega a 37 px del borde). */
+body.es-taller .d-velo.d-firma { padding-bottom: calc(env(safe-area-inset-bottom) + 48px); }

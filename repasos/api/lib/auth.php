@@ -133,6 +133,12 @@ function usuario_actual(): ?array
         'empresa'  => $fila['empresa'] ?? '',
         'verifica' => (int) ($fila['verifica'] ?? 0) === 1,
         'comercial' => (int) ($fila['comercial'] ?? 0) === 1,
+        // El chip «Posventa»: da por buenos los repasos de las visitas de
+        // repasos, y nada más (lib/posventa.php). Es lo que el servidor
+        // mira en cada petición y lo que devuelve «auth/me»; la misma
+        // clave va en usuario_salida(), en index.php. El «??» es la red
+        // de la ventana del despliegue: sin la columna, vale «no».
+        'posventa' => (int) ($fila['posventa'] ?? 0) === 1,
         'avatar'   => $fila['avatar'] ?? '',
     ];
     return $usuario;

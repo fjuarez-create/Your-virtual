@@ -17,6 +17,15 @@ require __DIR__ . '/lib/oido.php';
 require __DIR__ . '/lib/voces.php';
 require_once __DIR__ . '/lib/entregas.php';   // «once»: la precarga también lo carga
 require __DIR__ . '/lib/constancia.php';
+// «Entregadas» (esquema 23): la visita de repasos y su conforme firmado.
+// Con red, y no con un require a secas: al publicar, los ficheros de
+// api/ suben varios a la vez y sin orden, y este index.php puede llegar
+// unos segundos antes que su fichero nuevo. Por eso TODA llamada a una
+// función de lib/posventa.php va detrás de function_exists(): si aún no
+// está, la ruta nueva contesta 503 y las redes se saltan.
+if (is_file(__DIR__ . '/lib/posventa.php')) {
+    require_once __DIR__ . '/lib/posventa.php';
+}
 
 /**
  * Tipos admitidos y extensión con la que se guardan. Las funciones se
@@ -429,6 +438,16 @@ function despachar(string $metodo, array $p): void
         }
     }
 
+    // El conforme de la visita de repasos, ya firmado (lib/posventa.php).
+    // Esta ruta no contesta nunca 404: el móvil toma un 404 aquí por «un
+    // servidor de antes, que todavía no conoce la ruta», y espera.
+    if ($r0 === 'conformes' && $metodo === 'POST' && !isset($p[1])) {
+        if (!function_exists('subir_conforme')) {
+            responder_error(503, 'Todavía no se pueden guardar conformes. Vuelve a intentarlo en un momento.', 'esquema');
+        }
+        subir_conforme();
+    }
+
     responder_error(404, 'Ruta desconocida.');
 }
 
@@ -570,11 +589,16 @@ function oido_transcribir_recorrido(): void
  *
  * Lo puede pedir quien pueda abrir un acta: es su trabajo el que se está
  * redactando. La clave es de la casa, no suya, y no la ve.
+ *
+ * Y, desde «Entregadas», también el comercial: hace visitas de repasos
+ * foto a foto, y sin esto la descripción de cada foto le fallaba callada
+ * (un 403 que la app se traga). Las instrucciones y la forma de la
+ * respuesta no cambian: son las mismas del recorrido.
  */
 function claude_redactar_recorrido(): void
 {
     $u = exigir_sesion();
-    if (!($u['rol'] === 'admin' || !empty($u['verifica']))) {
+    if (!($u['rol'] === 'admin' || !empty($u['verifica']) || !empty($u['comercial']))) {
         responder_error(403, 'Solo quien puede abrir un acta puede pedir esto.', 'sin-permiso');
     }
 
@@ -965,6 +989,19 @@ function editar_usuario(string $id): void
         $campos[] = 'comercial = ?';
         $valores[] = booleano($d, 'comercial') ? 1 : 0;
     }
+    // El chip «Posventa»: deja dar por buenos y rechazar los repasos de
+    // las visitas de repasos, y nada más (lib/posventa.php). Solo lo
+    // pone y lo quita el administrador, que es quien llega hasta aquí.
+    // En la ventana del despliegue la columna puede no estar todavía:
+    // se dice «todavía no» en vez de reventar con una columna que la
+    // base no conoce.
+    if (isset($d['posventa'])) {
+        if (!in_array('posventa', esquema_columnas(bd(), 'usuarios'), true)) {
+            responder_error(503, 'Todavía no se puede cambiar ese permiso. Vuelve a intentarlo en un momento.', 'esquema');
+        }
+        $campos[] = 'posventa = ?';
+        $valores[] = booleano($d, 'posventa') ? 1 : 0;
+    }
     if (isset($d['rol'])) {
         if ($u['id'] === $yo['id'] && $d['rol'] !== 'admin') {
             responder_error(400, 'No puedes quitarte a ti mismo los permisos de administrador.', 'ultimo-admin');
@@ -1050,6 +1087,12 @@ function usuario_salida(array $u): array
         'verifica' => (int) ($u['verifica'] ?? 0) === 1,
         // Quien pone las fechas de entrega (el comercial).
         'comercial' => (int) ($u['comercial'] ?? 0) === 1,
+        // Quien da por buenos los repasos de las visitas de repasos (el
+        // chip «Posventa»). La misma clave que pone usuario_actual(), en
+        // lib/auth.php: si faltara en una de las dos, la bandera
+        // aparecería al entrar y desaparecería al reabrir la app. El «??»
+        // es la red de la ventana: sin la columna, vale «no».
+        'posventa' => (int) ($u['posventa'] ?? 0) === 1,
         // Marca de cuándo se puso la foto: sirve de versión para que el
         // navegador no siga enseñando la anterior desde su caché.
         'avatar' => $u['avatar'] ?? '',
@@ -1145,7 +1188,7 @@ function cuenta_admins(): int
    ═══════════════════════════════════════════════════════════════ */
 function guardar_listas(): void
 {
-    exigir_sesion();
+    $yo = exigir_sesion();
     $entrada = cuerpo()['listas'] ?? [];
     if (!is_array($entrada)) {
         responder_error(400, 'Formato incorrecto.', 'formato');
@@ -1170,6 +1213,14 @@ function guardar_listas(): void
         ];
         if ($registro['unidad_id'] === '') {
             continue;
+        }
+        // «Entregadas»: la lista de una visita de repasos no cambia de
+        // fase, no se borra si ya tiene su conforme firmado y, sin él,
+        // solo la borra quien hace visitas (lib/posventa.php). No se
+        // rechaza nada: se guarda la fila que llega con lo protegido
+        // repuesto, y así le vuelve viva al móvil que la borró.
+        if (function_exists('posventa_red_de_lista')) {
+            $registro = posventa_red_de_lista($registro, $yo);
         }
         if (upsert('listas', $registro)) {
             $guardadas++;
@@ -1243,22 +1294,83 @@ function guardar_tareas(): void
         // Se relee dentro del bucle y se vacía cada vuelta a
         // propósito: dejar la fila de la tarea anterior colgando
         // aquí acabaría escribiendo el texto de una en otra.
-        $previo = bd()->prepare('SELECT estado, estado_por, estado_en, rechazada, texto, oficio, zona, fecha_limite, '
+        $previo = bd()->prepare('SELECT lista_id, estado, estado_por, estado_en, rechazada, texto, oficio, zona, fecha_limite, '
             . ($hayPrioridad ? 'prioridad, ' : '') . 'borrada FROM tareas WHERE id = ?');
         $previo->execute([$t['id']]);
         $fila = $previo->fetch() ?: null;
         $previo->closeCursor();   // la lectura se suelta antes de escribir (ver upsert)
 
-        if (!$decide) {
-            if ($fila) {
-                $texto = (string) $fila['texto'];
-                $zona = (string) ($fila['zona'] ?? '');
-                $fechaLimite = $fila['fecha_limite'] ?? null;
-                $borrada = (int) ($fila['borrada'] ?? 0);
+        // «ENTREGADAS»: LOS REPASOS DE UNA VISITA DE REPASOS
+        // (lib/posventa.php). Si el repaso cuelga de la lista de una
+        // visita, cambian dos permisos y entran las redes:
+        //
+        //   - el comercial, que hace visitas, EDITA sus repasos (texto,
+        //     estancia y borrar) aunque no verifique: sin esto, lo que
+        //     corrigiera en un repaso ya subido se le deshacía callado;
+        //   - quien lleva la bandera «posventa» los DA POR BUENOS y los
+        //     rechaza. Solo eso, y solo los de una visita;
+        //   - la prioridad sigue siendo solo de quien decide.
+        //
+        // De qué lista cuelga se mira en lo GUARDADO, no en lo que llega:
+        // si el repaso ya existe, vale su lista de la base. Si se creyera
+        // la que dice el móvil, quien lleva la bandera daría por bueno un
+        // repaso de siempre con solo decir que es de una visita. Y por lo
+        // mismo un repaso ni entra en una visita ni sale de ella: la app
+        // no mueve repasos de lista, así que quien lo intenta se queda
+        // con la lista guardada.
+        //
+        // Todo detrás de function_exists(): sin lib/posventa.php (la
+        // ventana del despliegue), esto se comporta como siempre.
+        $listaId = (string) $t['listaId'];
+        $esDeVisita = false;
+        $red = [];
+        if (function_exists('posventa_red_de_tarea')) {
+            $listaGuardada = $fila ? (string) ($fila['lista_id'] ?? '') : '';
+            if ($listaGuardada !== '' && strtolower($listaGuardada) !== strtolower($listaId)
+                && (posventa_lista_es_de_visita($listaGuardada) || posventa_lista_es_de_visita($listaId))) {
+                $listaId = $listaGuardada;
             }
+            $esDeVisita = posventa_lista_es_de_visita($fila ? ($listaGuardada !== '' ? $listaGuardada : $listaId) : $listaId);
+            if ($esDeVisita) {
+                $red = posventa_red_de_tarea(
+                    (string) $t['id'],
+                    $listaId,
+                    $fila,
+                    es_uuid($t['creadoPor'] ?? null) ? (string) $t['creadoPor'] : null,
+                    $yo
+                );
+            }
+        }
+        $edita = $decide || ($esDeVisita && !empty($yo['comercial']));
+        $daPorBueno = $decide || ($esDeVisita && !empty($yo['posventa']));
+
+        // Tres miradas, cada una con su permiso (antes era una sola,
+        // «quien no decide»): editar, la prioridad y dar por bueno.
+        if (!$edita && $fila) {
+            $texto = (string) $fila['texto'];
+            $zona = (string) ($fila['zona'] ?? '');
+            $fechaLimite = $fila['fecha_limite'] ?? null;
+            $borrada = (int) ($fila['borrada'] ?? 0);
+        }
+        // Una visita ya firmada: lo firmado no se corrige ni se borra,
+        // sea quien sea. Y un repaso nuevo del que no responde nadie que
+        // haga visitas, o que llega a una visita ya firmada sin figurar
+        // en su conforme, se guarda ya borrado (y así le baja borrado
+        // también a quien lo creó, en vez de quedársele de fantasma).
+        if (!empty($red['conservar']) && $fila) {
+            $texto = (string) $fila['texto'];
+            $zona = (string) ($fila['zona'] ?? '');
+            $borrada = (int) ($fila['borrada'] ?? 0);
+        }
+        if (!empty($red['borrada'])) {
+            $borrada = 1;
+        }
+        if (!$decide) {
             // Quien no decide no fija prioridad: se queda la guardada, y
             // un repaso nuevo nace en alta.
             $prioridad = $fila ? (string) ($fila['prioridad'] ?? 'alta') : 'alta';
+        }
+        if (!$daPorBueno) {
             if (in_array($estado, ['verificada', 'rechazada'], true)) {
                 // Lo que ya hubiera decidido un verificador no lo deshace
                 // quien no puede; y si no había nada, se queda en
@@ -1295,7 +1407,7 @@ function guardar_tareas(): void
 
         $registro = [
             'id'                => $t['id'],
-            'lista_id'          => $t['listaId'],
+            'lista_id'          => $listaId,
             'texto'             => $texto,
             'estado'            => $estado,
             'oficio'            => $oficio,
@@ -1393,7 +1505,22 @@ function guardar_comentarios(): void
             if (!($esSuyo || $decide)) {
                 $registro['borrada'] = (int) $fila['borrada'];
             }
-        } elseif ($registro['tipo'] === 'rechazo' && !$decide) {
+            // «Entregadas»: en un repaso de una visita ya FIRMADA el hilo
+            // no se borra, sea quien sea (lib/posventa.php). Un móvil con
+            // la app de antes, al pulsar «Borrar la lista», borra también
+            // el hilo de cada repaso: aquí se le conserva y le vuelve vivo.
+            if (function_exists('posventa_tarea_es_de_visita_firmada')
+                && posventa_tarea_es_de_visita_firmada((string) $registro['tarea_id'])) {
+                $registro['borrada'] = (int) $fila['borrada'];
+            }
+        } elseif ($registro['tipo'] === 'rechazo' && !$decide
+            // Rechazar un repaso de una VISITA también es cosa de quien
+            // lleva la bandera «posventa»: el motivo que deja escrito es
+            // la otra mitad de rechazar. De qué lista cuelga el repaso se
+            // mira en lo guardado. Solo esta línea: editar o borrar lo
+            // ajeno sigue siendo de quien decide.
+            && !(!empty($yo['posventa']) && function_exists('posventa_tarea_es_de_visita')
+                && posventa_tarea_es_de_visita((string) $registro['tarea_id']))) {
             $registro['tipo'] = 'nota';
         }
         if (upsert('comentarios', $registro)) {
@@ -1616,10 +1743,18 @@ function subir_medio(): void
         responder_error(415, 'Tipo de fichero no admitido: ' . $detectado, 'mime');
     }
 
-    $existente = bd()->prepare('SELECT ruta FROM medios WHERE id = ?');
+    $existente = bd()->prepare('SELECT ruta, tipo FROM medios WHERE id = ?');
     $existente->execute([$id]);
-    $rutaPrevia = $existente->fetchColumn();
+    $previa = $existente->fetch() ?: null;
     $existente->closeCursor();
+    $rutaPrevia = $previa ? $previa['ruta'] : false;
+    // «Entregadas»: por esta puerta no se pisa un conforme firmado. Si
+    // el identificador ya es el de un documento, ni se toca su fichero
+    // ni se toca su fila (el conforme tiene su propia puerta, POST
+    // conformes, en lib/posventa.php).
+    if ($previa && (string) $previa['tipo'] === 'documento') {
+        responder_error(409, 'Ese identificador es el de un documento firmado, y no se puede pisar.', 'documento');
+    }
 
     $relativa = gmdate('Y/m') . '/' . $id . '.' . $extension;
     $destino = carpeta_medios() . '/' . $relativa;
@@ -1953,16 +2088,38 @@ function barrer_mensajes(): void
 
 function borrar_medio(string $id): void
 {
-    exigir_sesion();
+    $yo = exigir_sesion();
     if (!es_uuid($id)) {
         responder_error(400, 'Identificador incorrecto.', 'formato');
     }
-    $stmt = bd()->prepare('SELECT ruta FROM medios WHERE id = ?');
+    $stmt = bd()->prepare('SELECT * FROM medios WHERE id = ?');
     $stmt->execute([$id]);
-    $ruta = $stmt->fetchColumn();
+    $fila = $stmt->fetch() ?: null;
     $stmt->closeCursor();
-    if ($ruta === false) {
+    if ($fila === null) {
         responder_error(404, 'El medio no existe.');
+    }
+    $ruta = $fila['ruta'] ?? '';
+    // «ENTREGADAS»: LO QUE NO SE BORRA (lib/posventa.php). El conforme
+    // firmado de una visita de repasos, nunca; las fotos de los repasos
+    // de una visita ya firmada, tampoco, sea quien sea; y las de una
+    // visita sin firmar, solo quien hace visitas. Aquí no llega ninguna
+    // fila del móvil, así que la guardada se vuelve a escribir VIVA por
+    // upsert() —que la deja pendiente de numerar— con la hora más nueva
+    // entre «ahora» y la suya: así le baja viva al móvil que la borró.
+    // El fichero del disco no se toca. Y se contesta «hecho», no un
+    // error: no hay que cortarle la cola a nadie.
+    // Una fila que ya estaba borrada no entra: no hay fichero que
+    // conservar, y resucitarla dejaría una foto sin foto.
+    if ((int) ($fila['borrada'] ?? 0) === 0 && is_string($ruta) && $ruta !== '') {
+        $esDocumento = (string) ($fila['tipo'] ?? '') === 'documento';
+        if ($esDocumento || (function_exists('posventa_conserva_medio') && posventa_conserva_medio($fila, $yo))) {
+            unset($fila['recibido']);
+            $fila['borrada'] = 0;
+            $fila['actualizado'] = max(ahora_iso(), (string) $fila['actualizado']);
+            upsert('medios', $fila);
+            responder(['ok' => true, 'conservado' => true]);
+        }
     }
     if (is_string($ruta) && $ruta !== '') {
         @unlink(carpeta_medios() . '/' . $ruta);
@@ -1977,15 +2134,30 @@ function borrar_medio(string $id): void
 
 function servir_medio(string $id): void
 {
-    exigir_sesion();
+    $yo = exigir_sesion();
     if (!es_uuid($id)) {
         responder_error(400, 'Identificador incorrecto.', 'formato');
     }
-    $stmt = bd()->prepare('SELECT mime, ruta, borrada FROM medios WHERE id = ?');
+    $stmt = bd()->prepare('SELECT tipo, mime, ruta, borrada FROM medios WHERE id = ?');
     $stmt->execute([$id]);
     $m = $stmt->fetch();
     if (!$m || (int) $m['borrada'] === 1 || $m['ruta'] === '') {
         responder_error(404, 'El medio no existe.');
+    }
+    // «Entregadas»: el conforme firmado de una visita de repasos no lo
+    // abre cualquiera con sesión, como una foto. Lo abren el
+    // administrador, el comercial y la dirección facultativa; los demás
+    // ven en la app que está firmado, cuándo y por quién, pero no el
+    // papel. Si lib/posventa.php todavía no ha llegado (la ventana del
+    // despliegue), un documento no se sirve a nadie.
+    $esDocumento = (string) $m['tipo'] === 'documento';
+    if ($esDocumento) {
+        if (!function_exists('puede_visitar')) {
+            responder_error(503, 'Todavía no se puede abrir este documento. Vuelve a intentarlo en un momento.', 'esquema');
+        }
+        if (!puede_visitar($yo)) {
+            responder_error(403, 'El conforme firmado lo abren el administrador, el comercial y la dirección facultativa.', 'sin-permiso');
+        }
     }
 
     $ruta = carpeta_medios() . '/' . $m['ruta'];
@@ -1997,11 +2169,15 @@ function servir_medio(string $id): void
 
     $tam = filesize($real);
     header('Content-Type: ' . $m['mime']);
-    header('Content-Disposition: inline; filename="' . $id . '"');
+    // Un documento sale con su extensión, para que el móvil sepa con qué
+    // abrirlo al guardarlo o compartirlo.
+    header('Content-Disposition: inline; filename="' . $id . ($esDocumento ? '.pdf' : '') . '"');
     header('Accept-Ranges: bytes');
     // Privada: el contenido es sensible, pero el navegador puede guardarlo
-    // para no volver a bajar la misma foto en cada pintada.
-    header('Cache-Control: private, max-age=604800');
+    // para no volver a bajar la misma foto en cada pintada. Un documento,
+    // no: un papel con la firma de un comprador no tiene que quedarse en
+    // el navegador de un móvil de obra.
+    header($esDocumento ? 'Cache-Control: private, no-store' : 'Cache-Control: private, max-age=604800');
     header('X-Content-Type-Options: nosniff');
 
     $inicio = 0;
@@ -2853,7 +3029,7 @@ function lectura_salida(array $f): array
 
 function medio_salida(array $f): array
 {
-    return [
+    $salida = [
         'id' => $f['id'], 'tareaId' => $f['tarea_id'],
         'comentarioId' => $f['comentario_id'] ?? null,
         'tipo' => $f['tipo'], 'mime' => $f['mime'],
@@ -2861,6 +3037,17 @@ function medio_salida(array $f): array
         'duracion' => (int) $f['duracion'], 'borrada' => (int) $f['borrada'] === 1,
         'creado' => $f['creado'], 'actualizado' => $f['actualizado'],
     ];
+    // «Entregadas»: el conforme firmado de una visita de repasos es una
+    // fila de `medios` con tipo «documento», y su `tareaId` es el id de
+    // la LISTA de la visita, no el de un repaso. Lo firmado (la fecha
+    // orientativa, las observaciones, los repasos, quién firmó y cuándo)
+    // baja con ella, en `datos`. Solo en los documentos: las fotos salen
+    // exactamente como antes, sin esa clave.
+    if ((string) $f['tipo'] === 'documento') {
+        $datos = json_decode((string) ($f['datos'] ?? ''), true);
+        $salida['datos'] = is_array($datos) ? $datos : null;
+    }
+    return $salida;
 }
 
 /* ═══════════════════════════════════════════════════════════════

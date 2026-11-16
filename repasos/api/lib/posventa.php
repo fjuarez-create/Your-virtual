@@ -162,6 +162,13 @@ function posventa_tarea_es_de_visita(string $tareaId): bool
     return $listaId !== null && posventa_lista_es_de_visita($listaId);
 }
 
+/** ¿Cuelga este repaso de una visita que ya tiene su conforme FIRMADO? Mira lo guardado. */
+function posventa_tarea_es_de_visita_firmada(string $tareaId): bool
+{
+    $listaId = posventa_lista_de_tarea($tareaId);
+    return $listaId !== null && posventa_lista_es_de_visita($listaId) && posventa_conforme_de_lista($listaId) !== null;
+}
+
 /**
  * El conforme vivo de una visita: `['id', 'datos' (lo firmado, o null),
  * 'repasos' (los ids de los repasos firmados)]`, o null si la visita no
@@ -172,8 +179,18 @@ function posventa_tarea_es_de_visita(string $tareaId): bool
 function posventa_conforme_de_lista(string $listaId, bool $releer = false): ?array
 {
     static $vistos = [];
+    static $hayDatos = null;
     if (!$releer && array_key_exists($listaId, $vistos)) {
         return $vistos[$listaId];
+    }
+    // La red de la ventana del despliegue: si la columna `datos` todavía
+    // no está (este fichero ha llegado antes que lib/esquema.php), no
+    // puede haber ningún conforme guardado. Sin esta pregunta, cada
+    // subida de un repaso de una visita reventaba con un error de
+    // columna desconocida (lo cazó la batería).
+    $hayDatos ??= in_array('datos', esquema_columnas(bd(), 'medios'), true);
+    if (!$hayDatos) {
+        return $vistos[$listaId] = null;
     }
     $sent = bd()->prepare(
         "SELECT id, datos FROM medios WHERE tarea_id = ? AND tipo = 'documento' AND borrada = 0 ORDER BY creado ASC LIMIT 1"
@@ -244,6 +261,8 @@ function posventa_puede(?string $creadoPor, array $yo): bool
  *   - Una visita NUEVA de la que no responde nadie que haga visitas se
  *     guarda ya borrada (R3): le baja borrada también a quien la creó,
  *     y así no se le queda de fantasma en el móvil.
+ *   - Y una visita no se muda de vivienda: su conforme, que cuelga de
+ *     ella, se iría detrás. (La app no mueve listas de vivienda.)
  */
 function posventa_red_de_lista(array $registro, array $yo): array
 {
@@ -261,6 +280,7 @@ function posventa_red_de_lista(array $registro, array $yo): array
         return $registro;
     }
     $registro['fase'] = POSVENTA_FASE_VISITA;
+    $registro['unidad_id'] = $guardada['unidad_id'];
     if (posventa_conforme_de_lista((string) $registro['id']) !== null) {
         $registro['borrada'] = 0;
     } elseif (!puede_visitar($yo)) {
@@ -661,32 +681,53 @@ function subir_conforme(): void
     if ($lista['fase'] !== POSVENTA_FASE_VISITA || $lista['unidad_id'] !== $unidadId) {
         responder_error(409, 'Ese conforme no corresponde a una visita de repasos de esa vivienda.', 'no-es-visita');
     }
-    if (posventa_conforme_de_lista($listaId, true) !== null) {
+    $vivo = posventa_conforme_de_lista($listaId, true);
+    if ($vivo !== null) {
+        // Puede ser ESTE mismo conforme, que otra subida suya acaba de
+        // dejar entre la pregunta de arriba y esta (un reintento que se
+        // cruza con el primer envío): entonces es «hecho», no un rechazo.
+        if (strtolower($vivo['id']) === strtolower($id)) {
+            $repetido = conforme_ya_guardado($pdo, $id, $huella);
+            if ($repetido !== null) {
+                responder($repetido);
+            }
+        }
         responder_error(409, 'Esta visita ya tiene su conforme firmado.', 'ya-firmada');
     }
 
-    // El fichero, a su sitio: AAAA/MM/<id>.pdf, como las fotos. El año y
+    // El fichero. Su sitio es AAAA/MM/<id>.pdf, como las fotos; el año y
     // el mes salen del día de la firma y no del de la subida: así un
-    // reintento pisa SIEMPRE el mismo fichero, aunque llegue otro mes.
+    // reintento va SIEMPRE al mismo fichero, aunque llegue otro mes.
+    //
+    // Pero no se deja ahí todavía: primero va a un nombre provisional,
+    // suyo y de nadie más, y solo pasa a su sitio dentro del candado,
+    // cuando ya se sabe que este conforme es el que entra. Si se dejara
+    // directamente en su sitio, una subida que al final se rechaza (o un
+    // reintento cruzado) podría pisar o borrar el papel que ya estaba
+    // guardado con ese mismo identificador.
     $anio = (int) substr($creado, 0, 4);
     $carpetaDelMes = $anio >= 2020 && $anio <= (int) gmdate('Y') + 1
         ? substr($creado, 0, 4) . '/' . substr($creado, 5, 2)
         : gmdate('Y/m');
     $relativa = $carpetaDelMes . '/' . strtolower($id) . '.pdf';
     $destino = carpeta_medios() . '/' . $relativa;
+    $provisional = $destino . '.' . bin2hex(random_bytes(6)) . '.parte';
     if (!is_dir(dirname($destino)) && !mkdir(dirname($destino), 0755, true) && !is_dir(dirname($destino))) {
         responder_error(500, 'No se pudo crear la carpeta de destino.', 'carpeta');
     }
-    if (!move_uploaded_file($temporal, $destino)) {
+    if (!move_uploaded_file($temporal, $provisional)) {
         responder_error(500, 'No se pudo guardar el documento firmado.', 'guardar');
     }
-    @chmod($destino, 0644);
-    clearstatcache(true, $destino);
-    if ((int) @filesize($destino) !== $tam) {
-        @unlink($destino);
+    @chmod($provisional, 0644);
+    // Se mira lo que ha quedado en el disco: los mismos bytes y la misma
+    // huella. Si no —disco lleno, escritura cortada—, no vale.
+    clearstatcache(true, $provisional);
+    if ((int) @filesize($provisional) !== $tam || !hash_equals($huella, (string) @hash_file('sha256', $provisional))) {
+        @unlink($provisional);
         responder_error(500, 'El documento firmado se guardó incompleto.', 'guardar-corto');
     }
-    // Hasta aquí no se ha escrito nada en la base.
+    // Hasta aquí no se ha escrito nada en la base, ni se ha tocado el
+    // sitio definitivo del fichero.
 
     $ahora = ahora_iso();
     $datos['huellaFichero'] = $huella;
@@ -695,7 +736,7 @@ function subir_conforme(): void
     $datos['subidoPor'] = ['id' => es_uuid($yo['id']) ? $yo['id'] : null, 'nombre' => (string) $yo['nombre']];
     $json = conforme_json($datos);
     if (strlen($json) > CONFORME_DATOS_GUARDADOS_MAX) {
-        @unlink($destino);
+        @unlink($provisional);
         responder_error(413, 'Los datos del conforme ocupan demasiado.', 'datos-grandes');
     }
 
@@ -715,6 +756,12 @@ function subir_conforme(): void
             $rechazo = [409, 'Ya hay otro fichero guardado con ese identificador.', 'distinto'];
         } elseif (posventa_conforme_de_lista($listaId, true) !== null) {
             $rechazo = [409, 'Esta visita ya tiene su conforme firmado.', 'ya-firmada'];
+        } elseif (!@rename($provisional, $destino)) {
+            // El fichero, a su sitio, ANTES de escribir la fila: si lo
+            // que fallara fuese la base, quedaría un fichero suelto que
+            // el reintento pisa; al revés quedaría una fila viva sin su
+            // papel, que es lo que no puede pasar.
+            $rechazo = [500, 'No se pudo guardar el documento firmado.', 'guardar'];
         } else {
             // La visita, viva. El `actualizado` que se escribe es el más
             // nuevo entre «ahora» y el guardado: así upsert() no la da
@@ -764,17 +811,20 @@ function subir_conforme(): void
         } catch (Throwable $otro) {
             // nada: lo que importa es el primer fallo
         }
-        // El fichero suelto no estorba: el reintento, con el mismo
-        // identificador, lo pisa.
+        // Si el fichero ya había pasado a su sitio, no estorba: el
+        // reintento, con el mismo identificador, lo pisa.
+        @unlink($provisional);
         throw $e;
     }
+    // El provisional de quien no ha entrado (porque ya estaba, o porque
+    // se rechaza) no es de nadie. El de quien ha entrado ya no existe:
+    // es el fichero definitivo.
+    @unlink($provisional);
 
     if ($yaEstaba !== null) {
         responder($yaEstaba);
     }
     if ($rechazo !== null) {
-        // El fichero que se acaba de dejar no es de nadie.
-        @unlink($destino);
         responder_error($rechazo[0], $rechazo[1], $rechazo[2]);
     }
     responder(['ok' => true, 'id' => $id, 'tam' => $tam, 'huella' => $huella, 'repetido' => false]);

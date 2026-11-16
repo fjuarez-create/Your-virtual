@@ -388,13 +388,20 @@ case "$QUE" in
     # papel que se firma en la notaría: si un día faltara la letra del
     # documento, el PDF saldría con la de reserva sin que nadie lo viera;
     # si faltara cualquiera de las otras tres, no saldría.
+    #
+    # Y las tres de «Entregadas» que ya existen: el servidor de la visita
+    # de repasos y de su conforme firmado, el papel y la firma con el
+    # dedo. Sin la primera, la app no puede guardar un conforme (el
+    # servidor contesta «todavía no» y el móvil espera sin avisar); sin
+    # las otras dos, no hay papel que firmar.
     for f in index.html sw.js manifest.webmanifest \
              privacidad.html soporte.html marketing.html \
              assets/marketing/inicio.jpg \
              css/app.css js/app.js js/store.js \
              api/index.php api/lib/nucleo.php assets/fonts/opensans-var.woff2 \
              js/constancia.js js/pdfConstancia.js api/lib/constancia.php \
-             assets/fonts/liberation-sans-pdf.ttf; do
+             assets/fonts/liberation-sans-pdf.ttf \
+             api/lib/posventa.php js/pdfConforme.js js/firma.js; do
       if [ "$(contar_remoto "$f")" -ge 1 ]; then
         echo "ok     $f"
       else
