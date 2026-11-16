@@ -1206,6 +1206,9 @@ export function cabecera({ seccion, volver, titulo = '', menu, derecha } = {}) {
         ].filter(Boolean).join(' '),
         'aria-label': rotulo,
         'aria-current': seccion === clave ? 'true' : null,
+        // Para que el CSS pueda dar a una bola concreta su medida (el
+        // apretón de manos de «Entregadas» va un punto más grande).
+        'data-seccion': clave,
         onclick: seccion === clave ? null : () => ir(adonde),
       }, icon(icono));
     /* La cara mide lo que las bolas, y cuánto miden las bolas lo dice

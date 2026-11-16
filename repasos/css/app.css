@@ -1655,6 +1655,17 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
   .d-cab:not(.dentro) { --cab-bola: 40px; --cab-hueco: 2px; }
   .d-cab:not(.dentro) .d-bola svg { width: 20px; height: 20px; }
 }
+/* El apretón de manos de «Entregadas» es el dibujo más difícil de leer
+   en pequeño: es ancho y bajo (ocupa el lienzo de lado a lado y solo
+   dos tercios de alto), así que al tamaño de los demás se queda corto y
+   los dedos se empastan. Va un punto más grande que los otros, solo en
+   esta bola: 24 px (22 en los móviles más estrechos). Mirado a 360 y a
+   390 px de ancho, a densidad 2 y 3, en reposo y en negro. El dibujo y
+   su peso no se tocan. */
+.d-cab:not(.dentro) .d-bola[data-seccion='entregadas'] svg { width: 24px; height: 24px; }
+@media (max-width: 350px) {
+  .d-cab:not(.dentro) .d-bola[data-seccion='entregadas'] svg { width: 22px; height: 22px; }
+}
 
 /* Todo lo redondo de la cabecera mide igual, venga de donde venga: la
    cara, las bolas, la flecha de volver y los tres puntos. */
