@@ -3830,3 +3830,108 @@ body.es-taller::before {
   font-size: 15px; line-height: 20px;
 }
 .d-cal-poner svg { width: 20px; height: 20px; flex: none; }
+
+/* ─── La firma con el dedo ──────────────────────────────────────
+   La capa de js/firma.js: a pantalla completa y encima de todo, con el
+   nombre de quien firma arriba, el papel en medio y «Borrar» y
+   «Aceptar» abajo, donde llega el pulgar. Es un velo de la casa
+   (.d-velo), pero opaco, como el del reconocimiento.
+
+   Tres reglas que no son adorno:
+   · `touch-action: none`: sin ella el navegador toma el arrastre por un
+     desplazamiento, mueve la página y corta el trazo.
+   · `overscroll-behavior: none` y `overflow: hidden`: aquí dentro no
+     hay nada que se desplace ni que rebote.
+   · El papel no llega a los lados de la pantalla (20 px): el borde es
+     del gesto de «atrás» del teléfono. */
+.d-velo.d-firma {
+  position: fixed; inset: 0; z-index: 110; overflow: hidden;
+  background: var(--d-fondo); color: var(--d-tinta);
+  -webkit-backdrop-filter: none; backdrop-filter: none; place-items: normal;
+  font-family: var(--d-font); font-weight: 500;
+  display: flex; flex-direction: column; align-items: center;
+  padding: calc(env(safe-area-inset-top) + 12px) max(20px, env(safe-area-inset-right))
+           calc(env(safe-area-inset-bottom) + 16px) max(20px, env(safe-area-inset-left));
+  touch-action: none; overscroll-behavior: none;
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+  animation: magia-entra 200ms var(--sal-estandar) both;
+}
+.d-firma-caja {
+  width: 100%; max-width: 760px; flex: 1 1 auto; min-height: 0;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.d-firma-arriba {
+  display: grid; grid-template-columns: minmax(0, 1fr) 44px; align-items: center; gap: 8px 12px;
+  grid-template-areas: 'titulo x' 'campo campo';
+}
+.d-firma-titulo {
+  grid-area: titulo; margin: 0; min-width: 0;
+  font-size: 22px; line-height: 28px; font-weight: 500; letter-spacing: -0.01em;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.d-firma-x {
+  grid-area: x; width: 44px; height: 44px; border-radius: 999px;
+  background: #fff; color: var(--d-tinta); display: grid; place-items: center;
+}
+.d-firma-x:active { background: var(--d-gris-suave); }
+.d-firma-x svg { width: 22px; height: 22px; }
+.d-firma-campo { grid-area: campo; display: block; min-width: 0; }
+.d-firma-rotulo { display: block; margin: 0 4px 4px; font-size: 13px; line-height: 18px; color: var(--d-gris); }
+/* 17 px: por debajo de 16 el iPhone amplía la pantalla al tocar el campo. */
+.d-firma-nombre {
+  display: block; width: 100%; height: 48px; padding: 0 16px;
+  border: none; border-radius: var(--d-radio); background: #fff;
+  font: 500 17px/24px var(--d-font); color: var(--d-tinta);
+  -webkit-user-select: text; user-select: text;
+}
+.d-firma-nombre::placeholder { color: #c4c4c4; }
+.d-firma-nombre:focus { outline: none; box-shadow: inset 0 0 0 1.5px var(--d-beige); }
+
+.d-firma-papel {
+  position: relative; flex: 1 1 auto; min-height: 96px; overflow: hidden;
+  background: #fff; border: 1.5px dashed #c9c4bb; border-radius: var(--d-radio);
+}
+.d-firma-lienzo {
+  position: absolute; inset: 0; width: 100%; height: 100%; display: block;
+  touch-action: none; cursor: crosshair;
+}
+/* La raya sobre la que se firma y la invitación, que se va al primer
+   trazo. Ninguna de las dos recoge toques: debajo está el lienzo. */
+.d-firma-raya {
+  position: absolute; left: 8%; right: 8%; bottom: 24%;
+  border-bottom: 1.5px solid #dcd8d1; pointer-events: none;
+}
+.d-firma-aqui {
+  position: absolute; left: 8%; right: 8%; bottom: calc(24% + 14px); margin: 0;
+  font-size: 18px; line-height: 24px; color: #b9b4ab; text-align: center; pointer-events: none;
+}
+.d-firma.con-tinta .d-firma-aqui { display: none; }
+
+.d-firma-pista {
+  margin: 0; min-height: 20px; font-size: 14px; line-height: 20px;
+  color: var(--d-gris); text-align: center;
+}
+/* Lo que falta se lee en tinta, que es como se lee lo que hay que entender. */
+.d-firma-pista.falta { color: var(--d-tinta); }
+.d-firma-pie { display: flex; gap: 10px; }
+.d-firma-pie .d-boton-negro { flex: 1 1 0; min-width: 0; }
+.d-firma-borrar:disabled { background: #fff; color: #c9c9c9; }
+
+/* El teléfono tumbado: poco alto y mucho ancho. El título, el nombre y
+   la X se ponen en una sola fila para que el papel se quede con el sitio. */
+@media (orientation: landscape) and (max-height: 520px) {
+  .d-velo.d-firma {
+    padding-top: calc(env(safe-area-inset-top) + 8px);
+    padding-bottom: calc(env(safe-area-inset-bottom) + 8px);
+  }
+  .d-firma-caja { max-width: none; gap: 6px; }
+  .d-firma-arriba { grid-template-columns: auto minmax(0, 1fr) 44px; grid-template-areas: 'titulo campo x'; }
+  .d-firma-titulo { max-width: 34vw; font-size: 18px; line-height: 24px; }
+  .d-firma-rotulo { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .d-firma-nombre { height: 44px; }
+  .d-firma-aqui { bottom: calc(24% + 8px); }
+  .d-firma-pie .d-boton-negro { height: 44px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .d-velo.d-firma { animation: none; }
+}

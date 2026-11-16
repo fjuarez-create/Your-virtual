@@ -949,6 +949,11 @@ function flujoDePagina(ordenes) {
       const vuelta = orden.tw ? ' 0 Tw' : '';
       partes.push(`BT /F1 ${numero(orden.cuerpo)} Tf ${matriz} ${numero(orden.x)} ${numero(orden.y)} Tm `
         + `${espaciado}${cadenaDeTexto(orden.texto)} Tj${vuelta} ET`);
+    } else if (orden.tipo === 'crudo') {
+      // Órdenes de dibujo del PDF tal cual. El reconocimiento no la usa:
+      // es para el «Conforme de la visita» (js/pdfConforme.js), que pinta
+      // con ella la firma, los filetes de otro grosor, los grises y la banda.
+      partes.push(orden.ordenes);
     } else if (orden.tipo === 'trazos') {
       const rayas = orden.lineas.map((raya) => (
         `${numero(raya[0])} ${numero(raya[1])} m ${numero(raya[2])} ${numero(raya[3])} l S`
@@ -1257,3 +1262,13 @@ export function nombreDeConstancia(doc) {
   ].map(sanear).filter(Boolean);
   return `${partes.join('_')}.pdf`;
 }
+
+/* ───────────────────────────────────────────────────────────────────
+   Las piezas del motor, a la vista
+
+   Las usa el «Conforme de la visita» (js/pdfConforme.js), que es hermano
+   de este papel: misma letra, mismos márgenes y el mismo motor. Aquí no
+   cambia nada por exportarlas: el reconocimiento sale octeto a octeto
+   igual que antes (comprobado al añadirlas, el 16-11-2026).
+   ─────────────────────────────────────────────────────────────────── */
+export { limpiar, pierdeLetras, enMayusculas, rellenar, partir, anchoDe, leerFecha, escribirPdf, numero };

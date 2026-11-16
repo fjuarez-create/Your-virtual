@@ -80,6 +80,10 @@ const CODIGO = [
   'js/constancia.js',
   'js/pdfConstancia.js',
   'js/tipografiaConstancia.js',
+  // El «Conforme de la visita» de las viviendas entregadas: su PDF y la
+  // firma con el dedo. Se firma en la vivienda, muchas veces sin cobertura.
+  'js/pdfConforme.js',
+  'js/firma.js',
   'js/piezasObra.js',
   'js/grabadora.js',
   'js/views/entrar.js',
