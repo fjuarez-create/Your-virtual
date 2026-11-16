@@ -142,7 +142,9 @@ export async function render({ promoId, unidadId }) {
   };
   const cambiarHora = async () => {
     const hh = await hojaHora(entrega.posventaHora || '', PISTA_HORA);
-    if (hh === null || hh === (entrega.posventaHora || '')) return;
+    // Cerrar la hoja tocando fuera no devuelve una hora (ni siquiera
+    // vacía): no se toca nada. Quitar la hora es pulsar «Sin hora».
+    if (hh == null || hh === (entrega.posventaHora || '')) return;
     await guardar(async () => {
       await store.fijarPosventa(unidadId, promoId, { dia: entrega.posventa, hora: hh });
       toast(avisoDeCita(entrega.posventa, hh), '', { icono: 'reloj' });
