@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
   empresa       VARCHAR(120) NOT NULL DEFAULT '',
   verifica      TINYINT(1)   NOT NULL DEFAULT 0,
   comercial     TINYINT(1)   NOT NULL DEFAULT 0,   -- pone las fechas de entrega (Ezequiel)
+  posventa      TINYINT(1)   NOT NULL DEFAULT 0,   -- da por buenos los repasos de las visitas de repasos
   avatar        VARCHAR(24)  NOT NULL DEFAULT '',
   activo        TINYINT(1)   NOT NULL DEFAULT 1,
   creado        CHAR(24)     NOT NULL,
@@ -121,13 +122,14 @@ CREATE TABLE IF NOT EXISTS medios (
   id            CHAR(36)     NOT NULL,
   tarea_id      CHAR(36)     NOT NULL,
   comentario_id CHAR(36)     DEFAULT NULL,
-  tipo        VARCHAR(10)  NOT NULL,          -- imagen | video | audio
+  tipo        VARCHAR(10)  NOT NULL,          -- imagen | video | audio | documento
   mime        VARCHAR(100) NOT NULL,
   tam         BIGINT       NOT NULL DEFAULT 0,
   ancho       INT          NOT NULL DEFAULT 0,
   alto        INT          NOT NULL DEFAULT 0,
   duracion    INT          NOT NULL DEFAULT 0,
   ruta        VARCHAR(255) NOT NULL,
+  datos       TEXT,                           -- lo firmado en un conforme de la visita (JSON). Solo en un documento
   borrada     TINYINT(1)   NOT NULL DEFAULT 0,
   creado      CHAR(24)     NOT NULL,
   actualizado CHAR(24)     NOT NULL,
@@ -346,6 +348,27 @@ CREATE TABLE IF NOT EXISTS entregas (
   entregada_fijada_en  CHAR(24)     NOT NULL DEFAULT '',
   entregada_por        CHAR(36)     DEFAULT NULL,
   entregada_por_nombre VARCHAR(120) NOT NULL DEFAULT '',
+  posventa             CHAR(10)     NOT NULL DEFAULT '',   -- la cita de la visita de repasos (la de después de entregar)
+  posventa_hora        CHAR(5)      NOT NULL DEFAULT '',
+  posventa_fijada_en   CHAR(24)     NOT NULL DEFAULT '',
+  posventa_por         CHAR(36)     DEFAULT NULL,
+  posventa_por_nombre  VARCHAR(120) NOT NULL DEFAULT '',
+  piscina              CHAR(10)     NOT NULL DEFAULT '',   -- el día de la cita con el instalador, o no-tiene
+  piscina_fijada_en    CHAR(24)     NOT NULL DEFAULT '',
+  piscina_por          CHAR(36)     DEFAULT NULL,
+  piscina_por_nombre   VARCHAR(120) NOT NULL DEFAULT '',
+  clima                CHAR(10)     NOT NULL DEFAULT '',   -- el día de la cita con el instalador, o no-tiene
+  clima_fijado_en      CHAR(24)     NOT NULL DEFAULT '',
+  clima_por            CHAR(36)     DEFAULT NULL,
+  clima_por_nombre     VARCHAR(120) NOT NULL DEFAULT '',
+  domotica             CHAR(10)     NOT NULL DEFAULT '',   -- el día de la cita con el instalador
+  domotica_fijada_en   CHAR(24)     NOT NULL DEFAULT '',
+  domotica_por         CHAR(36)     DEFAULT NULL,
+  domotica_por_nombre  VARCHAR(120) NOT NULL DEFAULT '',
+  armarios             CHAR(10)     NOT NULL DEFAULT '',   -- el día de la cita con quien los monta
+  armarios_fijados_en  CHAR(24)     NOT NULL DEFAULT '',
+  armarios_por         CHAR(36)     DEFAULT NULL,
+  armarios_por_nombre  VARCHAR(120) NOT NULL DEFAULT '',
   borrada              TINYINT(1)   NOT NULL DEFAULT 0,
   creado               CHAR(24)     NOT NULL,
   actualizado          CHAR(24)     NOT NULL,

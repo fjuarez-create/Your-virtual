@@ -19,9 +19,14 @@
      anula. Si aun así el teléfono vuelve atrás con algo ya firmado, la
      capa NO se cierra: se queda como estaba y dice cómo salir.
    · Los trazos se guardan en las medidas que tenía el papel al empezar
-     a firmar. Si la pantalla cambia —se gira el teléfono, sale el
-     teclado— el papel se rehace y lo firmado se vuelve a pintar a
-     escala, sin deformar y sin perder nada.
+     a firmar. Si la pantalla cambia —se gira el teléfono, sale o se va
+     el teclado— el papel se rehace y lo firmado se vuelve a pintar sin
+     deformar y sin perder nada: si el papel crece, nada se mueve; si se
+     queda pequeño, lo firmado se encoge para caber y vuelve a su tamaño
+     cuando hay sitio.
+   · En un MÓVIL tumbado la firma no se ve: la casa tapa la app entera
+     con su telón («Gira el teléfono…», en css/app.css). Se firma en
+     vertical; al volver, lo firmado sigue donde estaba.
    · El lienzo va a la densidad de la pantalla (hasta el triple), y se
      mide el lienzo, no su marco: con el marco el dibujo se corría un
      1 % respecto al dedo.
@@ -234,8 +239,8 @@ export function pedirFirma({ titulo = FRASES.titulo, nombre = '', comprobarNombr
     const ctx = lienzo.getContext('2d');
     /* Los trazos se guardan en las medidas que tenía el papel al empezar
        a firmar (el «mundo»). Si la pantalla cambia, el lienzo se rehace y
-       lo firmado se vuelve a pintar encogido o agrandado para que quepa
-       entero, sin deformar. */
+       lo firmado se vuelve a pintar: en su sitio si cabe, y encogido para
+       que quepa entero, sin deformar, si no (ver repintar). */
     let mundo = null;
     let vista = { escala: 1, dx: 0, dy: 0 };
     let pintado = '';
@@ -259,8 +264,19 @@ export function pedirFirma({ titulo = FRASES.titulo, nombre = '', comprobarNombr
       if (!mundo || !trazos.length) mundo = { ancho, alto };
       lienzo.width = Math.round(ancho * densidad);
       lienzo.height = Math.round(alto * densidad);
-      const escala = Math.min(ancho / mundo.ancho, alto / mundo.alto);
-      vista = { escala, dx: (ancho - mundo.ancho * escala) / 2, dy: (alto - mundo.alto * escala) / 2 };
+      const escala = Math.min(1, ancho / mundo.ancho, alto / mundo.alto);
+      if (escala === 1) {
+        // El papel da para todo lo firmado: NADA se mueve ni cambia de
+        // tamaño, y el mundo crece hasta el papel. Es lo que pasa cuando se
+        // toca el papel con el teclado del nombre abierto: el teclado se
+        // cierra a mitad del trazo, el papel crece, y el trazo tiene que
+        // seguir bajo el dedo (centrándolo daba un salto).
+        mundo = { ancho: Math.max(mundo.ancho, ancho), alto: Math.max(mundo.alto, alto) };
+        vista = { escala: 1, dx: 0, dy: 0 };
+      } else {
+        // El papel se ha quedado pequeño: lo firmado se encoge, centrado.
+        vista = { escala, dx: (ancho - mundo.ancho * escala) / 2, dy: (alto - mundo.alto * escala) / 2 };
+      }
       ctx.setTransform(densidad * escala, 0, 0, densidad * escala, densidad * vista.dx, densidad * vista.dy);
       ctx.strokeStyle = '#111112';
       ctx.fillStyle = '#111112';

@@ -55,8 +55,18 @@ declare(strict_types=1);
     reunión ya cerrada le perdía (su bolita pasaba a «?» y su nombre
     desaparecía de la tarjeta del archivo). A las reuniones que ya
     había se les pone el nombre de cada asistente una sola vez:
-    esquema_nombres_de_asistentes(), aquí. */
-const ESQUEMA_VERSION = 22;
+    esquema_nombres_de_asistentes(), aquí.
+    La 23 trae «Entregadas», la sección de las viviendas ya entregadas.
+    Solo columnas, ninguna tabla: en la ficha de entrega, cinco hechos
+    nuevos, cada uno con su sello y su autor —la cita de la visita de
+    repasos (`posventa` y su hora) y el día de la cita con el instalador
+    de la piscina, de la climatización, de la domótica y de los armarios
+    (`piscina`, `clima`, `domotica`, `armarios`)—; en `medios`, la
+    columna `datos`, que guarda lo firmado en el conforme de la visita
+    (una fila con tipo «documento»); y en `usuarios`, la bandera
+    `posventa`, que deja dar por buenos los repasos de las visitas. No
+    arregla ninguna fila: todo nace vacío o a cero. */
+const ESQUEMA_VERSION = 23;
 
 /**
  * Tablas que tienen que existir para dar la versión por puesta. Si
@@ -82,6 +92,12 @@ const ESQUEMA_CAMPOS = [
         // Quien pone las fechas de entrega de cada vivienda: el
         // comercial (Ezequiel). El administrador puede siempre.
         'comercial' => 'TINYINT(1) NOT NULL DEFAULT 0',
+        // Quien da por buenos (y rechaza) los repasos de las visitas de
+        // repasos de «Entregadas», y nada más: el chip «Posventa» de la
+        // pantalla de Usuarios. Nace a cero en todas las cuentas. OJO:
+        // no es el `posventa` de la ficha de entrega, que es el día de
+        // la cita de la visita.
+        'posventa' => 'TINYINT(1) NOT NULL DEFAULT 0',
     ],
     'tareas' => [
         'rechazada' => 'TINYINT(1) NOT NULL DEFAULT 0',
@@ -122,6 +138,11 @@ const ESQUEMA_CAMPOS = [
         'comentario_id' => 'CHAR(36) DEFAULT NULL',
         // El número de orden de la recepción (ver `tareas`, arriba).
         'recibido' => "CHAR(24) NOT NULL DEFAULT ''",
+        // Lo firmado en un conforme de la visita, en JSON (ver
+        // lib/posventa.php). Solo lo lleva la fila de un documento; en
+        // las fotos queda en NULL. TEXT sin valor por defecto, como
+        // `visitas_hechas`: MariaDB no lo admite en una columna TEXT.
+        'datos' => 'TEXT',
     ],
     'mensajes' => [
         // El número de orden de la recepción (ver `tareas`, arriba).
@@ -155,6 +176,34 @@ const ESQUEMA_CAMPOS = [
         'visitas_fijadas_en'   => "CHAR(24) NOT NULL DEFAULT ''",
         // El número de orden de la recepción (ver `tareas`, arriba).
         'recibido'             => "CHAR(24) NOT NULL DEFAULT ''",
+        // «Entregadas» (esquema 23). La cita de la visita de repasos,
+        // la de DESPUÉS de entregar: su día, su hora, cuándo se fijó y
+        // quién. Vacío = sin cita.
+        'posventa'             => "CHAR(10) NOT NULL DEFAULT ''",
+        'posventa_hora'        => "CHAR(5) NOT NULL DEFAULT ''",
+        'posventa_fijada_en'   => "CHAR(24) NOT NULL DEFAULT ''",
+        'posventa_por'         => 'CHAR(36) DEFAULT NULL',
+        'posventa_por_nombre'  => "VARCHAR(120) NOT NULL DEFAULT ''",
+        // Los cuatro botones. Cada uno guarda el día de la CITA con el
+        // instalador (casi siempre futuro), no el día en que se apuntó,
+        // que ya lo dice su sello. Vacío = sin cita. «no-tiene» = la
+        // villa no lo tiene (solo vale en la piscina y la climatización).
+        'piscina'              => "CHAR(10) NOT NULL DEFAULT ''",
+        'piscina_fijada_en'    => "CHAR(24) NOT NULL DEFAULT ''",
+        'piscina_por'          => 'CHAR(36) DEFAULT NULL',
+        'piscina_por_nombre'   => "VARCHAR(120) NOT NULL DEFAULT ''",
+        'clima'                => "CHAR(10) NOT NULL DEFAULT ''",
+        'clima_fijado_en'      => "CHAR(24) NOT NULL DEFAULT ''",
+        'clima_por'            => 'CHAR(36) DEFAULT NULL',
+        'clima_por_nombre'     => "VARCHAR(120) NOT NULL DEFAULT ''",
+        'domotica'             => "CHAR(10) NOT NULL DEFAULT ''",
+        'domotica_fijada_en'   => "CHAR(24) NOT NULL DEFAULT ''",
+        'domotica_por'         => 'CHAR(36) DEFAULT NULL',
+        'domotica_por_nombre'  => "VARCHAR(120) NOT NULL DEFAULT ''",
+        'armarios'             => "CHAR(10) NOT NULL DEFAULT ''",
+        'armarios_fijados_en'  => "CHAR(24) NOT NULL DEFAULT ''",
+        'armarios_por'         => 'CHAR(36) DEFAULT NULL',
+        'armarios_por_nombre'  => "VARCHAR(120) NOT NULL DEFAULT ''",
     ],
     'reuniones' => [
         // El acta que sale de la grabación: el resumen ya aceptado y,

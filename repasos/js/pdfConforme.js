@@ -392,9 +392,11 @@ function pegasDe(datos, faltaFirmar) {
   }
   // Antes que dejar un repaso fuera, o un nombre a medias, en un papel
   // que se firma.
+  // Primero las letras: un repaso escrito ENTERO en otro alfabeto se queda
+  // sin texto al limpiarlo, y decirle «no tiene texto» sería despistar.
   datos.repasos.forEach((repaso, i) => {
-    if (!repaso.texto) pega('repasos', textos.repasoVacio, { n: i + 1 });
-    else if (repaso.faltanLetras) pega('repasos', textos.repasoLetras, { n: i + 1 });
+    if (repaso.faltanLetras) pega('repasos', textos.repasoLetras, { n: i + 1 });
+    else if (!repaso.texto) pega('repasos', textos.repasoVacio, { n: i + 1 });
   });
   if (datos.letras.compradores) pega('compradores', textos.compradoresLetras);
   if (datos.letras.realizadaPor) pega('realizadaPor', textos.realizadaPorLetras);
@@ -832,13 +834,15 @@ function piezaFirmas(frases, firmadas, m) {
   const recuadro = m.recuadro;
   const rotulos = frases.firmas.length ? frases.firmas : [{ nombre: '', firmado: '' }];
   const anchoHueco = (CAJA.ancho - medidas.hueco) / 2;
-  const conHora = rotulos.some((firma) => firma.firmado);
   // Un nombre largo no pisa la firma de al lado: baja a otro renglón.
   const nombres = rotulos.map((firma) => partir(firma.nombre, medidas.nombre, anchoHueco, false));
   const renglones = Math.max(1, ...nombres.map((lineas) => lineas.length));
   const altoNombre = medidas.nombre + (renglones - 1) * (medidas.nombre + 2.5);
   return {
-    alto: recuadro.alto + 4 + altoNombre + 3 + (conHora ? medidas.hora + 3 : 0),
+    // El renglón de «Firmado en pantalla…» se cuenta SIEMPRE, también
+    // antes de firmar: así medirConforme() dice, antes de pedirle la firma
+    // a nadie, las páginas que tendrá el papel ya firmado.
+    alto: recuadro.alto + 4 + altoNombre + 3 + medidas.hora + 3,
     antes: m.firmasAntes,
     pegada: false,
     pintar(ordenes, techo) {
@@ -982,6 +986,18 @@ export function pegasDeConforme(doc, { faltaFirmar = false } = {}) {
 }
 
 /**
+ * ¿Vale este nombre para ir escrito junto a una firma? → '' si vale, o la
+ * frase de por qué no (está vacío, o lleva letras que el documento no sabe
+ * escribir). No lanza nunca. Está hecha para dársela tal cual a la firma:
+ * pedirFirma({ nombre, comprobarNombre: pegaDeFirmante }).
+ */
+export function pegaDeFirmante(nombre) {
+  const textos = TEXTOS_CONFORME.pegas;
+  if (pierdeLetras(nombre)) return rellenar(textos.firmanteLetras, {});
+  return limpiar(nombre) ? '' : rellenar(textos.sinNombre, {});
+}
+
+/**
  * Cuántas páginas saldrían, cuánto sitio queda en la última (en puntos) y
  * si ha hecho falta apretar el aire: { paginas, sobra, prieto }. No lanza
  * nunca, y vale antes de firmar.
@@ -1026,7 +1042,7 @@ export function nombreDeConforme(doc) {
   const sanear = (parte) => {
     let limpia = String(parte);
     try { limpia = limpia.normalize('NFD'); } catch { /* se queda como está */ }
-    return limpia.replace(/[̀-ͯ]/g, '').replace(/\s+/g, '_')
+    return limpia.replace(/[\u0300-\u036F]/g, '').replace(/\s+/g, '_')
       .replace(/[^A-Za-z0-9_-]/g, '').replace(/_+/g, '_').replace(/^_+|_+$/g, '');
   };
   const firmada = datos.firmadas.find((firma) => firma.cuando && firma.cuando.hora);

@@ -3917,8 +3917,14 @@ body.es-taller::before {
 .d-firma-pie .d-boton-negro { flex: 1 1 0; min-width: 0; }
 .d-firma-borrar:disabled { background: #fff; color: #c9c9c9; }
 
-/* El teléfono tumbado: poco alto y mucho ancho. El título, el nombre y
-   la X se ponen en una sola fila para que el papel se quede con el sitio. */
+/* Poco alto y mucho ancho: el título, el nombre y la X se ponen en una
+   sola fila para que el papel se quede con el sitio.
+   OJO: en un MÓVIL tumbado esto no se llega a ver. Manda la regla de la
+   casa («EN VERTICAL SE TRABAJA», más arriba), que tapa la app entera con
+   su telón, y la firma no es una excepción: se firma en vertical. Lo
+   firmado no se pierde al girar (js/firma.js lo vuelve a pintar a escala);
+   al volver a vertical está como estaba. Esto queda para las pantallas
+   bajitas que no son un móvil tumbado (una ventana de ordenador). */
 @media (orientation: landscape) and (max-height: 520px) {
   .d-velo.d-firma {
     padding-top: calc(env(safe-area-inset-top) + 8px);

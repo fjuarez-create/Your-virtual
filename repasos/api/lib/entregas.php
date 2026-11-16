@@ -9,6 +9,13 @@
  *
  * Quién pone las fechas: el comercial (bandera `comercial` del
  * usuario) y el administrador. El resto del equipo las ve.
+ *
+ * Desde el esquema 23 la ficha guarda además lo de «Entregadas», la
+ * sección de las viviendas ya entregadas: la cita de la visita de
+ * repasos (`posventa`) y el día de la cita con el instalador de la
+ * piscina, la climatización, la domótica y los armarios. Lo demás de
+ * esa sección —la visita, sus repasos y el conforme firmado— no vive
+ * aquí: está en lib/posventa.php.
  */
 
 declare(strict_types=1);
@@ -228,6 +235,24 @@ function entrega_hora($valor): string
     return preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $valor) ? $valor : '';
 }
 
+/** Lo que guarda un botón de «Entregadas» cuando la villa no tiene eso (piscina o climatización). */
+const ENTREGA_NO_TIENE = 'no-tiene';
+
+/**
+ * El valor de uno de los cuatro botones de «Entregadas»: el día de la
+ * CITA con el instalador («AAAA-MM-DD», uno que exista), «no-tiene» si
+ * ese botón lo admite, o vacío. El día no se compara con hoy: es una
+ * cita, y lo normal es que sea futura.
+ */
+function entrega_boton($valor, bool $admiteNoTiene): string
+{
+    $valor = is_scalar($valor) ? trim((string) $valor) : '';
+    if ($valor === ENTREGA_NO_TIENE) {
+        return $admiteNoTiene ? ENTREGA_NO_TIENE : '';
+    }
+    return entrega_fecha($valor);
+}
+
 /** Una marca ISO como las del cliente, o vacío (no «ahora»: vacío es «no ha pasado»). */
 function entrega_sello($valor): string
 {
@@ -331,6 +356,16 @@ const ENTREGA_HECHOS = [
     // Que la vivienda se ha entregado no lo dice la fecha de la firma:
     // lo dice el comercial o el administrador (Fran, 10-11-2026).
     'entregada'   => ['sello' => 'entregada_fijada_en', 'campos' => ['entregada_en'], 'autor' => 'entregada_por'],
+    // «Entregadas» (esquema 23). La cita de la visita de repasos, la de
+    // DESPUÉS de entregar: no es `revision`, que es la de antes.
+    'posventa'    => ['sello' => 'posventa_fijada_en', 'campos' => ['posventa', 'posventa_hora'], 'autor' => 'posventa_por'],
+    // Y los cuatro botones: el día de la cita con el instalador de cada
+    // cosa. Cuatro hechos y no uno, para que quien pulsa la piscina en
+    // un móvil no le pise la domótica a quien la pulsa en otro.
+    'piscina'     => ['sello' => 'piscina_fijada_en', 'campos' => ['piscina'], 'autor' => 'piscina_por'],
+    'clima'       => ['sello' => 'clima_fijado_en', 'campos' => ['clima'], 'autor' => 'clima_por'],
+    'domotica'    => ['sello' => 'domotica_fijada_en', 'campos' => ['domotica'], 'autor' => 'domotica_por'],
+    'armarios'    => ['sello' => 'armarios_fijados_en', 'campos' => ['armarios'], 'autor' => 'armarios_por'],
 ];
 
 /**
@@ -346,7 +381,34 @@ const ENTREGA_SELLOS_CLIENTE = [
     'revisada'    => 'revisadaFijadaEn',
     'visitas'     => 'visitasFijadasEn',
     'entregada'   => 'entregadaFijadaEn',
+    'posventa'    => 'posventaFijadaEn',
+    'piscina'     => 'piscinaFijadaEn',
+    'clima'       => 'climaFijadoEn',
+    'domotica'    => 'domoticaFijadaEn',
+    'armarios'    => 'armariosFijadosEn',
 ];
+
+/**
+ * Los hechos que la base ya puede guardar: aquellos cuyo sello es ya
+ * una columna de `entregas`. Es la red para la ventana del despliegue:
+ * este fichero puede llegar al servidor unos segundos antes que
+ * lib/esquema.php, que es quien añade las columnas. Un hecho cuyo sello
+ * todavía no está se salta entero —ni se adopta ni se escribe—, en vez
+ * de reventar cada subida de fichas con un error de columna desconocida.
+ * Si las columnas no se pudieran leer, valen todos: mejor un fallo que
+ * el móvil reintenta que dar por guardado lo que no se guarda.
+ */
+function entrega_hechos_disponibles(): array
+{
+    static $disponibles = null;
+    if ($disponibles === null) {
+        $columnas = esquema_columnas(bd(), 'entregas');
+        $disponibles = $columnas === []
+            ? ENTREGA_HECHOS
+            : array_filter(ENTREGA_HECHOS, static fn ($def) => in_array($def['sello'], $columnas, true));
+    }
+    return $disponibles;
+}
 
 /** Una marca ISO venga como venga; si no vale, ahora. */
 function entrega_iso($valor): string
@@ -438,6 +500,15 @@ function guardar_entregas(): void
             'revisada_de_hora' => entrega_hora($e['revisadaDeHora'] ?? ''),
             'visitas_hechas'   => entrega_visitas_json(entrega_visitas($e['visitasHechas'] ?? null)),
             'entregada_en'  => entrega_sello($e['entregadaEn'] ?? ''),
+            // «Entregadas»: la cita de la visita de repasos y el día de
+            // la cita de cada botón. Solo la piscina y la climatización
+            // admiten «no-tiene».
+            'posventa'      => entrega_fecha($e['posventa'] ?? ''),
+            'posventa_hora' => entrega_hora($e['posventaHora'] ?? ''),
+            'piscina'       => entrega_boton($e['piscina'] ?? '', true),
+            'clima'         => entrega_boton($e['clima'] ?? '', true),
+            'domotica'      => entrega_boton($e['domotica'] ?? '', false),
+            'armarios'      => entrega_boton($e['armarios'] ?? '', false),
         ];
         // Una hora sin fecha no significa nada.
         if ($llega['revision'] === '') {
@@ -445,6 +516,9 @@ function guardar_entregas(): void
         }
         if ($llega['firma'] === '') {
             $llega['firma_hora'] = '';
+        }
+        if ($llega['posventa'] === '') {
+            $llega['posventa_hora'] = '';
         }
         // Ni la fecha que tenía la cita, si no hay marca de «hecha» que
         // deshacer (la app anterior quita la marca sin saber de ella).
@@ -469,7 +543,7 @@ function guardar_entregas(): void
         ];
 
         $adoptados = 0;
-        foreach (ENTREGA_HECHOS as $hecho => $def) {
+        foreach (entrega_hechos_disponibles() as $hecho => $def) {
             $selloMovil = entrega_sello($e[ENTREGA_SELLOS_CLIENTE[$hecho]] ?? '');
             $selloGuardado = $antes ? (string) ($antes[$def['sello']] ?? '') : '';
             if ($selloMovil !== '' && $selloMovil > $selloGuardado) {
@@ -544,6 +618,31 @@ function entrega_salida(array $f): array
         'entregadaFijadaEn' => (string) ($f['entregada_fijada_en'] ?? ''),
         'entregadaPor' => $f['entregada_por'] ?? null,
         'entregadaPorNombre' => (string) ($f['entregada_por_nombre'] ?? ''),
+        // «Entregadas»: la cita de la visita de repasos y los cuatro
+        // botones (el día de la cita con el instalador, o «no-tiene»).
+        // Con red: una fila servida antes de que la migración haya
+        // añadido las columnas sale con todo vacío.
+        'posventa' => (string) ($f['posventa'] ?? ''),
+        'posventaHora' => (string) ($f['posventa_hora'] ?? ''),
+        'posventaFijadaEn' => (string) ($f['posventa_fijada_en'] ?? ''),
+        'posventaPor' => $f['posventa_por'] ?? null,
+        'posventaPorNombre' => (string) ($f['posventa_por_nombre'] ?? ''),
+        'piscina' => (string) ($f['piscina'] ?? ''),
+        'piscinaFijadaEn' => (string) ($f['piscina_fijada_en'] ?? ''),
+        'piscinaPor' => $f['piscina_por'] ?? null,
+        'piscinaPorNombre' => (string) ($f['piscina_por_nombre'] ?? ''),
+        'clima' => (string) ($f['clima'] ?? ''),
+        'climaFijadoEn' => (string) ($f['clima_fijado_en'] ?? ''),
+        'climaPor' => $f['clima_por'] ?? null,
+        'climaPorNombre' => (string) ($f['clima_por_nombre'] ?? ''),
+        'domotica' => (string) ($f['domotica'] ?? ''),
+        'domoticaFijadaEn' => (string) ($f['domotica_fijada_en'] ?? ''),
+        'domoticaPor' => $f['domotica_por'] ?? null,
+        'domoticaPorNombre' => (string) ($f['domotica_por_nombre'] ?? ''),
+        'armarios' => (string) ($f['armarios'] ?? ''),
+        'armariosFijadosEn' => (string) ($f['armarios_fijados_en'] ?? ''),
+        'armariosPor' => $f['armarios_por'] ?? null,
+        'armariosPorNombre' => (string) ($f['armarios_por_nombre'] ?? ''),
         'borrada' => (int) ($f['borrada'] ?? 0) === 1,
         'creado' => $f['creado'], 'actualizado' => $f['actualizado'],
         'creadoPor' => $f['creado_por'] ?? null,
