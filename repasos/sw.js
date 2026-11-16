@@ -84,6 +84,10 @@ const CODIGO = [
   // firma con el dedo. Se firma en la vivienda, muchas veces sin cobertura.
   'js/pdfConforme.js',
   'js/firma.js',
+  // «Entregadas», las viviendas ya entregadas: sus reglas y las piezas
+  // que comparten la lista, la ficha y la visita.
+  'js/posventa.js',
+  'js/piezasPosventa.js',
   'js/piezasObra.js',
   'js/grabadora.js',
   'js/views/entrar.js',
@@ -100,6 +104,9 @@ const CODIGO = [
   'js/views/tareasEstado.js',
   'js/views/historial.js',
   'js/views/entregas.js',
+  'js/views/entregadas.js',
+  'js/views/entregada.js',
+  'js/views/visita.js',
   'js/views/acta.js',
   'js/views/ajustes.js',
   'js/views/usuarios.js',

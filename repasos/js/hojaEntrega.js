@@ -30,6 +30,7 @@ import { unidades } from './catalog.js';
 import { menuTarjeta, hojaFecha } from './piezas.js';
 import { ir } from './app.js';
 import * as E from './entregas.js';
+import { avisoAlDesmarcar } from './posventa.js';
 
 /**
  * Abre la hoja de una vivienda. `entrega` es su ficha tal como la tiene
@@ -223,9 +224,15 @@ export async function hojaFechas({ unidadId, promoId, nombre, entrega = null, al
       await store.marcarEntregada(unidadId, promoId);
       toast(`${nombre} entregada`, '', { icono: 'key' });
     } else if (elegido === 'no-entregada') {
+      // Sin la marca, la vivienda sale de «Entregadas» con todo lo suyo
+      // (la cita de la visita de repasos, los botones, las visitas y
+      // sus conformes). No se borra nada y vuelve al marcarla, pero
+      // quien la quita tiene que saberlo antes.
+      const deEntregadas = avisoAlDesmarcar(e, await store.visitasDeUnidad(unidadId),
+        await store.conformesSueltosDeUnidad(unidadId));
       const seguro = await confirmar({
         titulo: `¿Quitar la marca de entregada de la ${nombre}?`,
-        texto: 'La vivienda vuelve a estar sin entregar. Se puede volver a marcar cuando toque.',
+        texto: `La vivienda vuelve a estar sin entregar. Se puede volver a marcar cuando toque.${deEntregadas ? ` ${deEntregadas}` : ''}`,
         ok: 'Sí, quitarla', icono: 'x', conservar: 'Dejarla como está', iconoConservar: 'key',
       });
       if (!seguro) return;
@@ -320,9 +327,10 @@ function hojaCompradores(actual) {
 /**
  * La hora de la revisión o de la firma, con el reloj del propio móvil.
  * Resuelve con «HH:MM», con vacío si se quita la hora, o null si se
- * cierra sin tocar.
+ * cierra sin tocar. La usa también la ficha de una vivienda entregada,
+ * para la hora de la visita de repasos.
  */
-function hojaHora(actual, pista = 'La hora de la visita con el cliente. Se puede dejar sin hora.') {
+export function hojaHora(actual, pista = 'La hora de la visita con el cliente. Se puede dejar sin hora.') {
   return sheet((cerrar) => {
     const campo = h('input', { type: 'time', value: actual || '' });
     const sinHora = h('button.d-boton-negro.claro', { onclick: () => cerrar('') }, 'Sin hora');

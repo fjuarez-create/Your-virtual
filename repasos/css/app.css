@@ -1602,8 +1602,8 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 
 /* ═══ LA CABECERA ═══════════════════════════════════════════════
 
-   Una sola para las diez pantallas, en dos formas: la de fuera —la
-   cara y las tres bolas de navegación— y la de dentro —volver, título
+   Una sola para todas las pantallas, en dos formas: la de fuera —la
+   cara y las seis bolas de navegación— y la de dentro —volver, título
    y acción—. Las dos salen de estos tres números, así que miden
    exactamente lo mismo y caen a la misma altura.
 
@@ -1614,18 +1614,30 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 
    Quien las dibuja ahora es cabecera(), en js/piezas.js.  ═══ */
 :root {
-  /* ── GEMELO de CAB_BOLA en js/piezas.js: la cara la dibuja avatar()
-     con las medidas puestas en el propio elemento, y ésas no leen
-     variables de CSS. Si cambia una, cambia la otra. ── */
+  /* ── GEMELO de CAB_BOLA en js/piezas.js: la cara de la cabecera de
+     DENTRO (la de Ajustes) la dibuja avatar() con las medidas puestas
+     en el propio elemento, y ésas no leen variables de CSS. Si cambia
+     una, cambia la otra. ── */
   --cab-bola: 55px;   /* el diámetro de todo lo redondo de la cabecera */
   --cab-hueco: 4px;   /* el aire entre una bola y la siguiente */
   --cab-aire: 8px;    /* el margen de arriba y el de abajo */
 }
-/* La de fuera lleva cinco bolas desde noviembre de 2026 (la quinta es
-   el calendario de entregas) y a 55 no caben con la cara: bajan a 48.
-   ── GEMELO de CAB_BOLA_FUERA en js/piezas.js ── */
-.d-cab:not(.dentro) { --cab-bola: 48px; }
-.d-cab:not(.dentro) .d-bola svg { width: 22px; height: 22px; }
+/* La de fuera lleva SEIS bolas (la sexta es «Entregadas», las viviendas
+   ya entregadas) y, con la cara, no caben a 48 ni en un móvil de 360 ni
+   en uno de 375 (medido: la última se salía 24 y 9 px, y la pantalla la
+   recortaba sin avisar). Tres tamaños según el ancho:
+
+     de 400 px para arriba    48 y hueco de 4   (como antes)
+     entre 351 y 399          44 y hueco de 3   (casi todos los iPhone)
+     350 o menos              40 y hueco de 2
+
+   Los dos cortes están más abajo, DETRÁS de la regla de .d-cab. Aquí no
+   hay gemelo: la cara de fuera no lleva medidas en línea (se las quita
+   cabecera(), en js/piezas.js) y mide lo que diga --cab-bola, con sus
+   iniciales a escala. */
+.d-cab:not(.dentro) { --cab-bola: 44px; --cab-hueco: 3px; }
+.d-cab:not(.dentro) .d-bola svg { width: 21px; height: 21px; }
+.d-cab:not(.dentro) .avatar { font-size: calc(var(--cab-bola) * 0.34); }
 
 .d-cab {
   display: flex; align-items: center; gap: var(--cab-hueco);
@@ -1634,14 +1646,18 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
      entrar en una villa todo lo de debajo saltaría siete píxeles. */
   min-height: calc(55px + var(--cab-aire) * 2);
 }
-/* En los móviles más estrechos (320) ni a 48 caben la cara y las cinco
-   bolas: bajan a 44 y se aprietan. */
-@media (max-width: 340px) {
-  .d-cab:not(.dentro) { --cab-bola: 44px; --cab-hueco: 2px; }
+/* Los dos cortes de la cabecera de fuera (ver arriba). */
+@media (min-width: 400px) {
+  .d-cab:not(.dentro) { --cab-bola: 48px; --cab-hueco: 4px; }
+  .d-cab:not(.dentro) .d-bola svg { width: 22px; height: 22px; }
+}
+@media (max-width: 350px) {
+  .d-cab:not(.dentro) { --cab-bola: 40px; --cab-hueco: 2px; }
+  .d-cab:not(.dentro) .d-bola svg { width: 20px; height: 20px; }
 }
 
 /* Todo lo redondo de la cabecera mide igual, venga de donde venga: la
-   cara, las tres bolas, la flecha de volver y los tres puntos. */
+   cara, las bolas, la flecha de volver y los tres puntos. */
 .d-cab .d-bola,
 .d-cab .avatar,
 .d-cab .d-cab-hueco {
@@ -1649,7 +1665,7 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
   flex: 0 0 var(--cab-bola);
 }
 
-/* La de fuera: las tres bolas, pegadas al borde derecho. */
+/* La de fuera: las seis bolas, pegadas al borde derecho. */
 .d-cab-menu { display: flex; gap: var(--cab-hueco); margin-left: auto; }
 
 /* La de dentro: el título se come el centro y los dos flancos miden lo
@@ -1704,7 +1720,7 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 
 .d-bola, .d-cab .avatar, .d-confirmar-x, .d-fila-elegir, .d-boton-negro, .d-selector-estado,
 .d-bola-embudo, .d-bola-filtros, .d-desplegable, .d-tarjeta, .d-acta-dia,
-.d-acta-linea, .d-repaso, .d-mensaje, .d-item {
+.d-acta-linea, .d-repaso, .d-mensaje, .d-item, button.pv-bolita {
   transition: filter var(--pulsa-sale) var(--sal-estandar),
               background-color var(--pulsa-sale) var(--sal-estandar),
               transform var(--pulsa-sale) var(--sal-estandar);
@@ -1715,7 +1731,7 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 .d-boton-negro:active, .d-selector-estado:active, .d-bola-embudo:active,
 .d-bola-filtros:active, .d-desplegable:active, .d-tarjeta:active,
 .d-acta-dia:active, .d-acta-linea:active, .d-repaso:active,
-.d-mensaje:active, .d-item:active {
+.d-mensaje:active, .d-item:active, button.pv-bolita:active {
   transition-duration: 0s;
 }
 
@@ -1726,7 +1742,7 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
    cambiaba el tono: al lado de las bolas se notaba que iban por libre. */
 .d-bola:active, .d-cab .avatar:active, .d-confirmar-x:active,
 .d-selector-estado:active, .d-bola-embudo:active, .d-bola-filtros:active,
-.d-desplegable:active {
+.d-desplegable:active, button.pv-bolita:active {
   filter: brightness(0.93); transform: scale(0.96);
 }
 
@@ -1763,13 +1779,14 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) {
   .d-bola, .d-cab .avatar, .d-boton-negro, .d-selector-estado,
   .d-bola-embudo, .d-bola-filtros, .d-desplegable, .d-tarjeta,
-  .d-acta-dia, .d-acta-linea, .d-repaso, .d-mensaje, .d-item {
+  .d-acta-dia, .d-acta-linea, .d-repaso, .d-mensaje, .d-item, button.pv-bolita {
     transition-duration: var(--pulsa-sale) !important;
   }
   .d-bola:active, .d-cab .avatar:active, .d-boton-negro:active,
   .d-selector-estado:active, .d-bola-embudo:active, .d-bola-filtros:active,
   .d-desplegable:active, .d-tarjeta:active, .d-acta-dia:active,
-  .d-acta-linea:active, .d-repaso:active, .d-mensaje:active, .d-item:active {
+  .d-acta-linea:active, .d-repaso:active, .d-mensaje:active, .d-item:active,
+  button.pv-bolita:active {
     transform: none; transition-duration: 0s !important;
   }
 }
@@ -3945,3 +3962,207 @@ body.es-taller::before {
    izquierda y por encima de todo: sin esto tapaba media palabra de
    «Borrar». El pie le deja su sitio (el sello llega a 37 px del borde). */
 body.es-taller .d-velo.d-firma { padding-bottom: calc(env(safe-area-inset-bottom) + 48px); }
+
+/* ═══ ENTREGADAS ═════════════════════════════════════════════════
+   Las viviendas ya entregadas (noviembre de 2026): la lista con sus
+   tres filtros (js/views/entregadas.js), la ficha de cada una
+   (js/views/entregada.js) y las dos piezas que comparten con la
+   pantalla de la visita (js/piezasPosventa.js): los cuatro botones y
+   la tarjeta del conforme firmado. Todo lo de aquí empieza por «pv-».
+
+   Se apoya en lo que ya había: la tarjeta lisa del día de Entregas
+   (.d-dia-tarjeta y sus filas), el conmutador (.d-selector), los chips
+   (.d-chip), el botón negro y la tarjeta negra del reconocimiento
+   (.d-menu-destacada). Aquí solo va lo que les falta.  ═══ */
+
+/* Los colores de los cuatro botones. Son SUYOS y de nada más, para que
+   verlos signifique siempre lo mismo: agua la piscina, azul frío la
+   climatización, rojo tierra la domótica y ocre roble los armarios.
+   Están medidos contra los que ya tienen dueño en la casa: no se
+   confunden con el rojo de lo rechazado (--d-rojo), con el verde de lo
+   hecho (--d-verde) ni con el azul de «mensaje sin leer» (--azul). El
+   rojo tierra es el que más se arrima al rojo de la casa: lo acaban de
+   separar la forma (una bolita con dibujo, no una pastilla con letra)
+   y el icono. No se reaprovechan para otra cosa. */
+:root {
+  --pv-piscina: #0f7f94;
+  --pv-clima: #2d4a7a;
+  --pv-domotica: #96502f;
+  --pv-armarios: #8a6a12;
+  /* El gris de «No tiene»: su letra y la raya que tacha el icono. */
+  --pv-apagado: #6f6f6f;
+}
+
+/* ── La lista ── */
+/* Tres rótulos en el conmutador, y el del medio es largo: se reparten
+   según lo que ocupa cada uno, y en los móviles estrechos baja la
+   letra. El rótulo no se abrevia. */
+.pv-selector { display: flex; width: 100%; }
+.pv-selector button { flex: 1 1 auto; padding: 0 11px; white-space: nowrap; font-size: 15px; }
+@media (max-width: 374px) { .pv-selector button { padding: 0 7px; font-size: 14px; } }
+@media (max-width: 339px) { .pv-selector button { padding: 0 5px; font-size: 12.5px; } }
+.pv-cuenta { font-size: 17px; line-height: 22px; margin: 18px 0 12px; color: var(--d-gris); }
+.pv-lista { display: flex; flex-direction: column; gap: 10px; }
+
+/* Una tarjeta por vivienda. Se toca entera para abrir la ficha; las
+   bolitas de dentro tienen su propio toque, y al pulsar una la tarjeta
+   no se da por pulsada. */
+.pv-tarjeta { cursor: pointer; transition: filter var(--pulsa-sale) var(--sal-estandar); }
+.pv-tarjeta:active:not(:has(button:active)) { filter: brightness(0.96); transition-duration: 0s; }
+.pv-tarjeta .d-dia-cab { justify-content: space-between; }
+.pv-tarjeta .d-dia-titulo { margin: 0; flex: 1; min-width: 0; }
+.pv-abrir {
+  width: 40px; height: 40px; flex: none; margin: -6px -10px -6px 0; border-radius: 999px;
+  display: grid; place-items: center; color: var(--d-gris);
+}
+.pv-abrir svg { width: 22px; height: 22px; }
+.pv-chip-cerrada { flex: none; }
+.pv-tarjeta .d-dia-fila.suave { color: var(--d-gris); }
+.pv-tarjeta .d-dia-fila.hecha,
+.pv-tarjeta .d-dia-fila.hecha svg { color: var(--d-verde); }
+.pv-tarjeta-botones { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--d-gris-suave); }
+
+/* «Le falta: …», en la tarjeta y en la ficha. */
+.pv-falta {
+  margin-top: 12px; background: var(--d-gris-suave); border-radius: 12px; padding: 10px 12px;
+  font-size: 15px; line-height: 20px; color: var(--d-tinta);
+}
+.pv-falta b { font-weight: 500; color: #6b6b6b; }
+.pv-cerrada { margin-top: 12px; }
+
+.pv-vacio { background: #fff; border-radius: var(--d-radio); padding: 18px 16px; }
+.pv-vacio-titulo { margin: 0; font-size: 17px; line-height: 23px; color: var(--d-tinta); }
+.pv-vacio-sub { margin: 6px 0 0; font-size: 15px; line-height: 21px; color: var(--d-gris); }
+
+/* ── Los cuatro botones: «bolitas que se rellenan» ──
+   Sin pulsar, hueca: fondo blanco, y el borde y el icono de su color.
+   Con cita, maciza: el color entero y el icono en blanco; debajo, el
+   día. «No tiene», en gris y con el icono tachado por una raya de
+   esquina a esquina. Las cuatro en fila caben en la tarjeta de un
+   móvil de 360 (4 × 60 + 3 × 6 = 258 px). */
+.pv-bolita {
+  position: relative; flex: none; width: 48px; height: 48px; padding: 0; border: 0;
+  border-radius: 999px; display: grid; place-items: center;
+  background: #fff; color: var(--pv-color); box-shadow: inset 0 0 0 1.5px var(--pv-color);
+}
+.pv-bolita svg { width: 23px; height: 23px; }
+.pv-bolita.piscina { --pv-color: var(--pv-piscina); }
+.pv-bolita.clima { --pv-color: var(--pv-clima); }
+.pv-bolita.domotica { --pv-color: var(--pv-domotica); }
+.pv-bolita.armarios { --pv-color: var(--pv-armarios); }
+.pv-bolita.si { background: var(--pv-color); color: #fff; box-shadow: none; }
+.pv-bolita.nt { background: var(--d-gris-suave); color: var(--d-gris); box-shadow: none; }
+.pv-raya {
+  position: absolute; left: 50%; top: 50%; width: 30px; height: 2px; margin: -1px 0 0 -15px;
+  border-radius: 2px; background: var(--pv-apagado); box-shadow: 0 0 0 2px var(--d-gris-suave);
+  transform: rotate(-45deg); pointer-events: none;
+}
+/* En fila (la tarjeta de la lista): cada una en su columna, con el día debajo. */
+.pv-botones { display: flex; align-items: flex-start; gap: 6px; }
+.pv-uno { display: flex; flex-direction: column; align-items: center; width: 60px; }
+.pv-dia {
+  font-size: 14px; line-height: 18px; margin-top: 5px; min-height: 18px; white-space: nowrap;
+  color: var(--d-tinta); font-variant-numeric: tabular-nums;
+}
+.pv-uno.nt .pv-dia { color: var(--pv-apagado); }
+/* Si ninguna tiene nada que enseñar debajo, la línea del día no ocupa. */
+.pv-botones.vacio .pv-dia { display: none; }
+/* En lista (la ficha): la bolita, el nombre y, a la derecha, la cita. */
+.pv-tarjeta-lista { padding-top: 8px; padding-bottom: 8px; }
+.pv-fila-boton { display: flex; align-items: center; gap: 12px; padding: 9px 0; }
+.pv-fila-boton + .pv-fila-boton { border-top: 1px solid var(--d-gris-suave); }
+.pv-fila-nombre { flex: 1; min-width: 0; font-size: 17px; line-height: 22px; }
+.pv-fila-cuando { font-size: 15px; line-height: 20px; color: var(--d-tinta); text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pv-fila-cuando.gris { color: var(--d-gris); }
+
+/* La hoja de un botón (va dentro de la hoja de la casa, .sheet). */
+.pv-hoja-frase { font-size: 15px; line-height: 21px; color: #4a4a4a; margin-top: 4px; }
+.pv-elegir-dia {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 0 16px;
+  border-radius: 16px; background: #fff; box-shadow: inset 0 0 0 1.5px var(--d-beige);
+  font: 500 17px var(--d-font); text-align: left; color: var(--d-gris);
+}
+.pv-elegir-dia.puesto { color: var(--d-tinta); }
+.pv-elegir-dia:active { background: var(--d-gris-suave); }
+.pv-elegir-dia .grow { flex: 1; min-width: 0; }
+.pv-elegir-dia svg { width: 22px; height: 22px; flex: none; color: var(--d-beige-tinta); }
+.pv-elegir-dia svg:last-child { width: 20px; height: 20px; color: var(--d-gris); }
+.pv-hoja-botones { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+.pv-hoja-botones .d-boton-negro.claro { background: #fff; color: var(--d-tinta); box-shadow: inset 0 0 0 1.5px var(--d-beige); }
+.pv-hoja-filas { margin: 6px -8px 0; }
+
+/* ── La ficha de una vivienda entregada ── */
+.pv-epigrafe { margin: 24px 0 10px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.pv-entrega { margin-top: 6px; }
+.pv-entrega .d-dia-fila:first-child { margin-top: 0; }
+.pv-chip-curso svg { color: var(--d-gris); }
+
+/* La cita de la visita de repasos: el rótulo gris y, debajo, el día en
+   grande; a la derecha, para quien pone fechas, la bola del calendario. */
+.pv-cita { display: flex; align-items: center; gap: 12px; }
+.pv-cita-texto { flex: 1; min-width: 0; }
+.pv-cita-rotulo { font-size: 15px; line-height: 20px; color: var(--d-gris); margin-bottom: 2px; }
+.pv-cita-rotulo.solo { font-size: 22px; line-height: 28px; letter-spacing: -.015em; margin-bottom: 0; }
+.pv-cita-dia { font-size: 24px; line-height: 29px; letter-spacing: -.015em; color: var(--d-tinta); }
+.pv-boton-visita { margin-top: 14px; }
+.pv-poner-fecha { margin-top: 14px; }
+
+/* El conforme firmado. Quien puede abrirlo ve la tarjeta negra del
+   reconocimiento (.d-menu-destacada), a todo el ancho; los demás, que
+   está firmado, cuándo y por quién. */
+.d-menu-destacada.pv-conforme { width: 100%; margin: 0; }
+.pv-conforme-cerrado {
+  display: flex; align-items: flex-start; gap: 14px; background: #fff;
+  border-radius: 18px; padding: 14px 16px;
+}
+.pv-conforme-cerrado > svg { width: 26px; height: 26px; flex: none; color: var(--d-beige-tinta); margin-top: 1px; }
+.pv-conforme-cerrado .grow { flex: 1; min-width: 0; }
+.pv-conforme-titulo { font-size: 17px; line-height: 22px; color: var(--d-tinta); }
+.pv-conforme-firma { font-size: 15px; line-height: 20px; color: var(--d-tinta); margin-top: 3px; }
+.pv-conforme-nota { font-size: 14px; line-height: 19px; color: var(--d-gris); margin-top: 6px; }
+
+/* Los repasos de una visita, resumidos: la cuenta, la fecha orientativa
+   de finalización (la ÚNICA fecha: ningún repaso lleva la suya) y los
+   primeros repasos. */
+.pv-visita-firmada, .pv-visita-abierta, .pv-suelto { margin-top: 10px; }
+.pv-suelto .d-dia-fila:first-child { margin-top: 0; }
+.pv-repasos-cab { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 18px; line-height: 23px; }
+.pv-repasos-cab span + span { font-size: 15px; color: var(--d-gris); white-space: nowrap; }
+.pv-orientativa {
+  display: flex; align-items: center; gap: 10px; margin-top: 12px; background: var(--d-gris-suave);
+  border-radius: 12px; padding: 10px 12px; font-size: 15px; line-height: 20px;
+}
+.pv-orientativa svg { width: 22px; height: 22px; flex: none; color: var(--d-beige-tinta); }
+.pv-orientativa b { font-weight: 500; display: block; font-size: 17px; line-height: 22px; }
+.pv-repaso {
+  display: flex; align-items: flex-start; gap: 12px; width: 100%; padding: 12px 0;
+  border-top: 1px solid var(--d-gris-suave); text-align: left; font: inherit; color: var(--d-tinta);
+}
+.pv-repasos-cab + .pv-repaso { margin-top: 12px; }
+.pv-orientativa + .pv-repaso { margin-top: 6px; border-top: 0; }
+.pv-repaso:active { background: var(--d-gris-suave); }
+.pv-repaso-bola {
+  width: 30px; height: 30px; flex: none; border-radius: 999px; border: 2.5px solid #d9d9d9;
+  display: grid; place-items: center; color: #fff; margin-top: 1px; box-sizing: border-box;
+}
+.pv-repaso-bola svg { width: 17px; height: 17px; }
+.pv-repaso.hecho .pv-repaso-bola { border: none; background: var(--d-beige-tinta); }
+.pv-repaso-texto { flex: 1; min-width: 0; font-size: 16px; line-height: 21px; overflow-wrap: anywhere; }
+.pv-repaso.hecho .pv-repaso-texto > span:first-child { color: #a8a8a8; text-decoration: line-through; }
+.pv-repaso-sub { display: block; font-size: 14px; line-height: 19px; color: var(--d-gris); margin-top: 2px; }
+.pv-repaso-nota {
+  display: inline-block; margin-top: 6px; padding: 3px 10px; border-radius: 999px;
+  font-size: 13px; line-height: 18px; background: var(--d-beige-suave); color: var(--d-beige-tinta);
+}
+.pv-repaso-nota.rojo { background: var(--d-rojo-suave); color: #651d17; }
+.pv-sin-repasos { margin: 10px 0 0; font-size: 15px; line-height: 21px; color: var(--d-gris); }
+.pv-ver-todos {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%;
+  margin-top: 12px; padding: 14px 0 6px; border-top: 1px solid var(--d-gris-suave);
+  font: inherit; font-size: 16px; line-height: 21px; text-align: left; color: var(--d-tinta);
+}
+.pv-repaso + .pv-ver-todos { margin-top: 0; }
+.pv-ver-todos:active { color: var(--d-gris); }
+.pv-ver-todos svg { width: 20px; height: 20px; flex: none; color: var(--d-gris); }
+.pv-aviso-antes { margin: 18px 0 8px; font-size: 15px; line-height: 21px; color: var(--d-gris); text-align: center; padding: 0 10px; }
+.pv-en-construccion { margin-top: 12px; }

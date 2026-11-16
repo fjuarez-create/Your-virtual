@@ -160,6 +160,31 @@ export function subirMedio(medio, blob, alProgreso) {
   });
 }
 
+/**
+ * Sube un «Conforme de la visita» firmado: el PDF y lo firmado como
+ * dato. Va por su propia puerta (`POST conformes`) y no por la de las
+ * fotos, porque un papel firmado ni se pisa ni se borra. `medio` es la
+ * fila del almacén `medios` (tipo 'documento'; su `tareaId` es el id de
+ * la LISTA de la visita) y `blob`, el PDF.
+ *
+ * Resuelve con lo que contesta el servidor ({ ok, id, tam, huella,
+ * repetido }) y rechaza con un ApiError que lleva `status` y `codigo`,
+ * como subirMedio(). Qué hace la cola con cada respuesta (un 403 o un
+ * 503 no son un rechazo del papel) lo decide quien llama.
+ */
+export function subirConforme(medio, blob) {
+  if (!HAY_SERVIDOR) return Promise.reject(new ApiError('Sin servidor', 0, 'sin-servidor'));
+  const form = new FormData();
+  form.append('id', medio.id);
+  form.append('listaId', medio.tareaId);
+  form.append('unidadId', medio.datos?.unidadId || '');
+  form.append('creado', medio.creado);
+  form.append('huella', medio.huella || '');
+  form.append('datos', JSON.stringify(medio.datos || {}));
+  form.append('fichero', blob, medio.nombre || (medio.id + extension(medio.mime || 'application/pdf')));
+  return pedir('conformes', { metodo: 'POST', form });
+}
+
 export const borrarMedioRemoto = (id) =>
   pedir('medios/' + encodeURIComponent(id), { metodo: 'DELETE' });
 
@@ -375,6 +400,7 @@ function extension(mime) {
     'video/mp4': '.mp4', 'video/quicktime': '.mov', 'video/webm': '.webm',
     'audio/webm': '.webm', 'audio/mp4': '.m4a', 'audio/mpeg': '.mp3',
     'audio/ogg': '.ogg', 'audio/wav': '.wav',
+    'application/pdf': '.pdf',
   };
   return m[limpio] || '.bin';
 }

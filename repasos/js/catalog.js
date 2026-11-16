@@ -14,6 +14,10 @@ export const PROMOCIONES = [
   {
     id: 'brassie',
     nombre: 'Brassie',
+    // La sociedad que figura en los papeles que firma el comprador (el
+    // «Conforme de la visita»). Confirmada por el administrador el
+    // 16-11-2026.
+    sociedad: 'Brassie Villas, S.L.',
     ubicacion: '50 villas',
     activa: true,
     unidades: { desde: 1, hasta: 50, etiqueta: 'Villa' },
@@ -90,6 +94,18 @@ export const FASE_UNICA = 'pre';
  */
 export const FASE_POST = 'post';
 export const esPartePost = (lista) => lista?.fase === FASE_POST;
+
+/**
+ * Y una tercera, de noviembre de 2026, con la sección «Entregadas»: la
+ * VISITA DE REPASOS que se hace con los compradores después de entregar
+ * la vivienda. Cada visita es una lista con esta fase, y sus repasos
+ * NO se mezclan con los demás: solo se ven dentro de «Entregadas».
+ * Quien enumere las listas de una vivienda, de una promoción o de toda
+ * la obra aparta las de esta fase con esListaDeVisita(). No es un parte
+ * post-entrega y nunca lleva esa fase.
+ */
+export const FASE_VISITA = 'visita';
+export const esListaDeVisita = (lista) => lista?.fase === FASE_VISITA;
 
 /**
  * Los cuatro estados de una tarea, y el vocabulario de toda la app.
@@ -313,6 +329,32 @@ export function puedePonerFechas(usuario) {
  */
 export function puedeBajarReconocimiento(usuario) {
   return puedeVerificar(usuario) || puedePonerFechas(usuario);
+}
+
+/**
+ * Quién hace una visita de repasos de una vivienda entregada y recoge
+ * la firma del comprador: el administrador, el comercial y la
+ * dirección facultativa. Son los mismos que abren el PDF del conforme
+ * ya firmado. El servidor lo vuelve a comprobar (puede_visitar()).
+ */
+export function puedeHacerVisita(usuario) {
+  return puedePonerFechas(usuario) || puedeVerificar(usuario);
+}
+
+/** Quién abre el PDF de un «Conforme de la visita» firmado: quien hace visitas. Los demás ven que está firmado, cuándo y por quién. */
+export const puedeAbrirConforme = puedeHacerVisita;
+
+/**
+ * Quién da por buenos (y rechaza) los repasos de una VISITA: quien
+ * verifica, o quien lleva la bandera «posventa» (el chip «Posventa» de
+ * la pantalla de Usuarios). Esa bandera vale solo para esto: no
+ * verifica los repasos de siempre, no pone fechas, no hace la visita
+ * ni abre el PDF firmado. OJO: es `usuario.posventa`, un sí o un no de
+ * una PERSONA; el `posventa` de la ficha de entrega es otra cosa (el
+ * día de la cita de la visita).
+ */
+export function puedeVerificarVisita(usuario) {
+  return puedeVerificar(usuario) || usuario?.posventa === true;
 }
 
 /**

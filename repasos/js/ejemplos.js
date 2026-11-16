@@ -18,7 +18,7 @@
 import * as store from './store.js';
 import * as db from './db.js';
 import * as media from './media.js';
-import { unidades, FASE_UNICA } from './catalog.js';
+import { unidades, FASE_UNICA, esListaDeVisita } from './catalog.js';
 
 export const PREFIJO = 'Ejemplo · ';
 
@@ -299,7 +299,9 @@ async function ponerFotoDeMuestra(tareaId, nombre) {
 
 /** Las tareas vivas de la promoción que no tienen ni una imagen. */
 export async function tareasSinFotografia(promoId) {
-  const listas = (await db.getAll('listas')).filter((l) => !l.borrada && l.promoId === promoId);
+  // Sin los repasos de las visitas de repasos (fase 'visita'): figuran
+  // en un papel firmado por el comprador y no se purgan nunca.
+  const listas = (await db.getAll('listas')).filter((l) => !l.borrada && l.promoId === promoId && !esListaDeVisita(l));
   const ids = new Set(listas.map((l) => l.id));
   const tareas = (await db.getAll('tareas'))
     .filter((t) => !t.borrada && ids.has(t.listaId))

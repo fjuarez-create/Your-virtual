@@ -332,8 +332,14 @@ export async function render({ promoId, unidadId }) {
         sub: hechas9.length === 0
           ? 'Lo por cerrar; todavía no hay ejecutados'
           : `Lo por cerrar primero y ${hechas9.length === 1 ? 'el ejecutado' : `los ${hechas9.length} ejecutados`} al final` },
+      // El camino desde la vivienda de siempre hasta lo de después de
+      // entregarla (la visita de repasos, su conforme firmado y sus
+      // repasos, que aquí no salen). Solo si figura como entregada.
+      entrega?.entregadaEn ? { id: 'entregada', icono: 'apreton', rotulo: 'Visita de repasos y conforme',
+        sub: 'Lo de después de la entrega, en Entregadas' } : null,
     ].filter(Boolean), { extra, destacada });
 
+    if (elegido === 'entregada') ir(`#/entregadas/p/${promoId}/v/${String(unidadId).split(':')[1]}`);
     if (elegido === 'reconocimiento') bajarReconocimiento(unidadId);
     if (elegido === 'pdf') descargarVivienda(p, u, { tareas: vivas });
     if (elegido === 'pdf-filtrado') descargarVivienda(p, u, { tareas: conFiltro, filtros: fraseFiltros });

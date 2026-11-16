@@ -60,6 +60,7 @@ function filaUsuario(u, yo) {
     ),
     u.verifica ? h('span.tag.accent', null, 'Verifica') : null,
     u.comercial ? h('span.tag.accent', null, 'Comercial') : null,
+    u.posventa ? h('span.tag.accent', null, 'Posventa') : null,
     u.rol === 'admin' ? h('span.tag.ink', null, 'Admin') : null,
     !u.activo ? h('span.tag', null, 'Inactivo') : null,
     esYo ? null : chevron(),
@@ -328,6 +329,28 @@ function editarUsuario(u) {
             u.comercial
               ? 'Dejará de poder cambiar los compradores, la revisión y la firma'
               : 'Es el comercial: pondrá los compradores, la revisión con el cliente y la firma'),
+        ),
+      ),
+      // El chip «Posventa»: dar por buenos (y rechazar) los repasos de
+      // las visitas de repasos de «Entregadas». Solo eso: no verifica
+      // los repasos de siempre, no pone fechas ni pulsa botones, no
+      // hace la visita y no abre el conforme firmado. No va en el alta:
+      // se pone aquí, después. OJO: esta bandera es de una PERSONA; el
+      // `posventa` de la ficha de entrega es el día de una cita.
+      h('button.row', {
+        'data-permiso': 'posventa',
+        onclick: () => retocar(u, cerrar, { posventa: !u.posventa },
+          u.posventa
+            ? 'Ya no da por buenos los repasos de las visitas'
+            : 'Ya puede dar por buenos los repasos de las visitas. Tiene que cerrar y abrir la app.'),
+      },
+        h('div.row-lead', null, icon('apreton', 18)),
+        h('div.grow', null,
+          h('div.row-title', null, u.posventa ? 'Quitarle los repasos de las visitas' : 'Dejarle dar por buenos los repasos de las visitas'),
+          h('div.row-sub', { style: { whiteSpace: 'normal' } },
+            u.posventa
+              ? 'Dejará de poder dar por buenos los repasos de las visitas'
+              : 'Podrá dar por buenos y rechazar los repasos de las visitas de Entregadas. Nada más.'),
         ),
       ),
       h('button.row', {

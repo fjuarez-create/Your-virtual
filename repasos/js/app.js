@@ -34,6 +34,12 @@ const RUTAS = [
   { patron: /^\/tareas\/([^/]+)$/,           vista: () => import('./views/tareasEstado.js'), params: (m) => ({ estadoId: m[1] }) },
   { patron: /^\/listas$/,                     vista: () => import('./views/historial.js'),    params: () => ({}) },
   { patron: /^\/entregas$/,                   vista: () => import('./views/entregas.js'),     params: () => ({}) },
+  /* «Entregadas»: las viviendas ya entregadas. La lista, la ficha de
+     cada una y la pantalla de una visita de repasos. Ninguna dirección
+     contiene «/nueva» ni «/recorrido», que se miran por subcadena. */
+  { patron: /^\/entregadas$/,                 vista: () => import('./views/entregadas.js'),   params: () => ({}) },
+  { patron: /^\/entregadas\/p\/([^/]+)\/v\/([^/]+)$/, vista: () => import('./views/entregada.js'), params: (m) => ({ promoId: m[1], unidadId: `${m[1]}:${m[2]}` }) },
+  { patron: /^\/entregadas\/p\/([^/]+)\/v\/([^/]+)\/visita\/([^/]+)$/, vista: () => import('./views/visita.js'), params: (m) => ({ promoId: m[1], unidadId: `${m[1]}:${m[2]}`, listaId: m[3] }) },
   { patron: /^\/acta\/(\d{4}-\d{2}-\d{2})$/,   vista: () => import('./views/acta.js'),         params: (m) => ({ fecha: m[1] }) },
   { patron: /^\/ajustes$/,                    vista: () => import('./views/ajustes.js'),      params: () => ({}) },
   { patron: /^\/usuarios$/,                   vista: () => import('./views/usuarios.js'),     params: () => ({}) },

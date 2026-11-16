@@ -11,7 +11,9 @@ import * as api from './api.js';
 import {
   puedeVerificar, hecha, esperandoVisto, rebotada, enObra, OFICIO_POR_DEFECTO, FASE_UNICA, FASE_POST,
   PRIORIDAD_POR_DEFECTO, esPrioridad, prioridadDe, puedePonerFechas,
+  FASE_VISITA, esListaDeVisita, puedeHacerVisita,
 } from './catalog.js';
+import { BOTONES, NO_TIENE, esConforme } from './posventa.js';
 import {
   revisionHecha, visitasDe, visitaMarcada, todasLasVisitas, hayVisitaHecha, citaQueVuelve, esDia, hoyIso, diaDeMarca,
 } from './entregas.js';
@@ -315,6 +317,22 @@ const HECHOS_ENTREGA = [
   // Que la vivienda se ha entregado lo dicen el comercial o el
   // administrador, no la fecha de la firma (Fran, 10-11-2026).
   { sello: 'entregadaFijadaEn', campos: ['entregadaEn'], autor: 'entregadaPor' },
+  // «Entregadas» (noviembre de 2026): la cita de la visita de repasos y
+  // los cuatro botones, cada uno con el día de su cita con el
+  // instalador. Son CINCO hechos y no uno, cada cual con su sello, para
+  // que dos móviles que tocan cosas distintas de la misma vivienda no se
+  // pisen. Gemelos de los del servidor (api/lib/entregas.php).
+  { sello: 'posventaFijadaEn', campos: ['posventa', 'posventaHora'], autor: 'posventaPor' },
+  { sello: 'piscinaFijadaEn', campos: ['piscina'], autor: 'piscinaPor' },
+  { sello: 'climaFijadoEn', campos: ['clima'], autor: 'climaPor' },
+  { sello: 'domoticaFijadaEn', campos: ['domotica'], autor: 'domoticaPor' },
+  { sello: 'armariosFijadosEn', campos: ['armarios'], autor: 'armariosPor' },
+];
+
+/** Los cinco hechos de «Entregadas»: su campo y su sello, para ponerlos vacíos donde falten. */
+const HECHOS_POSVENTA = [
+  ['posventa', 'posventaFijadaEn'], ['piscina', 'piscinaFijadaEn'], ['clima', 'climaFijadoEn'],
+  ['domotica', 'domoticaFijadaEn'], ['armarios', 'armariosFijadosEn'],
 ];
 
 /**
@@ -324,13 +342,21 @@ const HECHOS_ENTREGA = [
  * que el resto del código no tenga que preguntarse si están.
  */
 function completarEntrega(e) {
-  return {
+  const completa = {
     ...e,
     revisadaDe: e.revisadaDe || '',
     revisadaDeHora: e.revisadaDeHora || '',
     visitasHechas: visitasDe(e),
     visitasFijadasEn: e.visitasFijadasEn || '',
+    posventaHora: e.posventaHora || '',
   };
+  // Lo de «Entregadas»: una ficha de antes, o la de un servidor que aún
+  // no lo conoce, no trae estos hechos. Vacíos, no sin definir.
+  for (const [campo, sello] of HECHOS_POSVENTA) {
+    completa[campo] = e[campo] || '';
+    completa[sello] = e[sello] || '';
+  }
+  return completa;
 }
 
 /**
@@ -404,7 +430,10 @@ export async function sinSubirDeUnidad(unidadId) {
       listaId = registro?.tareaId ? (await db.get('tareas', registro.tareaId))?.listaId : null;
     }
     if (!listaId) continue;
-    if ((await db.get('listas', listaId))?.unidadId === unidadId) cuantos++;
+    // Lo de una visita de repasos de «Entregadas» no cuenta: no entra en
+    // el reconocimiento, así que no hay por qué esperarlo.
+    const suLista = await db.get('listas', listaId);
+    if (suLista?.unidadId === unidadId && !esListaDeVisita(suLista)) cuantos++;
   }
   return cuantos;
 }
@@ -424,6 +453,11 @@ function entregaVacia(unidadId, promoId) {
     revisadaDe: '', revisadaDeHora: '',
     visitasHechas: [], visitasFijadasEn: '',
     entregadaEn: '', entregadaFijadaEn: '', entregadaPor: null, entregadaPorNombre: '',
+    posventa: '', posventaHora: '', posventaFijadaEn: '', posventaPor: null, posventaPorNombre: '',
+    piscina: '', piscinaFijadaEn: '', piscinaPor: null, piscinaPorNombre: '',
+    clima: '', climaFijadoEn: '', climaPor: null, climaPorNombre: '',
+    domotica: '', domoticaFijadaEn: '', domoticaPor: null, domoticaPorNombre: '',
+    armarios: '', armariosFijadosEn: '', armariosPor: null, armariosPorNombre: '',
     borrada: false,
     creado: ahora(), actualizado: ahora(),
     creadoPor: usuario?.id || 'local',
@@ -449,24 +483,31 @@ function entregaVacia(unidadId, promoId) {
  * que vuelve del historial sigue siendo de quien la dio por hecha, no
  * de quien le devuelve la fecha. El servidor lo comprueba igual: solo
  * le cree al móvil un autor que exista y pueda poner fechas.
+ *
+ * Y un hecho que NO cambia no se sella. La excepción la dice `calcular`
+ * en `resellar` (una lista de sellos): la cita de OTRA visita de
+ * repasos puesta para el mismo día y a la misma hora que la anterior
+ * es una cita nueva aunque diga lo mismo, y lo que la hace nueva es su
+ * sello (ver citaPendiente en js/posventa.js).
  */
 async function cambiarEntrega(unidadId, promoId, calcular) {
   if (!puedePonerFechas(usuario)) throw new Error('Las fechas de entrega las pone el comercial o el administrador.');
   const previa = completarEntrega((await db.get('entregas', unidadId)) || entregaVacia(unidadId, promoId));
   const pedido = calcular(previa);
   if (!pedido) return previa;
-  const { firmas = null, ...cambios } = pedido;
+  const { firmas = null, resellar = null, ...cambios } = pedido;
   const cuando = ahora();
   const nueva = { ...previa, ...cambios, borrada: false, actualizado: cuando };
   // Una hora sin fecha no significa nada.
   if (!nueva.revision) nueva.revisionHora = '';
   if (!nueva.firma) nueva.firmaHora = '';
+  if (!nueva.posventa) nueva.posventaHora = '';
   // Ni la fecha que tenía la cita, si no hay marca de «hecha» que deshacer.
   if (!nueva.revisadaEn) nueva.revisadaDe = '';
   if (!nueva.revisadaDe) nueva.revisadaDeHora = '';
   nueva.visitasHechas = visitasDe(nueva);
   for (const h of HECHOS_ENTREGA) {
-    if (h.campos.every((c) => mismoValor(nueva[c], previa[c]))) continue;
+    if (h.campos.every((c) => mismoValor(nueva[c], previa[c])) && !resellar?.includes(h.sello)) continue;
     nueva[h.sello] = cuando;
     if (h.autor) {
       const firma = firmas?.[h.autor];
@@ -508,6 +549,7 @@ export async function fijarEntrega(unidadId, promoId, cambios) {
   return cambiarEntrega(unidadId, promoId, (previa) => {
     const pedidos = { ...cambios };
     delete pedidos.firmas;   // quién firma no lo dice quien llama
+    delete pedidos.resellar; // ni qué se sella sin haber cambiado
     const fecha = 'revision' in pedidos ? (pedidos.revision || '') : '';
     // Quien manda también la marca sabe lo que hace: no se le toca nada.
     if (!esDia(fecha) || fecha === (previa.revision || '') || 'revisadaEn' in pedidos) return pedidos;
@@ -640,6 +682,223 @@ export async function deshacerEntregada(unidadId, promoId) {
   return fijarEntrega(unidadId, promoId, { entregadaEn: '' });
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   «Entregadas»: las viviendas ya entregadas
+
+   Lo que se guarda de cada una después de entregarla, y dónde:
+
+     · La CITA de la visita de repasos y los CUATRO BOTONES (piscina,
+       climatización, domótica y armarios, cada uno con el día de su
+       cita con el instalador) son hechos de la ficha de entrega: los
+       ponen el comercial y el administrador y suben con ella.
+     · Cada VISITA hecha con la app es una lista con fase 'visita', y
+       sus repasos son repasos de siempre colgados de esa lista. NO se
+       mezclan con los demás: todo lo que enumera listas (más abajo)
+       aparta las de esa fase.
+     · El CONFORME firmado es una fila de `medios` de tipo 'documento'
+       cuyo `tareaId` es el id de la LISTA de la visita, con lo firmado
+       en `datos`. En el móvil que firmó lleva además el PDF (`bytes`).
+
+   «Cerrada» no se guarda: la calcula situacionPosventa(), en
+   js/posventa.js, con lo que devuelven estas funciones.
+   ═══════════════════════════════════════════════════════════════ */
+
+/**
+ * Pone, cambia o quita la cita de la visita de repasos. `dia` es un día
+ * suelto («2026-11-17»); vacío, quita la cita (y su hora). `hora`,
+ * «09:30» o vacío.
+ *
+ * `otra: true` es para la cita de OTRA visita en una vivienda que ya
+ * tiene una hecha y firmada: se sella aunque el día y la hora sean los
+ * mismos que tenía la anterior, porque lo que la deja por hacer es que
+ * su sello sea posterior al conforme.
+ */
+export async function fijarPosventa(unidadId, promoId, { dia = '', hora = '', otra = false } = {}) {
+  if (dia && !esDia(dia)) throw new Error('Ese día no existe.');
+  const horaBuena = dia && /^\d{2}:\d{2}$/.test(hora || '') ? hora : '';
+  return cambiarEntrega(unidadId, promoId, () => ({
+    posventa: dia || '',
+    posventaHora: horaBuena,
+    ...(otra && dia ? { resellar: ['posventaFijadaEn'] } : {}),
+  }));
+}
+
+/**
+ * Pulsa, mueve o despulsa uno de los cuatro botones. `clave` es
+ * 'piscina', 'clima', 'domotica' o 'armarios'; `valor`, el día de la
+ * cita con el instalador («2026-11-26», pasado o futuro), 'no-tiene'
+ * (solo piscina y climatización) o vacío para despulsar.
+ */
+export async function fijarBotonPosventa(unidadId, promoId, clave, valor) {
+  const boton = BOTONES.find((b) => b.clave === clave);
+  if (!boton) throw new Error('Ese botón no existe.');
+  const v = valor || '';
+  if (v === NO_TIENE) {
+    if (!boton.admiteNoTiene) throw new Error(`${boton.nombre}: todas las villas lo tienen.`);
+  } else if (v && !esDia(v)) {
+    throw new Error('Ese día no existe.');
+  }
+  return cambiarEntrega(unidadId, promoId, () => ({ [clave]: v }));
+}
+
+/**
+ * El conforme firmado de una visita: la fila viva de `medios` de tipo
+ * 'documento' que cuelga de su lista, o null si la visita sigue
+ * abierta. Se lee por el índice `tareaId` (no se recorre el almacén,
+ * que lleva los bytes de todas las fotos). La fila sale tal cual está
+ * guardada: si este móvil tiene el PDF, va en `bytes`; para abrirlo,
+ * ficheroDeConforme().
+ *
+ * Una visita tiene UN conforme. Si este móvil guardara dos (el suyo,
+ * que el servidor rechazó, y el que firmó otro), manda el que ya está
+ * en el servidor.
+ */
+export async function conformeDeLista(listaId) {
+  const suyos = (await db.porIndice('medios', 'tareaId', listaId)).filter(esConforme);
+  if (!suyos.length) return null;
+  suyos.sort((a, b) => (a.subido ? 0 : 1) - (b.subido ? 0 : 1)
+    || String(a.creado || '').localeCompare(String(b.creado || '')));
+  return suyos[0];
+}
+
+/**
+ * Las visitas de repasos de una vivienda, de la más antigua a la más
+ * reciente: [{ lista, repasos, conforme }]. `repasos` son los vivos de
+ * esa lista, en su orden; `conforme`, su papel firmado o null.
+ */
+export async function visitasDeUnidad(unidadId) {
+  const listas = (await db.porIndice('listas', 'unidadId', unidadId))
+    .filter((l) => !l.borrada && esListaDeVisita(l))
+    .sort((a, b) => String(a.creado || '').localeCompare(String(b.creado || '')));
+  const visitas = [];
+  for (const l of listas) {
+    visitas.push({ lista: l, repasos: await tareasDeLista(l.id), conforme: await conformeDeLista(l.id) });
+  }
+  return visitas;
+}
+
+/** Los ids de los conformes firmados en este móvil que aún no han subido. */
+async function conformesPendientes() {
+  const ids = await db.meta.get('conformes-pendientes');
+  return Array.isArray(ids) ? ids.filter((id) => typeof id === 'string' && id) : [];
+}
+
+/**
+ * Los conformes firmados en ESTE móvil, todavía sin subir, cuya visita
+ * no está viva aquí: alguien la borró en otro móvil y a este le ha
+ * bajado borrada. El papel firmado manda —el servidor resucita la
+ * visita cuando el conforme sube—, así que mientras tanto no puede
+ * dejar de verse: la ficha los enseña sueltos.
+ */
+export async function conformesSueltosDeUnidad(unidadId) {
+  const sueltos = [];
+  for (const id of await conformesPendientes()) {
+    const m = await db.get('medios', id);
+    if (!esConforme(m) || m.datos?.unidadId !== unidadId) continue;
+    const l = await db.get('listas', m.tareaId);
+    if (l && !l.borrada) continue;
+    sueltos.push(m);
+  }
+  return sueltos;
+}
+
+/**
+ * Todo lo de «Entregadas» de una promoción, de una vez: un mapa
+ * unidadId → { entrega, visitas, sueltos } con las viviendas que
+ * FIGURAN COMO ENTREGADAS (lo han apuntado el comercial o el
+ * administrador; una firma con la fecha pasada no basta) y ninguna más.
+ * Las listas y los repasos se leen una sola vez para las cincuenta.
+ */
+export async function posventaDePromo(promoId) {
+  const salida = new Map();
+  for (const e of await entregasDePromo(promoId)) {
+    if (e.entregadaEn) salida.set(e.unidadId, { entrega: e, visitas: [], sueltos: [] });
+  }
+  if (!salida.size) return salida;
+
+  const listas = (await db.getAll('listas'))
+    .filter((l) => !l.borrada && l.promoId === promoId && esListaDeVisita(l) && salida.has(l.unidadId))
+    .sort((a, b) => String(a.creado || '').localeCompare(String(b.creado || '')));
+  const porLista = new Map(listas.map((l) => [l.id, []]));
+  if (listas.length) {
+    for (const t of await db.getAll('tareas')) {
+      if (!t.borrada && porLista.has(t.listaId)) porLista.get(t.listaId).push(t);
+    }
+  }
+  for (const l of listas) {
+    salida.get(l.unidadId).visitas.push({
+      lista: l,
+      repasos: porLista.get(l.id).sort((a, b) => (a.orden || 0) - (b.orden || 0)),
+      conforme: await conformeDeLista(l.id),
+    });
+  }
+  for (const id of await conformesPendientes()) {
+    const m = await db.get('medios', id);
+    const ficha = esConforme(m) ? salida.get(m.datos?.unidadId) : null;
+    if (!ficha) continue;
+    const l = await db.get('listas', m.tareaId);
+    if (!l || l.borrada) ficha.sueltos.push(m);
+  }
+  return salida;
+}
+
+/**
+ * El PDF de un conforme firmado, como File listo para entregar. Si
+ * este móvil lo tiene (es el que firmó, o ya lo abrió), sale de aquí y
+ * funciona sin cobertura; si no, se pide al servidor, que solo se lo da
+ * a quien hace visitas. Lanza un error con `codigo`: 'red' sin
+ * cobertura, 'sin-permiso' si la sesión no puede abrirlo.
+ *
+ * `nombre` es el del fichero cuando la fila no lo trae (la de un
+ * conforme firmado en otro móvil): lo pone quien llama.
+ */
+export async function ficheroDeConforme(medio, nombre = '') {
+  if (!esConforme(medio)) throw new api.ApiError('Ese conforme ya no está.', 0, 'sin-conforme');
+  const como = medio.nombre || nombre || `${medio.id}.pdf`;
+  const guardado = await db.get('medios', medio.id);
+  const bytes = guardado?.bytes || medio.bytes || null;
+  if (bytes && bytes.byteLength) return new File([bytes], como, { type: 'application/pdf' });
+  const blob = guardado?.blob instanceof Blob ? guardado.blob : (medio.blob instanceof Blob ? medio.blob : null);
+  if (blob && blob.size) return new File([blob], como, { type: 'application/pdf' });
+
+  if (!api.HAY_SERVIDOR || usuario?.local) throw new api.ApiError('El conforme no está en este móvil.', 0, 'sin-fichero');
+  if (!puedeHacerVisita(usuario)) {
+    throw new api.ApiError('El conforme firmado lo abren el administrador, el comercial y la dirección facultativa.', 403, 'sin-permiso');
+  }
+  if (!navigator.onLine) throw new api.ApiError('Sin cobertura: el conforme se podrá abrir cuando vuelva.', 0, 'red');
+  let res;
+  try {
+    res = await fetch(api.urlMedio(medio.id), { credentials: 'include', cache: 'no-store' });
+  } catch {
+    throw new api.ApiError('Sin cobertura: el conforme se podrá abrir cuando vuelva.', 0, 'red');
+  }
+  if (!res.ok) {
+    let datos = null;
+    try { datos = await res.json(); } catch { /* respuesta sin JSON */ }
+    throw new api.ApiError(datos?.error || 'No se ha podido abrir el conforme.', res.status, datos?.codigo || '');
+  }
+  const pdf = await res.arrayBuffer();
+  if (!pdf.byteLength) throw new api.ApiError('El conforme ha llegado vacío.', 0, 'vacio');
+  return new File([pdf], como, { type: 'application/pdf' });
+}
+
+/**
+ * «Empezar la visita»: abre la lista de una visita de repasos. SIEMPRE
+ * con su fase (sin ella, crearLista() la tomaría por un parte
+ * post-entrega en una vivienda ya revisada). Si la vivienda ya tiene
+ * una visita empezada y sin firmar en este móvil, devuelve esa: un
+ * segundo toque no abre otra. No hace falta que haya cita ni que sea
+ * de hoy.
+ */
+export async function empezarVisita(unidadId, promoId) {
+  if (!puedeHacerVisita(usuario)) {
+    throw new Error('La visita de repasos la hacen el administrador, el comercial y la dirección facultativa.');
+  }
+  const abierta = (await visitasDeUnidad(unidadId)).filter((v) => !v.conforme).pop();
+  if (abierta) return abierta.lista;
+  return crearLista({ unidadId, promoId, fase: FASE_VISITA, nombre: 'Visita de repasos' });
+}
+
 /**
  * Los repasos de los partes post-entrega que aún no tienen el visto
  * bueno, por vivienda: son las «incidencias» del banner rojo.
@@ -666,9 +925,16 @@ export async function partePostDeUnidad(unidadId) {
 }
 
 /* ─── Listas de repaso ────────────────────────────────────────── */
+/* OJO, de aquí para abajo: las listas de las VISITAS DE REPASOS (fase
+   'visita', la sección «Entregadas») no son partes y no se mezclan con
+   los demás. Todo lo que enumera las listas de una vivienda, de una
+   promoción o de la obra entera las aparta con esListaDeVisita(), en
+   la misma línea en que las lee: quitada la lista, sus repasos caen
+   solos. Las que van por una lista concreta (lista(), tareasDeLista(),
+   contarLista()) no filtran: son las que usa la propia visita. */
 export async function listasDeUnidad(unidadId) {
   const todas = await db.porIndice('listas', 'unidadId', unidadId);
-  return todas.filter((l) => !l.borrada).sort((a, b) => b.creado.localeCompare(a.creado));
+  return todas.filter((l) => !l.borrada && !esListaDeVisita(l)).sort((a, b) => b.creado.localeCompare(a.creado));
 }
 
 export async function lista(id) {
@@ -1087,7 +1353,9 @@ export async function urlDePortada(tarea) {
  * tareas para poder filtrar la lista de viviendas por gremio.
  */
 export async function resumenPorUnidad(promoId) {
-  const listas = (await db.getAll('listas')).filter((l) => !l.borrada && l.promoId === promoId);
+  // Sin las visitas de repasos: una vivienda finalizada no vuelve a
+  // «Inacabadas» por un repaso apuntado después de entregarla.
+  const listas = (await db.getAll('listas')).filter((l) => !l.borrada && l.promoId === promoId && !esListaDeVisita(l));
   const tareas = (await db.getAll('tareas')).filter((t) => !t.borrada);
   const unidadDeLista = new Map(listas.map((l) => [l.id, l.unidadId]));
 
@@ -1208,7 +1476,7 @@ export function oficiosSegun(c, estado) {
  * es la salida cuando no encaja ninguno.
  */
 export async function oficiosMasUsados(unidadId, cuantos = 5) {
-  const listas = (await db.getAll('listas')).filter((l) => !l.borrada);
+  const listas = (await db.getAll('listas')).filter((l) => !l.borrada && !esListaDeVisita(l));
   const deAqui = new Set(listas.filter((l) => l.unidadId === unidadId).map((l) => l.id));
   const vivas = new Set(listas.map((l) => l.id));
   const tareas = (await db.getAll('tareas')).filter((t) => !t.borrada && vivas.has(t.listaId));
@@ -1369,7 +1637,7 @@ export async function borrarRecorrido(id) {
 /** Cuántas actas vivas tiene una promoción. Para el enlace al archivo. */
 export async function cuantasActas(promoId = null) {
   return (await db.getAll('listas'))
-    .filter((l) => !l.borrada && (!promoId || l.promoId === promoId)).length;
+    .filter((l) => !l.borrada && !esListaDeVisita(l) && (!promoId || l.promoId === promoId)).length;
 }
 
 /** Conteo de un acta. `hechas` son las verificadas y solo esas. */
@@ -1412,7 +1680,7 @@ export const avance = (c) => (c && c.total ? Math.round((100 * c.hechas) / c.tot
  */
 export async function actasConDatos({ promoId = null } = {}) {
   const listas = (await db.getAll('listas'))
-    .filter((l) => !l.borrada && (!promoId || l.promoId === promoId));
+    .filter((l) => !l.borrada && !esListaDeVisita(l) && (!promoId || l.promoId === promoId));
   const tareas = (await db.getAll('tareas')).filter((t) => !t.borrada);
 
   return fichasDeActa(listas, tareas)
@@ -1480,7 +1748,7 @@ function participantes(lista, tareas) {
 
 /** Cifras de los dos widgets de la portada. */
 export async function resumenGeneral() {
-  const listas = (await db.getAll('listas')).filter((l) => !l.borrada);
+  const listas = (await db.getAll('listas')).filter((l) => !l.borrada && !esListaDeVisita(l));
   const vivas = new Set(listas.map((l) => l.id));
   const tareas = (await db.getAll('tareas')).filter((t) => !t.borrada && vivas.has(t.listaId));
   const c = contar(tareas);
@@ -1505,7 +1773,9 @@ export async function resumenGeneral() {
  * así que la fecha se parte en local y no cortando la cadena ISO.
  */
 export async function verificadasPorDia(dias = 7) {
-  const tareas = (await db.getAll('tareas')).filter((t) => !t.borrada && hecha(t) && t.estadoEn);
+  const deVisita = new Set((await db.getAll('listas')).filter(esListaDeVisita).map((l) => l.id));
+  const tareas = (await db.getAll('tareas'))
+    .filter((t) => !t.borrada && hecha(t) && t.estadoEn && !deVisita.has(t.listaId));
   const cuenta = new Map();
   for (const t of tareas) {
     const d = new Date(t.estadoEn);
@@ -1542,7 +1812,9 @@ const claveDia = (d) =>
  * salió cada cosa, sino qué queda por hacer en esa casa.
  */
 export async function tareasDeUnidad(unidadId) {
-  const listas = (await db.getAll('listas')).filter((l) => !l.borrada && l.unidadId === unidadId);
+  // Los repasos de las visitas de repasos no salen aquí: se ven solo en
+  // «Entregadas» (store.visitasDeUnidad).
+  const listas = (await db.getAll('listas')).filter((l) => !l.borrada && l.unidadId === unidadId && !esListaDeVisita(l));
   const suyas = new Set(listas.map((l) => l.id));
   const tareas = (await db.getAll('tareas')).filter((t) => !t.borrada && suyas.has(t.listaId));
   // Las fichas se montan antes de ordenar las tareas para que la pila de
@@ -1573,7 +1845,7 @@ export async function tareasDeUnidad(unidadId) {
  */
 export async function tareasDeLaObra(promoId) {
   const listas = (await db.getAll('listas'))
-    .filter((l) => !l.borrada && (!promoId || l.promoId === promoId));
+    .filter((l) => !l.borrada && !esListaDeVisita(l) && (!promoId || l.promoId === promoId));
   const donde = new Map(listas.map((l) => [l.id, l.unidadId]));
   const tareas = (await db.getAll('tareas')).filter((t) => !t.borrada && donde.has(t.listaId));
 
@@ -1604,7 +1876,7 @@ export async function tareasDeLaObra(promoId) {
 
 export async function tareasRecientes(n = 12, { promoId = null } = {}) {
   const listas = (await db.getAll('listas'))
-    .filter((l) => !l.borrada && (!promoId || l.promoId === promoId));
+    .filter((l) => !l.borrada && !esListaDeVisita(l) && (!promoId || l.promoId === promoId));
   const donde = new Map(listas.map((l) => [l.id, l.unidadId]));
   const tareas = (await db.getAll('tareas'))
     .filter((t) => !t.borrada && donde.has(t.listaId))
@@ -1619,7 +1891,7 @@ export async function tareasRecientes(n = 12, { promoId = null } = {}) {
 
 /** Cifras de toda una promoción, para la barra de la portada. */
 export async function resumenPromocion(promoId) {
-  const listas = (await db.getAll('listas')).filter((l) => !l.borrada && l.promoId === promoId);
+  const listas = (await db.getAll('listas')).filter((l) => !l.borrada && l.promoId === promoId && !esListaDeVisita(l));
   const suyas = new Set(listas.map((l) => l.id));
   const tareas = (await db.getAll('tareas')).filter((t) => !t.borrada && suyas.has(t.listaId));
   return { ...contar(tareas), listas: listas.length };
@@ -1635,7 +1907,9 @@ export async function resumenPromocion(promoId) {
  * mezclado con los mensajes generales de la promoción.
  */
 export async function datosHome(promoId) {
-  const listas = (await db.getAll('listas')).filter((l) => !l.borrada && l.promoId === promoId);
+  // La portada no cuenta los repasos de las visitas de repasos, ni los
+  // saca en la actividad reciente: se ven solo en «Entregadas».
+  const listas = (await db.getAll('listas')).filter((l) => !l.borrada && l.promoId === promoId && !esListaDeVisita(l));
   const casaDe = new Map(listas.map((l) => [l.id, l.unidadId]));
   const tareas = (await db.getAll('tareas')).filter((t) => !t.borrada && casaDe.has(t.listaId));
   const c = contar(tareas);
@@ -1945,8 +2219,14 @@ export async function purgarSinFotografia({ forzar = false } = {}) {
 
   const corte = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
   let borradas = 0;
+  // Los repasos de una visita de repasos no se purgan nunca, tengan
+  // foto o no: figuran en un papel que ha firmado el comprador, y no
+  // pueden desaparecer porque se les haya perdido la fotografía. Se
+  // miran TODAS las listas de esa fase, también las borradas (la visita
+  // puede volver: el conforme la resucita al subir).
+  const deVisita = new Set((await db.getAll('listas')).filter(esListaDeVisita).map((l) => l.id));
   const tareas = (await db.getAll('tareas'))
-    .filter((t) => !t.borrada && String(t.creado || '') < corte);
+    .filter((t) => !t.borrada && String(t.creado || '') < corte && !deVisita.has(t.listaId));
   for (const t of tareas) {
     const medios = await mediosDeTarea(t.id);
     if (medios.some((m) => m.tipo === 'imagen' && !m.perdido)) continue;
@@ -2391,7 +2671,9 @@ const MARGEN_NOTA = 90 * 1000;
  * reciente a la más antigua.
  */
 export async function actasPorDia(promoId) {
-  const listas = (await db.getAll('listas')).filter((l) => !l.borrada && l.promoId === promoId);
+  // Una visita de repasos no es un parte: no sale en el historial ni en
+  // el parte del día.
+  const listas = (await db.getAll('listas')).filter((l) => !l.borrada && l.promoId === promoId && !esListaDeVisita(l));
   const casaDe = new Map(listas.map((l) => [l.id, l.unidadId]));
   const tareas = (await db.getAll('tareas')).filter((t) => !t.borrada && casaDe.has(t.listaId));
   const porTarea = new Map(tareas.map((t) => [t.id, t]));

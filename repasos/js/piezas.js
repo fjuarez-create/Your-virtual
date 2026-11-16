@@ -14,6 +14,7 @@ import {
   PRIORIDADES, esPrioridad,
 } from './catalog.js';
 import { ir, conFiltros } from './app.js';
+import { ICONO_ENTREGADAS } from './posventa.js';
 
 /* Medidas de la cabecera, en un sitio para que las dos —la de las
    raíces y la de dentro— no se puedan separar nunca. */
@@ -1138,11 +1139,16 @@ export function tareaFila(t, { portada, donde, filtros = null } = {}) {
    ── GEMELO de --cab-bola en css/app.css ── */
 export const CAB_BOLA = 55;
 
-/* La cabecera de fuera lleva desde noviembre de 2026 CINCO bolas (la
-   quinta es el calendario de entregas), y a 55 no caben con la cara en
-   un iPhone de 390: ésas bajan a 48. Las de dentro —volver, título,
-   tres puntos— siguen a 55.
-   ── GEMELO de --cab-bola en .d-cab:not(.dentro), css/app.css ── */
+/* La cabecera de fuera lleva SEIS bolas (la quinta es el calendario de
+   entregas; la sexta, «Entregadas», las viviendas ya entregadas), y con
+   la cara no caben a un solo tamaño en todos los móviles: miden 48 de
+   400 px de ancho para arriba, 44 entre 351 y 399 y 40 por debajo. Ese
+   corte vive SOLO en el CSS (.d-cab:not(.dentro), css/app.css), y por
+   eso la cara de fuera ya no es gemela de nada: cabecera() le quita las
+   medidas que le pone avatar() y manda la hoja de estilos, así mide
+   siempre lo que las bolas de al lado. Este número es solo con lo que
+   nace, antes de que el CSS diga el suyo. Las de dentro —volver,
+   título, tres puntos— siguen a 55 y siguen siendo gemelas. */
 export const CAB_BOLA_FUERA = 48;
 
 /* En qué sección estaba la última cabecera de fuera que se pintó, para
@@ -1155,8 +1161,8 @@ let seccionPintada = null;
  * La cabecera de todas las pantallas, con dos formas y ninguna más.
  *
  *   cabecera({ seccion: 'inicio' })
- *       La de fuera, la de las tres raíces: la cara a la izquierda
- *       —que lleva a Ajustes— y las tres bolas de navegación a la
+ *       La de fuera, la de las pantallas raíz: la cara a la izquierda
+ *       —que lleva a Ajustes— y las seis bolas de navegación a la
  *       derecha, con la de la sección en la que estás en negro.
  *
  *   cabecera({ volver: '#/viviendas', titulo: 'Villa 01', menu: abrir })
@@ -1182,7 +1188,7 @@ let seccionPintada = null;
  * a «nueva lista»—: ponerTitulo() y ponerVuelta().
  */
 export function cabecera({ seccion, volver, titulo = '', menu, derecha } = {}) {
-  /* ─── La de fuera: la cara y las tres bolas ─── */
+  /* ─── La de fuera: la cara y las seis bolas ─── */
   if (seccion) {
     /* El negro de la bola entra fundido solo cuando se CAMBIA de
        sección, no cada vez que se pinta. La pantalla se repinta sola en
@@ -1202,14 +1208,25 @@ export function cabecera({ seccion, volver, titulo = '', menu, derecha } = {}) {
         'aria-current': seccion === clave ? 'true' : null,
         onclick: seccion === clave ? null : () => ir(adonde),
       }, icon(icono));
+    /* La cara mide lo que las bolas, y cuánto miden las bolas lo dice
+       el CSS según el ancho del móvil (48, 44 o 40). avatar() escribe
+       sus medidas en el propio elemento, y eso le gana a la hoja de
+       estilos: se le quitan aquí, y manda .d-cab .avatar. */
+    const cara = avatar(store.sesion(), { tam: CAB_BOLA_FUERA, onclick: () => ir('#/ajustes') });
+    cara.style.width = '';
+    cara.style.height = '';
+    cara.style.flex = '';
+    cara.style.fontSize = '';
     return h('div.d-cab', null,
-      avatar(store.sesion(), { tam: CAB_BOLA_FUERA, onclick: () => ir('#/ajustes') }),
+      cara,
       h('div.d-cab-menu', null,
         bola('inicio', 'brujula', 'Inicio', '#/'),
         bola('obra', 'grua', 'Reuniones de obra', '#/obra'),
         bola('viviendas', 'casa', 'Repasos de viviendas', '#/viviendas'),
         bola('listas', 'periodico', 'Partes', '#/listas'),
         bola('entregas', 'calendario', 'Entregas', '#/entregas'),
+        // La sexta, la de más a la derecha: las viviendas ya entregadas.
+        bola('entregadas', ICONO_ENTREGADAS, 'Entregadas', '#/entregadas'),
       ),
     );
   }
