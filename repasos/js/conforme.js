@@ -351,11 +351,11 @@ async function recorrido({ lista, entrega, repasos: repasosAlAbrir }) {
 
   function pintarHoja() {
     paso = 'hoja';
-    const error = (campo) => (errores[campo] ? h('p.d-conforme-error', { role: 'alert', 'data-campo': campo }, errores[campo]) : null);
+    const error = (campo) => (errores[campo] ? h('p.d-conforme-error', { role: 'alert', 'data-error': campo }, errores[campo]) : null);
     const quitarError = (campo, nodo) => {
       if (!errores[campo]) return;
       delete errores[campo];
-      nodo?.parentElement?.querySelector(`.d-conforme-error[data-campo="${campo}"]`)?.remove();
+      nodo?.closest('.d-conforme-fila')?.querySelector(`.d-conforme-error[data-error="${campo}"]`)?.remove();
     };
 
     /* La fecha de la visita */
@@ -502,7 +502,7 @@ async function recorrido({ lista, entrega, repasos: repasosAlAbrir }) {
         h('p.d-conforme-rotulo', null, FRASES.rotuloFirma), campoDeNombre(0, FRASES.rotuloFirma),
         h('p.d-conforme-pista', null, FRASES.pistaFirma), error('firmante1'), error('firmas'),
         zonaSegunda),
-      generales.length ? h('div.d-conforme-aviso.rojo', { role: 'alert', 'data-campo': 'general' },
+      generales.length ? h('div.d-conforme-aviso.rojo', { role: 'alert', 'data-error': 'general' },
         icon('alert'), h('div.grow', null, generales.map((frase) => h('p', null, frase)))) : null,
     );
     poner(pie, h('button.d-boton-negro', { type: 'button', 'data-accion': 'ver-documento', onclick: verDocumento }, FRASES.verDocumento));
