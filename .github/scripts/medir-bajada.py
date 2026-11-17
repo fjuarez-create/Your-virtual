@@ -154,6 +154,8 @@ def bajar(desde):
     muestra = None  # una foto, para mirar_ficheros(): la más reciente
     ficha = None    # las claves de una ficha de entrega, para saber qué versión las sirve
     hoy_listas = {}       # las listas creadas hoy: fase, vivienda, quién, borrada, hora
+    fichas_con_postventa = set()  # fichas con algún dato de Postventa GUARDADO en el servidor
+    conformes_con_datos = set()   # conformes (medios de tipo documento) con sus datos guardados
     repasos_por_lista = {}  # cuántos repasos distintos tiene cada lista
     while tandas < TOPE_TANDAS:
         antes = time.monotonic()
@@ -184,6 +186,13 @@ def bajar(desde):
                         str(fila.get("creado") or "")[11:13])
                 if t == "tareas" and isinstance(fila, dict):
                     repasos_por_lista.setdefault(fila.get("listaId"), set()).add(fila.get("id"))
+                if t == "entregas" and isinstance(fila, dict) and any(
+                        str(fila.get(k) or "").strip() not in ("", "null", "None")
+                        for k in ("posventa", "posventaHora", "piscina", "clima", "domotica", "armarios")):
+                    fichas_con_postventa.add(fila.get("id") or fila.get("unidadId"))
+                if (t == "medios" and isinstance(fila, dict) and str(fila.get("tipo") or "") == "documento"
+                        and fila.get("datos")):
+                    conformes_con_datos.add(fila.get("id"))
                 if t == "entregas" and ficha is None and isinstance(fila, dict):
                     ficha = sorted(fila.keys())
                 if (t == "medios" and not fila.get("borrada")
@@ -215,6 +224,7 @@ def bajar(desde):
         "ultimo": ultimo, "despues": {t: len(despues[t]) for t in TABLAS},
         "muestra": muestra, "ficha": ficha,
         "hoy_listas": hoy_listas, "repasos_por_lista": repasos_por_lista,
+        "fichas_con_postventa": len(fichas_con_postventa), "conformes_con_datos": len(conformes_con_datos),
     }
 
 
@@ -468,6 +478,14 @@ def main():
     #     botones)? Son columnas que añade la versión 23 del esquema: si
     #     las fichas las traen, la base de producción ha llegado a esa
     #     versión. Solo se miran los NOMBRES de los campos de una ficha.
+    # Las claves salen siempre (el servidor pone '' si la columna no
+    #     existe), así que lo que de verdad prueba que la base está en la
+    #     versión 23 es que haya DATOS guardados en esas columnas nuevas.
+    lineas.append("LO DE POSTVENTA, GUARDADO DE VERDAD: %d fichas de entrega con alguna cita o botón, y %d conformes con sus datos.%s"
+                  % (todo.get("fichas_con_postventa", 0), todo.get("conformes_con_datos", 0),
+                     " Las columnas nuevas existen y guardan: la base está en la versión 23."
+                     if todo.get("fichas_con_postventa", 0) or todo.get("conformes_con_datos", 0)
+                     else " Sin datos todavía: esto no prueba en qué versión está la base."))
     claves = todo.get("ficha")
     if claves is None:
         lineas.append("LAS FICHAS DE ENTREGA: no ha bajado ninguna con la que mirar.")
