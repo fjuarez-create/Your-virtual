@@ -302,14 +302,25 @@ function posventa_red_de_lista(array $registro, array $yo): array
  *
  *   - 'borrada' => 1          el repaso se guarda ya borrado: es nuevo
  *                             y no responde de él nadie que haga
- *                             visitas (R5), o la visita ya está firmada
- *                             y él no figura en el conforme (R6);
+ *                             visitas (R5, y R6 si la visita ya está
+ *                             firmada y él no figura en el conforme);
  *   - 'conservar' => true     la visita está firmada y el repaso ya
  *                             existía: `borrada`, `texto` y `zona` se
  *                             quedan como estaban, sea quien sea (R7).
  *
  * Un repaso firmado que llega DESPUÉS que su conforme (su id está en
- * `datos.repasos`) se guarda vivo: lo firmado es lo que dice el papel.
+ * `datos.repasos`) se guarda vivo, lo suba quien lo suba: lo firmado es
+ * lo que dice el papel.
+ *
+ * Y el repaso NUEVO que llega a una visita ya firmada SIN figurar en su
+ * conforme (R6) se juzga igual que en una visita sin firmar: vivo si
+ * responde de él quien hace visitas —posventa_puede()—, borrado si no.
+ * Hasta el 17-11-2026 se guardaba borrado fuera de quien fuera, y con
+ * dos móviles en la misma visita se perdía sin aviso, con su foto, lo
+ * que el segundo apuntaba sin cobertura y subía después de la firma. El
+ * papel no cambia: ese repaso no está en él, y la pantalla lo enseña
+ * aparte, como «añadido después de la firma».
+ *
  * Vacío si la lista no es de visita.
  */
 function posventa_red_de_tarea(string $tareaId, string $listaId, ?array $fila, ?string $creadoPor, array $yo): array
@@ -321,8 +332,8 @@ function posventa_red_de_tarea(string $tareaId, string $listaId, ?array $fila, ?
     if ($fila !== null) {
         return $conforme !== null ? ['conservar' => true] : [];
     }
-    if ($conforme !== null) {
-        return in_array(strtolower($tareaId), $conforme['repasos'], true) ? [] : ['borrada' => 1];
+    if ($conforme !== null && in_array(strtolower($tareaId), $conforme['repasos'], true)) {
+        return [];
     }
     return posventa_puede($creadoPor, $yo) ? [] : ['borrada' => 1];
 }

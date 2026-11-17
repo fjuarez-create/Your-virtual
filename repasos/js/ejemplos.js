@@ -222,7 +222,9 @@ export function pareceDePrueba(texto) {
  * una casa no se repite ninguno hasta agotar los cuarenta.
  */
 export async function candidatosDePrueba(promoId) {
-  const listas = (await db.getAll('listas')).filter((l) => !l.borrada && l.promoId === promoId);
+  // Los repasos de una visita de repasos no se tocan desde aquí: solo
+  // salen dentro de «Entregadas» (ver esListaDeVisita, en catalog.js).
+  const listas = (await db.getAll('listas')).filter((l) => !l.borrada && l.promoId === promoId && !esListaDeVisita(l));
   const casaDe = new Map(listas.map((l) => [l.id, l.unidadId]));
   const tareas = (await db.getAll('tareas'))
     .filter((t) => !t.borrada && casaDe.has(t.listaId) && pareceDePrueba(t.texto))

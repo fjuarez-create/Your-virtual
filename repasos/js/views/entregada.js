@@ -201,7 +201,7 @@ export async function render({ promoId, unidadId }) {
       : h('button.d-boton-negro.pv-boton-visita', { type: 'button', 'data-accion': 'empezar', onclick: empezar },
           icon('camera'), firmadas.length || sueltos.length ? 'Empezar otra visita' : 'Empezar la visita');
 
-  const botonFecha = !poneFechas || cita.caso === 'cita' ? null
+  const botonFecha = !poneFechas || cita.caso === 'cita' || cita.caso === 'en-curso' ? null
     : h('button.d-cal-poner.pv-poner-fecha', {
         type: 'button', 'data-accion': cita.caso === 'hecha' ? 'otra-fecha' : 'poner-fecha',
         onclick: () => (cita.caso === 'hecha' ? otraFecha() : ponerFecha()),
