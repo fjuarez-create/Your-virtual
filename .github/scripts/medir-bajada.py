@@ -43,6 +43,10 @@ TOPE_TANDAS = 600
 # se encendió la bajada por recepción en producción. Se puede cambiar
 # con MEDIR_DESPUES_DE para mirar otro tramo.
 DESPUES_DE = os.environ.get("MEDIR_DESPUES_DE", "2026-11-11T12:14:00")
+# El día de hoy (UTC = Canarias en invierno), para contar las listas creadas hoy.
+HOY = time.strftime("%Y-%m-%d", time.gmtime())
+# Las fases que pone la app; cualquier otra palabra se cuenta como «otra».
+FASES_CONOCIDAS = ("pre", "post", "unica", "visita")
 
 # El taller vive en el mismo dominio, en /taller. Solo se le pregunta
 # qué cookie de sesión pone (ver «LA SESIÓN», abajo); no se entra en él.
@@ -149,6 +153,8 @@ def bajar(desde):
     motivo = ""
     muestra = None  # una foto, para mirar_ficheros(): la más reciente
     ficha = None    # las claves de una ficha de entrega, para saber qué versión las sirve
+    hoy_listas = {}       # las listas creadas hoy: fase, vivienda, quién, borrada, hora
+    repasos_por_lista = {}  # cuántos repasos distintos tiene cada lista
     while tandas < TOPE_TANDAS:
         antes = time.monotonic()
         codigo, peso, r = pedir("cambios?desde=" + urllib.parse.quote(marca, safe=""))
@@ -171,6 +177,13 @@ def bajar(desde):
                     ultimo = cuando
                 if cuando >= DESPUES_DE:
                     despues[t].add(fila.get("id"))
+                if t == "listas" and isinstance(fila, dict) and str(fila.get("creado") or "")[:10] == HOY:
+                    hoy_listas[fila.get("id")] = (
+                        str(fila.get("fase") or ""), str(fila.get("unidadId") or ""),
+                        str(fila.get("creadoPor") or ""), bool(fila.get("borrada")),
+                        str(fila.get("creado") or "")[11:13])
+                if t == "tareas" and isinstance(fila, dict):
+                    repasos_por_lista.setdefault(fila.get("listaId"), set()).add(fila.get("id"))
                 if t == "entregas" and ficha is None and isinstance(fila, dict):
                     ficha = sorted(fila.keys())
                 if (t == "medios" and not fila.get("borrada")
@@ -201,7 +214,39 @@ def bajar(desde):
         "filas": filas, "distintas": {t: len(vistas[t]) for t in TABLAS},
         "ultimo": ultimo, "despues": {t: len(despues[t]) for t in TABLAS},
         "muestra": muestra, "ficha": ficha,
+        "hoy_listas": hoy_listas, "repasos_por_lista": repasos_por_lista,
     }
+
+
+def mirar_listas_de_hoy(b):
+    """Cuántas listas se han creado hoy y cómo se reparten. El registro es
+    público: solo números y las palabras de «fase», que son de la app.
+    Ni nombres, ni identificadores, ni viviendas."""
+    hoy = b.get("hoy_listas") or {}
+    if not hoy:
+        return "LISTAS CREADAS HOY (%s, por el reloj del móvil): ninguna." % HOY
+    fases, por_vivienda_y_fase, por_persona, por_hora = {}, {}, {}, {}
+    viviendas = set()
+    borradas = sin_repasos = 0
+    for ident, (fase, vivienda, persona, borrada, hora) in hoy.items():
+        fase = fase if fase in FASES_CONOCIDAS else "otra"
+        fases[fase] = fases.get(fase, 0) + 1
+        clave = (vivienda, fase)
+        por_vivienda_y_fase[clave] = por_vivienda_y_fase.get(clave, 0) + 1
+        por_persona[persona] = por_persona.get(persona, 0) + 1
+        por_hora[hora] = por_hora.get(hora, 0) + 1
+        viviendas.add(vivienda)
+        borradas += 1 if borrada else 0
+        if not b["repasos_por_lista"].get(ident):
+            sin_repasos += 1
+    return ("LISTAS CREADAS HOY (%s, por el reloj del móvil): %d, de ellas %d borradas y %d sin ningún repaso"
+            " · por fase: %s · en %d viviendas · por %d personas (la que más, %d)"
+            " · la misma vivienda y fase, como mucho %d veces · por hora (UTC): %s."
+            % (HOY, len(hoy), borradas, sin_repasos,
+               ", ".join("%s %d" % (f, n) for f, n in sorted(fases.items())),
+               len(viviendas), len(por_persona), max(por_persona.values()),
+               max(por_vivienda_y_fase.values()),
+               ", ".join("%sh %d" % (h or "?", n) for h, n in sorted(por_hora.items()))))
 
 
 def contar(b):
@@ -430,6 +475,10 @@ def main():
         lineas.append("LAS FICHAS DE ENTREGA traen ya lo de «Entregadas» (la cita de la visita y los cuatro botones): la base está en la versión nueva.")
     else:
         lineas.append("LAS FICHAS DE ENTREGA no traen todavía lo de «Entregadas»: el servidor es el de antes, o la base no ha llegado a la versión nueva.")
+
+    # 4 ter · Las listas creadas hoy, en números (para saber si un día con
+    #     muchas listas nuevas es trabajo del equipo o algo que las repite).
+    lineas.append(mirar_listas_de_hoy(todo))
 
     # 5 · Las fotos, por su dirección directa y sin sesión. Solo dice lo
     #     que contesta el servidor, y tampoco pone la medición en rojo.
