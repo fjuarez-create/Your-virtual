@@ -25,9 +25,9 @@
    Quien no puede algo no ve el botón.
 
    Ningún repaso lleva fecha propia: la única fecha es la «Fecha
-   orientativa de finalización» del conforme. Y aquí no se lee nunca
-   «acta» ni «tarea»: es el «Conforme de la visita» y son los «repasos
-   de la visita».
+   orientativa de finalización» del conforme. Y aquí cada cosa se llama
+   con su palabra del diccionario de la casa y con ninguna otra: el
+   «Conforme de la visita» y los «repasos de la visita».
 
    Si la lista no existe, está borrada, no es de visita o es de otra
    vivienda, vuelve a la ficha de la vivienda. */

@@ -40,7 +40,9 @@
    mientras se prepara el papel no hace nada. En la firma manda la capa
    de la firma, que tiene sus propias reglas.
 
-   Nunca «acta» ni «tarea» en nada que se lea aquí.
+   En lo que se lee aquí, cada cosa lleva su palabra del diccionario de
+   la casa y ninguna otra: «conforme de la visita» y «repasos de la
+   visita».
    ═══════════════════════════════════════════════════════════════ */
 import { h, icon, toast } from './ui.js';
 import * as store from './store.js';
