@@ -1140,7 +1140,7 @@ export function tareaFila(t, { portada, donde, filtros = null } = {}) {
 export const CAB_BOLA = 55;
 
 /* La cabecera de fuera lleva SEIS bolas (la quinta es el calendario de
-   entregas; la sexta, «Entregadas», las viviendas ya entregadas), y con
+   entregas; la sexta, «Postventa», las viviendas ya entregadas), y con
    la cara no caben a un solo tamaño en todos los móviles: miden 48 de
    400 px de ancho para arriba, 44 entre 351 y 399 y 40 por debajo. Ese
    corte vive SOLO en el CSS (.d-cab:not(.dentro), css/app.css), y por
@@ -1207,7 +1207,7 @@ export function cabecera({ seccion, volver, titulo = '', menu, derecha } = {}) {
         'aria-label': rotulo,
         'aria-current': seccion === clave ? 'true' : null,
         // Para que el CSS pueda dar a una bola concreta su medida (el
-        // apretón de manos de «Entregadas» va un punto más grande).
+        // apretón de manos de «Postventa» va un punto más grande).
         'data-seccion': clave,
         onclick: seccion === clave ? null : () => ir(adonde),
       }, icon(icono));
@@ -1229,7 +1229,7 @@ export function cabecera({ seccion, volver, titulo = '', menu, derecha } = {}) {
         bola('listas', 'periodico', 'Partes', '#/listas'),
         bola('entregas', 'calendario', 'Entregas', '#/entregas'),
         // La sexta, la de más a la derecha: las viviendas ya entregadas.
-        bola('entregadas', ICONO_ENTREGADAS, 'Entregadas', '#/entregadas'),
+        bola('entregadas', ICONO_ENTREGADAS, 'Postventa', '#/entregadas'),
       ),
     );
   }

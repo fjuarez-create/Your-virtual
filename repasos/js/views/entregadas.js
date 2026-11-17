@@ -1,4 +1,6 @@
-/* ENTREGADAS — las viviendas ya entregadas (noviembre de 2026).
+/* POSTVENTA — las viviendas ya entregadas (noviembre de 2026). En
+   pantalla se llama «Postventa» desde el 17-11-2026; por dentro sigue
+   siendo #/entregadas.
 
    Una sección más de la app, al nivel de Inicio / Obra / Viviendas /
    Partes / Entregas: entra por la sexta bola de la cabecera, la del
@@ -130,7 +132,7 @@ export async function render() {
     clase: 'pantalla-diseno',
     contenido: [
       cabecera({ seccion: 'entregadas' }),
-      h('h1.d-saludo', null, 'Entregadas'),
+      h('h1.d-saludo', null, 'Postventa'),
       avisoLocal() || barraSync(),
       h('div.d-fila-selector', null, selector),
       fichas.length ? cuenta : null,

@@ -1,5 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════
-   posventa.js — las reglas de la sección «Entregadas».
+   posventa.js — las reglas de la sección «Postventa» (por dentro,
+   #/entregadas: así se llamaba en pantalla hasta el 17-11-2026).
 
    Aquí no hay pantalla ni almacén: solo lo que hay que saber de una
    vivienda YA ENTREGADA para pintarla, y las frases con que se dice.
@@ -29,11 +30,11 @@
 
    Dos trampas de nombres. `posventa` en la ficha de ENTREGA es el día
    de la cita; `posventa` en una PERSONA es la bandera del chip
-   «Posventa» (un sí o un no). Y las «visitas» de la ficha de entrega
+   «Postventa» (un sí o un no). Y las «visitas» de la ficha de entrega
    (`visitasHechas`) son las revisiones de ANTES de entregar: aquí no se
    tocan.
    ═══════════════════════════════════════════════════════════════ */
-import { hecha } from './catalog.js';
+import { hecha, OFICIOS, OFICIO_POR_DEFECTO, ZONAS } from './catalog.js';
 import * as E from './entregas.js';
 
 /** El icono de la bolita de la cabecera: el apretón de manos (elegido mirando la lámina A, opción 4). */
@@ -432,8 +433,8 @@ export function avisoAlDesmarcar(entrega, visitas = [], sueltos = []) {
   if (!hayConforme && !hayVisita && !hayBotones) return '';
   const que = hayConforme ? 'Tiene una visita de repasos con su conforme firmado.'
     : hayVisita ? 'Tiene una visita de repasos apuntada.'
-      : 'Tiene citas apuntadas en Entregadas.';
-  return `${que} Dejará de verse en Entregadas hasta que se vuelva a marcar; no se borra nada.`;
+      : 'Tiene citas apuntadas en Postventa.';
+  return `${que} Dejará de verse en Postventa hasta que se vuelva a marcar; no se borra nada.`;
 }
 
 /* ─── Los compradores, acortados (la tarjeta de la lista) ───
@@ -581,4 +582,55 @@ export function compradoresCortos(texto) {
   let y = /^h?[ií](?![aeouáéóú])/iu.test(ultima) ? 'e' : 'y';
   if (!/\p{Ll}/u.test(entero)) y = y.toUpperCase();
   return `${personas.slice(0, -1).join(', ')} ${y} ${ultima}`;
+}
+
+/* ─── Los dos desplegables del repaso de la visita ───────────────
+   En la visita de repasos el oficio y la estancia no se eligen con
+   chips sino en dos desplegables (en el iPhone salen como rueda): con
+   chips eran «una lista enorme» en la que había que buscar con el
+   comprador delante (lo pidió Fran el 17-11-2026). Aquí está solo el
+   ORDEN de las dos listas y con qué nace cada una; el dibujo está en
+   js/piezasPosventa.js. Los repasos de siempre siguen con sus chips.
+
+     OFICIO     «General» el primero y los demás por orden alfabético.
+                Nace con el que propone la IA al describir la foto; si
+                la IA no contesta, tarda, falla o no hay cobertura,
+                «General». Se cambia en el desplegable.
+     ESTANCIA   opcional: «Sin estancia» la primera (y la que viene
+                puesta) y las de la obra por orden alfabético, con los
+                números en su sitio. La IA NO la elige: si la propone,
+                no se usa; quien apunta la escribe en el texto o la
+                elige aquí. */
+
+/* El orden de las dos listas. `numeric` pone los números en su sitio
+   («Dormitorio 2» antes que «Dormitorio 10», y los dos antes que
+   «Dormitorio suite»); `base` no distingue mayúsculas ni tildes. */
+const ALFABETO = new Intl.Collator('es', { sensitivity: 'base', numeric: true });
+
+/** Lo que dice la primera opción de la estancia, la que viene puesta. */
+export const SIN_ESTANCIA = 'Sin estancia';
+
+/** Las opciones del oficio, [{ valor, texto }]: «General» la primera y las demás por orden alfabético del nombre. */
+export function oficiosDelDesplegable(oficios = OFICIOS) {
+  const primero = oficios.filter((o) => o.id === OFICIO_POR_DEFECTO);
+  const resto = oficios.filter((o) => o.id !== OFICIO_POR_DEFECTO)
+    .sort((a, b) => ALFABETO.compare(a.nombre, b.nombre));
+  return [...primero, ...resto].map((o) => ({ valor: o.id, texto: o.nombre }));
+}
+
+/**
+ * Las opciones de la estancia, [{ valor, texto }]: «Sin estancia» (valor
+ * '') la primera y las de la obra (Ajustes → Estancias de la obra) por
+ * orden alfabético. La que ya lleve el repaso sale aunque se haya
+ * quitado de la lista, para que corregir el oficio no se la lleve.
+ */
+export function estanciasDelDesplegable(zonas = ZONAS, actual = '') {
+  const unicas = [...new Set([...zonas, actual].map((z) => String(z ?? '').trim()).filter(Boolean))];
+  unicas.sort((a, b) => ALFABETO.compare(a, b));
+  return [{ valor: '', texto: SIN_ESTANCIA }, ...unicas.map((z) => ({ valor: z, texto: z }))];
+}
+
+/** El oficio con el que nace (o se corrige) un repaso de la visita: el propuesto si es uno de la lista; si no, «General». */
+export function oficioDeLaVisita(propuesto, oficios = OFICIOS) {
+  return oficios.some((o) => o.id === propuesto) ? propuesto : OFICIO_POR_DEFECTO;
 }

@@ -139,10 +139,13 @@ Y dos cosas más que cuelgan de la sincronización:
   siga saliendo cuando a esa persona se le da de baja, y antes de
   cada baja lo deja apuntado `apuntar_nombre_antes_de_la_baja()`.
 
-## «Entregadas»: la visita de repasos y su conforme (noviembre de 2026)
+## «Postventa»: la visita de repasos y su conforme (noviembre de 2026)
 
-Las viviendas ya entregadas tienen su sección (`#/entregadas`) y su
-vocabulario, decidido por Fran el 16-11-2026:
+Las viviendas ya entregadas tienen su sección. En pantalla se llama
+**«Postventa»** (lo decidió Fran el 17-11-2026; antes, «Entregadas»);
+por dentro sigue siendo `#/entregadas`, con sus ficheros y nombres, y
+«entregada», como adjetivo de una vivienda, no cambia. Su vocabulario
+lo decidió Fran el 16-11-2026:
 
 - **Visita de repasos**: la que se hace con el comprador DESPUÉS de
   entregar. No es la «revisión» de antes de la firma (esa es `revision`
@@ -150,7 +153,7 @@ vocabulario, decidido por Fran el 16-11-2026:
   `posventaHora` de la ficha de entrega, y cada visita hecha con la app
   es una lista con `fase = 'visita'`.
 - **Repasos de la visita**: los que se apuntan en ella. Van en esa
-  lista y SOLO salen dentro de «Entregadas»: no se mezclan con los de
+  lista y SOLO salen dentro de «Postventa»: no se mezclan con los de
   siempre en la vivienda, la portada, las pantallas por estado, los
   partes, el reconocimiento ni la purga. Quien añada un sitio que
   enumere listas o repasos tiene que apartarlos: en el cliente,
@@ -178,7 +181,7 @@ vocabulario, decidido por Fran el 16-11-2026:
   administrador y el comercial; hacer la visita y abrir el PDF firmado,
   ellos dos y la dirección facultativa; dar por buenos los repasos de
   la visita, el administrador, la dirección facultativa y quien lleve la
-  bandera `posventa` (el chip «Posventa» de Usuarios), que no da nada
+  bandera `posventa` (el chip «Postventa» de Usuarios), que no da nada
   más.
 
 ## Lo que no se hace nunca

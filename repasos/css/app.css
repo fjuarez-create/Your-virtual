@@ -4285,6 +4285,27 @@ body.es-taller .d-velo.d-firma { padding-bottom: calc(env(safe-area-inset-bottom
 .vr-mirando-caja .d-boton-negro.claro { box-shadow: inset 0 0 0 1.5px var(--d-beige); }
 .vr-aviso-ia { color: #683c03; }
 
+/* El oficio y la estancia del repaso de la visita: dos desplegables
+   nativos (js/piezasPosventa.js), que en el iPhone se abren como la
+   rueda del sistema. Llevan la forma del campo de la casa (.input),
+   el rótulo encima como el de los campos (.field > .lbl) y una flecha
+   que es solo dibujo: el dedo pasa a través de ella al desplegable.
+   El texto elegido, si fuera largo, se corta con «…» antes que salirse
+   o empujar la flecha (a 320 px «Puertas de paso y entrada» cabe). */
+.sheet > .vr-campo { margin-top: 14px; }
+.vr-campo .lbl { margin-bottom: 7px; }
+.vr-desplegable-caja { position: relative; display: block; }
+.vr-desplegable {
+  display: block; min-width: 0; height: 49px; padding-top: 0; padding-bottom: 0; padding-right: 46px;
+  -webkit-appearance: none; appearance: none;
+  line-height: 49px; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;
+}
+.vr-desplegable-caja > svg {
+  position: absolute; right: 16px; top: 50%; width: 18px; height: 18px; margin-top: -9px;
+  color: var(--muted); pointer-events: none;
+}
+
 /* ── «Finalizar la visita»: la capa ──
    A pantalla completa y opaca, como la del reconocimiento. Va POR
    DEBAJO de los velos de la casa (70): el calendario, la pregunta y la

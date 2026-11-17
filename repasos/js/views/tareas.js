@@ -17,11 +17,13 @@ import { usaIA, ordenPdf } from '../ajustesLocales.js';
 import { ir, refrescar, conFiltros, filtrosDeRuta, anotarFiltros } from '../app.js';
 import { informe } from '../informe.js';
 import { hojaDePuerta, nombreDeFichero } from '../pdf.js';
+import { oficioDeLaVisita } from '../posventa.js';
+import { desplegableOficio, desplegableEstancia } from '../piezasPosventa.js';
 
 export async function render({ listaId }) {
   const lista = await store.lista(listaId);
   if (!lista) { toast('La lista ya no existe', 'err'); ir('#/', { reemplazar: true }); return { contenido: [] }; }
-  // La lista de una visita de repasos (la sección «Entregadas») no es un
+  // La lista de una visita de repasos (la sección «Postventa») no es un
   // parte y tiene su propia pantalla: quien llegue aquí —al volver de
   // la ficha de uno de sus repasos, por ejemplo— va a ella. Así nadie
   // llega al menú de un parte, que ofrece borrar la lista entera.
@@ -230,7 +232,7 @@ function marcasMedios(tipos) {
  * Flujo rápido: cámara → texto → guardar, sin salir del acta.
  *
  * `visita: true` es el foto a foto de una VISITA DE REPASOS (la sección
- * «Entregadas»). Es lo mismo, con tres diferencias y ninguna más:
+ * «Postventa»). Es lo mismo, con cuatro diferencias y ninguna más:
  *   1. No se pregunta la prioridad ni se le hace caso a la que proponga
  *      la IA: el repaso nace con la de por defecto. Tampoco se pregunta
  *      ninguna fecha (ningún repaso de una visita lleva la suya).
@@ -239,6 +241,10 @@ function marcasMedios(tipos) {
  *      los doce segundos sin respuesta la hoja sale en blanco, con su
  *      aviso. Hay un comprador delante: no se le tiene esperando.
  *   3. Sin cobertura no se le pregunta nada a la IA.
+ *   4. El oficio y la estancia van en dos desplegables, no en chips (lo
+ *      pidió Fran el 17-11-2026). El oficio nace con el que propone la
+ *      IA, o «General» si no lo hay; la estancia, «Sin estancia»: la de
+ *      la IA no se usa, la pone quien apunta.
  * Sin esa opción no cambia nada de lo de siempre.
  *
  * Devuelve el repaso recién guardado, o nada si se sale sin guardar.
@@ -299,14 +305,20 @@ export async function nuevaTarea(listaId, { visita = false } = {}) {
       propuesta = mirada.propuesta;
       if (mirada.tarde) avisoDeIA = 'La descripción automática tarda demasiado. Escríbela a mano.';
     }
-    // La prioridad no se pregunta ni se enseña en una visita.
-    if (propuesta) propuesta = { ...propuesta, prioridad: null };
+    // La prioridad no se pregunta ni se enseña en una visita. Y la
+    // estancia la pone quien apunta, no la IA: la que proponga no se usa.
+    if (propuesta) propuesta = { ...propuesta, prioridad: null, zona: '' };
   } else if (usaIA(store.sesion())) {
     toast('Mirando la foto…');
     propuesta = await proponer(preparadas[0]);
   }
 
-  const datos = await hojaTexto(preparadas, propuesta?.oficio || ultimoOficio, propuesta, { sinPrioridad: visita, aviso: avisoDeIA });
+  // En la visita el oficio nace con el que propone la IA, o «General»
+  // (sin IA, sin cobertura, si tarda o si falla): nunca con el del
+  // repaso anterior, que en una casa recorrida con el comprador casi
+  // nunca es el mismo. En los de siempre, como siempre.
+  const oficioInicial = visita ? oficioDeLaVisita(propuesta?.oficio) : (propuesta?.oficio || ultimoOficio);
+  const datos = await hojaTexto(preparadas, oficioInicial, propuesta, { sinPrioridad: visita, aviso: avisoDeIA, desplegables: visita });
   if (!datos) return;
 
   // La siguiente tarea suele ser del mismo gremio: se recuerda el
@@ -381,10 +393,12 @@ let ultimoOficio = null;
  * existiera el campo lo tienen vacío: si aquí fuera obligatorio, la
  * pantalla exigiría algo que media base de datos no cumple.
  */
-function hojaTexto(imagenes, oficioPrevio, propuesta = null, { sinPrioridad = false, aviso = '' } = {}) {
+function hojaTexto(imagenes, oficioPrevio, propuesta = null, { sinPrioridad = false, aviso = '', desplegables = false } = {}) {
   return sheet((cerrar) => {
     let elegido = oficioPrevio || null;
-    let zona = propuesta?.zona && ZONAS.includes(propuesta.zona) ? propuesta.zona : '';
+    // Con los desplegables (la visita de repasos) la estancia nace vacía
+    // aunque la IA proponga una: la elige quien apunta.
+    let zona = !desplegables && propuesta?.zona && ZONAS.includes(propuesta.zona) ? propuesta.zona : '';
     // La prioridad la elige solo la dirección facultativa: a la
     // constructora no se le pide (el servidor pondría alta de todas
     // formas) y su repaso nace en alta. En una visita de repasos
@@ -469,12 +483,19 @@ function hojaTexto(imagenes, oficioPrevio, propuesta = null, { sinPrioridad = fa
       aviso ? h('p.hint.vr-aviso-ia', { role: 'status' }, aviso) : null,
       previsualizacion,
       texto,
-      h('p.eyebrow', { style: { marginTop: '14px' } }, 'Oficio'),
-      rejilla,
-      decidePrioridad ? h('p.eyebrow', { style: { marginTop: '14px' } }, 'Prioridad') : null,
-      decidePrioridad ? prioridades : null,
-      h('p.eyebrow', { style: { marginTop: '14px' } }, 'Estancia · opcional'),
-      estancias,
+      // En la visita de repasos, dos desplegables (js/piezasPosventa.js)
+      // en lugar de las dos rejillas de chips; la prioridad no sale.
+      ...(desplegables ? [
+        desplegableOficio(elegido, (v) => { elegido = v; validar(); }),
+        desplegableEstancia(zona, (v) => { zona = v; }),
+      ] : [
+        h('p.eyebrow', { style: { marginTop: '14px' } }, 'Oficio'),
+        rejilla,
+        decidePrioridad ? h('p.eyebrow', { style: { marginTop: '14px' } }, 'Prioridad') : null,
+        decidePrioridad ? prioridades : null,
+        h('p.eyebrow', { style: { marginTop: '14px' } }, 'Estancia · opcional'),
+        estancias,
+      ]),
       pista,
       guardar,
     ];

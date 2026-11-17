@@ -1,7 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════
-   piezasPosventa.js — las piezas con dibujo de la sección «Entregadas».
+   piezasPosventa.js — las piezas con dibujo de la sección «Postventa».
 
-   Dos, y las dos se usan en más de una pantalla, por eso viven aparte:
+   Tres, y las tres se usan en más de una pantalla, por eso viven aparte:
 
      LOS CUATRO BOTONES   piscina, climatización, domótica y armarios,
                           como «bolitas que se rellenan»: huecas con el
@@ -13,6 +13,9 @@
      LA TARJETA NEGRA     del «Conforme de la visita» firmado, que abre
                           el PDF. Sale en la ficha de la vivienda y en
                           la pantalla de la visita.
+     LOS DOS DESPLEGABLES del repaso de la visita, oficio y estancia:
+                          en la hoja de apuntarlo (js/views/tareas.js)
+                          y en la de corregirlo (js/views/tarea.js).
 
    Las reglas (qué es un botón resuelto, cómo se dice su día, quién
    firmó) están en js/posventa.js, que no tiene pantalla; aquí solo se
@@ -31,6 +34,7 @@ import * as E from './entregas.js';
 import {
   BOTONES, NO_TIENE, valorDeBoton, estadoDeBoton, pieDeBoton, filaDeBoton, ariaDeBoton,
   firmantesDe, fraseDeFirma, firmadoEl,
+  oficiosDelDesplegable, estanciasDelDesplegable,
 } from './posventa.js';
 
 /* ─── Los cuatro botones ─────────────────────────────────────── */
@@ -280,4 +284,39 @@ export function tarjetaConforme(conforme, { puede = false } = {}) {
       h('span.d-menu-sub', null, `PDF${quien ? ` · firmado por ${quien}` : ' · firmado'}${sinSubir ? ' · pendiente de subir' : ''}`)),
     h('span.bajar', null, icon('download')),
   );
+}
+
+/* ─── Los dos desplegables del repaso de la visita ───────────────
+   Un <select> nativo de ancho completo, con su rótulo encima y la
+   forma del campo de la casa (.input): en el iPhone se abre como la
+   rueda del sistema, que con el comprador delante se maneja con el
+   pulgar sin buscar entre treinta chips. El orden de las opciones y
+   con cuál nace cada uno, en js/posventa.js. La flecha de la derecha
+   es dibujo: no recibe el dedo, que va al desplegable de debajo. */
+
+/** Un desplegable con su rótulo. `alCambiar(valor)` se llama cada vez que se elige otra opción. */
+function desplegable({ nombre, rotulo, opciones, valor, alCambiar }) {
+  const selector = h('select.input.vr-desplegable', { name: nombre, 'data-desplegable': nombre },
+    ...opciones.map((o) => h('option', { value: o.valor }, o.texto)));
+  selector.value = valor;
+  // Si lo que traía no está entre las opciones, la primera: nunca en blanco.
+  if (selector.selectedIndex < 0) selector.selectedIndex = 0;
+  selector.addEventListener('change', () => alCambiar(selector.value));
+  return h('label.field.vr-campo', null,
+    h('span.lbl.eyebrow', null, rotulo),
+    h('span.vr-desplegable-caja', null, selector, icon('caretAbajo')),
+  );
+}
+
+/** El oficio del repaso de la visita: «General» y los demás por orden alfabético. */
+export function desplegableOficio(valor, alCambiar = () => {}) {
+  return desplegable({ nombre: 'oficio', rotulo: 'Oficio', opciones: oficiosDelDesplegable(), valor, alCambiar });
+}
+
+/** La estancia del repaso de la visita, opcional: «Sin estancia» y las de la obra por orden alfabético. */
+export function desplegableEstancia(valor = '', alCambiar = () => {}) {
+  return desplegable({
+    nombre: 'estancia', rotulo: 'Estancia · opcional',
+    opciones: estanciasDelDesplegable(undefined, valor), valor: valor || '', alCambiar,
+  });
 }

@@ -336,7 +336,7 @@ export async function render({ promoId, unidadId }) {
       // entregarla (la visita de repasos, su conforme firmado y sus
       // repasos, que aquí no salen). Solo si figura como entregada.
       entrega?.entregadaEn ? { id: 'entregada', icono: 'apreton', rotulo: 'Visita de repasos y conforme',
-        sub: 'Lo de después de la entrega, en Entregadas' } : null,
+        sub: 'Lo de después de la entrega, en Postventa' } : null,
     ].filter(Boolean), { extra, destacada });
 
     if (elegido === 'entregada') ir(`#/entregadas/p/${promoId}/v/${String(unidadId).split(':')[1]}`);

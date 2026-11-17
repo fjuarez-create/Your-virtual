@@ -60,7 +60,7 @@ function filaUsuario(u, yo) {
     ),
     u.verifica ? h('span.tag.accent', null, 'Verifica') : null,
     u.comercial ? h('span.tag.accent', null, 'Comercial') : null,
-    u.posventa ? h('span.tag.accent', null, 'Posventa') : null,
+    u.posventa ? h('span.tag.accent', null, 'Postventa') : null,
     u.rol === 'admin' ? h('span.tag.ink', null, 'Admin') : null,
     !u.activo ? h('span.tag', null, 'Inactivo') : null,
     esYo ? null : chevron(),
@@ -331,8 +331,8 @@ function editarUsuario(u) {
               : 'Es el comercial: pondrá los compradores, la revisión con el cliente y la firma'),
         ),
       ),
-      // El chip «Posventa»: dar por buenos (y rechazar) los repasos de
-      // las visitas de repasos de «Entregadas». Solo eso: no verifica
+      // El chip «Postventa»: dar por buenos (y rechazar) los repasos de
+      // las visitas de repasos de «Postventa». Solo eso: no verifica
       // los repasos de siempre, no pone fechas ni pulsa botones, no
       // hace la visita y no abre el conforme firmado. No va en el alta:
       // se pone aquí, después. OJO: esta bandera es de una PERSONA; el
@@ -353,7 +353,7 @@ function editarUsuario(u) {
           h('div.row-sub', { style: { whiteSpace: 'normal' } },
             u.posventa
               ? 'Dejará de poder dar por buenos los repasos de las visitas'
-              : 'Podrá dar por buenos y rechazar los repasos de las visitas de Entregadas. Nada más.'),
+              : 'Podrá dar por buenos y rechazar los repasos de las visitas de Postventa. Nada más.'),
         ),
       ),
       h('button.row', {

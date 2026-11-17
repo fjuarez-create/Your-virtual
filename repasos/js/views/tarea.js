@@ -24,6 +24,8 @@ import {
 import { alCompletar, nombreCorto } from '../frases.js';
 import { ir, refrescar, conFiltros, filtrosDeRuta } from '../app.js';
 import { fotosDe, soltarFotos } from '../pendientes.js';
+import { oficioDeLaVisita } from '../posventa.js';
+import { desplegableOficio, desplegableEstancia } from '../piezasPosventa.js';
 
 export async function render({ listaId, tareaId }) {
   const t = await store.tarea(tareaId);
@@ -31,8 +33,8 @@ export async function render({ listaId, tareaId }) {
 
   const lista = await store.lista(listaId);
   const u = lista ? unidad(lista.unidadId) : null;
-  /* Un repaso de una VISITA DE REPASOS (la sección «Entregadas») es un
-     repaso como los demás, con cinco diferencias:
+  /* Un repaso de una VISITA DE REPASOS (la sección «Postventa») es un
+     repaso como los demás, con seis diferencias:
        · se vuelve a la pantalla de su visita, no a la vivienda;
        · no enseña la prioridad (ni ninguna fecha: no la lleva);
        · con la visita FIRMADA no se ofrece nada que cambie lo que firmó
@@ -43,7 +45,9 @@ export async function render({ listaId, tareaId }) {
        · con la visita ABIERTA lo corrige y lo borra quien hace visitas,
          no solo quien lo apuntó;
        · lo da por bueno o lo rechaza, además de quien verifica, quien
-         lleva la bandera «posventa» (el chip «Posventa» de Usuarios). */
+         lleva la bandera «posventa» (el chip «Postventa» de Usuarios);
+       · el oficio y la estancia se corrigen en dos desplegables, no en
+         chips (editarEstancia). El lápiz del oficio sigue como siempre. */
   const deVisita = esListaDeVisita(lista);
   const visitaFirmada = deVisita && !!(await store.conformeDeLista(listaId));
   const rutaVilla = deVisita
@@ -664,10 +668,15 @@ function editarTexto(t) {
  *
  * El gremio no se puede dejar vacío —de él tiran los filtros— y la
  * estancia sí: se quita volviendo a tocar el chip que está puesto.
+ *
+ * En un repaso de una visita de repasos (`deVisita`) son dos
+ * desplegables, como en la hoja en la que se apuntó: el oficio, con
+ * «General» el primero y los demás por orden alfabético, y la estancia,
+ * con «Sin estancia» el primero (lo pidió Fran el 17-11-2026).
  */
-function editarEstancia(t) {
+function editarEstancia(t, { deVisita = false } = {}) {
   return sheet((cerrar) => {
-    let gremio = t.oficio || OFICIOS[0].id;
+    let gremio = deVisita ? oficioDeLaVisita(t.oficio) : (t.oficio || OFICIOS[0].id);
     let zona = t.zona || '';
 
     const marcar = (caja, valor) => [...caja.children].forEach((c) =>
@@ -690,11 +699,16 @@ function editarEstancia(t) {
     );
 
     return [
-      h('h2.title', null, 'Gremio y estancia'),
-      h('p.eyebrow', { style: { marginTop: '10px' } }, 'Gremio'),
-      gremios,
-      h('p.eyebrow', { style: { marginTop: '14px' } }, 'Estancia · opcional'),
-      estancias,
+      h('h2.title', null, deVisita ? 'Oficio y estancia' : 'Gremio y estancia'),
+      ...(deVisita ? [
+        desplegableOficio(gremio, (v) => { gremio = v; }),
+        desplegableEstancia(zona, (v) => { zona = v; }),
+      ] : [
+        h('p.eyebrow', { style: { marginTop: '10px' } }, 'Gremio'),
+        gremios,
+        h('p.eyebrow', { style: { marginTop: '14px' } }, 'Estancia · opcional'),
+        estancias,
+      ]),
       h('button.btn.accent.full', {
         style: { marginTop: '14px' },
         onclick: async () => {
@@ -876,7 +890,7 @@ async function menuTarea(t, listaId, suya, { deVisita = false } = {}) {
   ]);
 
   if (accion === 'texto') return editarTexto(t);
-  if (accion === 'estancia') return editarEstancia(t);
+  if (accion === 'estancia') return editarEstancia(t, { deVisita });
   if (accion === 'voz') return añadirAudio(t);
   if (accion === 'video') return añadirVideo(t);
 
