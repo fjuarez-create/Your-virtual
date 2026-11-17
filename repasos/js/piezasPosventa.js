@@ -30,7 +30,7 @@ import { hojaFecha, entregarFichero } from './piezas.js';
 import * as E from './entregas.js';
 import {
   BOTONES, NO_TIENE, valorDeBoton, estadoDeBoton, pieDeBoton, filaDeBoton, ariaDeBoton,
-  firmantesDe, fraseDeFirma,
+  firmantesDe, fraseDeFirma, firmadoEl,
 } from './posventa.js';
 
 /* ─── Los cuatro botones ─────────────────────────────────────── */
@@ -210,9 +210,16 @@ async function nombreDeFichero(conforme) {
   if (conforme?.nombre) return conforme.nombre;
   try {
     // El nombre lo pone el mismo módulo que hace el papel, para que el
-    // PDF se llame igual lo abra quien lo abra.
+    // PDF se llame igual lo abra quien lo abra: el día de la visita y
+    // la hora de la primera firma. Ese módulo solo da por firmada una
+    // firma que trae su garabato, y el garabato no se guarda como dato
+    // (va dibujado dentro del PDF): aquí la hora de la firma se le pasa
+    // en el sitio de la hora de la visita, que es la que usa cuando no
+    // ve ninguna firmada. Sin esto, el mismo papel se llamaría de una
+    // manera en el móvil que firmó y de otra en los demás.
     const { nombreDeConforme } = await import('./pdfConforme.js');
-    const nombre = nombreDeConforme(conforme?.datos || {});
+    const datos = conforme?.datos || {};
+    const nombre = nombreDeConforme({ ...datos, firmas: [], horaVisita: firmadoEl(conforme).hora || datos.horaVisita || '' });
     if (nombre && nombre !== '.pdf') return nombre;
   } catch { /* sin el módulo, un nombre llano */ }
   return 'Conforme_de_la_visita.pdf';
