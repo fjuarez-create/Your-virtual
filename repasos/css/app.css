@@ -4257,6 +4257,9 @@ body.es-taller .d-velo.d-firma { padding-bottom: calc(env(safe-area-inset-bottom
 .vr-orientativa svg { width: 22px; height: 22px; flex: none; color: var(--d-beige-tinta); }
 .vr-orientativa b { font-weight: 500; white-space: nowrap; }
 .vr-observaciones { overflow-wrap: anywhere; }
+/* Las observaciones ocupan lo que ocupan: la caja de la casa guarda
+   sitio para una descripción larga, y aquí suele ser un renglón. */
+.pantalla-diseno .vr-observaciones { min-height: 0; }
 
 /* «Mirando la foto…»: la espera de la descripción automática, con su
    salida a mano. Es un velo de la casa, encima de la pantalla. */
@@ -4301,6 +4304,13 @@ body.es-taller .d-velo.d-firma { padding-bottom: calc(env(safe-area-inset-bottom
 .d-conforme-pie:empty { display: none; }
 .d-conforme-pie .d-boton-negro { flex: 1 1 0; min-width: 0; }
 .d-conforme-pie .d-boton-negro.claro { box-shadow: inset 0 0 0 1.5px var(--d-beige); }
+/* Con tres botones (el papel firmado que no se ha podido guardar), el
+   primero ocupa su renglón y los otros dos van debajo: en una fila, a
+   390 px, los rótulos se partían en dos. */
+@supports selector(:has(*)) {
+  .d-conforme-pie:has(> :nth-child(3)) { flex-wrap: wrap; }
+  .d-conforme-pie:has(> :nth-child(3)) > :first-child { flex-basis: 100%; }
+}
 /* En el taller, el sello «TALLER · datos de prueba» va abajo a la
    izquierda y por encima de todo: el pie le deja su sitio. */
 body.es-taller .d-conforme-pie { padding-bottom: calc(env(safe-area-inset-bottom) + 48px); }
