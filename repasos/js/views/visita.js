@@ -42,9 +42,11 @@ import { tarjetaConforme, abrirConforme } from '../piezasPosventa.js';
 import { finalizarVisita } from '../conforme.js';
 import { nuevaTarea } from './tareas.js';
 
-/** «Carpintería · Dormitorio 2»: el oficio y la estancia de un repaso. */
+/** «Carpintería · Dormitorio 2»: el oficio y la estancia de un repaso. El
+    número de una estancia va pegado a su nombre con un espacio que no se
+    parte, para que «2» no se quede solo en otro renglón. */
 function dondeDe(t) {
-  return [oficio(t.oficio)?.nombre, t.zona].filter(Boolean).join(' · ');
+  return [oficio(t.oficio)?.nombre, String(t.zona || '').replace(/ (\d)/g, '\u00a0$1')].filter(Boolean).join(' · ');
 }
 
 /** El chip del estado de un repaso, como se dice en esta sección. */

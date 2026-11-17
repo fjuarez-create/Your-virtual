@@ -4296,9 +4296,14 @@ body.es-taller .d-velo.d-firma { padding-bottom: calc(env(safe-area-inset-bottom
 .vr-campo .lbl { margin-bottom: 7px; }
 .vr-desplegable-caja { position: relative; display: block; }
 .vr-desplegable {
-  display: block; min-width: 0; height: 49px; padding-top: 0; padding-bottom: 0; padding-right: 46px;
+  /* El relleno del campo de la casa (.input) y la altura de su texto: con la
+     letra normal mide lo mismo (49 px) y con la letra grande del sistema
+     crece como los demás campos, sin cortar el texto. */
+  display: block; min-width: 0; padding-right: 46px;
   -webkit-appearance: none; appearance: none;
-  line-height: 49px; color: var(--text);
+  /* 19 px de renglón con la letra de 15,5 px, como el texto del .input,
+     pero en proporción a la letra, para que crezca con ella. */
+  line-height: 1.226; color: var(--text);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;
 }
 .vr-desplegable-caja > svg {
