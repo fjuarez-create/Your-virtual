@@ -815,6 +815,12 @@ async function vaciarCache() {
   if (pendientes > 0) {
     return toast(`Hay ${pendientes} cambios sin subir. Sincroniza antes de vaciar.`, 'err');
   }
+  // Un «Conforme de la visita» que el servidor no ha admitido ya no está
+  // en la cola, y su único ejemplar es el de este móvil: vaciar los
+  // medios se lo llevaría, con la firma del comprador dentro.
+  if (await store.conformesSinSubir() > 0) {
+    return toast('En este móvil hay un conforme de visita firmado que no ha subido. Compártelo desde su visita antes de vaciar.', 'err');
+  }
   if (!await confirmSheet({
     title: '¿Vaciar la caché?',
     text: 'Se borran del dispositivo las fotos y los datos ya sincronizados. Se vuelven a descargar del servidor cuando hagan falta.',
@@ -831,11 +837,16 @@ async function vaciarCache() {
 
 async function cerrarSesion() {
   const pendientes = await db.numPendientes();
+  // Con un conforme de visita firmado y sin subir tampoco se borra nada
+  // (ver cerrarSesion en el almacén): que la pregunta no diga lo contrario.
+  const conformes = pendientes > 0 ? 0 : await store.conformesSinSubir().catch(() => 0);
   if (!await confirmSheet({
     title: '¿Cerrar sesión?',
     text: pendientes > 0
       ? `Quedan ${pendientes} cambios sin subir. Se conservarán en este dispositivo hasta que vuelvas a entrar.`
-      : 'Se borrarán los datos guardados en este dispositivo.',
+      : conformes > 0
+        ? 'Hay un conforme de visita firmado que no ha subido. Se conservará en este dispositivo hasta que vuelvas a entrar.'
+        : 'Se borrarán los datos guardados en este dispositivo.',
     ok: 'Cerrar sesión', danger: true,
   })) return;
   await store.cerrarSesion();
