@@ -147,6 +147,7 @@ def bajar(desde):
     marca = desde
     completa = False
     motivo = ""
+    muestra = None  # una foto, para mirar_ficheros(): la más reciente
     while tandas < TOPE_TANDAS:
         antes = time.monotonic()
         codigo, peso, r = pedir("cambios?desde=" + urllib.parse.quote(marca, safe=""))
@@ -169,6 +170,10 @@ def bajar(desde):
                     ultimo = cuando
                 if cuando >= DESPUES_DE:
                     despues[t].add(fila.get("id"))
+                if (t == "medios" and not fila.get("borrada")
+                        and str(fila.get("mime") or "") in EXTENSIONES
+                        and (muestra is None or cuando > str(muestra.get("actualizado") or "")[:19])):
+                    muestra = fila
         nueva = r.get("ahora") or ""
         if not r.get("mas"):
             marca = nueva or marca
@@ -192,12 +197,60 @@ def bajar(desde):
         "completa": completa, "motivo": motivo, "personas": personas,
         "filas": filas, "distintas": {t: len(vistas[t]) for t in TABLAS},
         "ultimo": ultimo, "despues": {t: len(despues[t]) for t in TABLAS},
+        "muestra": muestra,
     }
 
 
 def contar(b):
     total = sum(b["distintas"].values())
     return total, ", ".join("%s %d" % (t, b["distintas"][t]) for t in TABLAS)
+
+
+# Con qué extensión guarda el servidor cada tipo de foto (api/index.php).
+EXTENSIONES = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
+
+
+def mirar_ficheros(muestra):
+    """Las fotos, por su dirección directa y SIN sesión. La carpeta de las
+    fotos lleva un .htaccess que cierra el paso, y la app las sirve solo
+    por la API, que mira la sesión; pero si delante de Apache hay un
+    servidor que entrega los ficheros sin leer ese .htaccess, cualquiera
+    que conozca la dirección los abre. Aquí se pide UNA foto de las dos
+    maneras, sin cookie, y se escribe solo lo que contesta el servidor:
+    ni la dirección, ni el identificador, ni un octeto de la foto.
+    Nunca pone la medición en rojo."""
+    rotulo = "LAS FOTOS, SIN SESIÓN"
+    try:
+        if not isinstance(muestra, dict):
+            return "%s: no hay ninguna foto con la que probar." % rotulo
+        suelto = urllib.request.build_opener()
+        suelto.addheaders = [("User-Agent", "medir-bajada")]
+
+        def estado(direccion):
+            try:
+                with suelto.open(urllib.request.Request(direccion, method="GET"), timeout=20) as r:
+                    r.read(1)
+                    return r.status
+            except urllib.error.HTTPError as e:
+                return e.code
+
+        ident = str(muestra.get("id") or "")
+        if not ident.replace("-", "").isalnum():
+            return "%s: la foto de muestra no tiene un identificador que se pueda probar." % rotulo
+        por_api = estado(BASE + "medios/" + ident + "/fichero")
+        extension = EXTENSIONES[str(muestra.get("mime"))]
+        meses = []
+        for campo in ("actualizado", "creado"):
+            mes = str(muestra.get(campo) or "")[:7].replace("-", "/")
+            if len(mes) == 7 and mes not in meses:
+                meses.append(mes)
+        directas = [estado(BASE + "uploads/" + mes + "/" + ident + "." + extension) for mes in meses]
+        abierta = 200 in directas
+        return ("%s: por la API contesta %s (tiene que ser 401); por su dirección directa, %s: %s."
+                % (rotulo, por_api, " y ".join(str(c) for c in directas) or "sin probar",
+                   "ABIERTAS, cualquiera con la dirección las ve" if abierta else "cerradas"))
+    except Exception as e:  # sin red, tarda, corte…: se dice y se sigue
+        return "%s no se han podido mirar (%s); la medición sigue igual." % (rotulo, type(e).__name__)
 
 
 def si_o_no(valor):
@@ -361,6 +414,10 @@ def main():
     # 4 · El reconocimiento de repasos pendientes contesta. Solo lee, y
     #     su línea nunca pone la medición en rojo (ver mirar_reconocimiento).
     lineas.append(mirar_reconocimiento())
+
+    # 5 · Las fotos, por su dirección directa y sin sesión. Solo dice lo
+    #     que contesta el servidor, y tampoco pone la medición en rojo.
+    lineas.append(mirar_ficheros(todo.get("muestra")))
 
     pedir("auth/logout", {})
 
