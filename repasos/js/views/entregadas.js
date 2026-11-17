@@ -33,7 +33,7 @@ import { ir, anotarRuta, refrescar } from '../app.js';
 import * as E from '../entregas.js';
 import {
   FILTROS, situacionPosventa, ordenarEntregadas, filtrarEntregadas, cuentaDeEntregadas,
-  renglonDeVisita, renglonDeRepasos, fraseDeFalta,
+  renglonDeVisita, renglonDeRepasos, fraseDeFalta, compradoresCortos,
 } from '../posventa.js';
 import { botonesPosventa } from '../piezasPosventa.js';
 
@@ -74,6 +74,8 @@ export async function render() {
     const repasos = renglonDeRepasos(situacion);
     const falta = fraseDeFalta(situacion);
     const entregada = E.diaEntregada(entrega);
+    /* Los compradores con el nombre y el primer apellido; enteros, en la ficha y en el conforme. */
+    const compradores = compradoresCortos(entrega.compradores);
     return h('div.d-dia-tarjeta.pv-tarjeta', {
       'data-unidad': entrega.unidadId,
       'data-estado': situacion.cerrada ? 'cerrada' : 'pendiente',
@@ -88,6 +90,7 @@ export async function render() {
         }, icon('chevron')),
       ),
       fila('key', entregada ? `Entregada el ${E.diaCorto(entregada)}` : 'Entregada'),
+      compradores ? fila('users', compradores) : null,
       fila(visita.icono, visita.texto, visita.clase),
       repasos ? fila('listaChecks', repasos) : null,
       h('div.pv-tarjeta-botones', null,

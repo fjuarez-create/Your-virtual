@@ -435,3 +435,150 @@ export function avisoAlDesmarcar(entrega, visitas = [], sueltos = []) {
       : 'Tiene citas apuntadas en Entregadas.';
   return `${que} Dejará de verse en Entregadas hasta que se vuelva a marcar; no se borra nada.`;
 }
+
+/* ─── Los compradores, acortados (la tarjeta de la lista) ───
+
+   La ficha de entrega guarda a los compradores en un texto libre que
+   escribe el comercial: «Nombre Apellido1 Apellido2 y Nombre Apellido1
+   Apellido2», a veces una sociedad. En la tarjeta de #/entregadas se
+   enseñan con el nombre y el PRIMER apellido de cada persona; la ficha
+   de la vivienda y el conforme siguen con el texto entero.
+
+   Cuando duda, no recorta: es mejor ver un apellido de más que perder
+   el primero. Por eso una sociedad, o una persona con algo que no
+   parece un nombre (cifras, paréntesis, emojis), salen tal cual. */
+
+/** Lo que va pegado al apellido que le sigue: «de la Fuente», «San Martín», «van der Berg». */
+const PARTICULAS = new Set(['de', 'del', 'la', 'las', 'los', 'y', 'i', 'da', 'das', 'do', 'dos',
+  'di', 'du', 'van', 'von', 'der', 'san', 'santa']);
+
+/* Lo que delata que el texto no es una persona. Se comparan sin puntos
+   y en minúsculas, como palabras sueltas: «S.L.» y «sl» son lo mismo. */
+const MARCAS_DE_SOCIEDAD = ['sl', 'slu', 'sll', 'slp', 'sa', 'sau', 'sal', 'scoop', 'coop',
+  'cooperativa', 'cb', 'scp', 'srl', 'sas', 'sarl', 'spa', 'sprl', 'bvba', 'sociedad', 'limitada',
+  'anonima', 'herederos', 'herencia', 'yacente', 'sucesores', 'comunidad', 'hermanos', 'hnos',
+  'hijos', 'cia', 'compania', 'ltd', 'ltda', 'limited', 'gmbh', 'gbr', 'kg', 'ag', 'inc', 'llc',
+  'llp', 'plc', 'corp', 'co', 'bv', 'nv', 'aps', 'oy', 'fundacion', 'asociacion', 'holding',
+  'inversiones', 'grupo', 'trust', 'ab', 'as', 'a/s', 'sci', 'slne', 'inmobiliaria', 'promociones'];
+const RE_SOCIEDAD = new RegExp(`(^|[^\\p{L}\\p{N}])(${MARCAS_DE_SOCIEDAD.join('|')})(?=$|[^\\p{L}\\p{N}])`, 'u');
+/* «S. L.», «S. A. U.»: con espacios entre las letras, que la lista de arriba no ve. */
+const RE_SOCIEDAD_SUELTA = /(^|[^\p{L}])s\s*\.\s*(l|a|coop)\s*\.?(\s*u\s*\.?)?($|[^\p{L}])/u;
+
+/* La segunda palabra de un nombre de la Virgen: «María del Carmen», «María del Pino».
+   Solo detrás de María o Mari: «Antonio del Pino» lleva un apellido. */
+const NOMBRES_MARIANOS = new Set(['carmen', 'pilar', 'mar', 'rosario', 'rocio', 'angeles',
+  'dolores', 'mercedes', 'consuelo', 'pino', 'cristo', 'jesus', 'paz', 'luz', 'socorro',
+  'remedios', 'candelaria', 'nieves', 'olvido', 'asuncion', 'concepcion', 'esperanza', 'valle',
+  'fatima', 'lourdes', 'gracia', 'gloria', 'sagrario', 'loreto', 'milagros', 'salud', 'soledad',
+  'amparo', 'montana', 'carmelo']);
+
+/* Nombres compuestos de los que la segunda palabra casi nunca es apellido.
+   Solo deciden con TRES palabras: «José Luis Pérez» se queda entero. */
+const NOMBRES_COMPUESTOS = new Set(['jose luis', 'jose maria', 'jose antonio', 'jose manuel',
+  'jose ramon', 'jose carlos', 'jose miguel', 'jose angel', 'jose ignacio', 'jose javier',
+  'jose juan', 'jose francisco', 'jose enrique', 'jose vicente', 'jose alberto', 'jose pablo',
+  'jose david', 'jose andres', 'jose rafael', 'jose fernando', 'jose joaquin', 'juan carlos',
+  'juan jose', 'juan antonio', 'juan manuel', 'juan luis', 'juan pablo', 'juan francisco',
+  'juan miguel', 'juan ramon', 'juan andres', 'juan ignacio', 'juan alberto', 'juan diego',
+  'juan cruz', 'juan bautista', 'juan pedro', 'miguel angel', 'francisco javier',
+  'francisco jose', 'luis miguel', 'luis alberto', 'luis fernando', 'pedro jose', 'pedro pablo',
+  'carlos alberto', 'jesus maria', 'maria jose', 'maria jesus', 'maria teresa', 'maria isabel',
+  'maria luisa', 'maria elena', 'maria angeles', 'maria dolores', 'maria victoria',
+  'maria eugenia', 'maria antonia', 'maria cristina', 'maria pilar', 'maria rosa', 'maria carmen',
+  'maria paz', 'maria luz', 'maria lourdes', 'maria candelaria', 'maria nieves', 'maria mar',
+  'maria inmaculada', 'maria auxiliadora', 'maria soledad', 'maria esther', 'maria fernanda',
+  'maria belen', 'mari carmen', 'mari paz', 'mari luz', 'ana maria', 'ana isabel',
+  'ana belen', 'ana rosa', 'rosa maria', 'rosa ana', 'eva maria', 'ana lucia',
+  'ana cristina', 'luz maria', 'pilar maria']);
+
+/* Segundas palabras que casi siempre son nombre y no apellido. Con TRES
+   palabras, si la segunda es una de estas, la persona se queda entera:
+   «Mari Cruz Toro», «Hans Peter Müller». */
+const SEGUNDOS_NOMBRES = new Set([...NOMBRES_COMPUESTOS].map((n) => n.split(' ')[1]).concat([
+  'angeles', 'cruz', 'pino', 'jesus', 'manuel', 'jose', 'luis', 'antonio', 'peter', 'michael',
+  'jane', 'pierre', 'marie', 'ann', 'anne', 'maria', 'john', 'paul', 'james', 'louise', 'mary',
+  'erik']));
+
+/* Tratamientos delante del nombre: no cuentan como palabra («D. Juan Pérez» se queda entero). */
+const TRATAMIENTOS = new Set(['d', 'dna', 'dª', 'don', 'dona', 'sr', 'sra', 'srta', 'mr', 'mrs',
+  'ms', 'dr', 'dra']);
+
+/** En minúsculas y sin tildes ni puntos, para comparar: «Mª.» → «maria». */
+function llano(palabra) {
+  return palabra.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/\.$/, '').replace(/^mª$/, 'maria').replace(/^ma$/, 'maria');
+}
+
+/** ¿Parece una palabra de un nombre? Letras, y por dentro guion, apóstrofo o punto. */
+function esPalabraDeNombre(palabra) {
+  return /^[\p{L}\p{M}][\p{L}\p{M}'’.\-]*$/u.test(palabra);
+}
+
+/** Las palabras, en grupos: cada apellido con las partículas que lleva delante. */
+function agruparPalabras(palabras) {
+  const grupos = [];
+  let pendientes = [];
+  for (const p of palabras) {
+    if (PARTICULAS.has(p.toLowerCase())) { pendientes.push(p); continue; }
+    grupos.push([...pendientes, p].join(' '));
+    pendientes = [];
+  }
+  if (pendientes.length) {
+    if (grupos.length) grupos[grupos.length - 1] += ` ${pendientes.join(' ')}`;
+    else grupos.push(pendientes.join(' '));
+  }
+  return grupos;
+}
+
+/** Una persona con su nombre y su primer apellido. Si no lo tiene claro, la deja como viene. */
+function personaCorta(persona) {
+  const palabras = persona.split(' ').filter(Boolean);
+  if (!palabras.length || !palabras.every(esPalabraDeNombre)) return palabras.join(' ');
+  const todos = agruparPalabras(palabras);
+  const tratamiento = todos.length > 1 && TRATAMIENTOS.has(llano(todos[0])) ? todos[0] : null;
+  const grupos = tratamiento ? todos.slice(1) : todos;
+  const unir = (g) => (tratamiento ? [tratamiento, ...g] : g).join(' ');
+  if (grupos.length <= 2) return unir(grupos);
+  const primero = grupos[0].split(' ');
+  const segundo = grupos[1].split(' ');
+  let enElNombre = 1;
+  if (primero.length === 1 && segundo.length > 1 && ['maria', 'mari'].includes(llano(primero[0]))
+      && NOMBRES_MARIANOS.has(llano(segundo[segundo.length - 1]))) enElNombre = 2;
+  else if (grupos.length === 3 && primero.length === 1 && segundo.length === 1
+      && SEGUNDOS_NOMBRES.has(llano(segundo[0]))) enElNombre = 2;
+  if (grupos.length - enElNombre <= 1) return unir(grupos);
+  return unir(grupos.slice(0, -1));
+}
+
+/** ¿El texto es de una sociedad (o de algo que no es una persona)? */
+export function esSociedad(texto) {
+  const t = String(texto ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return RE_SOCIEDAD_SUELTA.test(t) || RE_SOCIEDAD.test(t.replace(/[.·]/g, ''));
+}
+
+/**
+ * Los compradores de la ficha de entrega, con el nombre y el primer
+ * apellido de cada persona: «Nombre Apellido1 Apellido2 y Nombre
+ * Apellido1 Apellido2» → «Nombre Apellido1 y Nombre Apellido1». Una
+ * sociedad sale tal cual. Nunca lanza:
+ * lo que no es texto (null, un objeto) da ''.
+ */
+export function compradoresCortos(texto) {
+  if (typeof texto !== 'string' && typeof texto !== 'number') return '';
+  const entero = String(texto).replace(/\s+/g, ' ').trim();
+  if (!entero) return '';
+  if (esSociedad(entero)) return entero;
+  const personas = String(texto)
+    .split(/[\n\r,;\/&]|\s(?:y|e|and|und|och|og|et|-|–)(?=\s)/iu)
+    .map((p) => p.replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+    .map(personaCorta)
+    .filter(Boolean);
+  if (!personas.length) return entero;
+  if (personas.length === 1) return personas[0];
+  const ultima = personas[personas.length - 1];
+  /* «e» delante del sonido «i» («Ana Pérez e Inés Gómez»), y en mayúscula si todo viene en mayúsculas. */
+  let y = /^h?[ií](?![aeouáéóú])/iu.test(ultima) ? 'e' : 'y';
+  if (!/\p{Ll}/u.test(entero)) y = y.toUpperCase();
+  return `${personas.slice(0, -1).join(', ')} ${y} ${ultima}`;
+}
