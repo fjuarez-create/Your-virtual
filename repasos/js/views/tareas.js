@@ -4,7 +4,7 @@
 import { h, icon, sheet, toast, confirmSheet, emptyState, fechaCorta, hora } from '../ui.js';
 import {
   unidad, estado, promocion, enObra, ESTADOS, OFICIOS, ZONAS, oficio, OFICIO_POR_DEFECTO,
-  puedeVerificar, prioridadDe, esPrioridad,
+  puedeVerificar, prioridadDe, esPrioridad, esListaDeVisita, PRIORIDAD_POR_DEFECTO,
 } from '../catalog.js';
 import * as store from '../store.js';
 import * as media from '../media.js';
@@ -21,6 +21,14 @@ import { hojaDePuerta, nombreDeFichero } from '../pdf.js';
 export async function render({ listaId }) {
   const lista = await store.lista(listaId);
   if (!lista) { toast('La lista ya no existe', 'err'); ir('#/', { reemplazar: true }); return { contenido: [] }; }
+  // La lista de una visita de repasos (la sección «Entregadas») no es un
+  // parte y tiene su propia pantalla: quien llegue aquí —al volver de
+  // la ficha de uno de sus repasos, por ejemplo— va a ella. Así nadie
+  // llega al menú de un parte, que ofrece borrar la lista entera.
+  if (esListaDeVisita(lista)) {
+    ir(`#/entregadas/p/${lista.promoId}/v/${String(lista.unidadId).split(':')[1]}/visita/${lista.id}`, { reemplazar: true });
+    return { contenido: [] };
+  }
 
   const u = unidad(lista.unidadId);
   const tareas = await store.tareasDeLista(listaId);
@@ -218,8 +226,22 @@ function marcasMedios(tipos) {
 }
 
 /* ─── Alta de tarea ───────────────────────────────────────────── */
-/** Flujo rápido: cámara → texto → guardar, sin salir del acta. */
-export async function nuevaTarea(listaId) {
+/**
+ * Flujo rápido: cámara → texto → guardar, sin salir del acta.
+ *
+ * `visita: true` es el foto a foto de una VISITA DE REPASOS (la sección
+ * «Entregadas»). Es lo mismo, con tres diferencias y ninguna más:
+ *   1. No se pregunta la prioridad ni se le hace caso a la que proponga
+ *      la IA: el repaso nace con la de por defecto. Tampoco se pregunta
+ *      ninguna fecha (ningún repaso de una visita lleva la suya).
+ *   2. La espera de la IA tiene tope y se ve: mientras mira la foto hay
+ *      un velo «Mirando la foto…» con el botón «Escribir a mano», y a
+ *      los doce segundos sin respuesta la hoja sale en blanco, con su
+ *      aviso. Hay un comprador delante: no se le tiene esperando.
+ *   3. Sin cobertura no se le pregunta nada a la IA.
+ * Sin esa opción no cambia nada de lo de siempre.
+ */
+export async function nuevaTarea(listaId, { visita = false } = {}) {
   // Dos tarjetas, una al lado de la otra y más altas que anchas. Es una
   // elección entre dos cosas del mismo rango, y en dos filas la de
   // arriba parecía la buena y la de abajo el plan B. Sin título: con
@@ -268,12 +290,21 @@ export async function nuevaTarea(listaId) {
   // se borra. Y si falla —sin clave, sin línea, sin saldo— no se
   // interrumpe nada: la hoja sale igual, en blanco, como antes.
   let propuesta = null;
-  if (usaIA(store.sesion())) {
+  let avisoDeIA = '';
+  if (visita) {
+    if (usaIA(store.sesion()) && navigator.onLine !== false) {
+      const mirada = await proponerConTope(preparadas[0]);
+      propuesta = mirada.propuesta;
+      if (mirada.tarde) avisoDeIA = 'La descripción automática tarda demasiado. Escríbela a mano.';
+    }
+    // La prioridad no se pregunta ni se enseña en una visita.
+    if (propuesta) propuesta = { ...propuesta, prioridad: null };
+  } else if (usaIA(store.sesion())) {
     toast('Mirando la foto…');
     propuesta = await proponer(preparadas[0]);
   }
 
-  const datos = await hojaTexto(preparadas, propuesta?.oficio || ultimoOficio, propuesta);
+  const datos = await hojaTexto(preparadas, propuesta?.oficio || ultimoOficio, propuesta, { sinPrioridad: visita, aviso: avisoDeIA });
   if (!datos) return;
 
   // La siguiente tarea suele ser del mismo gremio: se recuerda el
@@ -290,6 +321,43 @@ export async function nuevaTarea(listaId) {
   }
   toast('Repaso añadido');
   await refrescar();
+}
+
+/** Lo que se espera a que la IA describa la foto en una visita de repasos, en milisegundos. */
+const TOPE_DE_LA_IA = 12000;
+
+/**
+ * La IA mira la foto, con tope y a la vista: un velo «Mirando la foto…»
+ * con «Escribir a mano». Resuelve con { propuesta, tarde }: la propuesta
+ * (o null si no la hay, si se pulsó «Escribir a mano» o si se acabó el
+ * tiempo) y si lo que pasó fue que tardó demasiado. Es una carrera
+ * contra un temporizador: la llamada no se corta, solo se deja de
+ * esperar.
+ */
+function proponerConTope(imagen) {
+  return new Promise((listo) => {
+    let acabado = false;
+    let reloj = 0;
+    const acabar = (propuesta, tarde = false) => {
+      if (acabado) return;
+      acabado = true;
+      clearTimeout(reloj);
+      velo.remove();
+      listo({ propuesta, tarde });
+    };
+    // Es un velo de la casa (.d-velo): mientras está puesto, la app no
+    // repinta la pantalla de debajo ni se recarga con una versión nueva.
+    const velo = h('div.d-velo.vr-mirando', { role: 'status', 'aria-live': 'polite' },
+      h('div.vr-mirando-caja', null,
+        h('span.vr-mirando-rueda', { 'aria-hidden': 'true' }),
+        h('p.vr-mirando-frase', null, 'Mirando la foto…'),
+        h('button.d-boton-negro.claro', { type: 'button', onclick: () => acabar(null) }, 'Escribir a mano'),
+      ),
+    );
+    document.body.append(velo);
+    reloj = setTimeout(() => acabar(null, true), TOPE_DE_LA_IA);
+    proponer(imagen).then((propuesta) => acabar(propuesta), () => acabar(null));
+  });
 }
 
 /** Hoja con la foto tomada y el texto de la tarea. */
@@ -310,15 +378,18 @@ let ultimoOficio = null;
  * existiera el campo lo tienen vacío: si aquí fuera obligatorio, la
  * pantalla exigiría algo que media base de datos no cumple.
  */
-function hojaTexto(imagenes, oficioPrevio, propuesta = null) {
+function hojaTexto(imagenes, oficioPrevio, propuesta = null, { sinPrioridad = false, aviso = '' } = {}) {
   return sheet((cerrar) => {
     let elegido = oficioPrevio || null;
     let zona = propuesta?.zona && ZONAS.includes(propuesta.zona) ? propuesta.zona : '';
     // La prioridad la elige solo la dirección facultativa: a la
     // constructora no se le pide (el servidor pondría alta de todas
-    // formas) y su repaso nace en alta.
-    const decidePrioridad = puedeVerificar(store.sesion());
-    let prioridad = !decidePrioridad ? 'alta' : esPrioridad(propuesta?.prioridad) ? propuesta.prioridad : null;
+    // formas) y su repaso nace en alta. En una visita de repasos
+    // (`sinPrioridad`) no se le pregunta a nadie: nace con la de por
+    // defecto.
+    const decidePrioridad = !sinPrioridad && puedeVerificar(store.sesion());
+    let prioridad = sinPrioridad ? PRIORIDAD_POR_DEFECTO
+      : !decidePrioridad ? 'alta' : esPrioridad(propuesta?.prioridad) ? propuesta.prioridad : null;
 
     const texto = h('textarea.textarea', {
       placeholder: 'Qué hay que hacer aquí…',
@@ -391,6 +462,8 @@ function hojaTexto(imagenes, oficioPrevio, propuesta = null) {
 
     return [
       h('h2.title', null, 'Describe el repaso'),
+      // Si la descripción automática no ha llegado a tiempo, se dice.
+      aviso ? h('p.hint.vr-aviso-ia', { role: 'status' }, aviso) : null,
       previsualizacion,
       texto,
       h('p.eyebrow', { style: { marginTop: '14px' } }, 'Oficio'),

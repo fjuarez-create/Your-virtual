@@ -145,6 +145,15 @@ function listaDeContactos(tiene) {
   return frase.charAt(0).toUpperCase() + frase.slice(1);
 }
 
+/**
+ * Cambia lo que hay dentro de un nodo por estos hijos, sin los huecos:
+ * a replaceChildren() no se le puede pasar un null (lo escribe, con sus
+ * cuatro letras).
+ */
+function poner(nodo, ...hijos) {
+  nodo.replaceChildren(...hijos.flat().filter((hijo) => hijo !== null && hijo !== undefined && hijo !== false));
+}
+
 /** Solo una a la vez: un doble toque en «Finalizar visita» no abre dos capas. */
 let abierta = false;
 
@@ -453,13 +462,13 @@ async function recorrido({ lista, entrega, repasos: repasosAlAbrir }) {
     const zonaSegunda = h('div.d-conforme-segunda');
     const ponerSegunda = () => {
       if (estado.firmantes.length < 2) {
-        zonaSegunda.replaceChildren(h('button.d-conforme-enlace', {
+        poner(zonaSegunda, h('button.d-conforme-enlace', {
           type: 'button', 'data-accion': 'otra-firma',
           onclick: () => { estado.firmantes[1] = ''; ponerSegunda(); guardarBorrador(); zonaSegunda.querySelector('input')?.focus(); },
         }, icon('plus'), FRASES.otraFirma));
         return;
       }
-      zonaSegunda.replaceChildren(
+      poner(zonaSegunda,
         h('div.d-conforme-con-aspa', null,
           campoDeNombre(1, FRASES.rotuloSegunda),
           h('button.d-conforme-aspa', {
@@ -473,7 +482,7 @@ async function recorrido({ lista, entrega, repasos: repasosAlAbrir }) {
 
     const generales = [errores.repasos, errores.compradores, errores.vivienda].filter(Boolean);
     const cuantos = repasos.length;
-    cuerpo.replaceChildren(
+    poner(cuerpo,
       h('div.d-conforme-cab', null,
         h('h2.d-conforme-titulo', null, FRASES.titulo),
         h('button.d-conforme-x', { type: 'button', 'aria-label': 'Cerrar sin firmar', onclick: () => cerrar({ firmado: false }) }, icon('x')),
@@ -496,7 +505,7 @@ async function recorrido({ lista, entrega, repasos: repasosAlAbrir }) {
       generales.length ? h('div.d-conforme-aviso.rojo', { role: 'alert', 'data-campo': 'general' },
         icon('alert'), h('div.grow', null, generales.map((frase) => h('p', null, frase)))) : null,
     );
-    pie.replaceChildren(h('button.d-boton-negro', { type: 'button', 'data-accion': 'ver-documento', onclick: verDocumento }, FRASES.verDocumento));
+    poner(pie, h('button.d-boton-negro', { type: 'button', 'data-accion': 'ver-documento', onclick: verDocumento }, FRASES.verDocumento));
     cuerpo.scrollTop = 0;
     // Con errores, a la vista el primero.
     const primero = cuerpo.querySelector('.d-conforme-error, .d-conforme-aviso.rojo');
@@ -594,12 +603,12 @@ async function recorrido({ lista, entrega, repasos: repasosAlAbrir }) {
     const noCabe = pegaDeTamano(doc);
     const sinSello = !(globalThis.crypto && globalThis.crypto.subtle) ? FRASES.sinSello : '';
     const impide = noCabe || sinSello;
-    cuerpo.replaceChildren(
+    poner(cuerpo,
       aviso ? h('div.d-conforme-aviso', { role: 'status', 'data-parte': 'aviso' }, icon('alert'), h('div.grow', null, h('p', null, aviso))) : null,
       papelDe(doc),
       impide ? h('div.d-conforme-aviso.rojo', { role: 'alert', 'data-parte': 'no-cabe' }, icon('alert'), h('div.grow', null, h('p', null, impide))) : null,
     );
-    pie.replaceChildren(
+    poner(pie,
       h('button.d-boton-negro.claro', { type: 'button', 'data-accion': 'corregir', onclick: pintarHoja }, FRASES.corregir),
       impide ? null : h('button.d-boton-negro', { type: 'button', 'data-accion': 'firmar', onclick: firmar }, FRASES.firmar),
     );
@@ -657,12 +666,12 @@ async function recorrido({ lista, entrega, repasos: repasosAlAbrir }) {
     return new Promise((listo) => {
       paso = 'segunda';
       let pidiendo = false;
-      cuerpo.replaceChildren(h('div.d-conforme-centro', { 'data-parte': 'segunda' },
+      poner(cuerpo, h('div.d-conforme-centro', { 'data-parte': 'segunda' },
         h('span.d-conforme-sello', null, icon('edit')),
         h('h2.d-conforme-titulo', null, `¿Firma también ${nombre}?`),
         h('p.d-conforme-villa', null, 'Si no firma, no figura en el documento: ni su nombre ni un hueco para su firma.'),
       ));
-      pie.replaceChildren(
+      poner(pie,
         h('button.d-boton-negro', {
           type: 'button', 'data-accion': 'si-firma',
           onclick: async () => {
@@ -683,11 +692,11 @@ async function recorrido({ lista, entrega, repasos: repasosAlAbrir }) {
   /* ─── Paso 4 · El papel ─── */
   async function montarYGuardar(firmas) {
     paso = 'preparando';
-    cuerpo.replaceChildren(h('div.d-conforme-centro', { 'data-parte': 'preparando', role: 'status' },
+    poner(cuerpo, h('div.d-conforme-centro', { 'data-parte': 'preparando', role: 'status' },
       h('span.d-conforme-rueda', { 'aria-hidden': 'true' }),
       h('h2.d-conforme-titulo', null, FRASES.preparando),
     ));
-    pie.replaceChildren();
+    poner(pie);
     cuerpo.scrollTop = 0;
 
     let pdf = null;
@@ -714,14 +723,14 @@ async function recorrido({ lista, entrega, repasos: repasosAlAbrir }) {
   function pintarFallo(firmas, fallo, pdf, nombre) {
     paso = 'fallo';
     const motivo = limpio(fallo?.message) || 'Fallo desconocido.';
-    cuerpo.replaceChildren(
+    poner(cuerpo,
       h('div.d-conforme-aviso.rojo', { role: 'alert', 'data-parte': 'fallo' }, icon('alert'),
         h('div.grow', null,
           h('p', null, pdf ? FRASES.noGuardado : FRASES.noPreparado),
           h('p.d-conforme-detalle', null, motivo))),
       papelDe(docDe(firmas), firmas),
     );
-    pie.replaceChildren(
+    poner(pie,
       h('button.d-boton-negro', { type: 'button', 'data-accion': 'reintentar', onclick: () => montarYGuardar(firmas) }, FRASES.reintentar),
       // El papel está hecho y firmado: que no se quede sin salir de aquí.
       pdf ? h('button.d-boton-negro.claro', {

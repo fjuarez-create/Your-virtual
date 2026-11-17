@@ -13,6 +13,7 @@ import { h, icon, sheet, toast, confirmSheet, openViewer, fechaCorta, hora, peso
 import {
   ZONAS, OFICIOS, estado, oficio, unidad, rebotada, puedeVerificar, imagenDeOficio,
   TOPE_FOTOS_TAREA, TOPE_FOTOS_VERIFICACION, prioridadDe,
+  esListaDeVisita, puedeHacerVisita, puedeVerificarVisita,
 } from '../catalog.js';
 import * as store from '../store.js';
 import * as media from '../media.js';
@@ -30,9 +31,26 @@ export async function render({ listaId, tareaId }) {
 
   const lista = await store.lista(listaId);
   const u = lista ? unidad(lista.unidadId) : null;
-  const rutaVilla = lista && u
-    ? conFiltros(`#/p/${lista.promoId}/v/${String(lista.unidadId).split(':')[1]}`, filtrosDeRuta())
-    : '#/viviendas';
+  /* Un repaso de una VISITA DE REPASOS (la sección «Entregadas») es un
+     repaso como los demás, con cinco diferencias:
+       · se vuelve a la pantalla de su visita, no a la vivienda;
+       · no enseña la prioridad (ni ninguna fecha: no la lleva);
+       · con la visita FIRMADA no se ofrece nada que cambie lo que firmó
+         el comprador: ni editar la descripción o la estancia, ni borrar
+         una foto, una nota de voz o el repaso (el servidor lo repondría
+         y parecería un fallo). El lápiz del oficio se queda: el oficio
+         no va en el papel y la contrata lo necesita;
+       · con la visita ABIERTA lo corrige y lo borra quien hace visitas,
+         no solo quien lo apuntó;
+       · lo da por bueno o lo rechaza, además de quien verifica, quien
+         lleva la bandera «posventa» (el chip «Posventa» de Usuarios). */
+  const deVisita = esListaDeVisita(lista);
+  const visitaFirmada = deVisita && !!(await store.conformeDeLista(listaId));
+  const rutaVilla = deVisita
+    ? `#/entregadas/p/${lista.promoId}/v/${String(lista.unidadId).split(':')[1]}/visita/${lista.id}`
+    : lista && u
+      ? conFiltros(`#/p/${lista.promoId}/v/${String(lista.unidadId).split(':')[1]}`, filtrosDeRuta())
+      : '#/viviendas';
   const medios = await store.mediosDeTarea(tareaId);
   const visuales = medios.filter((m) => m.tipo !== 'audio');
   const audios = medios.filter((m) => m.tipo === 'audio');
@@ -45,7 +63,7 @@ export async function render({ listaId, tareaId }) {
   for (const c of comentarios) mediosPorComentario.set(c.id, await store.mediosDeComentario(c.id));
 
   const yo = store.sesion();
-  const verifica = puedeVerificar(yo);
+  const verifica = deVisita ? puedeVerificarVisita(yo) : puedeVerificar(yo);
   const e = estado(t.estado);
 
   /* ─── Quién puede tocar qué ───
@@ -58,8 +76,10 @@ export async function render({ listaId, tareaId }) {
   const puedeCompletar = !verifica && (t.estado === 'pendiente' || t.estado === 'rechazada');
   const puedeVerificarla = verifica && t.estado !== 'verificada';
   const puedeRechazarla = verifica && t.estado === 'resuelta';
-  // Editar y borrar, solo quien la creó y el superadministrador.
-  const suya = store.esMio(t) || store.esAdmin();
+  // Editar y borrar, solo quien la creó y el superadministrador. En una
+  // visita de repasos, quien hace visitas mientras siga abierta; y con
+  // el conforme firmado, nadie.
+  const suya = deVisita ? (!visitaFirmada && puedeHacerVisita(yo)) : (store.esMio(t) || store.esAdmin());
 
   /* ─── Las fotos del remate: una grande, o las dos apiladas ─── */
   const caja = h('div.d-fotos-tarea');
@@ -233,7 +253,7 @@ export async function render({ listaId, tareaId }) {
         titulo: `Excelente${nombreCorto(yo) ? ', ' + nombreCorto(yo) : ''}`,
         frase: alCompletar(),
         usuario: yo,
-        boton: u ? `Volver a ${u.nombre}` : 'Volver a la vivienda',
+        boton: deVisita ? 'Volver a la visita' : u ? `Volver a ${u.nombre}` : 'Volver a la vivienda',
       });
       ir(rutaVilla);
     } catch (err) { toast(err.message, 'err'); accion.disabled = false; }
@@ -293,7 +313,7 @@ export async function render({ listaId, tareaId }) {
       cabecera({
         volver: rutaVilla,
         titulo: `Repaso ${e.nombre.toLowerCase()}`,
-        menu: () => menuTarea(t, listaId, suya),
+        menu: () => menuTarea(t, listaId, suya, { deVisita }),
       }),
 
       h('p.d-creada', null,
@@ -304,12 +324,14 @@ export async function render({ listaId, tareaId }) {
       caja,
       chips,
       // La prioridad, debajo de los chips y con su rótulo. La DF la
-      // cambia de un toque (la pareja); la constructora solo la ve.
-      verifica
-        ? parejaPrioridad((v) => cambiarPrioridad(t, v), prioridadDe(t), { rotulo: 'Prioridad' })
-        : h('div.d-pareja-prioridad', null,
-            h('span.d-pareja-rotulo', null, 'Prioridad'),
-            chipPrioridad(prioridadDe(t))),
+      // cambia de un toque (la pareja); la constructora solo la ve. En
+      // un repaso de una visita de repasos no se enseña.
+      deVisita ? null
+        : verifica
+          ? parejaPrioridad((v) => cambiarPrioridad(t, v), prioridadDe(t), { rotulo: 'Prioridad' })
+          : h('div.d-pareja-prioridad', null,
+              h('span.d-pareja-rotulo', null, 'Prioridad'),
+              chipPrioridad(prioridadDe(t))),
 
       h('p.d-epigrafe', null, 'Descripción'),
       h('div.d-caja', null, t.texto || 'Sin descripción.'),
@@ -335,7 +357,7 @@ export async function render({ listaId, tareaId }) {
 
       audios.length ? h('div', { style: { marginTop: '20px' } },
         h('p.d-epigrafe', null, 'Notas de voz'),
-        h('div.stack', null, audios.map((m) => filaAudio(m, t))),
+        h('div.stack', null, audios.map((m) => filaAudio(m, t, { borrable: !deVisita || suya }))),
       ) : null,
 
       navegacionHermanas(hermanas, indice, listaId),
@@ -366,7 +388,7 @@ function fechaLarga(iso) {
 }
 
 /* ─── Piezas ──────────────────────────────────────────────────── */
-function filaAudio(m, t) {
+function filaAudio(m, t, { borrable = true } = {}) {
   const url = store.urlDeMedio(m);
   return h('div.audio-row', null,
     h('div.row-lead', null, icon('mic', 17)),
@@ -377,7 +399,9 @@ function filaAudio(m, t) {
       h('p.hint', { style: { marginTop: '2px' } },
         [media.duracionLegible(m.duracion), pesoLegible(m.tam)].filter(Boolean).join(' · ')),
     ),
-    h('button.icon-btn', {
+    // En una visita de repasos firmada no se borra nada de un repaso; en
+    // una abierta, solo quien hace visitas (el servidor lo repondría).
+    borrable ? h('button.icon-btn', {
       'aria-label': 'Borrar nota de voz',
       style: { width: '36px', height: '36px', flex: '0 0 36px' },
       onclick: async () => {
@@ -385,7 +409,7 @@ function filaAudio(m, t) {
         await store.borrarMedio(m.id);
         refrescar();
       },
-    }, icon('trash', 16)),
+    }, icon('trash', 16)) : null,
   );
 }
 
@@ -619,7 +643,10 @@ function editarTexto(t) {
       area,
       h('button.btn.accent.full', {
         onclick: async () => {
-          await store.actualizarTarea(t.id, { texto: area.value.trim() });
+          // El almacén se niega si el repaso figura ya en un conforme
+          // firmado (pudo firmarse mientras esta hoja estaba abierta).
+          try { await store.actualizarTarea(t.id, { texto: area.value.trim() }); }
+          catch (err) { cerrar(false); toast(err.message || 'No se ha podido guardar', 'err'); refrescar(); return; }
           cerrar(true);
           toast('Texto actualizado');
           refrescar();
@@ -671,7 +698,8 @@ function editarEstancia(t) {
       h('button.btn.accent.full', {
         style: { marginTop: '14px' },
         onclick: async () => {
-          await store.actualizarTarea(t.id, { oficio: gremio, zona });
+          try { await store.actualizarTarea(t.id, { oficio: gremio, zona }); }
+          catch (err) { cerrar(false); toast(err.message || 'No se ha podido guardar', 'err'); refrescar(); return; }
           cerrar(true);
           toast(zona ? `Guardado · ${zona}` : 'Guardado');
           refrescar();
@@ -822,7 +850,7 @@ async function cambiarOficio(t) {
   refrescar();
 }
 
-async function menuTarea(t, listaId, suya) {
+async function menuTarea(t, listaId, suya, { deVisita = false } = {}) {
   const visuales = (await store.mediosDeTarea(t.id)).filter((m) => m.tipo !== 'audio');
   // Editar y borrar son de quien la creó y del superadministrador. Lo
   // que uno escribió no lo cambia otro: una tarea es lo que alguien
@@ -841,7 +869,9 @@ async function menuTarea(t, listaId, suya) {
     visuales.length > 1
       ? { id: 'portada', icono: 'image', rotulo: 'Elegir la foto del listado', sub: 'La que se ve sin abrir el repaso' }
       : null,
-    visuales.length ? { id: 'borrar-medio', icono: 'trash', rotulo: 'Borrar una foto o vídeo', rojo: true } : null,
+    // En una visita de repasos, borrar una foto es de quien puede editar
+    // el repaso (nadie, si la visita ya está firmada).
+    visuales.length && (!deVisita || edita) ? { id: 'borrar-medio', icono: 'trash', rotulo: 'Borrar una foto o vídeo', rojo: true } : null,
     edita ? { id: 'borrar', icono: 'trash', rotulo: 'Borrar el repaso entero', rojo: true } : null,
   ]);
 
@@ -892,7 +922,8 @@ async function menuTarea(t, listaId, suya) {
       text: 'Se borrarán también sus fotos, vídeos y notas de voz.',
       ok: 'Borrar', danger: true,
     })) return;
-    await store.borrarTarea(t.id);
+    try { await store.borrarTarea(t.id); }
+    catch (err) { toast(err.message || 'No se ha podido borrar', 'err'); refrescar(); return; }
     toast('Repaso borrado');
     ir(conFiltros('#/l/' + listaId, filtrosDeRuta()));
   }

@@ -148,6 +148,7 @@ def bajar(desde):
     completa = False
     motivo = ""
     muestra = None  # una foto, para mirar_ficheros(): la más reciente
+    ficha = None    # las claves de una ficha de entrega, para saber qué versión las sirve
     while tandas < TOPE_TANDAS:
         antes = time.monotonic()
         codigo, peso, r = pedir("cambios?desde=" + urllib.parse.quote(marca, safe=""))
@@ -170,6 +171,8 @@ def bajar(desde):
                     ultimo = cuando
                 if cuando >= DESPUES_DE:
                     despues[t].add(fila.get("id"))
+                if t == "entregas" and ficha is None and isinstance(fila, dict):
+                    ficha = sorted(fila.keys())
                 if (t == "medios" and not fila.get("borrada")
                         and str(fila.get("mime") or "") in EXTENSIONES
                         and (muestra is None or cuando > str(muestra.get("actualizado") or "")[:19])):
@@ -197,7 +200,7 @@ def bajar(desde):
         "completa": completa, "motivo": motivo, "personas": personas,
         "filas": filas, "distintas": {t: len(vistas[t]) for t in TABLAS},
         "ultimo": ultimo, "despues": {t: len(despues[t]) for t in TABLAS},
-        "muestra": muestra,
+        "muestra": muestra, "ficha": ficha,
     }
 
 
@@ -414,6 +417,19 @@ def main():
     # 4 · El reconocimiento de repasos pendientes contesta. Solo lee, y
     #     su línea nunca pone la medición en rojo (ver mirar_reconocimiento).
     lineas.append(mirar_reconocimiento())
+
+    # 4 bis · ¿Sirve ya el servidor las fichas de entrega con lo de
+    #     «Entregadas» (la cita de la visita de repasos y los cuatro
+    #     botones)? Son columnas que añade la versión 23 del esquema: si
+    #     las fichas las traen, la base de producción ha llegado a esa
+    #     versión. Solo se miran los NOMBRES de los campos de una ficha.
+    claves = todo.get("ficha")
+    if claves is None:
+        lineas.append("LAS FICHAS DE ENTREGA: no ha bajado ninguna con la que mirar.")
+    elif all(k in claves for k in ("posventa", "piscina", "clima", "domotica", "armarios")):
+        lineas.append("LAS FICHAS DE ENTREGA traen ya lo de «Entregadas» (la cita de la visita y los cuatro botones): la base está en la versión nueva.")
+    else:
+        lineas.append("LAS FICHAS DE ENTREGA no traen todavía lo de «Entregadas»: el servidor es el de antes, o la base no ha llegado a la versión nueva.")
 
     # 5 · Las fotos, por su dirección directa y sin sesión. Solo dice lo
     #     que contesta el servidor, y tampoco pone la medición en rojo.
