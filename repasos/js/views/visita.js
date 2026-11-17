@@ -200,7 +200,11 @@ export async function render({ promoId, unidadId, listaId }) {
         store.entregaDeUnidad(unidadId), store.tareasDeLista(listaId), store.conformeDeLista(listaId),
       ]);
       if (yaFirmada) { refrescar(); return; }
-      await finalizarVisita({ lista, entrega, repasos: deAhora });
+      const salida = await finalizarVisita({ lista, entrega, repasos: deAhora });
+      // Si se sale sin firmar, la pantalla se pone al día: con la hoja
+      // abierta no se repintaba, y mientras tanto pudo llegar algo de
+      // otro móvil (un repaso más, o la visita ya firmada allí).
+      if (!salida?.firmado) refrescar();
     } catch (e) {
       toast(e?.message || 'No se ha podido finalizar la visita', 'err');
     } finally {
