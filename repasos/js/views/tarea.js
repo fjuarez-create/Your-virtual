@@ -672,7 +672,7 @@ function editarTexto(t) {
  * En un repaso de una visita de repasos (`deVisita`) son dos
  * desplegables, como en la hoja en la que se apuntó: el oficio, con
  * «General» el primero y los demás por orden alfabético, y la estancia,
- * con «Sin estancia» el primero (lo pidió Fran el 17-11-2026).
+ * con «Sin estancia» el primero (pedido el 17-11-2026).
  */
 function editarEstancia(t, { deVisita = false } = {}) {
   return sheet((cerrar) => {

@@ -588,7 +588,7 @@ export function compradoresCortos(texto) {
    En la visita de repasos el oficio y la estancia no se eligen con
    chips sino en dos desplegables (en el iPhone salen como rueda): con
    chips eran «una lista enorme» en la que había que buscar con el
-   comprador delante (lo pidió Fran el 17-11-2026). Aquí está solo el
+   comprador delante (lo pidió la casa el 17-11-2026). Aquí está solo el
    ORDEN de las dos listas y con qué nace cada una; el dibujo está en
    js/piezasPosventa.js. Los repasos de siempre siguen con sus chips.
 

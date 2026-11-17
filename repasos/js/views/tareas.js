@@ -242,7 +242,7 @@ function marcasMedios(tipos) {
  *      aviso. Hay un comprador delante: no se le tiene esperando.
  *   3. Sin cobertura no se le pregunta nada a la IA.
  *   4. El oficio y la estancia van en dos desplegables, no en chips (lo
- *      pidió Fran el 17-11-2026). El oficio nace con el que propone la
+ *      pidió la casa el 17-11-2026). El oficio nace con el que propone la
  *      IA, o «General» si no lo hay; la estancia, «Sin estancia»: la de
  *      la IA no se usa, la pone quien apunta.
  * Sin esa opción no cambia nada de lo de siempre.
