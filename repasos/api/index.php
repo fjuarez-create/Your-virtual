@@ -2019,6 +2019,15 @@ function volcado_completo(): array
  * el navegador tiene prohibida— y los ficheros de fotos y audios no se
  * tocan: con el volcado, esto tiene vuelta atrás. Solo abre con la
  * llave de un solo uso de la copia, que el robot pone y retira.
+ *
+ * OJO DESDE «ENTREGADAS» (17-11-2026): `medios` se vacía ENTERA, sin
+ * mirar el tipo, así que esto se lleva también las filas de los
+ * CONFORMES FIRMADOS de las visitas de repasos (tipo «documento»), que
+ * por la app no se borran nunca. Los PDF siguen en el disco y sus filas
+ * en el volcado, pero las fichas de entrega no se tocan: quedarían con
+ * la cita de la visita puesta y sin su conforme. Quien lo lance con
+ * conformes ya firmados tiene que saberlo y reponer esas filas desde el
+ * volcado.
  */
 function arranque_limpio(): void
 {
