@@ -389,11 +389,12 @@ case "$QUE" in
     # documento, el PDF saldría con la de reserva sin que nadie lo viera;
     # si faltara cualquiera de las otras tres, no saldría.
     #
-    # Y las tres de «Entregadas» que ya existen: el servidor de la visita
-    # de repasos y de su conforme firmado, el papel y la firma con el
-    # dedo. Sin la primera, la app no puede guardar un conforme (el
-    # servidor contesta «todavía no» y el móvil espera sin avisar); sin
-    # las otras dos, no hay papel que firmar.
+    # Y las cuatro de «Entregadas»: el servidor de la visita de repasos y
+    # de su conforme firmado, el papel, la firma con el dedo y la capa
+    # que lleva de «Finalizar visita» al conforme guardado. Sin la
+    # primera, la app no puede guardar un conforme (el servidor contesta
+    # «todavía no» y el móvil espera sin avisar); sin las otras tres, no
+    # hay papel que firmar.
     for f in index.html sw.js manifest.webmanifest \
              privacidad.html soporte.html marketing.html \
              assets/marketing/inicio.jpg \
@@ -401,7 +402,8 @@ case "$QUE" in
              api/index.php api/lib/nucleo.php assets/fonts/opensans-var.woff2 \
              js/constancia.js js/pdfConstancia.js api/lib/constancia.php \
              assets/fonts/liberation-sans-pdf.ttf \
-             api/lib/posventa.php js/pdfConforme.js js/firma.js; do
+             api/lib/posventa.php js/pdfConforme.js js/firma.js \
+             js/conforme.js; do
       if [ "$(contar_remoto "$f")" -ge 1 ]; then
         echo "ok     $f"
       else
