@@ -346,7 +346,10 @@ function editarUsuario(u) {
       },
         h('div.row-lead', null, icon('apreton', 18)),
         h('div.grow', null,
-          h('div.row-title', null, u.posventa ? 'Quitarle los repasos de las visitas' : 'Dejarle dar por buenos los repasos de las visitas'),
+          // El título es largo y en un móvil no cabe en un renglón: se
+          // deja partir en dos antes que cortarlo con puntos suspensivos.
+          h('div.row-title', { style: { whiteSpace: 'normal' } },
+            u.posventa ? 'Quitarle los repasos de las visitas' : 'Dejarle dar por buenos los repasos de las visitas'),
           h('div.row-sub', { style: { whiteSpace: 'normal' } },
             u.posventa
               ? 'Dejará de poder dar por buenos los repasos de las visitas'
