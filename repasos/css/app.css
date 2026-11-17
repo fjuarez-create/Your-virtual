@@ -3897,6 +3897,11 @@ body.es-taller::before {
   font-size: 22px; line-height: 28px; font-weight: 500; letter-spacing: -0.01em;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+/* Por debajo de 360 px, «Firma de la parte compradora» no cabe en un
+   renglón: parte en dos, un poco más pequeño, en vez de cortarse. */
+@media (max-width: 359px) {
+  .d-firma-titulo { white-space: normal; font-size: 20px; line-height: 26px; }
+}
 .d-firma-x {
   grid-area: x; width: 44px; height: 44px; border-radius: 999px;
   background: #fff; color: var(--d-tinta); display: grid; place-items: center;
@@ -3935,8 +3940,10 @@ body.es-taller::before {
 }
 .d-firma.con-tinta .d-firma-aqui { display: none; }
 
+/* Siempre con el sitio de dos renglones: si la frase lo ocupara al salir,
+   el papel encogería y lo ya firmado daría un salto bajo el dedo. */
 .d-firma-pista {
-  margin: 0; min-height: 20px; font-size: 14px; line-height: 20px;
+  margin: 0; min-height: 40px; font-size: 14px; line-height: 20px;
   color: var(--d-gris); text-align: center;
 }
 /* Lo que falta se lee en tinta, que es como se lee lo que hay que entender. */

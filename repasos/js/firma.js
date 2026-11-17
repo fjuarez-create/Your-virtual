@@ -318,6 +318,8 @@ export function pedirFirma({ titulo = FRASES.titulo, nombre = '', comprobarNombr
 
     const sumar = (e) => {
       const p = aMundo(e);
+      // Lo que se sale del papel no se ve: tampoco se guarda (saldría en el PDF).
+      if (mundo) { p[0] = Math.min(Math.max(p[0], 0), mundo.ancho); p[1] = Math.min(Math.max(p[1], 0), mundo.alto); }
       const anterior = enCurso[enCurso.length - 1];
       if (anterior && Math.hypot(p[0] - anterior[0], p[1] - anterior[1]) < PASO_MINIMO) return;
       enCurso.push(p);
