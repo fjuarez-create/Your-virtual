@@ -139,6 +139,48 @@ Y dos cosas más que cuelgan de la sincronización:
   siga saliendo cuando a esa persona se le da de baja, y antes de
   cada baja lo deja apuntado `apuntar_nombre_antes_de_la_baja()`.
 
+## «Entregadas»: la visita de repasos y su conforme (noviembre de 2026)
+
+Las viviendas ya entregadas tienen su sección (`#/entregadas`) y su
+vocabulario, decidido por Fran el 16-11-2026:
+
+- **Visita de repasos**: la que se hace con el comprador DESPUÉS de
+  entregar. No es la «revisión» de antes de la firma (esa es `revision`
+  y `revisadaEn`). Por dentro, la cita son los hechos `posventa` y
+  `posventaHora` de la ficha de entrega, y cada visita hecha con la app
+  es una lista con `fase = 'visita'`.
+- **Repasos de la visita**: los que se apuntan en ella. Van en esa
+  lista y SOLO salen dentro de «Entregadas»: no se mezclan con los de
+  siempre en la vivienda, la portada, las pantallas por estado, los
+  partes, el reconocimiento ni la purga. Quien añada un sitio que
+  enumere listas o repasos tiene que apartarlos: en el cliente,
+  `esListaDeVisita()` (`js/catalog.js`); en SQL, por sus bytes,
+  `HEX(l.fase) <> '766973697461'`, porque en MariaDB un «<> 'visita'»
+  no distingue mayúsculas ni tildes y se dejaba engañar.
+- **Conforme de la visita**: el papel que firma el comprador con el
+  dedo al acabar. NUNCA «acta». Plantilla fija, sin IA y sin fotos
+  (`js/pdfConforme.js`), firmado con `js/firma.js`. Por dentro es una
+  fila de `medios` con `tipo = 'documento'` cuyo `tarea_id` es el id de
+  la LISTA de la visita, y lo firmado va en `medios.datos`. Un conforme
+  firmado no se anula ni se borra: si tiene un error, se hace otra
+  visita con su conforme y quedan los dos.
+- **Los cuatro botones** (piscina, climatización, domótica y armarios)
+  son hechos de la ficha de entrega. Su valor es el día de la CITA con
+  el instalador (puede ser futuro), vacío, o `no-tiene` (solo piscina y
+  climatización). Nunca «coordinado el».
+- **Cerrada** se calcula, no se guarda (`situacionPosventa()`, en
+  `js/posventa.js`): hay un conforme firmado, no queda ninguna visita a
+  medias ni cita por hacer, los cuatro botones están resueltos y todos
+  los repasos de las visitas están VERIFICADOS. Los repasos de antes de
+  la entrega no cuentan.
+- **Quién puede qué**, comprobado en el servidor (`api/lib/posventa.php`
+  y `api/lib/entregas.php`): la fecha, la hora y los botones, el
+  administrador y el comercial; hacer la visita y abrir el PDF firmado,
+  ellos dos y la dirección facultativa; dar por buenos los repasos de
+  la visita, el administrador, la dirección facultativa y quien lleve la
+  bandera `posventa` (el chip «Posventa» de Usuarios), que no da nada
+  más.
+
 ## Lo que no se hace nunca
 
 - **No se cambia la contraseña de Fran** (f.juarez@unikdi.com). Lo ha
