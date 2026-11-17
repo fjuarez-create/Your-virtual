@@ -11,7 +11,7 @@ import * as api from './api.js';
 import {
   puedeVerificar, hecha, esperandoVisto, rebotada, enObra, OFICIO_POR_DEFECTO, FASE_UNICA, FASE_POST,
   PRIORIDAD_POR_DEFECTO, esPrioridad, prioridadDe, puedePonerFechas,
-  FASE_VISITA, esListaDeVisita, puedeHacerVisita,
+  FASE_VISITA, esListaDeVisita, puedeHacerVisita, puedeVerificarVisita,
 } from './catalog.js';
 import { BOTONES, NO_TIENE, esConforme } from './posventa.js';
 import {
@@ -72,9 +72,14 @@ export async function iniciarSesionLocal(nombre) {
 export async function cerrarSesion() {
   const pend = await db.numPendientes();
   if (api.HAY_SERVIDOR) { try { await api.salir(); } catch { /* da igual */ } }
+  // Un «Conforme de la visita» firmado y sin subir cuenta como trabajo
+  // sin subir AUNQUE ya no esté en la cola: si el servidor lo rechazó,
+  // su único ejemplar es el de este móvil, y limpiar la base lo tiraría.
+  let conformes = 0;
+  try { conformes = (await conformesPendientes()).length; } catch { conformes = 1; /* ante la duda, no se limpia */ }
   usuario = null;
   // Si quedaba trabajo sin subir se conserva: se recupera al volver a entrar.
-  if (pend > 0) await db.meta.del('usuario');
+  if (pend > 0 || conformes > 0) await db.meta.del('usuario');
   else await db.limpiarTodo();
 }
 
@@ -899,6 +904,151 @@ export async function empezarVisita(unidadId, promoId) {
   return crearLista({ unidadId, promoId, fase: FASE_VISITA, nombre: 'Visita de repasos' });
 }
 
+/* ─── La visita: del borrador de «Finalizar» al conforme guardado ───
+   Lo que escribe la pantalla de la visita (js/views/visita.js y
+   js/conforme.js). Tres reglas que no son adorno:
+
+     · Un conforme firmado NO SE PIERDE. Se guarda en este móvil con su
+       PDF dentro (`bytes`), se apunta en `conformes-pendientes` y se
+       encola. Sube solo cuando hay cobertura; si el servidor no lo
+       admite, sale de la cola pero NO de `conformes-pendientes`, y la
+       pantalla lo enseña en rojo con «Compartir el PDF». Cerrar sesión
+       no limpia la base mientras quede alguno (ver cerrarSesion).
+     · Lo firmado no se retoca: con conforme, un repaso de la visita ya
+       no cambia de texto ni de estancia y no se borra (sí se completa
+       y se da por bueno). El servidor hace cumplir lo mismo.
+     · Una visita con conforme no se borra. */
+
+/** Apunta la lista de conformes sin subir (o la quita del todo si queda vacía). */
+async function fijarConformesPendientes(ids) {
+  const limpios = [...new Set(ids.filter((id) => typeof id === 'string' && id))];
+  if (limpios.length) await db.meta.set('conformes-pendientes', limpios);
+  else await db.meta.del('conformes-pendientes');
+}
+
+/** Un instante tal como lo exige la puerta del conforme: «2026-11-17T10:12:31.000Z». */
+const INSTANTE_ESTRICTO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+
+/**
+ * Guarda en ESTE móvil un «Conforme de la visita» recién firmado y lo
+ * deja en la cola para que suba solo. Funciona sin cobertura.
+ *
+ *   listaId   la lista de la visita (fase 'visita').
+ *   unidadId  la vivienda.
+ *   pdf       el documento, en octetos (Uint8Array o ArrayBuffer).
+ *   nombre    el del fichero («BRASSIE_Villa_12_Conforme_Visita_….pdf»).
+ *   datos     lo firmado, tal como va a viajar (contrato § 3.5).
+ *   huella    el SHA-256 del PDF, en 64 cifras hexadecimales.
+ *
+ * Devuelve la fila guardada. NO comprueba que la visita siga sin otro
+ * conforme: quien llama lo mira ANTES de pedir la firma; con la firma
+ * ya hecha, el papel se guarda siempre (si en otro móvil se firmó otro,
+ * el servidor rechaza este y se enseña en rojo, con su PDF a salvo).
+ */
+export async function guardarConforme({ listaId, unidadId, pdf, nombre, datos, huella }) {
+  if (!puedeHacerVisita(usuario)) {
+    throw new Error('El conforme de la visita lo recogen el administrador, el comercial y la dirección facultativa.');
+  }
+  const l = await db.get('listas', listaId);
+  if (!l || !esListaDeVisita(l) || l.unidadId !== unidadId) throw new Error('Esa visita no está en este móvil.');
+  let bytes = null;
+  if (pdf instanceof ArrayBuffer) bytes = pdf;
+  else if (ArrayBuffer.isView(pdf)) bytes = pdf.buffer.slice(pdf.byteOffset, pdf.byteOffset + pdf.byteLength);
+  if (!bytes || !bytes.byteLength) throw new Error('El documento ha salido vacío.');
+  if (!/^[0-9a-f]{64}$/.test(String(huella || ''))) throw new Error('Falta la huella del documento.');
+  if (!datos || typeof datos !== 'object' || !Array.isArray(datos.firmas) || !datos.firmas.length) {
+    throw new Error('Falta la firma: el conforme no se guarda sin firmar.');
+  }
+
+  const primera = String(datos.firmas[0]?.firmadoEn || '');
+  const m = {
+    id: nuevoId(),
+    tareaId: listaId,            // en un conforme, `tareaId` es el id de la LISTA de la visita
+    comentarioId: null,
+    tipo: 'documento',
+    mime: 'application/pdf',
+    tam: bytes.byteLength,
+    ancho: 0, alto: 0, duracion: 0,
+    nombre: nombre || '',
+    blob: null,
+    bytes,
+    datos,
+    huella,
+    subido: false,
+    intentos: 0,
+    borrada: false,
+    // El instante de la firma, del reloj de este móvil.
+    creado: INSTANTE_ESTRICTO.test(primera) ? primera : ahora(),
+    actualizado: ahora(),
+  };
+  // Primero se apunta en la lista de pendientes y después se escribe la
+  // fila: si el teléfono mata la app entre una cosa y otra, la repesca
+  // encuentra el apunte (y lo limpia si la fila no llegó a escribirse);
+  // al revés quedaría un conforme guardado que nadie subiría.
+  await fijarConformesPendientes([...(await conformesPendientes()), m.id]);
+  await db.put('medios', m);
+  await db.meta.del(`conforme-borrador:${listaId}`);
+  await encolar('medio', m.id);
+  estadoSync.revision++;
+  return m;
+}
+
+/**
+ * Los OTROS conformes que este móvil guarda de una visita, además del
+ * que manda (conformeDeLista): el caso de dos móviles que firman la
+ * misma visita. El servidor se queda con el primero que llega y rechaza
+ * el otro, que sigue aquí con su PDF: la pantalla lo enseña aparte.
+ */
+export async function conformesDeMasDeLista(listaId) {
+  const principal = await conformeDeLista(listaId);
+  if (!principal) return [];
+  return (await db.porIndice('medios', 'tareaId', listaId))
+    .filter((m) => esConforme(m) && m.id !== principal.id)
+    .sort((a, b) => String(a.creado || '').localeCompare(String(b.creado || '')));
+}
+
+/** ¿Cuelga este repaso de una visita que ya tiene su conforme firmado (subido o por subir)? */
+async function esDeVisitaFirmada(t) {
+  if (!t?.listaId) return false;
+  const l = await db.get('listas', t.listaId);
+  if (!esListaDeVisita(l)) return false;
+  return (await db.porIndice('medios', 'tareaId', l.id)).some(esConforme);
+}
+const FRASE_FIRMADO = 'Este repaso figura en un conforme firmado: ya no se le cambia el texto ni la estancia, y no se borra.';
+
+/**
+ * «Borrar esta visita»: solo una visita ABIERTA, y solo quien la empezó
+ * o el administrador. Con conforme (subido, por subir o rechazado) no
+ * se borra nunca. Se lleva sus repasos con sus fotos, como borrar una
+ * lista, y el borrador de «Finalizar la visita».
+ */
+export async function borrarVisita(listaId) {
+  const l = await db.get('listas', listaId);
+  if (!l || l.borrada) return null;
+  if (!esListaDeVisita(l)) throw new Error('Eso no es una visita de repasos.');
+  if (!puedeHacerVisita(usuario) || !(esAdmin() || esMio(l))) {
+    throw new Error('Una visita la borra quien la empezó o el administrador.');
+  }
+  if ((await db.porIndice('medios', 'tareaId', listaId)).some(esConforme)) {
+    throw new Error('Esta visita tiene su conforme firmado: no se puede borrar.');
+  }
+  await db.meta.del(`conforme-borrador:${listaId}`);
+  return borrarLista(listaId);
+}
+
+/* El borrador de «Finalizar la visita»: lo escrito en la hoja antes de
+   firmar, por visita. Vive solo en este móvil (no viaja) y se borra al
+   guardar el conforme o al borrar la visita. Si el teléfono mata la app
+   a media hoja, al volver sale como estaba. */
+export async function leerBorradorConforme(listaId) {
+  const b = await db.meta.get(`conforme-borrador:${listaId}`);
+  return b && typeof b === 'object' ? b : null;
+}
+export async function guardarBorradorConforme(listaId, borrador) {
+  await db.meta.set(`conforme-borrador:${listaId}`, { ...borrador, guardado: ahora() });
+}
+export const borrarBorradorConforme = (listaId) => db.meta.del(`conforme-borrador:${listaId}`);
+
 /**
  * Los repasos de los partes post-entrega que aún no tienen el visto
  * bueno, por vivienda: son las «incidencias» del banner rojo.
@@ -1035,6 +1185,13 @@ export async function crearTarea({ listaId, texto, oficio = OFICIO_POR_DEFECTO, 
 export async function actualizarTarea(id, cambios) {
   const t = await db.get('tareas', id);
   if (!t) return null;
+  // Lo que firmó el comprador no se retoca: en una visita con conforme,
+  // el texto y la estancia de un repaso ya no cambian y el repaso no se
+  // borra. Su estado sí (se completa y se da por bueno), y su oficio.
+  const tocaLoFirmado = ('texto' in cambios && String(cambios.texto || '') !== String(t.texto || ''))
+    || ('zona' in cambios && String(cambios.zona || '') !== String(t.zona || ''))
+    || (cambios.borrada === true && !t.borrada);
+  if (tocaLoFirmado && await esDeVisitaFirmada(t)) throw new Error(FRASE_FIRMADO);
   const nueva = { ...t, ...cambios, actualizado: ahora() };
   if (cambios.estado && cambios.estado !== t.estado) {
     nueva.estadoPor = usuario?.nombre || 'Sin identificar';
@@ -1068,8 +1225,15 @@ export async function cambiarEstado(tareaId, nuevo, nota = {}) {
   if (!t) return null;
   if (t.estado === nuevo) return t;
 
-  if ((nuevo === 'verificada' || nuevo === 'rechazada') && !puedeVerificar(usuario)) {
-    throw new Error('No tienes permiso para verificar ni rechazar repasos.');
+  if (nuevo === 'verificada' || nuevo === 'rechazada') {
+    // Un repaso de una VISITA de repasos lo da por bueno (o lo rechaza)
+    // también quien lleva la bandera «posventa» (el chip «Posventa» de
+    // Usuarios). Solo ahí: en un repaso de siempre esa bandera no vale
+    // nada. El servidor hace la misma comprobación, mirando la lista
+    // que tiene guardada.
+    const deVisita = esListaDeVisita(await db.get('listas', t.listaId));
+    const puede = deVisita ? puedeVerificarVisita(usuario) : puedeVerificar(usuario);
+    if (!puede) throw new Error('No tienes permiso para verificar ni rechazar repasos.');
   }
 
   const rechazo = nuevo === 'rechazada';
@@ -1173,6 +1337,10 @@ export async function mediosDeComentario(comentarioId) {
 }
 
 export async function borrarTarea(id) {
+  // Antes de tocar nada: un repaso que figura en una visita firmada no
+  // se borra (si se mirara al final, ya se habrían ido sus fotos).
+  const t = await db.get('tareas', id);
+  if (t && !t.borrada && await esDeVisitaFirmada(t)) throw new Error(FRASE_FIRMADO);
   const medios = await db.porIndice('medios', 'tareaId', id);
   for (const m of medios) await borrarMedio(m.id, { silencioso: true });
   for (const c of await comentariosDeTarea(id)) await borrarComentario(c.id);
@@ -2124,6 +2292,9 @@ export async function sincronizar({ forzar = false } = {}) {
         if (e.status !== 404) throw e;
         // Un servidor viejo no conoce la ruta: sin sello, nada que acatar.
       }
+      // Antes de subir: un conforme firmado que se hubiera quedado sin
+      // apunte en la cola vuelve a ella (ver repescarConformes).
+      await repescarConformes();
       await empujar();
       // El relleno de una vez: hasta noviembre de 2026 una bajada por
       // tandas podía saltarse filas (ver cambios() en el servidor), y
@@ -2263,6 +2434,13 @@ async function empujar() {
         const c = await db.get('comentarios', item.id);
         mirar('comentarios', c);
         if (c) await api.subirComentarios([sinBlobs(c)]);
+      } else if (item.tipo === 'medio' && (await db.get('medios', item.id))?.tipo === 'documento') {
+        // Un «Conforme de la visita» firmado tiene sus propias reglas
+        // (ver empujarConforme): no sube por la puerta de las fotos, y
+        // lo que conteste el servidor no puede ni tirarlo de la cola en
+        // silencio ni cortarle la sincronización a quien firma.
+        const paso = await empujarConforme(item.id);
+        if (paso === 'esperar') continue;
       } else if (item.tipo === 'medio') {
         const m = despertarMedio(await db.get('medios', item.id));
         if (m && !m.borrada && m.blob) {
@@ -2352,6 +2530,147 @@ async function empujar() {
       throw e;
     }
   }
+  // Un conforme que se ha quedado esperando a que suba lo suyo (su
+  // lista, sus repasos) ya lo tiene arriba si se ha llegado hasta aquí:
+  // otra vuelta enseguida, sin esperar al minuto de rutina.
+  if (conformeEsperaLoSuyo) {
+    conformeEsperaLoSuyo = false;
+    quedaAlgoPorSubir = true;
+  }
+}
+
+/* ═══ La subida de un «Conforme de la visita» ══════════════════════
+   El papel firmado sube por su puerta (POST conformes) y con reglas
+   suyas, porque la cola de siempre falla de dos maneras que aquí no se
+   pueden heredar: un 4xx repetido tres veces APARTA el apunte sin
+   decir nada, y cualquier otro fallo CORTA la subida de lo que va
+   detrás y también la bajada. Con una foto eso se cura solo; con un
+   conforme, o se perdería un papel firmado o se quedaría sin
+   sincronizar nada el móvil de quien firma.
+
+   Devuelve 'hecho' (el apunte sale de la cola: subió, o el servidor lo
+   ha rechazado de verdad y queda apuntado en su fila) o 'esperar' (el
+   apunte se queda en la cola y los demás siguen). Solo lanza cuando no
+   hay respuesta (sin red: se corta y se reintenta, como siempre) o
+   cuando la sesión ha caducado (401).
+
+     · La sesión no hace visitas (en el móvil de obra entra hoy uno y
+       mañana otro): no se llama al servidor; espera a quien pueda.
+     · El conforme espera a lo suyo: con su lista o alguno de sus
+       repasos todavía en la cola, espera. Lo firmado tiene que estar en
+       el servidor antes que el papel.
+     · 200: subido. NO suelta los bytes: el móvil que firmó tiene que
+       poder abrirlo sin cobertura. Sale de `conformes-pendientes`.
+     · 400, 409, 413, 415: rechazo de verdad, a la primera. Se apunta
+       en su fila (`rechazado`), sale de la cola y NO de
+       `conformes-pendientes`: la pantalla lo enseña en rojo, con
+       «Compartir el PDF».
+     · 403 (ha entrado otra persona, o se le quitó el permiso) y 404 (un
+       servidor de antes, que no conoce la puerta): espera, sin contar.
+     · 500, 503 y cualquier otra cosa: «todavía no». Espera, y cuenta
+       el intento EN LA FILA para enseñarlo. Con `aun-no` (el servidor
+       no tiene la visita) se vuelven a encolar la lista y sus repasos.
+       A la quinta vez SEGUIDA de `fichero-incompleto` pasa a rechazado:
+       lo guardado no da la huella y reintentar no lo va a curar. */
+let conformeEsperaLoSuyo = false;
+const FICHERO_NO_LLEGA = 'El fichero no llega entero al servidor.';
+
+async function empujarConforme(id) {
+  const m = await db.get('medios', id);
+  if (!m || m.borrada || m.tipo !== 'documento') return 'hecho';
+  if (m.subido) {
+    await fijarConformesPendientes((await conformesPendientes()).filter((x) => x !== id));
+    return 'hecho';
+  }
+  if (m.rechazado) return 'hecho';   // ya apartado: sigue en `conformes-pendientes`, no en la cola
+  if (!puedeHacerVisita(usuario)) return 'esperar';
+
+  // Lo suyo, primero: su lista y sus repasos.
+  const suyos = new Set((await db.porIndice('tareas', 'listaId', m.tareaId)).map((t) => t.id));
+  const enCola = await db.pendientes();
+  if (enCola.some((p) => (p.tipo === 'lista' && p.id === m.tareaId) || (p.tipo === 'tarea' && suyos.has(p.id)))) {
+    conformeEsperaLoSuyo = true;
+    return 'esperar';
+  }
+
+  const apuntar = async (cambios) => {
+    const guardado = await db.get('medios', id);
+    if (guardado) await db.put('medios', { ...guardado, ...cambios });
+    estadoSync.revision++;
+  };
+  const rechazar = async (estado, mensaje) => {
+    await apuntar({ rechazado: { estado, mensaje: mensaje || 'El servidor no ha admitido el conforme.' } });
+    return 'hecho';
+  };
+  /** «Todavía no»: cuenta el intento en la fila y sigue esperando. */
+  const todaviaNo = async (estado, codigo) => {
+    const incompletos = codigo === 'fichero-incompleto' ? (m.incompletos || 0) + 1 : 0;
+    if (incompletos >= 5) return rechazar(estado, FICHERO_NO_LLEGA);
+    await apuntar({ intentos: (m.intentos || 0) + 1, incompletos });
+    return 'esperar';
+  };
+
+  const pdf = m.bytes && m.bytes.byteLength ? new Blob([m.bytes], { type: 'application/pdf' })
+    : (m.blob instanceof Blob && m.blob.size ? m.blob : null);
+  if (!pdf) return rechazar(0, 'El documento firmado ya no está en este móvil.');
+
+  let r;
+  try {
+    r = await api.subirConforme(m, pdf);
+  } catch (e) {
+    const estado = Number(e?.status) || 0;
+    if (estado === 401 || estado === 0) throw e;
+    if ([400, 409, 413, 415].includes(estado)) return rechazar(estado, e.message);
+    if (estado === 403 || estado === 404) return 'esperar';
+    if (e.codigo === 'aun-no') {
+      // El servidor dice que no tiene la visita: se le vuelve a mandar.
+      await encolar('lista', m.tareaId);
+      for (const t of suyos) await encolar('tarea', t);
+      // La vuelta rápida, solo las primeras veces: si el servidor
+      // siguiera sin quererla, esto sería llamarle cada segundo. Después
+      // va al paso de la sincronización de rutina.
+      if ((m.intentos || 0) < 3) conformeEsperaLoSuyo = true;
+    }
+    return todaviaNo(estado, e.codigo || '');
+  }
+  // El servidor dice qué ha guardado: si no es lo que salió de aquí, la
+  // subida no vale y se reintenta (como con las fotos).
+  if (r && typeof r.tam === 'number' && r.tam !== pdf.size) return todaviaNo(0, 'fichero-incompleto');
+  if (r && typeof r.huella === 'string' && r.huella && m.huella && r.huella !== m.huella) return todaviaNo(0, 'fichero-incompleto');
+
+  // Subido. Los bytes SE QUEDAN (a diferencia de un vídeo o un audio).
+  const guardado = await db.get('medios', id);
+  if (guardado) {
+    const { rechazado, incompletos, ...resto } = guardado;
+    await db.put('medios', { ...resto, subido: true, intentos: 0 });
+  }
+  await fijarConformesPendientes((await conformesPendientes()).filter((x) => x !== id));
+  estadoSync.revision++;
+  return 'hecho';
+}
+
+/**
+ * La repesca: los conformes firmados en este móvil que siguen sin subir
+ * y se han quedado sin apunte en la cola vuelven a ella. Cubre una
+ * vuelta atrás de versión (una app que no conozca el tipo borra el
+ * apunte como si hubiera subido) y cualquier apunte perdido: un
+ * conforme firmado no se queda sin subir sin que se vea. Los que el
+ * servidor rechazó NO vuelven a la cola (se enseñan en rojo), y los que
+ * ya subieron, o ya no están, salen de la lista.
+ */
+async function repescarConformes() {
+  const ids = await conformesPendientes();
+  if (!ids.length) return;
+  const enCola = await db.pendientes();
+  const quedan = [];
+  for (const id of ids) {
+    const m = await db.get('medios', id);
+    if (!m || m.borrada || m.tipo !== 'documento' || m.subido) continue;
+    quedan.push(id);
+    if (m.rechazado) continue;
+    if (!enCola.some((p) => p.tipo === 'medio' && p.id === id)) await db.encolar({ tipo: 'medio', id });
+  }
+  if (quedan.length !== ids.length) await fijarConformesPendientes(quedan);
 }
 
 /** Baja los cambios por tandas: se pide otra mientras el servidor diga
@@ -2382,9 +2701,18 @@ async function tirar() {
 async function acatarArranque(sello) {
   if (!sello) return false;
   if ((await db.meta.get('arranque')) === sello) return false;
+  // Lo único que se salva: los conformes firmados en este móvil que no
+  // han subido. Son papeles con la firma de un comprador y su único
+  // ejemplar está aquí; se quedan sueltos, con su «Compartir el PDF».
+  const aSalvo = [];
+  for (const id of await conformesPendientes()) {
+    const m = await db.get('medios', id);
+    if (esConforme(m) && !m.subido) aSalvo.push(m);
+  }
   for (const almacen of ['tareas', 'listas', 'comentarios', 'medios', 'mensajes', 'lecturas', 'entregas', 'outbox']) {
     await db.vaciar(almacen);
   }
+  if (aSalvo.length) await db.putVarios('medios', aSalvo);
   await db.meta.del('ultimoSync');
   await db.meta.set('arranque', sello);
   await refrescarPendientes();
