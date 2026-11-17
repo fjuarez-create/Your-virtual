@@ -987,6 +987,10 @@ export async function guardarConforme({ listaId, unidadId, pdf, nombre, datos, h
   // al revés quedaría un conforme guardado que nadie subiría.
   await fijarConformesPendientes([...(await conformesPendientes()), m.id]);
   await db.put('medios', m);
+  // put() da por bueno el éxito de la petición, no el de la transacción
+  // (que es la que falla si el teléfono se queda sin sitio): se relee.
+  const escrito = await db.get('medios', m.id);
+  if (!escrito?.bytes || escrito.bytes.byteLength !== bytes.byteLength) throw new Error('El documento no ha quedado guardado en este móvil.');
   await db.meta.del(`conforme-borrador:${listaId}`);
   await encolar('medio', m.id);
   estadoSync.revision++;
@@ -1030,7 +1034,7 @@ async function esDeVisitaFirmada(t) {
   if (!esListaDeVisita(l)) return false;
   return (await db.porIndice('medios', 'tareaId', l.id)).some(esConforme);
 }
-const FRASE_FIRMADO = 'Este repaso figura en un conforme firmado: ya no se le cambia el texto ni la estancia, y no se borra.';
+const FRASE_FIRMADO = 'Este repaso es de una visita con el conforme ya firmado: ya no se le cambia el texto ni la estancia, y no se borra.';
 
 /**
  * «Borrar esta visita»: solo una visita ABIERTA, y solo quien la empezó
@@ -2649,6 +2653,13 @@ async function empujarConforme(id) {
     }
     return todaviaNo(estado, e.codigo || '');
   }
+  // Solo se da por subido con la respuesta de la puerta del conforme
+  // ({ ok: true, id }, también cuando contesta «repetido»). Un 200 que
+  // no es eso —la página de una wifi con portal o del alojamiento, un
+  // cuerpo vacío, un «{}»— NO es un «hecho»: es «todavía no», y se
+  // reintenta. Dándolo por bueno, el conforme salía de la cola sin estar
+  // en el servidor y el papel firmado podía acabar perdido.
+  if (!r || r.ok !== true || String(r.id || '').toLowerCase() !== String(id).toLowerCase()) return todaviaNo(0, '');
   // El servidor dice qué ha guardado: si no es lo que salió de aquí, la
   // subida no vale y se reintenta (como con las fotos).
   if (r && typeof r.tam === 'number' && r.tam !== pdf.size) return todaviaNo(0, 'fichero-incompleto');
