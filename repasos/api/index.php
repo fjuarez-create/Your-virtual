@@ -1357,9 +1357,9 @@ function guardar_tareas(): void
         }
         // Una visita ya firmada: lo firmado no se corrige ni se borra,
         // sea quien sea. Y un repaso nuevo del que no responde nadie que
-        // haga visitas —esté la visita firmada o no— se guarda ya
-        // borrado (y así le baja borrado también a quien lo creó, en
-        // vez de quedársele de fantasma).
+        // haga visitas, o que llega a una visita ya firmada sin figurar
+        // en su conforme, se guarda ya borrado (y así le baja borrado
+        // también a quien lo creó, en vez de quedársele de fantasma).
         if (!empty($red['conservar']) && $fila) {
             $texto = (string) $fila['texto'];
             $zona = (string) ($fila['zona'] ?? '');

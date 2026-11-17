@@ -108,11 +108,6 @@ export function abrir() {
     // Si otra pestaña necesita subir la versión, esta suelta la base
     // para no bloquearla; la siguiente operación la reabre.
     db.onversionchange = () => { db.close(); dbPromise = null; };
-    // Y si es el navegador el que la cierra por su cuenta (el teléfono se
-    // queda sin sitio a media escritura), la conexión muerta no se queda
-    // guardada: la siguiente operación la reabre. Sin esto, tras un fallo
-    // así ya no se podía ni leer ni volver a intentar hasta recargar.
-    db.onclose = () => { dbPromise = null; };
     return db;
   })();
   // Un fallo de apertura no se queda pegado: el siguiente intento

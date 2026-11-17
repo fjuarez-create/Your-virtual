@@ -112,8 +112,6 @@ const FRASES = Object.freeze({
   yaFirmada: 'Esta visita ya tiene su conforme firmado (se ha firmado en otro móvil).',
   noPreparado: 'No se ha podido preparar el documento.',
   noGuardado: 'El documento está hecho, pero no se ha podido guardar en este móvil.',
-  quizaSinSitio: 'Puede que el teléfono se haya quedado sin sitio. Libera espacio y toca «Volver a intentarlo». Mientras tanto, «Compartir el PDF» pone el documento a salvo.',
-  falloAlPreparar: 'Ha fallado algo al prepararlo. Toca «Volver a intentarlo».',
 });
 
 const limpio = (texto) => String(texto || '').replace(/\s+/g, ' ').trim();
@@ -156,27 +154,6 @@ function listaDeContactos(tiene) {
  */
 function poner(nodo, ...hijos) {
   nodo.replaceChildren(...hijos.flat().filter((hijo) => hijo !== null && hijo !== undefined && hijo !== false));
-}
-
-/* EL REPOSO. Los pasos de este recorrido se pintan uno donde estaba el
-   otro, y sus botones caen bajo el mismo dedo: con un doble toque en
-   «Ver el documento», el segundo pulsaba «Firmar»; con uno en «Aceptar»
-   de la primera firma, el segundo contestaba «No firma» a una pregunta
-   que nadie había llegado a ver, y el conforme —que no se anula— quedaba
-   cerrado con una sola firma; y con un solo firmante cerraba la hoja
-   «El PDF está listo» nada más salir. Es la regla de confirmar()
-   (js/ui.js): lo recién pintado no atiende hasta pasado un rato de dedo
-   quieto, y cada toque que llega a destiempo vuelve a empezar la cuenta.
-   reposo() devuelve la pregunta «¿puede pasar este toque?». */
-const REPOSO = 700;
-function reposo() {
-  let desde = performance.now();
-  return () => {
-    const ahora = performance.now();
-    if (ahora - desde >= REPOSO) return true;
-    desde = ahora;
-    return false;
-  };
 }
 
 /** Solo una a la vez: un doble toque en «Finalizar visita» no abre dos capas. */
@@ -266,11 +243,6 @@ async function recorrido({ lista, entrega, repasos: repasosAlAbrir }) {
     observaciones: estado.observaciones.trim(),
     contactos: { dados: estado.contactosDados, ...tiene },
     firmas: firmas || firmantesEscritos().map((nombre) => ({ nombre })),
-    // El día del «En …, a …». El papel firmado lleva el de la firma, no
-    // el de la visita; así que antes de firmar se enseña el de HOY, que
-    // es el que llevará. Si la visita se empezó otro día, lo que se lee
-    // y lo que se firma dicen lo mismo.
-    fecha: firmas ? '' : E.hoyIso(),
   });
   /** Lo firmado como dato, tal como viaja al servidor (contrato § 3.5). Los trazos NO van. */
   const datosDe = (doc, firmas, paginas) => ({
@@ -633,8 +605,6 @@ async function recorrido({ lista, entrega, repasos: repasosAlAbrir }) {
     const noCabe = pegaDeTamano(doc);
     const sinSello = !(globalThis.crypto && globalThis.crypto.subtle) ? FRASES.sinSello : '';
     const impide = noCabe || sinSello;
-    // «Firmar» sale donde estaba «Ver el documento» (ver «El reposo»).
-    const quieto = reposo();
     poner(cuerpo,
       aviso ? h('div.d-conforme-aviso', { role: 'status', 'data-parte': 'aviso' }, icon('alert'), h('div.grow', null, h('p', null, aviso))) : null,
       papelDe(doc),
@@ -642,7 +612,7 @@ async function recorrido({ lista, entrega, repasos: repasosAlAbrir }) {
     );
     poner(pie,
       h('button.d-boton-negro.claro', { type: 'button', 'data-accion': 'corregir', onclick: pintarHoja }, FRASES.corregir),
-      impide ? null : h('button.d-boton-negro', { type: 'button', 'data-accion': 'firmar', onclick: () => { if (quieto()) firmar(); } }, FRASES.firmar),
+      impide ? null : h('button.d-boton-negro', { type: 'button', 'data-accion': 'firmar', onclick: firmar }, FRASES.firmar),
     );
     cuerpo.scrollTop = 0;
   }
@@ -698,8 +668,6 @@ async function recorrido({ lista, entrega, repasos: repasosAlAbrir }) {
     return new Promise((listo) => {
       paso = 'segunda';
       let pidiendo = false;
-      // Los dos botones salen donde estaba «Aceptar» (ver «El reposo»).
-      const quieto = reposo();
       poner(cuerpo, h('div.d-conforme-centro', { 'data-parte': 'segunda' },
         h('span.d-conforme-sello', null, icon('edit')),
         h('h2.d-conforme-titulo', null, `¿Firma también ${nombre}?`),
@@ -709,7 +677,7 @@ async function recorrido({ lista, entrega, repasos: repasosAlAbrir }) {
         h('button.d-boton-negro', {
           type: 'button', 'data-accion': 'si-firma',
           onclick: async () => {
-            if (pidiendo || !quieto()) return;
+            if (pidiendo) return;
             pidiendo = true;
             const firma = await pedir(FRASES.tituloSegunda, nombre);
             pidiendo = false;
@@ -717,7 +685,7 @@ async function recorrido({ lista, entrega, repasos: repasosAlAbrir }) {
             if (firma) listo(firma);
           },
         }, FRASES.siFirma),
-        h('button.d-boton-negro.claro', { type: 'button', 'data-accion': 'no-firma', onclick: () => { if (!pidiendo && quieto()) listo(null); } }, FRASES.noFirma),
+        h('button.d-boton-negro.claro', { type: 'button', 'data-accion': 'no-firma', onclick: () => { if (!pidiendo) listo(null); } }, FRASES.noFirma),
       );
       cuerpo.scrollTop = 0;
     });
@@ -756,13 +724,7 @@ async function recorrido({ lista, entrega, repasos: repasosAlAbrir }) {
   /** El papel no ha salido (o no se ha podido guardar): el documento, con las firmas hechas, y volver a intentarlo. */
   function pintarFallo(firmas, fallo, pdf, nombre) {
     paso = 'fallo';
-    // El motivo, en español. Las frases de la casa (las de este recorrido,
-    // las del papel y las del almacén) se enseñan tal cual; lo que dice el
-    // navegador por su cuenta —«The transaction was aborted…», cuando el
-    // teléfono se queda sin sitio— no le dice nada a quien lo lee, y va a
-    // la consola.
-    const deLaCasa = fallo && Object.getPrototypeOf(fallo) === Error.prototype ? limpio(fallo.message) : '';
-    const motivo = deLaCasa || (pdf ? FRASES.quizaSinSitio : FRASES.falloAlPreparar);
+    const motivo = limpio(fallo?.message) || 'Fallo desconocido.';
     poner(cuerpo,
       h('div.d-conforme-aviso.rojo', { role: 'alert', 'data-parte': 'fallo' }, icon('alert'),
         h('div.grow', null,
@@ -800,22 +762,7 @@ async function recorrido({ lista, entrega, repasos: repasosAlAbrir }) {
   // ese toque es el de «Compartir» de esa hoja.
   try { await refrescar(); } catch { /* si no se repinta ahora, lo hará la sincronización */ }
   toast(FRASES.guardado, '', { icono: 'documento' });
-  try {
-    entregarFichero(salida.fichero, salida.nombre, { nota: FRASES.notaDeEntrega });
-    // La hoja nace bajo el dedo que acaba de pulsar «Aceptar» en la firma
-    // (ver «El reposo»): los toques que le lleguen a destiempo no cuentan,
-    // ni para cerrarla ni para pulsar nada de ella.
-    const hoja = [...document.querySelectorAll('.d-hoja-acciones')].pop();
-    if (hoja) {
-      const quieto = reposo();
-      const tragar = (e) => {
-        if (!hoja.isConnected || quieto()) { document.removeEventListener('click', tragar, true); return; }
-        e.stopImmediatePropagation();
-        e.preventDefault();
-      };
-      document.addEventListener('click', tragar, true);
-    }
-  } catch (e) {
+  try { entregarFichero(salida.fichero, salida.nombre, { nota: FRASES.notaDeEntrega }); } catch (e) {
     console.error('No se ha podido ofrecer el PDF:', e);
   }
   return { firmado: true, conforme: salida.conforme };
