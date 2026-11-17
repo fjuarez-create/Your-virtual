@@ -189,7 +189,16 @@ export async function render({ promoId, unidadId, listaId }) {
   const nuevo = async () => {
     if (ocupado) return;
     ocupado = true;
-    try { await nuevaTarea(listaId, { visita: true }); } catch (e) { toast(e?.message || 'No se ha podido apuntar el repaso', 'err'); } finally { ocupado = false; }
+    try {
+      const guardado = await nuevaTarea(listaId, { visita: true });
+      // Las hojas de la casa sobreviven al botón de atrás del teléfono:
+      // si se da «atrás» con la foto ya hecha, la hoja sigue ahí con lo
+      // escrito, pero la pantalla de debajo pasa a ser la ficha de la
+      // vivienda. El repaso se guarda igual en su visita; lo que no
+      // puede ser es que, con el comprador delante, quien apunta se
+      // encuentre de pronto fuera de ella. Al guardar, se vuelve.
+      if (guardado && location.hash.split('?')[0] !== `${ficha}/visita/${listaId}`) ir(`${ficha}/visita/${listaId}`);
+    } catch (e) { toast(e?.message || 'No se ha podido apuntar el repaso', 'err'); } finally { ocupado = false; }
   };
   const finalizar = async () => {
     if (ocupado) return;

@@ -240,6 +240,8 @@ function marcasMedios(tipos) {
  *      aviso. Hay un comprador delante: no se le tiene esperando.
  *   3. Sin cobertura no se le pregunta nada a la IA.
  * Sin esa opción no cambia nada de lo de siempre.
+ *
+ * Devuelve el repaso recién guardado, o nada si se sale sin guardar.
  */
 export async function nuevaTarea(listaId, { visita = false } = {}) {
   // Dos tarjetas, una al lado de la otra y más altas que anchas. Es una
@@ -321,6 +323,7 @@ export async function nuevaTarea(listaId, { visita = false } = {}) {
   }
   toast('Repaso añadido');
   await refrescar();
+  return t;
 }
 
 /** Lo que se espera a que la IA describa la foto en una visita de repasos, en milisegundos. */
