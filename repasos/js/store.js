@@ -1007,6 +1007,22 @@ export async function conformesDeMasDeLista(listaId) {
     .sort((a, b) => String(a.creado || '').localeCompare(String(b.creado || '')));
 }
 
+/**
+ * Cuántos «Conformes de la visita» firmados guarda ESTE móvil sin haber
+ * subido: los que esperan en la cola y los que el servidor rechazó (que
+ * ya no están en ella). Su único ejemplar es el de aquí: quien vaya a
+ * borrar datos del móvil tiene que mirarlo antes, porque la cola vacía
+ * no dice que no quede ninguno.
+ */
+export async function conformesSinSubir() {
+  let cuantos = 0;
+  for (const id of await conformesPendientes()) {
+    const m = await db.get('medios', id);
+    if (esConforme(m) && !m.subido) cuantos += 1;
+  }
+  return cuantos;
+}
+
 /** ¿Cuelga este repaso de una visita que ya tiene su conforme firmado (subido o por subir)? */
 async function esDeVisitaFirmada(t) {
   if (!t?.listaId) return false;
