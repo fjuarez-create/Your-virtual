@@ -342,6 +342,13 @@ function esquema_aplicar(PDO $pdo): array
         if (!$existentes) {
             continue;   // la tabla no existe todavía; el CREATE ya la trae completa
         }
+        // A la ficha de entrega, si hay que añadirle columnas y su fila
+        // está en un formato viejo, primero se le cambia el formato: si
+        // no, las columnas nuevas no caben (ver esquema_fila_dinamica).
+        if ($tabla === 'entregas' && array_diff(array_keys($campos), $existentes) !== []
+            && esquema_fila_dinamica($pdo, $tabla)) {
+            $hechos[] = "{$tabla} pasa al formato de fila DYNAMIC";
+        }
         foreach ($campos as $nombre => $tipo) {
             if (in_array($nombre, $existentes, true)) {
                 continue;
@@ -695,6 +702,53 @@ function esquema_ahora_ms(): string
 {
     $ahora = microtime(true);
     return gmdate('Y-m-d\TH:i:s', (int) $ahora) . sprintf('.%03dZ', (int) floor(($ahora - floor($ahora)) * 1000));
+}
+
+/**
+ * EL FORMATO DE FILA DE `entregas` (solo MariaDB/MySQL).
+ *
+ * La ficha de entrega lleva tantas columnas de texto que, con la tabla
+ * en formato de fila COMPACT o REDUNDANT y el modo estricto de InnoDB
+ * encendido, las de la versión 23 no caben: el servidor corta el ALTER
+ * con «1118 Row size too large», la versión se queda en la 22 y nadie
+ * se entera (la app contesta 200; el fallo solo va al registro del
+ * hosting). Medido el 17-11-2026: entraban 9 de las 21 columnas, y
+ * pulsar climatización, domótica o armarios contestaba «guardada» sin
+ * guardar nada.
+ *
+ * Con la configuración de fábrica no pasa (MariaDB crea las tablas en
+ * DYNAMIC desde la 10.2), pero en qué formato está la tabla del hosting
+ * no se sabe desde aquí. Así que, antes de añadirle columnas, si está
+ * en uno de esos dos formatos se pasa a DYNAMIC, que guarda los textos
+ * largos fuera de la fila. No cambia ni un dato: reconstruye la tabla,
+ * que tiene tantas filas como viviendas. Una tabla que ya está en
+ * DYNAMIC no se toca.
+ *
+ * Si no se pudiera (un servidor muy antiguo), se anota y se sigue: la
+ * migración queda como estaba antes de existir esta función. Devuelve
+ * si la tabla ha cambiado de formato.
+ */
+function esquema_fila_dinamica(PDO $pdo, string $tabla): bool
+{
+    if (motor() === 'sqlite' || !preg_match('/^[a-z_]+$/', $tabla)) {
+        return false;
+    }
+    $formato = static function () use ($pdo, $tabla): string {
+        $sent = $pdo->query("SHOW TABLE STATUS WHERE Name = '{$tabla}'");
+        $estado = array_change_key_case($sent->fetch(PDO::FETCH_ASSOC) ?: []);
+        $sent->closeCursor();
+        return strtolower((string) ($estado['row_format'] ?? ''));
+    };
+    try {
+        if (!in_array($formato(), ['compact', 'redundant'], true)) {
+            return false;
+        }
+        $pdo->exec("ALTER TABLE {$tabla} ROW_FORMAT=DYNAMIC");
+        return $formato() === 'dynamic';
+    } catch (Throwable $e) {
+        error_log("UNIK repasos · no se pudo pasar {$tabla} al formato de fila DYNAMIC: " . $e->getMessage());
+        return false;
+    }
 }
 
 /** SQLite no entiende TINYINT ni longitudes de VARCHAR: se traducen. */

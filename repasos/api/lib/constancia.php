@@ -347,7 +347,13 @@ function constancia_material(string $unidad): array
     // de entregar: listas con fase «visita») NO entran en este papel: es
     // el de la notaría, con lo que queda por terminar al entregar. Si
     // entraran, saldrían en él y le cambiarían la huella.
-    $filtro = "l.unidad_id = ? AND l.borrada = 0 AND l.fase <> 'visita' AND t.borrada = 0 AND t.estado IN ('pendiente', 'rechazada')";
+    //
+    // La fase se compara LETRA A LETRA, por sus bytes ('766973697461' es
+    // «visita»), que es como la compara el PHP de las redes. Con
+    // «l.fase <> 'visita'», MariaDB no distingue mayúsculas ni tildes: a
+    // una lista de siempre con la fase «VISITA» o «vísita» puesta a mano
+    // se le caían los repasos de este papel sin haber borrado nada.
+    $filtro = "l.unidad_id = ? AND l.borrada = 0 AND HEX(l.fase) <> '766973697461' AND t.borrada = 0 AND t.estado IN ('pendiente', 'rechazada')";
 
     $stmt = $pdo->prepare(
         "SELECT t.id, t.lista_id, t.texto, t.estado, t.zona, t.creado
@@ -1544,7 +1550,7 @@ function constancia_fichas(array $ids, array $material, string $unidad): array
                     // Sin los de una visita de repasos (ver constancia_material).
                     "SELECT t.id, t.lista_id, t.texto, t.zona
                        FROM tareas t JOIN listas l ON l.id = t.lista_id
-                      WHERE t.id = ? AND l.unidad_id = ? AND t.borrada = 0 AND l.borrada = 0 AND l.fase <> 'visita'"
+                      WHERE t.id = ? AND l.unidad_id = ? AND t.borrada = 0 AND l.borrada = 0 AND HEX(l.fase) <> '766973697461'"
                 );
             }
             $stmt->execute([$id, $unidad]);

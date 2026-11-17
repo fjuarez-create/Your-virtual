@@ -83,13 +83,14 @@ function verifica_visitas(array $yo): bool
 /* ═══ Lo guardado, con memoria por petición ═══════════════════════ */
 
 /**
- * La fila guardada de una lista (lo justo: vivienda, fase y si está
- * borrada), o null si no existe. Sin memoria: `borrada` cambia dentro
- * de una misma petición, y la lista puede llegar en esta misma subida.
+ * La fila guardada de una lista (lo justo: vivienda, promoción, fase y
+ * si está borrada), o null si no existe. Sin memoria: `borrada` cambia
+ * dentro de una misma petición, y la lista puede llegar en esta misma
+ * subida.
  */
 function posventa_lista_guardada(string $listaId): ?array
 {
-    $sent = bd()->prepare('SELECT id, unidad_id, fase, borrada FROM listas WHERE id = ?');
+    $sent = bd()->prepare('SELECT id, unidad_id, promo_id, fase, borrada FROM listas WHERE id = ?');
     $sent->execute([$listaId]);
     $fila = $sent->fetch() ?: null;
     $sent->closeCursor();   // la lectura se suelta antes de escribir (ver upsert)
@@ -98,6 +99,7 @@ function posventa_lista_guardada(string $listaId): ?array
     }
     return [
         'id' => (string) $fila['id'], 'unidad_id' => (string) $fila['unidad_id'],
+        'promo_id' => (string) ($fila['promo_id'] ?? ''),
         'fase' => (string) $fila['fase'], 'borrada' => (int) $fila['borrada'],
     ];
 }
@@ -262,7 +264,9 @@ function posventa_puede(?string $creadoPor, array $yo): bool
  *     guarda ya borrada (R3): le baja borrada también a quien la creó,
  *     y así no se le queda de fantasma en el móvil.
  *   - Y una visita no se muda de vivienda: su conforme, que cuelga de
- *     ella, se iría detrás. (La app no mueve listas de vivienda.)
+ *     ella, se iría detrás. (La app no mueve listas de vivienda.) Ni de
+ *     promoción: «Entregadas» lista las visitas por promoción, y con
+ *     otra dejaría de salir.
  */
 function posventa_red_de_lista(array $registro, array $yo): array
 {
@@ -281,6 +285,7 @@ function posventa_red_de_lista(array $registro, array $yo): array
     }
     $registro['fase'] = POSVENTA_FASE_VISITA;
     $registro['unidad_id'] = $guardada['unidad_id'];
+    $registro['promo_id'] = $guardada['promo_id'];
     if (posventa_conforme_de_lista((string) $registro['id']) !== null) {
         $registro['borrada'] = 0;
     } elseif (!puede_visitar($yo)) {
@@ -616,8 +621,11 @@ function subir_conforme(): void
         responder_error(413, 'El documento firmado pesa demasiado.', 'grande');
     }
 
-    // La forma de lo que llega.
-    $id = (string) ($_POST['id'] ?? '');
+    // La forma de lo que llega. El identificador, en minúsculas (como lo
+    // manda la app): el fichero se guarda con el nombre en minúsculas, y
+    // en SQLite «A1…» y «a1…» son dos filas distintas, así que el mismo
+    // identificador en mayúsculas pisaba el papel de otro conforme.
+    $id = strtolower((string) ($_POST['id'] ?? ''));
     $listaId = (string) ($_POST['listaId'] ?? '');
     $unidadId = (string) ($_POST['unidadId'] ?? '');
     $creado = iso(is_string($_POST['creado'] ?? null) ? $_POST['creado'] : '', '');
@@ -764,8 +772,11 @@ function subir_conforme(): void
     // ninguna, con la lista cogida (ver «El candado de la visita»).
     $rechazo = null;   // [código, frase, clave] si al releer ya no se puede
     $yaEstaba = null;
-    posventa_cerrar($pdo);
     try {
+        // El candado se pide DENTRO del try: si no se consigue (la base
+        // ocupada, la conexión caída), el catch borra el provisional.
+        // Fuera, ese intento lo dejaba suelto en la carpeta para siempre.
+        posventa_cerrar($pdo);
         $fila = posventa_releer_lista($pdo, $listaId);
         $yaEstaba = conforme_ya_guardado($pdo, $id, $huella, false);
         if ($yaEstaba !== null) {

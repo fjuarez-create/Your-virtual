@@ -1317,7 +1317,10 @@ function guardar_tareas(): void
         // repaso de siempre con solo decir que es de una visita. Y por lo
         // mismo un repaso ni entra en una visita ni sale de ella: la app
         // no mueve repasos de lista, así que quien lo intenta se queda
-        // con la lista guardada.
+        // con la lista guardada. La comparación es LETRA A LETRA, como
+        // compara el móvil: el mismo identificador escrito en mayúsculas
+        // también es «otra lista», y se repone la guardada (si se dejara
+        // pasar, el repaso firmado dejaba de salirles en su visita).
         //
         // Todo detrás de function_exists(): sin lib/posventa.php (la
         // ventana del despliegue), esto se comporta como siempre.
@@ -1326,7 +1329,7 @@ function guardar_tareas(): void
         $red = [];
         if (function_exists('posventa_red_de_tarea')) {
             $listaGuardada = $fila ? (string) ($fila['lista_id'] ?? '') : '';
-            if ($listaGuardada !== '' && strtolower($listaGuardada) !== strtolower($listaId)
+            if ($listaGuardada !== '' && $listaGuardada !== $listaId
                 && (posventa_lista_es_de_visita($listaGuardada) || posventa_lista_es_de_visita($listaId))) {
                 $listaId = $listaGuardada;
             }
@@ -2116,6 +2119,10 @@ function borrar_medio(string $id): void
     // fila del móvil, así que la guardada se vuelve a escribir VIVA por
     // upsert() —que la deja pendiente de numerar— con la hora más nueva
     // entre «ahora» y la suya: así le baja viva al móvil que la borró.
+    // Ese «ahora» va CON milisegundos: el móvil apunta su borrado con
+    // milisegundos y solo adopta lo que le baja con una hora igual o más
+    // nueva; con la hora cortada al segundo, un borrado que llegaba
+    // dentro del mismo segundo le dejaba sin la foto a él solo.
     // El fichero del disco no se toca. Y se contesta «hecho», no un
     // error: no hay que cortarle la cola a nadie.
     // Una fila que ya estaba borrada no entra: no hay fichero que
@@ -2125,7 +2132,7 @@ function borrar_medio(string $id): void
         if ($esDocumento || (function_exists('posventa_conserva_medio') && posventa_conserva_medio($fila, $yo))) {
             unset($fila['recibido']);
             $fila['borrada'] = 0;
-            $fila['actualizado'] = max(ahora_iso(), (string) $fila['actualizado']);
+            $fila['actualizado'] = max(ahora_ms_iso(), (string) $fila['actualizado']);
             upsert('medios', $fila);
             responder(['ok' => true, 'conservado' => true]);
         }
