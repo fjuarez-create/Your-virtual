@@ -37,7 +37,9 @@
      si se queda pequeño, lo firmado se encoge para caber, y vuelve a su
      tamaño cuando hay sitio. El mundo solo crece cuando se firma en el
      sitio nuevo: ir a un lienzo grande y volver sin firmar nada deja la
-     firma como estaba.
+     firma como estaba. Si se gira el teléfono con el dedo apoyado (cambia
+     el ancho a media firma), ese trazo se da por acabado al girar: el
+     lienzo se ha movido bajo el dedo, y el mundo no debe crecer con él.
    · En la capa, el papel no llega a los bordes de la pantalla, que son
      del gesto de «atrás» del sistema; y un toque que empieza pegado al
      borde se anula. Si aun así el teléfono vuelve atrás con algo ya
@@ -269,6 +271,17 @@ export function lienzoDeFirma(lienzo, { alEmpezar = null, alCambiar = null } = {
     const medida = `${ancho}x${alto}@${densidad}`;
     if (!aLaFuerza && medida === pintado) return;
     pintado = medida;
+    // Cambia el ANCHO con un dedo apoyado (se gira el móvil a media
+    // firma): el lienzo se ha movido bajo el dedo, así que su trazo se da
+    // por acabado aquí, como si se hubiera levantado, y lo que el dedo
+    // siga moviendo ya no pinta. Se recalcula como sin dedo. Antes el
+    // mundo crecía hasta el lienzo de tumbado y ya no encogía: al volver,
+    // la firma se veía al 60 % y con dos franjas muertas, arriba y abajo,
+    // donde lo firmado se aplastaba contra el borde. Si cambia solo el
+    // ALTO (el teclado que se cierra a mitad del trazo), el trazo sigue
+    // bajo el dedo: ver más abajo.
+    const cortado = toques.size > 0 && ancho !== papel.ancho;
+    if (cortado) cortarAlGirar();
     papel = { ancho, alto };
     // Sin nada firmado, el mundo es el lienzo de ahora.
     if (!mundo || !trazos.length) mundo = { ancho, alto };
@@ -296,7 +309,24 @@ export function lienzoDeFirma(lienzo, { alEmpezar = null, alCambiar = null } = {
     ctx.lineJoin = 'round';
     ctx.lineWidth = GROSOR;
     for (const trazo of trazos) pintarTrazo(ctx, trazo);
+    if (cortado) avisar();
   };
+
+  /** Los toques que pintaban acaban aquí (ver repintar). */
+  function cortarAlGirar() {
+    // Dos que aún competían (ninguno se ha movido 12 px): no se sabe cuál
+    // es la palma, y lo de cada uno es apenas un punto: se quitan los dos.
+    const competian = toques.size > 1;
+    for (const [id, toque] of toques) {
+      if (competian) {
+        const donde = trazos.indexOf(toque.trazo);
+        if (donde >= 0) trazos.splice(donde, 1);
+      }
+      try { if (lienzo.hasPointerCapture && lienzo.hasPointerCapture(id)) lienzo.releasePointerCapture(id); } catch { /* da igual */ }
+    }
+    toques.clear();
+    if (!competian) ultimoTrazo = new Date();
+  }
 
   const aMundo = (e) => {
     const caja = lienzo.getBoundingClientRect();

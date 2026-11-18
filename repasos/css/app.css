@@ -4519,7 +4519,13 @@ body.es-taller .d-conforme-pie { padding-bottom: calc(env(safe-area-inset-bottom
      del recuadro: el papel de alrededor sí deja seleccionar.
    · La frase de la firma corta tiene su sitio reservado debajo de cada
      recuadro (dos renglones): si saliera sin sitio, lo de debajo daría
-     un salto bajo el dedo de quien firma en el segundo. */
+     un salto bajo el dedo de quien firma en el segundo. El sitio va en
+     renglones de su letra (`lh`): con la letra grande del sistema, los
+     40 px fijos se quedaban cortos y el segundo recuadro saltaba.
+   · «Borrar» va apartado del recuadro (18 px por debajo) y con 44 px de
+     alto, como los botones de la casa: a 7 px, el punto o la tilde que
+     se pone un poco por debajo de la firma caía en él. El nombre sigue
+     donde estaba, pegado debajo del recuadro, como en el papel. */
 .d-conforme-firmas.con-recuadros { flex-direction: column; gap: 4px; margin-top: 16px; }
 .d-conforme-firma.recuadro {
   flex: none; border: none; padding: 0; gap: 6px;
@@ -4544,15 +4550,27 @@ body.es-taller .d-conforme-pie { padding-bottom: calc(env(safe-area-inset-bottom
   font-size: 17px; line-height: 22px; color: #b9b4ab; text-align: center; pointer-events: none;
 }
 .d-conforme-firma.con-tinta .d-conforme-recuadro-aqui { display: none; }
-.d-conforme-firma-bajo { display: flex; align-items: center; gap: 10px; }
-.d-conforme-firma-bajo .d-conforme-firma-nombre { flex: 1; min-width: 0; }
+.d-conforme-firma-bajo { display: flex; align-items: flex-start; gap: 10px; }
+.d-conforme-firma-bajo .d-conforme-firma-nombre { flex: 1; min-width: 0; padding-top: 7px; }
 .d-conforme-borrar {
-  flex: none; height: 34px; padding: 0 14px; border-radius: 999px; background: #fff;
+  flex: none; height: 44px; margin-top: 12px; padding: 0 18px; border-radius: 999px; background: #fff;
   box-shadow: inset 0 0 0 1.5px var(--d-beige); font: 500 14px/18px var(--d-font); color: var(--d-tinta);
 }
 .d-conforme-borrar:active { background: var(--d-gris-suave); }
 .d-conforme-borrar:disabled { box-shadow: inset 0 0 0 1.5px #ececec; color: #c9c9c9; }
-.d-conforme-firma-pista { margin: 0; min-height: 40px; font-size: 14px; line-height: 20px; color: #a3261c; }
+/* Dos renglones de su letra: 40 px con la de siempre (14 px y 20 de
+   renglón), y 52 con la letra al 130 %. Ni los px ni los em sirven:
+   cuando el teléfono agranda la letra (text-size-adjust), crecen la letra
+   y el renglón, pero un min-height en px o en em se queda en 40 (medido).
+   Así que, vacía, la ocupan dos renglones en blanco de su misma letra,
+   que miden lo mismo que los dos de la frase con cualquier tamaño; y
+   `2lh` (con los 40 px para quien no lo conozca) la sostiene cuando la
+   frase cabe en uno, en una tableta. El renglón va en em para que crezca
+   también si la letra se agranda por la hoja de estilos. */
+.d-conforme-firma-pista {
+  margin: 0; min-height: 40px; min-height: 2lh; font-size: 14px; line-height: calc(20em / 14); color: #a3261c;
+}
+.d-conforme-firma-pista:empty::before { content: '\00a0\A\00a0'; content: '\00a0\A\00a0' / ''; white-space: pre; }
 
 @media (prefers-reduced-motion: reduce) {
   .d-velo.d-conforme { animation: none; }

@@ -101,6 +101,7 @@ const FRASES = Object.freeze({
   siGuardar: 'Sí, guardar',
   volver: 'Volver',
   segundaCorta: (segundo) => `La firma de ${segundo} es demasiado corta: siga firmando en su recuadro, o toque «Borrar» y repita.`,
+  borrarFirma: (nombre) => `¿Borrar la firma de ${nombre}?`,
   volverConFirmas: '¿Volver a la hoja?',
   seBorranLasFirmas: 'Lo firmado en el documento se borra, y habrá que firmar otra vez.',
   siVolver: 'Volver a la hoja',
@@ -180,9 +181,13 @@ function poner(nodo, ...hijos) {
    quieto, y cada toque que llega a destiempo vuelve a empezar la cuenta.
    reposo() devuelve la pregunta «¿puede pasar este toque?». Hoy la
    guardan «Corregir» y «Aceptar y guardar» del documento (que salen
-   donde estaba «Ver el documento») y la hoja «El PDF está listo» (que
-   sale bajo «Aceptar y guardar»). La pregunta de la segunda firma es
-   un confirmar() de la casa, que trae la suya. */
+   donde estaba «Ver el documento»), los tres botones del papel que no
+   se ha podido guardar (que salen bajo «Aceptar y guardar»: con un
+   segundo toque, «Corregir» llevaba a la hoja y se perdían las firmas)
+   y la hoja «El PDF está listo» (que también sale ahí). La pregunta de
+   la segunda firma es un confirmar() de la casa, que trae la suya para
+   el «sí», y además nace sorda entera (`sorda`) este mismo rato: el
+   segundo toque de un doble toque caía en su velo y la cerraba. */
 const REPOSO = 700;
 function reposo() {
   let desde = performance.now();
@@ -684,9 +689,15 @@ async function recorrido({ lista, entrega, repasos: repasosAlAbrir }) {
   /**
    * Un recuadro de firma, como en el papel: el rótulo, el lienzo con su
    * raya y su «Firme aquí con el dedo» (que se va al primer trazo), el
-   * nombre debajo, un «Borrar» pequeño que solo se enciende si hay
-   * trazos, y el sitio reservado para la frase de la firma corta (si
-   * saliera sin sitio, todo lo de debajo daría un salto).
+   * nombre debajo, un «Borrar» que solo se enciende si hay trazos, y el
+   * sitio reservado para la frase de la firma corta (si saliera sin
+   * sitio, todo lo de debajo daría un salto).
+   *
+   * «Borrar» queda apartado del recuadro (la hoja de estilos lo baja) y
+   * pregunta antes: estaba a 7 px bajo la esquina de la firma, y el punto
+   * o la tilde que una persona mayor pone un poco por debajo se llevaba
+   * la firma entera de un toque. La pregunta es la de la casa, con su
+   * reposo en el «sí».
    */
   function recuadroDeFirma(trozo, indice, alCambiar) {
     const lienzo = h('canvas.d-conforme-lienzo', { 'aria-label': `Firma de ${trozo.texto}` });
@@ -715,7 +726,17 @@ async function recorrido({ lista, entrega, repasos: repasosAlAbrir }) {
         alCambiar: recuadro.alDia,
       });
     };
-    borrar.addEventListener('click', () => { recuadro.motor?.borrar(); });
+    borrar.addEventListener('click', async () => {
+      if (cerrada || paso !== 'documento' || ocupado || preguntando) return;
+      if (!recuadro.motor || recuadro.motor.medida().puntos === 0) return;
+      const si = await preguntar({
+        titulo: FRASES.borrarFirma(trozo.texto),
+        ok: FRASES_DE_FIRMA.borrar, icono: 'trash', rojo: true,
+        conservar: FRASES_DE_FIRMA.cancelar, iconoConservar: 'x',
+      });
+      // Mientras se preguntaba, el documento pudo irse o repintarse.
+      if (si && !cerrada && paso === 'documento' && recuadros.includes(recuadro)) recuadro.motor?.borrar();
+    });
     return recuadro;
   }
 
@@ -771,15 +792,20 @@ async function recorrido({ lista, entrega, repasos: repasosAlAbrir }) {
     }
   }
 
-  /** «Corregir» (o «atrás») en el documento: a la hoja. Con algo firmado, se pregunta antes. */
+  /**
+   * «Corregir» (o «atrás») en el documento, y «Corregir» del papel que no
+   * se ha podido guardar: a la hoja. Con algo firmado, se pregunta antes.
+   */
   async function corregir() {
-    if (cerrada || paso !== 'documento' || ocupado || preguntando) return;
-    if (hayFirmado()) {
+    if (cerrada || (paso !== 'documento' && paso !== 'fallo') || ocupado || preguntando) return;
+    const desde = paso;
+    // En el fallo, las firmas ya están hechas: sin la primera no se llega a guardar.
+    if (desde === 'fallo' || hayFirmado()) {
       const si = await preguntar({
         titulo: FRASES.volverConFirmas, texto: FRASES.seBorranLasFirmas,
         ok: FRASES.siVolver, icono: 'edit', conservar: FRASES.seguirFirmando, iconoConservar: 'arrowLeft',
       });
-      if (!si || cerrada || paso !== 'documento') return;
+      if (!si || cerrada || paso !== desde) return;
     }
     pintarHoja();
   }
@@ -828,9 +854,12 @@ async function recorrido({ lista, entrega, repasos: repasosAlAbrir }) {
           return;
         }
         if (medida.puntos === 0) {
+          // Nace bajo el dedo de «Aceptar y guardar»: sorda sus primeros
+          // 700 ms, también el «Volver» y el velo (ver «El reposo»).
           const si = await preguntar({
             titulo: FRASES.soloUnaFirma(primero.nombre), texto: FRASES.noHaFirmado(segundo.nombre),
             ok: FRASES.siGuardar, icono: 'documento', conservar: FRASES.volver, iconoConservar: 'arrowLeft',
+            sorda: REPOSO,
           });
           if (!si || cerrada || paso !== 'documento') return;
           // Mientras se preguntaba, la sincronización ha podido traer algo.
@@ -897,14 +926,20 @@ async function recorrido({ lista, entrega, repasos: repasosAlAbrir }) {
           h('p.d-conforme-detalle', null, motivo))),
       papelDe(docDe(firmas), firmas),
     );
+    // Sale bajo el dedo que pulsó «Aceptar y guardar» (ver «El reposo»), y
+    // «Corregir», con las firmas hechas, pregunta antes de salir.
+    const quieto = reposo();
     poner(pie,
-      h('button.d-boton-negro', { type: 'button', 'data-accion': 'reintentar', onclick: () => montarYGuardar(firmas) }, FRASES.reintentar),
+      h('button.d-boton-negro', { type: 'button', 'data-accion': 'reintentar', onclick: () => { if (quieto()) montarYGuardar(firmas); } }, FRASES.reintentar),
       // El papel está hecho y firmado: que no se quede sin salir de aquí.
       pdf ? h('button.d-boton-negro.claro', {
         type: 'button', 'data-accion': 'compartir',
-        onclick: () => entregarFichero(new File([pdf], nombre || 'Conforme_de_la_visita.pdf', { type: 'application/pdf' }), nombre || 'Conforme_de_la_visita.pdf'),
+        onclick: () => {
+          if (!quieto()) return;
+          entregarFichero(new File([pdf], nombre || 'Conforme_de_la_visita.pdf', { type: 'application/pdf' }), nombre || 'Conforme_de_la_visita.pdf');
+        },
       }, FRASES.compartir) : null,
-      h('button.d-boton-negro.claro', { type: 'button', 'data-accion': 'corregir', onclick: pintarHoja }, FRASES.corregir),
+      h('button.d-boton-negro.claro', { type: 'button', 'data-accion': 'corregir', onclick: () => { if (quieto()) corregir(); } }, FRASES.corregir),
     );
     cuerpo.scrollTop = 0;
   }

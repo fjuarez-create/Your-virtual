@@ -428,9 +428,30 @@ export function confirmar({
   iconoConservar = 'corazon',
   mini = null,
   rojo = false,
+  sorda = 0,
 } = {}) {
   return new Promise((resolver) => {
     const cerrar = (valor) => { velo.remove(); resolver(valor); };
+
+    /* `sorda` (en ms; 0, lo de siempre): la pregunta ENTERA —las dos
+       filas, la X y el velo— no atiende a ningún dedo durante ese rato
+       al nacer, y cada toque que llega a destiempo vuelve a empezar la
+       cuenta. Solo la pide una pregunta que nace bajo un dedo que pudo
+       tocar dos veces y donde también el «no» descoloca: la de la
+       segunda firma del conforme (js/conforme.js). Con un doble toque en
+       «Aceptar y guardar», el segundo caía en el velo y la cerraba como
+       «Volver» antes de que nadie la leyera. Las demás preguntas no la
+       piden, y para ellas no cambia nada. El botón de atrás del teléfono
+       la cierra siempre: ese clic lo da el código, no un dedo
+       (isTrusted), y pasa. */
+    let sordaDesde = performance.now();
+    const atiende = (e) => {
+      if (!sorda || (e && e.isTrusted === false)) return true;
+      const ahora = performance.now();
+      if (ahora - sordaDesde >= sorda) return true;
+      sordaDesde = ahora;
+      return false;
+    };
 
     /* En rojo va solo la fila que destruye, nunca las dos: el color
        marca cuál de las dos es la que no tiene vuelta atrás. Si se
@@ -453,7 +474,8 @@ export function confirmar({
     const fila = (rotulo, ico, valor) => h(
       `button.d-confirmar-fila${valor && rojo ? '.roja' : ''}`,
       {
-        onclick: () => {
+        onclick: (e) => {
+          if (!atiende(e)) return;
           if (valor) {
             const ahora = performance.now();
             if (ahora - reposaDesde < 500) { reposaDesde = ahora; return; }
@@ -483,10 +505,10 @@ export function confirmar({
     // hacer nada, y separarla de las dos opciones deja claro que no es
     // una tercera.
     const velo = h('div.d-menu-velo.confirmar', {
-      onclick: (e) => { if (e.target === velo) cerrar(false); },
+      onclick: (e) => { if (e.target === velo && atiende(e)) cerrar(false); },
     },
       tarjeta,
-      h('button.d-confirmar-x', { 'aria-label': 'Cerrar', onclick: () => cerrar(false) }, icon('x')),
+      h('button.d-confirmar-x', { 'aria-label': 'Cerrar', onclick: (e) => { if (atiende(e)) cerrar(false); } }, icon('x')),
     );
     document.body.append(velo);
   });
