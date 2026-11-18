@@ -156,8 +156,10 @@ export async function render() {
      celda, sin cortarla: «Villa 07» o «V 07»; y la visita hecha,
      «✓ Villa 07», «✓ V 07» o «✓ 07». Se mide en el propio móvil (con su
      letra, su tamaño de letra y su ancho) y se vuelve a medir si algo
-     de eso cambia. Todo el mes va con la misma forma, para que se lea
-     igual de un día a otro; la hecha nunca va más larga que las demás. */
+     de eso cambia. Las barras de siempre van todas con la misma forma,
+     para que se lea igual de un día a otro, y las visitas hechas, todas
+     con la suya (el ✓ ocupa sitio: pueden ir una más corta que las
+     demás, nunca más larga). */
   const FORMAS = ['larga', 'media', 'corta'];
   /* Se mide con decimales y con holgura: el ancho del texto contra el
      hueco de la barra (su caja menos el relleno), y han de sobrar al

@@ -177,6 +177,13 @@ lo decidió Fran el 16-11-2026:
   medias ni cita por hacer, los cinco botones están resueltos y todos
   los repasos de las visitas están VERIFICADOS. Los repasos de antes de
   la entrega no cuentan.
+- **En el calendario de Entregas**, las visitas de repasos van en
+  MOSTAZA (`--d-visita`, en `css/app.css`): la cita prevista y cada
+  visita hecha, con un ✓. Una revisión de la hoja de fechas que cae
+  DESPUÉS del día de la entrega también se pinta como visita de repasos
+  (decidido el 18-11-2026), y si ese día y esa villa ya tienen visita de
+  Postventa sale una sola barra. Es solo cómo se pinta: los datos no
+  cambian. Y en el mes no hay «+N»: cada día enseña todas sus villas.
 - **Quién puede qué**, comprobado en el servidor (`api/lib/posventa.php`
   y `api/lib/entregas.php`): la fecha, la hora y los botones, el
   administrador y el comercial; hacer la visita y abrir el PDF firmado,
