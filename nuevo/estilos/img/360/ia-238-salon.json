@@ -1,0 +1,75 @@
+{
+ "nombre": "ia-238-salon",
+ "provisional": true,
+ "vivienda": "238",
+ "estancia": "Salón - comedor",
+ "base": "base-238-salon.jpg (360 exacto del BIM; misma cámara y convención: rumbo horario desde el norte del modelo, centro = 0°, costura a 180°)",
+ "imagenes": {
+  "ia-238-salon.jpg": [
+   5440,
+   2720
+  ],
+  "ia-238-salon-m.jpg": [
+   4096,
+   2048
+  ]
+ },
+ "cadena": [
+  "base 4096×2048 → reducida a 1536×768 y rellenada hasta 21:9 (1792×768) con la propia panorámica envuelta (tools/captura/ia360.py preparar)",
+  "Figma Weave · Nano Banana Pro (fal-ai/nano-banana-pro/edit), 4K, 21:9, semilla 7311; imagen 1 = base, imagen 2 = estancia-salon.webp (referencia de luz y color)",
+  "montaje: recorte del núcleo 2:1, fundido de los solapes envueltos sobre la costura, polos al color medio (ia360.py montar)",
+  "registro al BIM: afín global ECC sobre gradientes, sin flujo local (registrar360.py)",
+  "comprobación: comparar360.py contra el pase de segmentación del BIM"
+ ],
+ "registroAfin": [
+  [
+   1.00113,
+   -0.00099,
+   -0.12497
+  ],
+  [
+   0.00057,
+   1.01148,
+   -12.09972
+  ]
+ ],
+ "geometria": {
+  "bordesBIMRecuperadosA2px": 0.6235,
+  "bordesBIMRecuperadosA4px": 0.77,
+  "distanciaMedianaPx": 2.0,
+  "bordesInventadosEnPanosLisos": 0.00101,
+  "porPares4px": {
+   "arista o salto dentro de una clase": 0.7871,
+   "suelo/mobiliario": 0.8758,
+   "muro/techo": 0.545,
+   "muro/puerta": 0.6554,
+   "muro/suelo": 0.9841,
+   "muro/mobiliario": 0.7559,
+   "muro/mueble_fijo": 0.6457,
+   "mobiliario/mueble_fijo": 0.7517,
+   "muro/carpinteria": 0.986,
+   "vidrio/carpinteria": 1.0,
+   "suelo/mueble_fijo": 0.9984,
+   "suelo/puerta": 0.2961
+  }
+ },
+ "costura": {
+  "saltoNiveles": 1.23,
+  "columnasVecinasMediana": 0.57,
+  "columnasVecinasP95": 1.42
+ },
+ "polos": {
+  "desviacionFilaCenit": 0.0,
+  "desviacionFilaNadir": 0.0
+ },
+ "creditosWeave": {
+  "esteResultado": 23,
+  "pruebaCompletaIncluidosDescartes": 91
+ },
+ "avisos": [
+  "La IA añade detalle que no está en el BIM: cojines de respaldo en el sofá, juntas de cocina algo distintas y una mancha de sol en el muro junto a la ventana (a esta hora el sol real lo tapa el edificio vecino).",
+  "Por la ventana se ve un exterior claro genérico, no la maqueta del entorno.",
+  "La unión muro/techo queda suave: Canny solo la encuentra en ~55 % a ±4 px.",
+  "Pendiente del cliente: el BIM y el plano comercial de la 238 no tienen la misma fachada en el salón."
+ ]
+}

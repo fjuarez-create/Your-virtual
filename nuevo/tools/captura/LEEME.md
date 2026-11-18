@@ -436,6 +436,132 @@ dar nada por bueno.
   base-238-dormitorio`. Otra vivienda necesita antes su `vivienda-<id>.json`
   (`procesar.py`).
 
+## 360 con IA (Figma Weave sobre el 360 exacto)
+
+Resultado de la prueba (18-nov-2026): `estilos/img/360/ia-238-salon.jpg`
+(5440×2720, 1,2 MB), `ia-238-salon-m.jpg` (4096×2048, 478 KB) y
+`ia-238-salon.json` (cadena, cifras y avisos). Visor de comparación
+«Base BIM / Con IA»: página autocontenida en la carpeta de trabajo de la
+sesión (`360/ia/visor-360.html`).
+
+### Lo que funciona y lo que no (medido)
+
+| Intento | ¿Respeta el BIM? | Bordes del BIM a ±4 px |
+|---|---|---|
+| Seedream 4.5 sobre la equirectangular | No: reordena la sala (cocina al otro lado, armarios altos inventados) | 20,5 % (al azar ≈ 10–28 %) |
+| Nano Banana Pro, 1.ª versión | Sí: misma distribución, inventa tiradores en la cocina | 60,7 % crudo, 71,8 % registrado |
+| **Nano Banana Pro, 2.ª versión (la buena)** | **Sí** | **63,4 % crudo, 77,0 % registrado** (62 % a ±2 px, mediana 2 px) |
+
+En la buena: marco y vidrio de la ventana 98,6 % y 100 %; muro/suelo
+98,4 %; suelo/cocina 99,8 %; muro/techo solo 54 %, porque la IA suaviza la
+esquina y Canny no la encuentra, aunque esté en su sitio. Costura: salto de
+1,23 niveles, por debajo del p95 entre columnas vecinas (1,42). Polos: filas
+uniformes (desviación 0).
+
+### Receta
+
+```bash
+T=nuevo/tools/captura
+# 1) entrada: base reducida a 1536×768 y rellenada hasta 21:9 con la propia
+#    panorámica envuelta; JPEG + trozos de base64 con su suma de control
+python3 $T/ia360.py preparar --base base-238-salon.png --salida entradas/e768
+# 2) subir a Figma (ver «Subida»), lanzar Nano Banana Pro en Weave y bajar el PNG
+# 3) montar: recorte 2:1, costura con los solapes envueltos y polos
+python3 $T/ia360.py montar --ia salida.png --meta entradas/e768.json --salida ia-4k.png --ancho 4096
+python3 $T/ia360.py montar --ia salida.png --meta entradas/e768.json --salida ia-5440.png --ancho 5440
+# 4) registrar al BIM (afín global; reparte el salto de la costura)
+python3 $T/registrar360.py --base base-238-salon.png --ia ia-4k.png --salida ia-4k-reg.png \
+        --ia-grande ia-5440.png --salida-grande ia-5440-reg.png
+# 5) comprobar contra el BIM
+python3 $T/comparar360.py --id base-238-salon-id.png --leyenda base-238-salon.json \
+        --nueva ia-4k-reg.png --salida control.jpg
+```
+
+Modelo y parámetros: **Nano Banana Pro** (`fal-ai/nano-banana-pro/edit`),
+`resolution` 4K, `aspect_ratio` 21:9 (sale a 6336×2688), 23 créditos.
+Imagen 1 = la base preparada; imagen 2 = `estilos/img/estancia-salon.webp`
+(solo luz y color). Prompt final (inglés):
+
+> Edit image 1; do not create a new scene. Image 1 is a 360-degree
+> equirectangular panorama (spherical projection, 21:9 with wrap-around
+> overlap: the left and right ends show the same wall) rendered from the
+> architect's exact BIM model of a living-dining room with an open kitchen.
+> Make it a photorealistic interior photograph while keeping exactly the same
+> equirectangular panorama: same projection, same curvature of every line,
+> same framing, every element at the same pixel position and size as in
+> image 1. Keep every wall, corner, ceiling and floor line; the single narrow
+> tall window with dark grey frame (do not widen it, no curtains); the flush
+> white doors, their thin frames and handles as drawn; the kitchen exactly as
+> drawn: flat white handleless fronts with the same panel joints only (no bar
+> handles, no extra drawers), pale stone worktop, hob, sink with tap,
+> dishwasher, tall white column units, no wall cabinets; the three-seat sofa
+> with one terracotta and one olive cushion; the low oak TV unit and TV; the
+> oak dining table with four upholstered chairs. Do not add, remove, move or
+> resize anything; do not straighten curved lines. Change only materials,
+> light and photographic quality, using image 2 only as reference for colour,
+> materials and mood (ignore its furniture, person, art, plants, lamp,
+> curtain): warm white matte walls, plain flat warm white ceiling without
+> lamps, light natural oak vinyl plank floor with fine grain, ivory linen
+> upholstery with natural wrinkles, light oak wood, dark bronze tap. Warm
+> late-afternoon light: one soft sun patch from the window on the wall and
+> floor, the rest in soft daylight with gentle bounce, soft contact shadows
+> and ambient occlusion. Crisp professional real-estate photograph, natural
+> contrast, true whites, no haze, no bloom. No people, no text.
+
+Lo que hay que nombrar en el prompt es lo que la IA tiende a cambiar: los
+frentes de cocina (en la 1.ª versión puso tiradores), las ventanas (que no
+las ensanche ni ponga cortinas) y los muebles de la referencia (los copia si
+no se le dice que no).
+
+### Subida de la imagen a Weave (importante)
+
+- **Weave ignora en silencio los `data:` URI.** El modelo se lanza, cobra y
+  genera desde el texto: la prueba de control devolvió una foto de un
+  bizcocho. Los tres primeros intentos de esta tanda (Seedream 4,
+  Nano Banana Pro 23 y 11 créditos) no vieron la base por eso.
+- `weave_upload_asset` es un selector de ficheros del navegador del usuario:
+  no sirve para ficheros de la sesión en la nube.
+- Lo que funciona: un fichero de diseño de Figma de paso
+  («Serenea · entradas 360 IA (temporal)», en borradores). Con `use_figma` se
+  guarda cada trozo del base64 en el nombre de un marco (comprobando longitud
+  y suma de control), se unen en una llamada final, se decodifican con
+  `figma.base64Decode` y `figma.createImage` (JPEG o PNG; WebP no), y
+  `download_assets` da la URL del `rawImage`, que Weave sí lee.
+- La red de la sesión necesita `s3-alpha-sig.figma.com` y `blobs.figma.com`
+  para bajar los resultados (añadidos al entorno «Unik»).
+
+### Por qué no se usa flujo óptico ni la vía por caras
+
+- El registro con flujo óptico local sube algún par de bordes, pero **ondula
+  las verticales** (marcos, columna de cocina, puertas): se ve en el visor.
+  `registrar360.py` queda en afín global (`--max 0` por defecto).
+- La escala horizontal de la afín (1,0011) no es periódica en 360°; en vez de
+  quitarla (baja la geometría a 70 %), se reparte el salto de la costura en
+  una banda del 1,5 % del ancho.
+- `vistas360.py` (caras en perspectiva → IA → recomposición) está probado
+  solo en ida y vuelta (PSNR 32,5 dB, 35,6 en la franja central, con vistas
+  de 768 px). No ha hecho falta: Nano Banana Pro conserva la equirectangular
+  cuando de verdad ve la imagen.
+
+### Coste
+
+- Por 360, con esta cadena: 23 créditos por intento; con 1,5 intentos de
+  media, unos **35 créditos** (≈ 0,30–0,55 $ a 0,008–0,016 $ el crédito).
+- Para los ~285 360 de Apolo: unos **10 000 créditos** (≈ 80–160 $). El
+  plan Professional da 4.000 créditos al mes. Sin reescalado: el núcleo útil
+  sale a 5430 px de ancho.
+- Esta prueba: 91 créditos, con los descartes incluidos (desglose en el
+  informe de la tanda).
+
+### Pendiente
+
+- Las referencias de luz y acabado del cliente: se pasan como imagen 2 (o 2 y
+  3) y se repite la pasada. La cadena no cambia.
+- La 238 tiene la fachada del salón distinta en el BIM y en el plano
+  comercial: el 360 sigue el BIM.
+- Probar un salón de planta 1 (antepecho blanco) y un dormitorio con el
+  mismo prompt antes de lanzar la tanda.
+
 ## Limitaciones conocidas
 
 - Calidad de captura en tiempo real (three.js por CPU), no de render: el

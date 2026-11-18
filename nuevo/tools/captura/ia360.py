@@ -12,8 +12,11 @@ continúa en el derecho. Este script resuelve las dos puntas de la cadena:
               (lo que hay a la izquierda de la costura se pega a la derecha
               y al revés), para que el modelo vea la continuidad;
             · se añade una ondulación de ±2 niveles de muy baja frecuencia
-              (invisible) que evita repeticiones largas en el WebP;
-            · se escribe .webp, .b64 (para un data URI) y .json.
+              (invisible) que evita repeticiones largas en el base64;
+            · se escribe .jpg, .b64, los trozos .trozoN (con su suma de
+              control en el .json) para subirlo a Figma, y el .json.
+            OJO: Weave ignora en silencio los data URI; la imagen tiene que
+            estar en una URL https (ver LEEME, «360 con IA»).
   montar    Salida del modelo -> equirectangular 2:1 sin costura:
             · se recorta el núcleo 2:1 (escala deducida del ancho);
             · se funden los solapes envueltos sobre la costura (el modelo
@@ -48,10 +51,18 @@ def preparar(a):
     im = np.clip(im + g[..., None] + 0.5, 0, 255).astype(np.uint8)
     wt = round(h * a.relacion[0] / a.relacion[1]); p = wt - w; pl = p // 2; pr = p - pl
     pad = np.concatenate([im[:, w - pl:], im, im[:, :pr]], axis=1)
-    Image.fromarray(pad).save(a.salida + '.webp', 'WEBP', quality=a.calidad, method=6)
-    s = base64.b64encode(open(a.salida + '.webp', 'rb').read()).decode()
+    # JPEG progresivo: lo acepta figma.createImage (WebP no) y el progresivo
+    # evita tiradas largas repetidas en el base64
+    Image.fromarray(pad).save(a.salida + '.jpg', 'JPEG', quality=a.calidad, optimize=True, progressive=True)
+    s = base64.b64encode(open(a.salida + '.jpg', 'rb').read()).decode()
     open(a.salida + '.b64', 'w').write(s)
-    meta = {'pl': pl, 'pr': pr, 'w': w, 'h': h, 'ancho': wt, 'md5b64': hashlib.md5(s.encode()).hexdigest(), 'caracteres': len(s)}
+    # trozos para subirlos a Figma en varias llamadas (cada una ≲ 12 000 caracteres)
+    trozos = []
+    for i in range(0, len(s), a.trozo):
+        t = s[i:i + a.trozo]
+        open(f'{a.salida}.trozo{len(trozos)}', 'w').write(t)
+        trozos.append({'n': len(trozos), 'caracteres': len(t), 'suma': sum(ord(c) * (k % 97 + 1) for k, c in enumerate(t)) % 1000003})
+    meta = {'pl': pl, 'pr': pr, 'w': w, 'h': h, 'ancho': wt, 'md5b64': hashlib.md5(s.encode()).hexdigest(), 'caracteres': len(s), 'trozos': trozos}
     json.dump(meta, open(a.salida + '.json', 'w'))
     print(json.dumps(meta))
 
@@ -144,7 +155,8 @@ p = sub.add_parser('preparar')
 p.add_argument('--base', required=True)
 p.add_argument('--salida', required=True, help='prefijo: escribe .webp, .b64 y .json')
 p.add_argument('--alto', type=int, default=768)
-p.add_argument('--calidad', type=int, default=75)
+p.add_argument('--calidad', type=int, default=60)
+p.add_argument('--trozo', type=int, default=11600, help='caracteres de base64 por trozo')
 p.add_argument('--relacion', type=int, nargs=2, default=[21, 9])
 m = sub.add_parser('montar')
 m.add_argument('--ia', required=True)
