@@ -65,8 +65,13 @@ declare(strict_types=1);
     columna `datos`, que guarda lo firmado en el conforme de la visita
     (una fila con tipo «documento»); y en `usuarios`, la bandera
     `posventa`, que deja dar por buenos los repasos de las visitas. No
-    arregla ninguna fila: todo nace vacío o a cero. */
-const ESQUEMA_VERSION = 23;
+    arregla ninguna fila: todo nace vacío o a cero.
+    La 24 trae el quinto botón de «Postventa», la fotovoltaica (pedido
+    el 17-11-2026: la tienen todas las villas). Solo cuatro
+    columnas en la ficha de entrega, como las de la domótica: el día de
+    la cita con el instalador (`fotovoltaica`), su sello y su autor. No
+    arregla ninguna fila: nacen vacías. */
+const ESQUEMA_VERSION = 24;
 
 /**
  * Tablas que tienen que existir para dar la versión por puesta. Si
@@ -184,7 +189,7 @@ const ESQUEMA_CAMPOS = [
         'posventa_fijada_en'   => "CHAR(24) NOT NULL DEFAULT ''",
         'posventa_por'         => 'CHAR(36) DEFAULT NULL',
         'posventa_por_nombre'  => "VARCHAR(120) NOT NULL DEFAULT ''",
-        // Los cuatro botones. Cada uno guarda el día de la CITA con el
+        // Los botones. Cada uno guarda el día de la CITA con el
         // instalador (casi siempre futuro), no el día en que se apuntó,
         // que ya lo dice su sello. Vacío = sin cita. «no-tiene» = la
         // villa no lo tiene (solo vale en la piscina y la climatización).
@@ -204,6 +209,12 @@ const ESQUEMA_CAMPOS = [
         'armarios_fijados_en'  => "CHAR(24) NOT NULL DEFAULT ''",
         'armarios_por'         => 'CHAR(36) DEFAULT NULL',
         'armarios_por_nombre'  => "VARCHAR(120) NOT NULL DEFAULT ''",
+        // El quinto botón (esquema 24): la fotovoltaica. Como la
+        // domótica: la tienen todas, así que no admite «no-tiene».
+        'fotovoltaica'             => "CHAR(10) NOT NULL DEFAULT ''",
+        'fotovoltaica_fijada_en'   => "CHAR(24) NOT NULL DEFAULT ''",
+        'fotovoltaica_por'         => 'CHAR(36) DEFAULT NULL',
+        'fotovoltaica_por_nombre'  => "VARCHAR(120) NOT NULL DEFAULT ''",
     ],
     'reuniones' => [
         // El acta que sale de la grabación: el resumen ya aceptado y,

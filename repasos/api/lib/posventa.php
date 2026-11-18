@@ -4,10 +4,10 @@
  * entregada y su «Conforme de la visita», el documento que el comprador
  * firma con el dedo.
  *
- * DÓNDE VIVE CADA COSA (esquema 23; ninguna tabla nueva):
- *   - La cita de la visita y los cuatro botones (piscina, climatización,
- *     domótica y armarios): hechos de la ficha de entrega, en
- *     lib/entregas.php.
+ * DÓNDE VIVE CADA COSA (esquemas 23 y 24; ninguna tabla nueva):
+ *   - La cita de la visita y los cinco botones (piscina, climatización,
+ *     domótica, fotovoltaica y armarios): hechos de la ficha de entrega,
+ *     en lib/entregas.php.
  *   - Cada visita hecha con la app: una fila de `listas` con
  *     `fase = 'visita'`. Sus repasos, filas de `tareas` como las demás
  *     (por dentro, `tareas` guarda REPASOS).
@@ -495,10 +495,17 @@ function conforme_sanear(string $crudo, string $unidadId, string $listaId): arra
     }
     $salida['observaciones'] = $observaciones;
 
-    // La línea de los contactos: cinco síes o noes, y nada más.
+    // La línea de los contactos: síes o noes, y nada más. La
+    // fotovoltaica (esquema 24) es la única que puede faltar: un móvil
+    // con la app de antes no la conoce, y su papel no la nombra. Si
+    // viene, tiene que ser un sí o un no, como las demás; si no viene,
+    // no se guarda (lo firmado se queda como se firmó).
     $contactos = $d['contactos'] ?? null;
     $salida['contactos'] = [];
-    foreach (['dados', 'piscina', 'clima', 'domotica', 'armarios'] as $clave) {
+    foreach (['dados', 'piscina', 'clima', 'domotica', 'fotovoltaica', 'armarios'] as $clave) {
+        if ($clave === 'fotovoltaica' && is_array($contactos) && !array_key_exists($clave, $contactos)) {
+            continue;
+        }
         if (!is_array($contactos) || !is_bool($contactos[$clave] ?? null)) {
             return $mal("los contactos («contactos.{$clave}»)");
         }

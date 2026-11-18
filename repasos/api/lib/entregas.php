@@ -13,7 +13,8 @@
  * Desde el esquema 23 la ficha guarda además lo de «Entregadas», la
  * sección de las viviendas ya entregadas: la cita de la visita de
  * repasos (`posventa`) y el día de la cita con el instalador de la
- * piscina, la climatización, la domótica y los armarios. Lo demás de
+ * piscina, la climatización, la domótica y los armarios; y desde el 24,
+ * también el de la fotovoltaica. Lo demás de
  * esa sección —la visita, sus repasos y el conforme firmado— no vive
  * aquí: está en lib/posventa.php.
  */
@@ -239,7 +240,7 @@ function entrega_hora($valor): string
 const ENTREGA_NO_TIENE = 'no-tiene';
 
 /**
- * El valor de uno de los cuatro botones de «Entregadas»: el día de la
+ * El valor de uno de los cinco botones de «Postventa»: el día de la
  * CITA con el instalador («AAAA-MM-DD», uno que exista), «no-tiene» si
  * ese botón lo admite, o vacío. El día no se compara con hoy: es una
  * cita, y lo normal es que sea futura.
@@ -359,13 +360,16 @@ const ENTREGA_HECHOS = [
     // «Entregadas» (esquema 23). La cita de la visita de repasos, la de
     // DESPUÉS de entregar: no es `revision`, que es la de antes.
     'posventa'    => ['sello' => 'posventa_fijada_en', 'campos' => ['posventa', 'posventa_hora'], 'autor' => 'posventa_por'],
-    // Y los cuatro botones: el día de la cita con el instalador de cada
-    // cosa. Cuatro hechos y no uno, para que quien pulsa la piscina en
+    // Y los cinco botones: el día de la cita con el instalador de cada
+    // cosa. Cinco hechos y no uno, para que quien pulsa la piscina en
     // un móvil no le pise la domótica a quien la pulsa en otro.
     'piscina'     => ['sello' => 'piscina_fijada_en', 'campos' => ['piscina'], 'autor' => 'piscina_por'],
     'clima'       => ['sello' => 'clima_fijado_en', 'campos' => ['clima'], 'autor' => 'clima_por'],
     'domotica'    => ['sello' => 'domotica_fijada_en', 'campos' => ['domotica'], 'autor' => 'domotica_por'],
     'armarios'    => ['sello' => 'armarios_fijados_en', 'campos' => ['armarios'], 'autor' => 'armarios_por'],
+    // El quinto (esquema 24). Un móvil con la app de antes no lo conoce
+    // y no manda su sello: lo guardado se conserva (ver abajo).
+    'fotovoltaica' => ['sello' => 'fotovoltaica_fijada_en', 'campos' => ['fotovoltaica'], 'autor' => 'fotovoltaica_por'],
 ];
 
 /**
@@ -386,6 +390,7 @@ const ENTREGA_SELLOS_CLIENTE = [
     'clima'       => 'climaFijadoEn',
     'domotica'    => 'domoticaFijadaEn',
     'armarios'    => 'armariosFijadosEn',
+    'fotovoltaica' => 'fotovoltaicaFijadaEn',
 ];
 
 /**
@@ -500,15 +505,16 @@ function guardar_entregas(): void
             'revisada_de_hora' => entrega_hora($e['revisadaDeHora'] ?? ''),
             'visitas_hechas'   => entrega_visitas_json(entrega_visitas($e['visitasHechas'] ?? null)),
             'entregada_en'  => entrega_sello($e['entregadaEn'] ?? ''),
-            // «Entregadas»: la cita de la visita de repasos y el día de
+            // «Postventa»: la cita de la visita de repasos y el día de
             // la cita de cada botón. Solo la piscina y la climatización
-            // admiten «no-tiene».
+            // admiten «no-tiene»: la fotovoltaica la tienen todas.
             'posventa'      => entrega_fecha($e['posventa'] ?? ''),
             'posventa_hora' => entrega_hora($e['posventaHora'] ?? ''),
             'piscina'       => entrega_boton($e['piscina'] ?? '', true),
             'clima'         => entrega_boton($e['clima'] ?? '', true),
             'domotica'      => entrega_boton($e['domotica'] ?? '', false),
             'armarios'      => entrega_boton($e['armarios'] ?? '', false),
+            'fotovoltaica'  => entrega_boton($e['fotovoltaica'] ?? '', false),
         ];
         // Una hora sin fecha no significa nada.
         if ($llega['revision'] === '') {
@@ -618,7 +624,7 @@ function entrega_salida(array $f): array
         'entregadaFijadaEn' => (string) ($f['entregada_fijada_en'] ?? ''),
         'entregadaPor' => $f['entregada_por'] ?? null,
         'entregadaPorNombre' => (string) ($f['entregada_por_nombre'] ?? ''),
-        // «Entregadas»: la cita de la visita de repasos y los cuatro
+        // «Postventa»: la cita de la visita de repasos y los cinco
         // botones (el día de la cita con el instalador, o «no-tiene»).
         // Con red: una fila servida antes de que la migración haya
         // añadido las columnas sale con todo vacío.
@@ -643,6 +649,10 @@ function entrega_salida(array $f): array
         'armariosFijadosEn' => (string) ($f['armarios_fijados_en'] ?? ''),
         'armariosPor' => $f['armarios_por'] ?? null,
         'armariosPorNombre' => (string) ($f['armarios_por_nombre'] ?? ''),
+        'fotovoltaica' => (string) ($f['fotovoltaica'] ?? ''),
+        'fotovoltaicaFijadaEn' => (string) ($f['fotovoltaica_fijada_en'] ?? ''),
+        'fotovoltaicaPor' => $f['fotovoltaica_por'] ?? null,
+        'fotovoltaicaPorNombre' => (string) ($f['fotovoltaica_por_nombre'] ?? ''),
         'borrada' => (int) ($f['borrada'] ?? 0) === 1,
         'creado' => $f['creado'], 'actualizado' => $f['actualizado'],
         'creadoPor' => $f['creado_por'] ?? null,

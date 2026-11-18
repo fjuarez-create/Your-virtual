@@ -161,7 +161,7 @@ export const TRAZADOS = {
   key: '<path d="M216.57,39.43A80,80,0,0,0,83.91,120.78L28.69,176A15.86,15.86,0,0,0,24,187.31V216a16,16,0,0,0,16,16H72a8,8,0,0,0,8-8V208H96a8,8,0,0,0,8-8V184h16a8,8,0,0,0,5.66-2.34l9.56-9.57A79.73,79.73,0,0,0,160,176h.1A80,80,0,0,0,216.57,39.43ZM224,98.1c-1.09,34.09-29.75,61.86-63.89,61.9H160a63.7,63.7,0,0,1-23.65-4.51,8,8,0,0,0-8.84,1.68L116.69,168H96a8,8,0,0,0-8,8v16H72a8,8,0,0,0-8,8v16H40V187.31l58.83-58.82a8,8,0,0,0,1.68-8.84A63.72,63.72,0,0,1,96,95.92c0-34.14,27.81-62.8,61.9-63.89A64,64,0,0,1,224,98.1ZM192,76a12,12,0,1,1-12-12A12,12,0,0,1,192,76Z"/>',
   // list
   list: '<path d="M224,128a8,8,0,0,1-8,8H40a8,8,0,0,1,0-16H216A8,8,0,0,1,224,128ZM40,72H216a8,8,0,0,0,0-16H40a8,8,0,0,0,0,16ZM216,184H40a8,8,0,0,0,0,16H216a8,8,0,0,0,0-16Z"/>',
-  // ── «Entregadas» (noviembre de 2026). Los cinco van puestos A MANO:
+  // ── «Entregadas» (noviembre de 2026). Los seis van puestos A MANO:
   // tools/traer-iconos.mjs no los conoce y, si se ejecutara, se los
   // llevaría por delante junto con los demás que tampoco conoce.
   //
@@ -181,4 +181,9 @@ export const TRAZADOS = {
   // en Phosphor: caja, junta entre las dos puertas, un tirador en cada
   // una y dos patas, con el mismo trazo.
   armario: '<rect x="48" y="32" width="160" height="176" rx="12" fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/><line x1="128" y1="32" x2="128" y2="208" fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/><line x1="104" y1="108" x2="104" y2="132" fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/><line x1="152" y1="108" x2="152" y2="132" fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/><line x1="76" y1="208" x2="76" y2="232" fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/><line x1="180" y1="208" x2="180" y2="232" fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>',
+  // Los paneles solares: el botón de la fotovoltaica (17-11-2026).
+  // Tampoco existe en Phosphor: el sol que asoma con tres rayos y,
+  // debajo, el panel en perspectiva con sus seis celdas, con el mismo
+  // trazo. Se eligió entre cuatro mirándolo a 23 px en la bolita de 48.
+  panelSolar: '<path d="M96,100 A32,32 0 0 1 160,100" fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/><line x1="128" y1="48" x2="128" y2="30" fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/><line x1="88" y1="62" x2="76" y2="50" fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/><line x1="168" y1="62" x2="180" y2="50" fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/><path d="M60,124 H196 L228,220 H28 Z" fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/><line x1="44" y1="172" x2="212" y2="172" fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/><line x1="105" y1="124" x2="95" y2="220" fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/><line x1="151" y1="124" x2="161" y2="220" fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>',
 };

@@ -20,9 +20,15 @@
                      lea ANTES de firmar. Las frases son las del papel:
                      salen de frasesDeConforme() (js/pdfConforme.js) y
                      aquí no se redacta ni se repite ninguna.
-     3. LA FIRMA     con el dedo (js/firma.js). Una basta; si se añadió
-                     un segundo nombre, se pregunta si firma también.
-                     Quien no firma no figura.
+     3. LA FIRMA     con el dedo, EN EL PROPIO DOCUMENTO: al final, un
+                     recuadro por cada persona de «Quién firma», uno
+                     debajo del otro, y se firma ahí mismo (el motor de
+                     los trazos es el de js/firma.js, lienzoDeFirma). El
+                     dedo que cae dentro de un recuadro firma y no mueve
+                     la página; el que cae fuera la desplaza. «Aceptar y
+                     guardar» se enciende con la primera firma; si hay
+                     una segunda persona y no ha firmado, se pregunta si
+                     se guarda sin ella. Quien no firma no figura.
      4. EL PAPEL     se monta el PDF (segundos, sin red), se calcula su
                      huella, se guarda en este móvil (store.guardarConforme,
                      que lo deja en la cola para que suba solo) y se
@@ -32,29 +38,29 @@
    el servidor podrían rechazar después: al comprador no se le puede
    pedir que firme dos veces.
 
-   Se puede salir sin firmar en cualquier momento antes de la firma: la
+   Se puede salir sin firmar en cualquier momento antes de guardar: la
    visita se queda empezada, no hecha, y lo escrito en la hoja, guardado.
 
-   El botón de atrás del teléfono: en el documento vuelve a la hoja; en
-   la hoja, la cierra; con un calendario abierto, cierra el calendario;
-   mientras se prepara el papel no hace nada. En la firma manda la capa
-   de la firma, que tiene sus propias reglas.
+   El botón de atrás del teléfono: en el documento vuelve a la hoja (con
+   algo firmado, pregunta antes: lo firmado se perdería); en la hoja, la
+   cierra; con un calendario o una pregunta abiertos, los cierra;
+   mientras se prepara el papel no hace nada.
 
    En lo que se lee aquí, cada cosa lleva su palabra del diccionario de
    la casa y ninguna otra: «conforme de la visita» y «repasos de la
    visita».
    ═══════════════════════════════════════════════════════════════ */
-import { h, icon, toast } from './ui.js';
+import { h, icon, toast, confirmar } from './ui.js';
 import * as store from './store.js';
 import { promocion, unidad } from './catalog.js';
 import { hojaFecha, entregarFichero } from './piezas.js';
 import * as E from './entregas.js';
 import { BOTONES, NO_TIENE, valorDeBoton, diaDeInstante, horaDeInstante } from './posventa.js';
 import {
-  VARIANTE_CONFORME, TOPES_CONFORME, cargarTipografia, frasesDeConforme, pegasDeConforme, pegaDeFirmante,
+  VARIANTE_CONFORME, TOPES_CONFORME, cargarTipografia, frasesDeConforme, pegasDeConforme,
   medirConforme, pdfConforme, nombreDeConforme,
 } from './pdfConforme.js';
-import { pedirFirma } from './firma.js';
+import { lienzoDeFirma, FRASES_DE_FIRMA } from './firma.js';
 import { refrescar } from './app.js';
 
 /* El tope de lo firmado como dato, medido TAL COMO VIAJA (los octetos
@@ -66,7 +72,7 @@ export const CONFORME_DATOS_MAX = 58000;
 /* Lo demás que exige el servidor a lo firmado, para mirarlo antes. */
 const TOPES = Object.freeze({ repasos: 200, textoDeRepaso: 4000, nombre: 120, compradores: 160, paginas: 20 });
 /* Lo que se reserva, al medir antes de firmar, para lo que aún no se
-   sabe: el nombre de quien firma se puede corregir en la propia firma. */
+   sabe del todo (el instante de cada firma y su escritura). */
 const RESERVA_DE_FIRMAS = 600;
 
 const FRASES = Object.freeze({
@@ -89,11 +95,16 @@ const FRASES = Object.freeze({
   quitarSegunda: 'Quitar la segunda firma',
   verDocumento: 'Ver el documento',
   corregir: 'Corregir',
-  firmar: 'Firmar',
-  tituloFirma: 'Firma de la parte compradora',
-  tituloSegunda: 'Segunda firma',
-  siFirma: 'Sí, firma ahora',
-  noFirma: 'No firma',
+  aceptarYGuardar: 'Aceptar y guardar',
+  soloUnaFirma: (primero) => `¿Guardar el conforme solo con la firma de ${primero}?`,
+  noHaFirmado: (segundo) => `${segundo} no ha firmado.`,
+  siGuardar: 'Sí, guardar',
+  volver: 'Volver',
+  segundaCorta: (segundo) => `La firma de ${segundo} es demasiado corta: siga firmando en su recuadro, o toque «Borrar» y repita.`,
+  volverConFirmas: '¿Volver a la hoja?',
+  seBorranLasFirmas: 'Lo firmado en el documento se borra, y habrá que firmar otra vez.',
+  siVolver: 'Volver a la hoja',
+  seguirFirmando: 'Seguir en el documento',
   preparando: 'Preparando el conforme…',
   guardado: 'Conforme firmado y guardado',
   notaDeEntrega: 'Compártelo con los compradores: es su copia.',
@@ -130,7 +141,7 @@ const diaEntero = (dia) => `${E.diaSemana(dia)} ${E.fechaLarga(dia, { conAno: tr
 
 /**
  * Lo que la villa TIENE, que es lo que nombra la línea de los
- * contactos: la domótica y los armarios, siempre; la piscina y la
+ * contactos: la domótica, la fotovoltaica y los armarios, siempre; la piscina y la
  * climatización, salvo que su botón diga «No tiene».
  */
 export function contactosDeVilla(entrega) {
@@ -141,7 +152,7 @@ export function contactosDeVilla(entrega) {
   return tiene;
 }
 
-/** «Piscina, climatización, domótica y armarios», con lo que la villa tenga. */
+/** «Piscina, climatización, domótica, fotovoltaica y armarios», con lo que la villa tenga. */
 function listaDeContactos(tiene) {
   const nombres = BOTONES.filter((b) => tiene[b.clave]).map((b) => b.nombre.toLowerCase());
   if (!nombres.length) return '';
@@ -167,7 +178,11 @@ function poner(nodo, ...hijos) {
    «El PDF está listo» nada más salir. Es la regla de confirmar()
    (js/ui.js): lo recién pintado no atiende hasta pasado un rato de dedo
    quieto, y cada toque que llega a destiempo vuelve a empezar la cuenta.
-   reposo() devuelve la pregunta «¿puede pasar este toque?». */
+   reposo() devuelve la pregunta «¿puede pasar este toque?». Hoy la
+   guardan «Corregir» y «Aceptar y guardar» del documento (que salen
+   donde estaba «Ver el documento») y la hoja «El PDF está listo» (que
+   sale bajo «Aceptar y guardar»). La pregunta de la segunda firma es
+   un confirmar() de la casa, que trae la suya. */
 const REPOSO = 700;
 function reposo() {
   let desde = performance.now();
@@ -188,7 +203,7 @@ let abierta = false;
  *
  *   lista     la lista de la visita (fase 'visita'), sin conforme.
  *   entrega   la ficha de entrega de la vivienda (compradores, la cita,
- *             la firma de la escritura y los cuatro botones).
+ *             la firma de la escritura y los cinco botones).
  *   repasos   los repasos vivos de la visita, en su orden.
  *
  * Resuelve con { firmado: true, conforme } cuando el papel queda
@@ -287,6 +302,7 @@ async function recorrido({ lista, entrega, repasos: repasosAlAbrir }) {
     contactos: {
       dados: doc.contactos.dados === true, piscina: doc.contactos.piscina === true, clima: doc.contactos.clima === true,
       domotica: doc.contactos.domotica === true, armarios: doc.contactos.armarios === true,
+      fotovoltaica: doc.contactos.fotovoltaica === true,
     },
     repasos: repasos.map((t) => ({ id: t.id, texto: t.texto || '' })),
     firmas: firmas.map((f) => ({ nombre: f.nombre, firmadoEn: f.firmadoEn, fecha: f.fecha, hora: f.hora })),
@@ -315,10 +331,11 @@ async function recorrido({ lista, entrega, repasos: repasosAlAbrir }) {
   const capa = h('div.d-velo.d-conforme', { role: 'dialog', 'aria-modal': 'true', 'aria-label': FRASES.titulo },
     h('div.d-conforme-caja', null, cuerpo, pie));
 
-  let paso = 'hoja';         // 'hoja' · 'documento' · 'segunda' · 'preparando' · 'fallo'
+  let paso = 'hoja';         // 'hoja' · 'documento' · 'preparando' · 'fallo'
   let cerrada = false;
-  let firmando = false;      // la capa de la firma está puesta: «atrás» es suyo
+  let preguntando = false;   // hay una pregunta de la casa abierta encima (confirmar)
   let conEntrada = false;    // ¿está puesta nuestra entrada en el historial?
+  let recuadros = [];        // los recuadros de firma del documento en pantalla, uno por persona
   let resolver = () => {};
   const promesa = new Promise((listo) => { resolver = listo; });
 
@@ -329,14 +346,22 @@ async function recorrido({ lista, entrega, repasos: repasosAlAbrir }) {
     } catch { conEntrada = false; }
   };
   const alVolver = () => {
-    if (cerrada || firmando) return;
+    if (cerrada) return;
     conEntrada = false;
+    // Con una pregunta abierta encima, «atrás» contesta que no.
+    if (preguntando) {
+      const pregunta = [...document.querySelectorAll('.d-menu-velo.confirmar')].pop();
+      pregunta?.querySelector('.d-confirmar-x')?.click();
+      ponerEntrada();
+      return;
+    }
     // Con un calendario abierto encima, «atrás» cierra el calendario.
     const calendario = [...document.querySelectorAll('.d-velo.abajo')].pop();
     if (calendario) { calendario.click(); ponerEntrada(); return; }
-    if (paso === 'documento') { ponerEntrada(); pintarHoja(); return; }
+    // En el documento vuelve a la hoja; con algo firmado, pregunta antes.
+    if (paso === 'documento') { ponerEntrada(); corregir(); return; }
     if (paso === 'hoja') { cerrar({ firmado: false }); return; }
-    // Preguntando por la segunda firma o preparando el papel, no se sale.
+    // Preparando el papel, no se sale.
     ponerEntrada();
   };
   // Si la pantalla de debajo cambia de sitio por su cuenta (un aviso que
@@ -353,6 +378,7 @@ async function recorrido({ lista, entrega, repasos: repasosAlAbrir }) {
     if (cerrada) return;
     cerrada = true;
     guardarBorradorSiToca(valor);
+    apagarRecuadros();
     window.removeEventListener('popstate', alVolver);
     window.removeEventListener('hashchange', alCambiarDeSitio);
     capa.remove();
@@ -381,6 +407,7 @@ async function recorrido({ lista, entrega, repasos: repasosAlAbrir }) {
 
   function pintarHoja() {
     paso = 'hoja';
+    apagarRecuadros();
     const error = (campo) => (errores[campo] ? h('p.d-conforme-error', { role: 'alert', 'data-error': campo }, errores[campo]) : null);
     const quitarError = (campo, nodo) => {
       if (!errores[campo]) return;
@@ -568,6 +595,14 @@ async function recorrido({ lista, entrega, repasos: repasosAlAbrir }) {
 
   async function verDocumento() {
     await guardarBorrador();
+    // Si otro móvil ya la ha firmado, no se le pide la firma a nadie: el
+    // documento ni se enseña (y se vuelve a mirar al guardar).
+    if (await store.conformeDeLista(lista.id)) {
+      if (cerrada) return;
+      toast(FRASES.yaFirmada, 'err');
+      cerrar({ firmado: false });
+      return;
+    }
     // Lo que se va a firmar es lo que haya ahora, no lo que había al abrir la hoja.
     const frescos = await repasosDeAhora();
     if (cerrada) return;
@@ -579,14 +614,21 @@ async function recorrido({ lista, entrega, repasos: repasosAlAbrir }) {
   }
 
   /* ─── Paso 2 · El documento en pantalla ─── */
-  /** El papel, con las frases de frasesDeConforme(). `firmas`, las ya hechas (para enseñar el garabato). */
-  function papelDe(doc, firmas = []) {
+  /**
+   * El papel, con las frases de frasesDeConforme().
+   *   firmas      las ya hechas, para enseñar el garabato (el papel que no
+   *               se ha podido guardar).
+   *   recuadroDe  (trozo, n) → el nodo que va en el sitio de la firma n
+   *               (0, 1): el recuadro donde se firma. Sin él, el hueco de
+   *               siempre, que no se toca.
+   */
+  function papelDe(doc, firmas = [], recuadroDe = null) {
     const frases = frasesDeConforme(doc);
     let nFirma = 0;
     const hoja = h('div.d-conforme-papel', { 'data-pagina': 'documento' });
     const cuadro = h('div.d-conforme-datos');
     const lista2 = h('ol.d-conforme-repasos');
-    const zonaFirmas = h('div.d-conforme-firmas');
+    const zonaFirmas = h(recuadroDe ? 'div.d-conforme-firmas.con-recuadros' : 'div.d-conforme-firmas');
     for (const trozo of frases.enOrden) {
       switch (trozo.parte) {
         case 'sociedad': hoja.append(h('p.d-conforme-sociedad', null, trozo.texto)); break;
@@ -610,14 +652,17 @@ async function recorrido({ lista, entrega, repasos: repasosAlAbrir }) {
         case 'lugarYFecha': hoja.append(h('p.d-conforme-parrafo', { 'data-parte': 'lugar' }, trozo.texto), zonaFirmas); break;
         case 'firma': {
           const hecha = firmas[nFirma];
+          if (recuadroDe) zonaFirmas.append(recuadroDe(trozo, nFirma));
+          else {
+            zonaFirmas.append(h('div.d-conforme-firma', null,
+              h('span.d-conforme-firma-rotulo', null, trozo.rotulo),
+              hecha?.vistaPrevia ? h('img.d-conforme-garabato', { src: hecha.vistaPrevia, alt: `Firma de ${trozo.texto}` })
+                : h('span.d-conforme-garabato.hueco', { 'aria-hidden': 'true' }),
+              h('span.d-conforme-firma-nombre', null, trozo.texto),
+              trozo.firmado ? h('span.d-conforme-firma-cuando', null, trozo.firmado) : null,
+            ));
+          }
           nFirma += 1;
-          zonaFirmas.append(h('div.d-conforme-firma', null,
-            h('span.d-conforme-firma-rotulo', null, trozo.rotulo),
-            hecha?.vistaPrevia ? h('img.d-conforme-garabato', { src: hecha.vistaPrevia, alt: `Firma de ${trozo.texto}` })
-              : h('span.d-conforme-garabato.hueco', { 'aria-hidden': 'true' }),
-            h('span.d-conforme-firma-nombre', null, trozo.texto),
-            trozo.firmado ? h('span.d-conforme-firma-cuando', null, trozo.firmado) : null,
-          ));
           break;
         }
         default: if (trozo.texto) hoja.append(h('p.d-conforme-parrafo', null, trozo.texto));
@@ -627,105 +672,186 @@ async function recorrido({ lista, entrega, repasos: repasosAlAbrir }) {
     return hoja;
   }
 
+  /* ─── Paso 3 · La firma, en el propio documento ─── */
+  /** Los recuadros dejan de escuchar: el documento se va de la pantalla. */
+  function apagarRecuadros() {
+    for (const recuadro of recuadros) recuadro.motor?.apagar();
+    recuadros = [];
+  }
+  /** ¿Hay algo firmado en algún recuadro? */
+  const hayFirmado = () => recuadros.some((recuadro) => recuadro.motor && recuadro.motor.medida().puntos > 0);
+
+  /**
+   * Un recuadro de firma, como en el papel: el rótulo, el lienzo con su
+   * raya y su «Firme aquí con el dedo» (que se va al primer trazo), el
+   * nombre debajo, un «Borrar» pequeño que solo se enciende si hay
+   * trazos, y el sitio reservado para la frase de la firma corta (si
+   * saliera sin sitio, todo lo de debajo daría un salto).
+   */
+  function recuadroDeFirma(trozo, indice, alCambiar) {
+    const lienzo = h('canvas.d-conforme-lienzo', { 'aria-label': `Firma de ${trozo.texto}` });
+    const borrar = h('button.d-conforme-borrar', { type: 'button', disabled: true, 'data-accion': 'borrar-firma' }, FRASES_DE_FIRMA.borrar);
+    const pista = h('p.d-conforme-firma-pista', { role: 'status', 'aria-live': 'polite' });
+    const nodo = h('div.d-conforme-firma.recuadro', { 'data-firma': String(indice + 1) },
+      h('span.d-conforme-firma-rotulo', null, trozo.rotulo),
+      h('div.d-conforme-recuadro', null,
+        h('span.d-conforme-recuadro-raya', { 'aria-hidden': 'true' }),
+        h('p.d-conforme-recuadro-aqui', { 'aria-hidden': 'true' }, FRASES_DE_FIRMA.aqui),
+        lienzo),
+      h('div.d-conforme-firma-bajo', null, h('span.d-conforme-firma-nombre', null, trozo.texto), borrar),
+      pista,
+    );
+    const recuadro = { nodo, lienzo, pista, nombre: trozo.texto, motor: null };
+    recuadro.alDia = (medida) => {
+      nodo.classList.toggle('con-tinta', medida.puntos > 0);
+      borrar.disabled = medida.puntos === 0;
+      pista.textContent = medida.puntos > 0 && !medida.vale ? FRASES_DE_FIRMA.corta : '';
+      alCambiar();
+    };
+    // El motor se pone cuando el lienzo ya está en la página (pintarDocumento).
+    recuadro.arrancar = () => {
+      recuadro.motor = lienzoDeFirma(lienzo, {
+        alEmpezar: () => nodo.classList.add('con-tinta'),
+        alCambiar: recuadro.alDia,
+      });
+    };
+    borrar.addEventListener('click', () => { recuadro.motor?.borrar(); });
+    return recuadro;
+  }
+
   function pintarDocumento() {
     paso = 'documento';
+    apagarRecuadros();
     const doc = docDe();
     const noCabe = pegaDeTamano(doc);
     const sinSello = !(globalThis.crypto && globalThis.crypto.subtle) ? FRASES.sinSello : '';
     const impide = noCabe || sinSello;
-    // «Firmar» sale donde estaba «Ver el documento» (ver «El reposo»).
+    // «Corregir» y «Aceptar y guardar» salen donde estaba «Ver el
+    // documento» (ver «El reposo»).
     const quieto = reposo();
+    const guardar = impide ? null : h('button.d-boton-negro', {
+      type: 'button', 'data-accion': 'guardar', disabled: true,
+      onclick: () => { if (quieto()) aceptarYGuardar(); },
+    }, FRASES.aceptarYGuardar);
+    // «Aceptar y guardar», encendido solo con una firma que valga en el PRIMER recuadro.
+    const ponerGuardar = () => {
+      if (guardar) guardar.disabled = !(recuadros[0]?.motor && recuadros[0].motor.medida().vale);
+    };
+    // Si el documento no se puede firmar (no cabe, no se puede sellar), no
+    // hay recuadros donde firmar: el hueco de siempre y la frase de por qué.
+    const nuevos = [];
+    const recuadroDe = impide ? null : (trozo, n) => {
+      const recuadro = recuadroDeFirma(trozo, n, ponerGuardar);
+      nuevos.push(recuadro);
+      return recuadro.nodo;
+    };
     poner(cuerpo,
       aviso ? h('div.d-conforme-aviso', { role: 'status', 'data-parte': 'aviso' }, icon('alert'), h('div.grow', null, h('p', null, aviso))) : null,
-      papelDe(doc),
+      papelDe(doc, [], recuadroDe),
       impide ? h('div.d-conforme-aviso.rojo', { role: 'alert', 'data-parte': 'no-cabe' }, icon('alert'), h('div.grow', null, h('p', null, impide))) : null,
     );
     poner(pie,
-      h('button.d-boton-negro.claro', { type: 'button', 'data-accion': 'corregir', onclick: pintarHoja }, FRASES.corregir),
-      impide ? null : h('button.d-boton-negro', { type: 'button', 'data-accion': 'firmar', onclick: () => { if (quieto()) firmar(); } }, FRASES.firmar),
+      h('button.d-boton-negro.claro', { type: 'button', 'data-accion': 'corregir', onclick: () => { if (quieto()) corregir(); } }, FRASES.corregir),
+      guardar,
     );
+    // Ya en la página: los lienzos se pueden medir.
+    recuadros = nuevos;
+    for (const recuadro of recuadros) recuadro.arrancar();
+    ponerGuardar();
     cuerpo.scrollTop = 0;
   }
 
-  /* ─── Paso 3 · La firma ─── */
-  let ocupado = false;
-  async function pedir(titulo, nombre) {
-    firmando = true;
+  /** Una pregunta de la casa (confirmar), encima de la capa. «Atrás» la contesta que no. */
+  async function preguntar(opciones) {
+    preguntando = true;
     try {
-      return await pedirFirma({ titulo, nombre, comprobarNombre: pegaDeFirmante });
+      return await confirmar(opciones);
     } finally {
-      firmando = false;
+      preguntando = false;
     }
   }
 
-  async function firmar() {
-    if (ocupado || cerrada) return;
+  /** «Corregir» (o «atrás») en el documento: a la hoja. Con algo firmado, se pregunta antes. */
+  async function corregir() {
+    if (cerrada || paso !== 'documento' || ocupado || preguntando) return;
+    if (hayFirmado()) {
+      const si = await preguntar({
+        titulo: FRASES.volverConFirmas, texto: FRASES.seBorranLasFirmas,
+        ok: FRASES.siVolver, icono: 'edit', conservar: FRASES.seguirFirmando, iconoConservar: 'arrowLeft',
+      });
+      if (!si || cerrada || paso !== 'documento') return;
+    }
+    pintarHoja();
+  }
+
+  /**
+   * Lo que se mira justo antes de guardar: que la visita siga sin
+   * conforme (otro móvil pudo firmarla) y que lo que se ha leído y
+   * firmado siga siendo lo que hay. Si no, no se guarda: false.
+   */
+  async function sigueValiendo() {
+    if (await store.conformeDeLista(lista.id)) {
+      if (!cerrada) { toast(FRASES.yaFirmada, 'err'); cerrar({ firmado: false }); }
+      return false;
+    }
+    const frescos = await repasosDeAhora();
+    if (cerrada || paso !== 'documento') return false;
+    if (!mismos(frescos, repasos)) {
+      // Lo firmado era otro documento: se enseña el de ahora, para leerlo y firmar otra vez.
+      repasos = frescos;
+      errores = comprobarHoja();
+      if (Object.keys(errores).length) { pintarHoja(); return false; }
+      aviso = FRASES.hanCambiado;
+      pintarDocumento();
+      return false;
+    }
+    return true;
+  }
+
+  let ocupado = false;
+  async function aceptarYGuardar() {
+    if (ocupado || cerrada || paso !== 'documento' || preguntando) return;
+    const [primero, segundo] = recuadros;
+    if (!primero?.motor || !primero.motor.medida().vale) return;
     ocupado = true;
     try {
-      // Lo último antes de pedirle la firma a nadie: que la visita siga
-      // sin conforme y que lo que se ha leído siga siendo lo que hay.
-      if (await store.conformeDeLista(lista.id)) {
-        toast(FRASES.yaFirmada, 'err');
-        cerrar({ firmado: false });
-        return;
+      if (!(await sigueValiendo())) return;
+      // La segunda persona: si ha empezado a firmar, su firma tiene que
+      // valer; si no ha firmado, se pregunta si se guarda sin ella.
+      let conSegunda = false;
+      if (segundo?.motor) {
+        const medida = segundo.motor.medida();
+        if (medida.puntos > 0 && !medida.vale) {
+          toast(FRASES.segundaCorta(segundo.nombre), 'err');
+          segundo.pista.textContent = FRASES_DE_FIRMA.corta;
+          segundo.nodo.scrollIntoView({ block: 'center', behavior: 'smooth' });
+          return;
+        }
+        if (medida.puntos === 0) {
+          const si = await preguntar({
+            titulo: FRASES.soloUnaFirma(primero.nombre), texto: FRASES.noHaFirmado(segundo.nombre),
+            ok: FRASES.siGuardar, icono: 'documento', conservar: FRASES.volver, iconoConservar: 'arrowLeft',
+          });
+          if (!si || cerrada || paso !== 'documento') return;
+          // Mientras se preguntaba, la sincronización ha podido traer algo.
+          if (!(await sigueValiendo())) return;
+        } else {
+          conSegunda = true;
+        }
       }
-      const frescos = await repasosDeAhora();
-      if (!mismos(frescos, repasos)) {
-        repasos = frescos;
-        errores = comprobarHoja();
-        if (Object.keys(errores).length) { pintarHoja(); return; }
-        aviso = FRASES.hanCambiado;
-        pintarDocumento();
-        return;
-      }
-      const escritos = firmantesEscritos();
-      const primera = await pedir(FRASES.tituloFirma, escritos[0] || '');
-      if (!primera || cerrada) return;           // se cerró sin firmar: sigue el documento, sin perder nada
-      const firmas = [primera];
-      if (escritos[1]) {
-        const segunda = await preguntarSegunda(escritos[1]);
-        if (cerrada) return;
-        if (segunda) firmas.push(segunda);
-      }
+      // Cada firma lleva el momento de su último trazo. Quien no firma no figura.
+      const firmas = [primero.motor.firma(primero.nombre)];
+      if (conSegunda) firmas.push(segundo.motor.firma(segundo.nombre));
       await montarYGuardar(firmas);
     } finally {
       ocupado = false;
     }
   }
 
-  /** «¿Firma también …?»: resuelve con su firma, o con null si no firma. Quien no firma no figura. */
-  function preguntarSegunda(nombre) {
-    return new Promise((listo) => {
-      paso = 'segunda';
-      let pidiendo = false;
-      // Los dos botones salen donde estaba «Aceptar» (ver «El reposo»).
-      const quieto = reposo();
-      poner(cuerpo, h('div.d-conforme-centro', { 'data-parte': 'segunda' },
-        h('span.d-conforme-sello', null, icon('edit')),
-        h('h2.d-conforme-titulo', null, `¿Firma también ${nombre}?`),
-        h('p.d-conforme-villa', null, 'Si no firma, no figura en el documento: ni su nombre ni un hueco para su firma.'),
-      ));
-      poner(pie,
-        h('button.d-boton-negro', {
-          type: 'button', 'data-accion': 'si-firma',
-          onclick: async () => {
-            if (pidiendo || !quieto()) return;
-            pidiendo = true;
-            const firma = await pedir(FRASES.tituloSegunda, nombre);
-            pidiendo = false;
-            // Si cierra la firma sin firmar, la pregunta sigue ahí.
-            if (firma) listo(firma);
-          },
-        }, FRASES.siFirma),
-        h('button.d-boton-negro.claro', { type: 'button', 'data-accion': 'no-firma', onclick: () => { if (!pidiendo && quieto()) listo(null); } }, FRASES.noFirma),
-      );
-      cuerpo.scrollTop = 0;
-    });
-  }
-
   /* ─── Paso 4 · El papel ─── */
   async function montarYGuardar(firmas) {
     paso = 'preparando';
+    apagarRecuadros();
     poner(cuerpo, h('div.d-conforme-centro', { 'data-parte': 'preparando', role: 'status' },
       h('span.d-conforme-rueda', { 'aria-hidden': 'true' }),
       h('h2.d-conforme-titulo', null, FRASES.preparando),
@@ -756,6 +882,7 @@ async function recorrido({ lista, entrega, repasos: repasosAlAbrir }) {
   /** El papel no ha salido (o no se ha podido guardar): el documento, con las firmas hechas, y volver a intentarlo. */
   function pintarFallo(firmas, fallo, pdf, nombre) {
     paso = 'fallo';
+    apagarRecuadros();
     // El motivo, en español. Las frases de la casa (las de este recorrido,
     // las del papel y las del almacén) se enseñan tal cual; lo que dice el
     // navegador por su cuenta —«The transaction was aborted…», cuando el
@@ -802,7 +929,7 @@ async function recorrido({ lista, entrega, repasos: repasosAlAbrir }) {
   toast(FRASES.guardado, '', { icono: 'documento' });
   try {
     entregarFichero(salida.fichero, salida.nombre, { nota: FRASES.notaDeEntrega });
-    // La hoja nace bajo el dedo que acaba de pulsar «Aceptar» en la firma
+    // La hoja nace bajo el dedo que acaba de pulsar «Aceptar y guardar»
     // (ver «El reposo»): los toques que le lleguen a destiempo no cuentan,
     // ni para cerrarla ni para pulsar nada de ella.
     const hoja = [...document.querySelectorAll('.d-hoja-acciones')].pop();

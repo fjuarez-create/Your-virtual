@@ -3,19 +3,22 @@
 
    Tres, y las tres se usan en más de una pantalla, por eso viven aparte:
 
-     LOS CUATRO BOTONES   piscina, climatización, domótica y armarios,
+     LOS CINCO BOTONES    piscina, climatización, domótica,
+                          fotovoltaica y armarios,
                           como «bolitas que se rellenan»: huecas con el
                           borde y el icono de su color; macizas, con el
                           icono en blanco, cuando hay cita; en gris y
                           con el icono tachado cuando la villa no tiene
                           eso. Salen en fila en la tarjeta de la lista
-                          y en cuatro renglones en la ficha.
+                          y en cinco renglones en la ficha.
      LA TARJETA NEGRA     del «Conforme de la visita» firmado, que abre
                           el PDF. Sale en la ficha de la vivienda y en
                           la pantalla de la visita.
      LOS DOS DESPLEGABLES del repaso de la visita, oficio y estancia:
                           en la hoja de apuntarlo (js/views/tareas.js)
-                          y en la de corregirlo (js/views/tarea.js).
+                          y en la de corregirlo (js/views/tarea.js). Y
+                          el del lápiz del oficio, en la ficha del
+                          repaso (oficioConDesplegable).
 
    Las reglas (qué es un botón resuelto, cómo se dice su día, quién
    firmó) están en js/posventa.js, que no tiene pantalla; aquí solo se
@@ -37,7 +40,7 @@ import {
   oficiosDelDesplegable, estanciasDelDesplegable,
 } from './posventa.js';
 
-/* ─── Los cuatro botones ─────────────────────────────────────── */
+/* ─── Los cinco botones ──────────────────────────────────────── */
 
 /** La bolita de un botón, sola: el redondel con su icono y, si no tiene, la raya que lo tacha. */
 function bolita(boton, valor, { alPulsar = null } = {}) {
@@ -58,16 +61,16 @@ function bolita(boton, valor, { alPulsar = null } = {}) {
 }
 
 /**
- * Los cuatro botones de una vivienda entregada.
+ * Los cinco botones de una vivienda entregada.
  *
- *   entrega    su ficha de entrega (de ahí salen los cuatro valores, la
+ *   entrega    su ficha de entrega (de ahí salen los cinco valores, la
  *              vivienda y la promoción).
  *   puede      si quien mira pone fechas: entonces son botones y abren
  *              su hoja; si no, se ven igual y no hacen nada.
  *   alCambiar  se llama cuando algo se ha guardado, para repintar.
- *   forma      'fila' (la tarjeta de la lista: las cuatro bolitas una
+ *   forma      'fila' (la tarjeta de la lista: las cinco bolitas una
  *              junto a otra, con el día debajo) o 'lista' (la ficha:
- *              cuatro renglones con la bolita, el nombre y «cita el…»).
+ *              cinco renglones con la bolita, el nombre y «cita el…»).
  */
 export function botonesPosventa(entrega, { puede = false, alCambiar = () => {}, forma = 'fila' } = {}) {
   const e = entrega || {};
@@ -311,6 +314,47 @@ function desplegable({ nombre, rotulo, opciones, valor, alCambiar }) {
 /** El oficio del repaso de la visita: «General» y los demás por orden alfabético. */
 export function desplegableOficio(valor, alCambiar = () => {}) {
   return desplegable({ nombre: 'oficio', rotulo: 'Oficio', opciones: oficiosDelDesplegable(), valor, alCambiar });
+}
+
+/**
+ * El chip del oficio y su lápiz, en la ficha de un repaso de la visita,
+ * con el desplegable del sistema ENCIMA: un <select> nativo, invisible,
+ * que tapa a los dos. Tocar el chip o el lápiz es tocar el desplegable,
+ * y lo abre el propio sistema —en el iPhone, la rueda— con «General» el
+ * primero, los demás por orden alfabético y el de ahora elegido (pedido
+ * el 17-11-2026; antes abría la hoja de chips de siempre, que en los
+ * repasos de obra sigue igual).
+ *
+ * No se abre desde el código, con focus() o showPicker(): en el iPhone
+ * un desplegable solo se abre de forma fiable con el dedo encima, y por
+ * eso el dedo cae en él y no en un botón. Lleva letra de 16 px aunque no
+ * se vea: con menos, el iPhone amplía la pantalla al tocarlo.
+ *
+ *   actual     el oficio del repaso (su id).
+ *   nombre     cómo se llama.
+ *   chip       su chip, ya hecho por la ficha (con la forma de los de
+ *              su fila); aquí se le pone debajo del desplegable.
+ *   alElegir   se llama con el id elegido, solo si es otro.
+ */
+export function oficioConDesplegable(actual, nombre, chip, alElegir = () => {}) {
+  const opciones = oficiosDelDesplegable();
+  // Un oficio que ya no está en la lista sale el primero, tal cual, para
+  // que el desplegable no diga otro distinto del que lleva el repaso.
+  if (actual && !opciones.some((o) => o.valor === actual)) opciones.unshift({ valor: actual, texto: nombre });
+  const selector = h('select.d-oficio-selector', { 'aria-label': 'Cambiar de oficio', 'data-desplegable': 'oficio-repaso' },
+    ...opciones.map((o) => h('option', { value: o.valor }, o.texto)));
+  selector.value = actual;
+  if (selector.selectedIndex < 0) selector.selectedIndex = 0;
+  selector.addEventListener('change', () => {
+    if (selector.value && selector.value !== actual) alElegir(selector.value);
+  });
+  // Lo que se ve queda debajo y no se lee: quien no ve oye el desplegable.
+  chip.setAttribute('aria-hidden', 'true');
+  return h('span.d-oficio-desplegable', null,
+    chip,
+    h('span.d-lapiz-oficio', { 'aria-hidden': 'true' }, icon('edit')),
+    selector,
+  );
 }
 
 /** La estancia del repaso de la visita, opcional: «Sin estancia» y las de la obra por orden alfabético. */

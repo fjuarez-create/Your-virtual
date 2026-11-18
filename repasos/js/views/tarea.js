@@ -25,7 +25,7 @@ import { alCompletar, nombreCorto } from '../frases.js';
 import { ir, refrescar, conFiltros, filtrosDeRuta } from '../app.js';
 import { fotosDe, soltarFotos } from '../pendientes.js';
 import { oficioDeLaVisita } from '../posventa.js';
-import { desplegableOficio, desplegableEstancia } from '../piezasPosventa.js';
+import { desplegableOficio, desplegableEstancia, oficioConDesplegable } from '../piezasPosventa.js';
 
 export async function render({ listaId, tareaId }) {
   const t = await store.tarea(tareaId);
@@ -47,7 +47,9 @@ export async function render({ listaId, tareaId }) {
        · lo da por bueno o lo rechaza, además de quien verifica, quien
          lleva la bandera «posventa» (el chip «Postventa» de Usuarios);
        · el oficio y la estancia se corrigen en dos desplegables, no en
-         chips (editarEstancia). El lápiz del oficio sigue como siempre. */
+         chips (editarEstancia); y el lápiz del oficio abre directamente
+         el desplegable de oficios del sistema (oficioConDesplegable),
+         no la hoja de chips. */
   const deVisita = esListaDeVisita(lista);
   const visitaFirmada = deVisita && !!(await store.conformeDeLista(listaId));
   const rutaVilla = deVisita
@@ -137,15 +139,19 @@ export async function render({ listaId, tareaId }) {
   const chips = h('div.d-chips-tarea', null,
     u ? h('span.d-chip.tarea', null, u.nombre) : null,
     t.zona ? h('span.d-chip.tarea', null, t.zona) : null,
-    h('span.d-chip.tarea', null, o.nombre),
-    // El lápiz del oficio, a la derecha de su chip y para todo el
-    // mundo: la contrata se encuentra remates de fachada apuntados en
-    // «Pintura» y tiene que poder recategorizarlos de un toque, sin
-    // pasar por editar (lo pidió Fran para Sofía, noviembre de 2026).
-    h('button.d-lapiz-oficio', {
-      'aria-label': 'Cambiar de oficio',
-      onclick: () => cambiarOficio(t),
-    }, icon('edit')),
+    // En un repaso de la visita, el chip y el lápiz llevan encima el
+    // desplegable de oficios del sistema: se elige y se guarda, sin hoja.
+    deVisita ? oficioConDesplegable(t.oficio, o.nombre, h('span.d-chip.tarea', null, o.nombre), (elegido) => guardarOficio(t, elegido)) : [
+      h('span.d-chip.tarea', null, o.nombre),
+      // El lápiz del oficio, a la derecha de su chip y para todo el
+      // mundo: la contrata se encuentra remates de fachada apuntados en
+      // «Pintura» y tiene que poder recategorizarlos de un toque, sin
+      // pasar por editar (pedido en noviembre de 2026).
+      h('button.d-lapiz-oficio', {
+        'aria-label': 'Cambiar de oficio',
+        onclick: () => cambiarOficio(t),
+      }, icon('edit')),
+    ],
     // La fecha límite solo si la hay, y solo para mirarla.
     t.fechaLimite ? h('span.d-chip.tarea.fecha', null, icon('calendario'), diaYMes(t.fechaLimite)) : null,
   );
@@ -860,6 +866,31 @@ async function cambiarOficio(t) {
     texto: `Oficio cambiado: ${antes.nombre} → ${despues.nombre}`,
     tipo: 'nota',
   });
+  toast(`Ahora es ${despues.nombre}`);
+  refrescar();
+}
+
+/**
+ * Lo mismo, desde el desplegable del lápiz de un repaso de la visita
+ * (oficioConDesplegable): el oficio elegido se guarda igual, con la
+ * misma nota automática en el hilo y el mismo aviso. Si no se puede
+ * guardar, lo dice y repinta, y el desplegable vuelve al que tenía.
+ */
+async function guardarOficio(t, elegido) {
+  if (!elegido || elegido === t.oficio) return;
+  const antes = oficio(t.oficio);
+  const despues = oficio(elegido);
+  try {
+    await store.actualizarTarea(t.id, { oficio: elegido });
+    await store.añadirComentario(t.id, {
+      texto: `Oficio cambiado: ${antes.nombre} → ${despues.nombre}`,
+      tipo: 'nota',
+    });
+  } catch (err) {
+    toast(err?.message || 'No se ha podido cambiar el oficio', 'err');
+    refrescar();
+    return;
+  }
   toast(`Ahora es ${despues.nombre}`);
   refrescar();
 }

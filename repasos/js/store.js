@@ -322,22 +322,25 @@ const HECHOS_ENTREGA = [
   // Que la vivienda se ha entregado lo dicen el comercial o el
   // administrador, no la fecha de la firma (Fran, 10-11-2026).
   { sello: 'entregadaFijadaEn', campos: ['entregadaEn'], autor: 'entregadaPor' },
-  // «Entregadas» (noviembre de 2026): la cita de la visita de repasos y
-  // los cuatro botones, cada uno con el día de su cita con el
-  // instalador. Son CINCO hechos y no uno, cada cual con su sello, para
+  // «Postventa» (noviembre de 2026): la cita de la visita de repasos y
+  // los cinco botones, cada uno con el día de su cita con el
+  // instalador. Son SEIS hechos y no uno, cada cual con su sello, para
   // que dos móviles que tocan cosas distintas de la misma vivienda no se
-  // pisen. Gemelos de los del servidor (api/lib/entregas.php).
+  // pisen. Gemelos de los del servidor (api/lib/entregas.php). La
+  // fotovoltaica, la última en llegar (esquema 24), va aquí al final;
+  // en pantalla sale entre la domótica y los armarios (BOTONES).
   { sello: 'posventaFijadaEn', campos: ['posventa', 'posventaHora'], autor: 'posventaPor' },
   { sello: 'piscinaFijadaEn', campos: ['piscina'], autor: 'piscinaPor' },
   { sello: 'climaFijadoEn', campos: ['clima'], autor: 'climaPor' },
   { sello: 'domoticaFijadaEn', campos: ['domotica'], autor: 'domoticaPor' },
   { sello: 'armariosFijadosEn', campos: ['armarios'], autor: 'armariosPor' },
+  { sello: 'fotovoltaicaFijadaEn', campos: ['fotovoltaica'], autor: 'fotovoltaicaPor' },
 ];
 
-/** Los cinco hechos de «Entregadas»: su campo y su sello, para ponerlos vacíos donde falten. */
+/** Los seis hechos de «Postventa»: su campo y su sello, para ponerlos vacíos donde falten. */
 const HECHOS_POSVENTA = [
   ['posventa', 'posventaFijadaEn'], ['piscina', 'piscinaFijadaEn'], ['clima', 'climaFijadoEn'],
-  ['domotica', 'domoticaFijadaEn'], ['armarios', 'armariosFijadosEn'],
+  ['domotica', 'domoticaFijadaEn'], ['fotovoltaica', 'fotovoltaicaFijadaEn'], ['armarios', 'armariosFijadosEn'],
 ];
 
 /**
@@ -463,6 +466,7 @@ function entregaVacia(unidadId, promoId) {
     clima: '', climaFijadoEn: '', climaPor: null, climaPorNombre: '',
     domotica: '', domoticaFijadaEn: '', domoticaPor: null, domoticaPorNombre: '',
     armarios: '', armariosFijadosEn: '', armariosPor: null, armariosPorNombre: '',
+    fotovoltaica: '', fotovoltaicaFijadaEn: '', fotovoltaicaPor: null, fotovoltaicaPorNombre: '',
     borrada: false,
     creado: ahora(), actualizado: ahora(),
     creadoPor: usuario?.id || 'local',
@@ -692,9 +696,9 @@ export async function deshacerEntregada(unidadId, promoId) {
 
    Lo que se guarda de cada una después de entregarla, y dónde:
 
-     · La CITA de la visita de repasos y los CUATRO BOTONES (piscina,
-       climatización, domótica y armarios, cada uno con el día de su
-       cita con el instalador) son hechos de la ficha de entrega: los
+     · La CITA de la visita de repasos y los CINCO BOTONES (piscina,
+       climatización, domótica, fotovoltaica y armarios, cada uno con el
+       día de su cita con el instalador) son hechos de la ficha de entrega: los
        ponen el comercial y el administrador y suben con ella.
      · Cada VISITA hecha con la app es una lista con fase 'visita', y
        sus repasos son repasos de siempre colgados de esa lista. NO se
@@ -729,8 +733,8 @@ export async function fijarPosventa(unidadId, promoId, { dia = '', hora = '', ot
 }
 
 /**
- * Pulsa, mueve o despulsa uno de los cuatro botones. `clave` es
- * 'piscina', 'clima', 'domotica' o 'armarios'; `valor`, el día de la
+ * Pulsa, mueve o despulsa uno de los cinco botones. `clave` es
+ * 'piscina', 'clima', 'domotica', 'fotovoltaica' o 'armarios'; `valor`, el día de la
  * cita con el instalador («2026-11-26», pasado o futuro), 'no-tiene'
  * (solo piscina y climatización) o vacío para despulsar.
  */

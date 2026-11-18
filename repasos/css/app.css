@@ -2985,6 +2985,20 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 }
 .d-lapiz-oficio svg { width: 22px; height: 22px; }
 .d-lapiz-oficio:active { transform: scale(0.92); transition-duration: 0s; }
+/* En un repaso de la visita (js/piezasPosventa.js, oficioConDesplegable)
+   el chip y el lápiz llevan ENCIMA el desplegable de oficios del
+   sistema, invisible, que los tapa a los dos: el dedo cae en él y el
+   sistema lo abre (en el iPhone, la rueda). La letra, 16 px aunque no se
+   vea, para que el iPhone no amplíe la pantalla al tocarlo. Lo que se ve
+   y se hunde al pulsar es el chip y el lápiz de debajo. */
+.d-oficio-desplegable { position: relative; display: inline-flex; align-items: center; gap: 8px; flex: none; }
+.d-oficio-selector {
+  position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0; border: 0;
+  opacity: 0; font-size: 16px; color: transparent; background: transparent;
+  -webkit-appearance: none; appearance: none; cursor: pointer;
+}
+.d-oficio-desplegable:active .d-lapiz-oficio { transform: scale(0.92); transition-duration: 0s; }
+.d-oficio-desplegable:has(.d-oficio-selector:focus-visible) .d-lapiz-oficio { outline: 2px solid var(--d-tinta); outline-offset: 2px; }
 /* La fecha límite, en oscuro y solo para mirarla. */
 .d-chip.tarea.fecha { background: #454545; color: #fff; gap: 8px; }
 .d-chip.tarea.fecha svg { width: 20px; height: 20px; }
@@ -3985,7 +3999,7 @@ body.es-taller .d-velo.d-firma { padding-bottom: calc(env(safe-area-inset-bottom
    Las viviendas ya entregadas (noviembre de 2026): la lista con sus
    tres filtros (js/views/entregadas.js), la ficha de cada una
    (js/views/entregada.js) y las dos piezas que comparten con la
-   pantalla de la visita (js/piezasPosventa.js): los cuatro botones y
+   pantalla de la visita (js/piezasPosventa.js): los cinco botones y
    la tarjeta del conforme firmado. Todo lo de aquí empieza por «pv-».
 
    Se apoya en lo que ya había: la tarjeta lisa del día de Entregas
@@ -3993,20 +4007,27 @@ body.es-taller .d-velo.d-firma { padding-bottom: calc(env(safe-area-inset-bottom
    (.d-chip), el botón negro y la tarjeta negra del reconocimiento
    (.d-menu-destacada). Aquí solo va lo que les falta.  ═══ */
 
-/* Los colores de los cuatro botones. Son SUYOS y de nada más, para que
+/* Los colores de los cinco botones. Son SUYOS y de nada más, para que
    verlos signifique siempre lo mismo: agua la piscina, azul frío la
-   climatización, rojo tierra la domótica y ocre roble los armarios.
+   climatización, rojo tierra la domótica, granate la fotovoltaica y
+   ocre roble los armarios.
    Están medidos contra los que ya tienen dueño en la casa: no se
    confunden con el rojo de lo rechazado (--d-rojo), con el verde de lo
    hecho (--d-verde) ni con el azul de «mensaje sin leer» (--azul). El
    rojo tierra es el que más se arrima al rojo de la casa: lo acaban de
    separar la forma (una bolita con dibujo, no una pastilla con letra)
-   y el icono. No se reaprovechan para otra cosa. */
+   y el icono. No se reaprovechan para otra cosa.
+   El granate de la fotovoltaica (17-11-2026) va entre la domótica y los
+   armarios, así que se eligió para que se separe de los dos a simple
+   vista: más oscuro y tirando a vino, lejos del rojo tierra (ΔE 2000:
+   25) y del ocre (43), del rojo de lo rechazado (29) y del verde de lo
+   hecho (53); el blanco sobre él contrasta 11:1. */
 :root {
   --pv-piscina: #0f7f94;
   --pv-clima: #2d4a7a;
   --pv-domotica: #96502f;
   --pv-armarios: #8a6a12;
+  --pv-fotovoltaica: #6e1d3a;
   /* El gris de «No tiene»: su letra y la raya que tacha el icono. */
   --pv-apagado: #6f6f6f;
 }
@@ -4052,12 +4073,13 @@ body.es-taller .d-velo.d-firma { padding-bottom: calc(env(safe-area-inset-bottom
 .pv-vacio-titulo { margin: 0; font-size: 17px; line-height: 23px; color: var(--d-tinta); }
 .pv-vacio-sub { margin: 6px 0 0; font-size: 15px; line-height: 21px; color: var(--d-gris); }
 
-/* ── Los cuatro botones: «bolitas que se rellenan» ──
+/* ── Los cinco botones: «bolitas que se rellenan» ──
    Sin pulsar, hueca: fondo blanco, y el borde y el icono de su color.
    Con cita, maciza: el color entero y el icono en blanco; debajo, el
    día. «No tiene», en gris y con el icono tachado por una raya de
-   esquina a esquina. Las cuatro en fila caben en la tarjeta de un
-   móvil de 360 (4 × 60 + 3 × 6 = 258 px). */
+   esquina a esquina. Las cinco caben en fila a 48 px desde los 320 de
+   ancho (allí la caja mide 264: 5 × 48 + 4 × 6, justas); de 360 en
+   adelante cada columna se ensancha hasta 60. */
 .pv-bolita {
   position: relative; flex: none; width: 48px; height: 48px; padding: 0; border: 0;
   border-radius: 999px; display: grid; place-items: center;
@@ -4068,6 +4090,7 @@ body.es-taller .d-velo.d-firma { padding-bottom: calc(env(safe-area-inset-bottom
 .pv-bolita.clima { --pv-color: var(--pv-clima); }
 .pv-bolita.domotica { --pv-color: var(--pv-domotica); }
 .pv-bolita.armarios { --pv-color: var(--pv-armarios); }
+.pv-bolita.fotovoltaica { --pv-color: var(--pv-fotovoltaica); }
 .pv-bolita.si { background: var(--pv-color); color: #fff; box-shadow: none; }
 .pv-bolita.nt { background: var(--d-gris-suave); color: var(--d-gris); box-shadow: none; }
 .pv-raya {
@@ -4075,11 +4098,16 @@ body.es-taller .d-velo.d-firma { padding-bottom: calc(env(safe-area-inset-bottom
   border-radius: 2px; background: var(--pv-apagado); box-shadow: 0 0 0 2px var(--d-gris-suave);
   transform: rotate(-45deg); pointer-events: none;
 }
-/* En fila (la tarjeta de la lista): cada una en su columna, con el día debajo. */
+/* En fila (la tarjeta de la lista): cada una en su columna, con el día
+   debajo. Las columnas encogen hasta el ancho de la bolita; el día, si
+   no cabe en una línea (a 320 px, o con la letra del sistema grande),
+   parte por el espacio —«20» sobre «nov», «No» sobre «tiene»— en vez de
+   salirse de la tarjeta. */
 .pv-botones { display: flex; align-items: flex-start; gap: 6px; }
-.pv-uno { display: flex; flex-direction: column; align-items: center; width: 60px; }
+.pv-uno { display: flex; flex-direction: column; align-items: center; width: 60px; min-width: 48px; }
 .pv-dia {
-  font-size: 14px; line-height: 18px; margin-top: 5px; min-height: 18px; white-space: nowrap;
+  font-size: 14px; line-height: 1.2858; margin-top: 5px; min-height: 18px;
+  text-align: center; overflow-wrap: normal;
   color: var(--d-tinta); font-variant-numeric: tabular-nums;
 }
 .pv-uno.nt .pv-dia { color: var(--pv-apagado); }
@@ -4479,6 +4507,52 @@ body.es-taller .d-conforme-pie { padding-bottom: calc(env(safe-area-inset-bottom
 .d-conforme-garabato.hueco { height: 54px; }
 .d-conforme-firma-nombre { font-size: 15px; line-height: 20px; overflow-wrap: anywhere; }
 .d-conforme-firma-cuando { font-size: 12px; line-height: 16px; color: #6b6b6b; }
+
+/* La firma en el propio documento (noviembre de 2026: la opción C, con
+   el recuadro un 50 % más alto que en la maqueta, 225 px). Un recuadro
+   por persona, uno debajo del otro, y se firma en él con el dedo
+   (js/conforme.js, con el motor de js/firma.js). Tres reglas que no son
+   adorno:
+   · `touch-action: none` en el lienzo: el dedo que cae dentro firma y no
+     desplaza el documento; el que cae fuera lo desplaza como siempre.
+   · Nada de seleccionar texto ni del menú de la pulsación larga dentro
+     del recuadro: el papel de alrededor sí deja seleccionar.
+   · La frase de la firma corta tiene su sitio reservado debajo de cada
+     recuadro (dos renglones): si saliera sin sitio, lo de debajo daría
+     un salto bajo el dedo de quien firma en el segundo. */
+.d-conforme-firmas.con-recuadros { flex-direction: column; gap: 4px; margin-top: 16px; }
+.d-conforme-firma.recuadro {
+  flex: none; border: none; padding: 0; gap: 6px;
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+}
+.d-conforme-recuadro {
+  position: relative; height: 225px; overflow: hidden;
+  background: #fff; border: 1.5px dashed #c9c4bb; border-radius: 12px;
+}
+.d-conforme-lienzo {
+  position: absolute; inset: 0; width: 100%; height: 100%; display: block;
+  touch-action: none; cursor: crosshair;
+}
+/* La raya sobre la que se firma y la invitación, que se va al primer
+   trazo. Ninguna de las dos recoge toques: encima está el lienzo. */
+.d-conforme-recuadro-raya {
+  position: absolute; left: 8%; right: 8%; bottom: 26%;
+  border-bottom: 1.5px solid #dcd8d1; pointer-events: none;
+}
+.d-conforme-recuadro-aqui {
+  position: absolute; left: 8%; right: 8%; bottom: calc(26% + 12px); margin: 0;
+  font-size: 17px; line-height: 22px; color: #b9b4ab; text-align: center; pointer-events: none;
+}
+.d-conforme-firma.con-tinta .d-conforme-recuadro-aqui { display: none; }
+.d-conforme-firma-bajo { display: flex; align-items: center; gap: 10px; }
+.d-conforme-firma-bajo .d-conforme-firma-nombre { flex: 1; min-width: 0; }
+.d-conforme-borrar {
+  flex: none; height: 34px; padding: 0 14px; border-radius: 999px; background: #fff;
+  box-shadow: inset 0 0 0 1.5px var(--d-beige); font: 500 14px/18px var(--d-font); color: var(--d-tinta);
+}
+.d-conforme-borrar:active { background: var(--d-gris-suave); }
+.d-conforme-borrar:disabled { box-shadow: inset 0 0 0 1.5px #ececec; color: #c9c9c9; }
+.d-conforme-firma-pista { margin: 0; min-height: 40px; font-size: 14px; line-height: 20px; color: #a3261c; }
 
 @media (prefers-reduced-motion: reduce) {
   .d-velo.d-conforme { animation: none; }

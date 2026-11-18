@@ -11,7 +11,7 @@
         …», o la marca «Cerrada».
      2. VISITA DE REPASOS: la cita con los compradores (día y hora) y el
         botón negro de empezar la visita.
-     3. PUESTAS EN MARCHA Y ARMARIOS: los cuatro botones, cada uno con
+     3. PUESTAS EN MARCHA Y ARMARIOS: los cinco botones, cada uno con
         el día de su cita con el instalador.
      4. CADA VISITA, de la más reciente a la más antigua: la firmada,
         con su conforme en PDF y sus repasos; la que está en curso, con
@@ -21,7 +21,7 @@
 
    Quién puede qué (el servidor lo vuelve a comprobar todo):
      · Verlo, todo el equipo.
-     · La fecha, la hora y los cuatro botones: el comercial y el
+     · La fecha, la hora y los cinco botones: el comercial y el
        administrador (puedePonerFechas).
      · Empezar la visita y abrir el PDF firmado: ellos dos y la
        dirección facultativa (puedeHacerVisita). Los demás ven que está
@@ -221,7 +221,7 @@ export async function render({ promoId, unidadId }) {
     botonVisita,
   );
 
-  /* ═══ 3 · Los cuatro botones ═══ */
+  /* ═══ 3 · Los cinco botones ═══ */
   const bloqueBotones = h('div.d-dia-tarjeta.pv-tarjeta-lista', null,
     botonesPosventa(entrega, { puede: poneFechas, alCambiar: refrescar, forma: 'lista' }));
 

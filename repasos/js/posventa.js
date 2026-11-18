@@ -21,8 +21,8 @@
                          una fila de `medios` de tipo 'documento' colgada
                          de la lista de la visita, con lo firmado en
                          `datos`.
-     LOS CUATRO BOTONES  piscina, climatización, domótica y armarios.
-                         Cada uno guarda el día de la CITA con el
+     LOS CINCO BOTONES   piscina, climatización, domótica, fotovoltaica
+                         y armarios. Cada uno guarda el día de la CITA con el
                          instalador (casi siempre un día que aún no ha
                          llegado), o «no tiene» en los dos primeros.
      CERRADA             no se guarda en ningún sitio: se calcula aquí,
@@ -47,7 +47,7 @@ export const NO_TIENE = 'no-tiene';
 export const ROTULO_DIA_BOTON = 'cita el';
 
 /**
- * Los cuatro botones, en su orden fijo. `clave` es el nombre del hecho
+ * Los cinco botones, en su orden fijo. `clave` es el nombre del hecho
  * en la ficha de entrega (igual en el servidor); `icono`, su dibujo en
  * js/iconos.js; `conQuien` monta la pregunta de la hoja y `queNoTiene`
  * el botón de «no tiene» de los dos que lo admiten.
@@ -59,6 +59,10 @@ export const BOTONES = [
     conQuien: 'con la empresa de la climatización', queNoTiene: 'Esta villa no tiene climatización', queSiTiene: 'Sí tiene climatización' },
   { clave: 'domotica', nombre: 'Domótica', icono: 'casaOnda', admiteNoTiene: false,
     conQuien: 'con la empresa de la domótica' },
+  // La quinta (17-11-2026), entre la domótica y los armarios. Como esos
+  // dos, la tienen todas las villas: no admite «no tiene».
+  { clave: 'fotovoltaica', nombre: 'Fotovoltaica', icono: 'panelSolar', admiteNoTiene: false,
+    conQuien: 'con la empresa de la fotovoltaica' },
   { clave: 'armarios', nombre: 'Armarios', icono: 'armario', admiteNoTiene: false,
     conQuien: 'con el montador de los armarios' },
 ];
@@ -69,6 +73,7 @@ export const SELLO_DE_HECHO = {
   piscina: 'piscinaFijadaEn',
   clima: 'climaFijadoEn',
   domotica: 'domoticaFijadaEn',
+  fotovoltaica: 'fotovoltaicaFijadaEn',
   armarios: 'armariosFijadosEn',
 };
 
@@ -232,13 +237,13 @@ export function citaPendiente(entrega, conformes = []) {
  *   visita    { estado, dia, hora }: 'en-curso' | 'prevista' |
  *             'sin-confirmar' | 'firmada' | 'sin-fecha'.
  *   cita      { pendiente, dia, hora, pasada }: la cita de la ficha.
- *   botones   [{ clave, nombre, icono, valor, resuelto }], los cuatro.
+ *   botones   [{ clave, nombre, icono, valor, resuelto }], los cinco.
  *   repasos   { total, terminados, porCerrar } de TODAS sus visitas.
  *   abiertas, firmadas   cuántas visitas hay de cada clase.
  *
  * CERRADA es: (1) hay al menos un conforme firmado; (2) no queda
  * ninguna visita empezada y sin firmar; (3) no hay cita por hacer;
- * (4) los cuatro botones están resueltos; y (5) todos los repasos de
+ * (4) los cinco botones están resueltos; y (5) todos los repasos de
  * sus visitas están verificados. Los repasos de antes de la entrega no
  * cuentan para nada.
  */
@@ -258,7 +263,7 @@ export function situacionPosventa({ entrega, visitas = [], sueltos = [], hoy = E
     pasada: pendiente && e.posventa < hoy,
   };
 
-  /* Los cuatro botones. */
+  /* Los cinco botones. */
   const botones = BOTONES.map((b) => {
     const valor = valorDeBoton(e, b.clave);
     return { clave: b.clave, nombre: b.nombre, icono: b.icono, valor, resuelto: valor !== '' };
@@ -295,7 +300,7 @@ export function situacionPosventa({ entrega, visitas = [], sueltos = [], hoy = E
     falta.push(repasos.porCerrar === 1 ? '1 repaso de la visita' : `${repasos.porCerrar} repasos de la visita`);
   }
   const sinResolver = botones.filter((b) => !b.resuelto);
-  if (sinResolver.length === botones.length) falta.push('los cuatro botones');
+  if (sinResolver.length === botones.length) falta.push('los cinco botones');
   else for (const b of sinResolver) falta.push(b.nombre.toLowerCase());
 
   const cerrada = conformes.length > 0 && abiertas.length === 0 && !pendiente

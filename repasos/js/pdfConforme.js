@@ -47,7 +47,7 @@
                                                 repasos; sin repasos no existe
      observaciones:    'texto libre'            respeta los puntos y aparte;
                                                 vacío → el apartado no sale
-     contactos:        { piscina, clima, domotica, armarios, dados }
+     contactos:        { piscina, clima, domotica, fotovoltaica, armarios, dados }
                                                 solo se nombra lo que venga a
                                                 `true`; con `dados: false` (o
                                                 sin nada a `true`) la línea no
@@ -126,14 +126,19 @@ export const TEXTOS_CONFORME = congelar({
   fechaOrientativa: 'Fecha orientativa de finalización',
   aclaracion: 'La fecha de finalización es orientativa. Si por causas ajenas a la promotora —el plazo de entrega de un material, la disponibilidad de un oficio o una causa de fuerza mayor— alguna actuación necesitara más tiempo, se lo comunicaremos y la reprogramaremos a la mayor brevedad.',
   // La línea de los contactos se monta con lo que se le diga que hay.
+  // Con más de una puesta en marcha la lista ya lleva su «y», y la
+  // coma separa la de los armarios: «…de la domótica y la
+  // fotovoltaica, y para coordinar el montaje de los armarios».
   contactos: {
-    todo: 'En la visita se han facilitado a los compradores los contactos para la puesta en marcha de {puestas} y para coordinar el montaje de los armarios.',
+    todo: 'En la visita se han facilitado a los compradores los contactos para la puesta en marcha de {puestas}, y para coordinar el montaje de los armarios.',
+    todoUna: 'En la visita se han facilitado a los compradores los contactos para la puesta en marcha de {puestas} y para coordinar el montaje de los armarios.',
     soloPuestasVarias: 'En la visita se han facilitado a los compradores los contactos para la puesta en marcha de {puestas}.',
     soloPuestaUna: 'En la visita se ha facilitado a los compradores el contacto para la puesta en marcha de {puestas}.',
     soloArmarios: 'En la visita se ha facilitado a los compradores el contacto para coordinar el montaje de los armarios.',
     piscina: 'la piscina',
     clima: 'la climatización',
     domotica: 'la domótica',
+    fotovoltaica: 'la fotovoltaica',
     y: 'y',
   },
   observaciones: 'Observaciones',
@@ -322,6 +327,7 @@ function leerContactos(origen) {
     piscina: dicho.piscina === true,
     clima: clima === true,
     domotica: dicho.domotica === true,
+    fotovoltaica: dicho.fotovoltaica === true,
     armarios: dicho.armarios === true,
   };
 }
@@ -415,16 +421,17 @@ function pegasDe(datos, faltaFirmar) {
    Las frases: lo que se lee, igual en la pantalla que en el papel
    ─────────────────────────────────────────────────────────────────── */
 
-// «la piscina, la climatización y la domótica», con lo que se le diga.
+// «la piscina, la climatización, la domótica y la fotovoltaica», con lo que se le diga.
 function fraseDeContactos(contactos, textos) {
   if (!contactos.dados) return '';
   const rotulos = textos.contactos;
-  const puestas = ['piscina', 'clima', 'domotica'].filter((clave) => contactos[clave]).map((clave) => rotulos[clave]);
+  const puestas = ['piscina', 'clima', 'domotica', 'fotovoltaica'].filter((clave) => contactos[clave]).map((clave) => rotulos[clave]);
   let lista = puestas.join(', ');
   if (puestas.length > 1) {
     lista = `${puestas.slice(0, -1).join(', ')} ${rotulos.y} ${puestas[puestas.length - 1]}`;
   }
-  if (puestas.length && contactos.armarios) return rellenar(rotulos.todo, { puestas: lista });
+  if (puestas.length > 1 && contactos.armarios) return rellenar(rotulos.todo, { puestas: lista });
+  if (puestas.length && contactos.armarios) return rellenar(rotulos.todoUna, { puestas: lista });
   if (puestas.length > 1) return rellenar(rotulos.soloPuestasVarias, { puestas: lista });
   if (puestas.length === 1) return rellenar(rotulos.soloPuestaUna, { puestas: lista });
   if (contactos.armarios) return rellenar(rotulos.soloArmarios, {});

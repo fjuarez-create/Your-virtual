@@ -369,6 +369,10 @@ CREATE TABLE IF NOT EXISTS entregas (
   armarios_fijados_en  CHAR(24)     NOT NULL DEFAULT '',
   armarios_por         CHAR(36)     DEFAULT NULL,
   armarios_por_nombre  VARCHAR(120) NOT NULL DEFAULT '',
+  fotovoltaica         CHAR(10)     NOT NULL DEFAULT '',   -- el día de la cita con el instalador (esquema 24)
+  fotovoltaica_fijada_en CHAR(24)   NOT NULL DEFAULT '',
+  fotovoltaica_por     CHAR(36)     DEFAULT NULL,
+  fotovoltaica_por_nombre VARCHAR(120) NOT NULL DEFAULT '',
   borrada              TINYINT(1)   NOT NULL DEFAULT 0,
   creado               CHAR(24)     NOT NULL,
   actualizado          CHAR(24)     NOT NULL,

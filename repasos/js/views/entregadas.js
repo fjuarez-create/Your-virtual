@@ -15,8 +15,9 @@
        que ya está hecha y con el conforme firmado);
      · los REPASOS DE LA VISITA, «5 de 8 terminados» (terminado es
        verificado: que la obra lo dé por hecho no basta);
-     · los CUATRO BOTONES —piscina, climatización, domótica y
-       armarios—, cada uno con el día de su cita con el instalador;
+     · los CINCO BOTONES —piscina, climatización, domótica,
+       fotovoltaica y armarios—, cada uno con el día de su cita con el
+       instalador;
      · y la caja «Le falta: …», o la marca «Cerrada» cuando no le falta
        nada. «Cerrada» no la pone nadie: se calcula (js/posventa.js).
 

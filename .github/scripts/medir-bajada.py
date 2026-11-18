@@ -155,6 +155,7 @@ def bajar(desde):
     ficha = None    # las claves de una ficha de entrega, para saber qué versión las sirve
     hoy_listas = {}       # las listas creadas hoy: fase, vivienda, quién, borrada, hora
     fichas_con_postventa = set()  # fichas con algún dato de Postventa GUARDADO en el servidor
+    fichas_con_fotovoltaica = set()  # de ellas, las que tienen guardado el quinto botón (esquema 24)
     conformes_con_datos = set()   # conformes (medios de tipo documento) con sus datos guardados
     repasos_por_lista = {}  # cuántos repasos distintos tiene cada lista
     while tandas < TOPE_TANDAS:
@@ -188,8 +189,10 @@ def bajar(desde):
                     repasos_por_lista.setdefault(fila.get("listaId"), set()).add(fila.get("id"))
                 if t == "entregas" and isinstance(fila, dict) and any(
                         str(fila.get(k) or "").strip() not in ("", "null", "None")
-                        for k in ("posventa", "posventaHora", "piscina", "clima", "domotica", "armarios")):
+                        for k in ("posventa", "posventaHora", "piscina", "clima", "domotica", "fotovoltaica", "armarios")):
                     fichas_con_postventa.add(fila.get("id") or fila.get("unidadId"))
+                if t == "entregas" and isinstance(fila, dict) and str(fila.get("fotovoltaica") or "").strip() not in ("", "null", "None"):
+                    fichas_con_fotovoltaica.add(fila.get("id") or fila.get("unidadId"))
                 if (t == "medios" and isinstance(fila, dict) and str(fila.get("tipo") or "") == "documento"
                         and fila.get("datos")):
                     conformes_con_datos.add(fila.get("id"))
@@ -225,6 +228,7 @@ def bajar(desde):
         "muestra": muestra, "ficha": ficha,
         "hoy_listas": hoy_listas, "repasos_por_lista": repasos_por_lista,
         "fichas_con_postventa": len(fichas_con_postventa), "conformes_con_datos": len(conformes_con_datos),
+        "fichas_con_fotovoltaica": len(fichas_con_fotovoltaica),
     }
 
 
@@ -474,23 +478,32 @@ def main():
     lineas.append(mirar_reconocimiento())
 
     # 4 bis · ¿Sirve ya el servidor las fichas de entrega con lo de
-    #     «Entregadas» (la cita de la visita de repasos y los cuatro
-    #     botones)? Son columnas que añade la versión 23 del esquema: si
-    #     las fichas las traen, la base de producción ha llegado a esa
-    #     versión. Solo se miran los NOMBRES de los campos de una ficha.
+    #     «Postventa» (la cita de la visita de repasos y los cinco
+    #     botones)? Son columnas que añaden las versiones 23 y 24 (la
+    #     fotovoltaica) del esquema: si las fichas las traen, la base de
+    #     producción ha llegado a esa versión. Solo se miran los NOMBRES
+    #     de los campos de una ficha.
     # Las claves salen siempre (el servidor pone '' si la columna no
     #     existe), así que lo que de verdad prueba que la base está en la
-    #     versión 23 es que haya DATOS guardados en esas columnas nuevas.
+    #     versión 23 es que haya DATOS guardados en esas columnas nuevas,
+    #     y en la 24, que alguna ficha tenga guardada la fotovoltaica.
     lineas.append("LO DE POSTVENTA, GUARDADO DE VERDAD: %d fichas de entrega con alguna cita o botón, y %d conformes con sus datos.%s"
                   % (todo.get("fichas_con_postventa", 0), todo.get("conformes_con_datos", 0),
                      " Las columnas nuevas existen y guardan: la base está en la versión 23."
                      if todo.get("fichas_con_postventa", 0) or todo.get("conformes_con_datos", 0)
                      else " Sin datos todavía: esto no prueba en qué versión está la base."))
+    lineas.append("LA FOTOVOLTAICA, GUARDADA DE VERDAD: %d fichas de entrega con su cita.%s"
+                  % (todo.get("fichas_con_fotovoltaica", 0),
+                     " La columna existe y guarda: la base está en la versión 24."
+                     if todo.get("fichas_con_fotovoltaica", 0)
+                     else " Ninguna todavía: esto no prueba que la base esté en la 24 (ni que no lo esté)."))
     claves = todo.get("ficha")
     if claves is None:
         lineas.append("LAS FICHAS DE ENTREGA: no ha bajado ninguna con la que mirar.")
+    elif all(k in claves for k in ("posventa", "piscina", "clima", "domotica", "fotovoltaica", "armarios")):
+        lineas.append("LAS FICHAS DE ENTREGA traen ya lo de «Postventa» (la cita de la visita y los cinco botones, con la fotovoltaica): el servidor es el de ahora.")
     elif all(k in claves for k in ("posventa", "piscina", "clima", "domotica", "armarios")):
-        lineas.append("LAS FICHAS DE ENTREGA traen ya lo de «Entregadas» (la cita de la visita y los cuatro botones): la base está en la versión nueva.")
+        lineas.append("LAS FICHAS DE ENTREGA traen lo de «Entregadas» con cuatro botones, sin la fotovoltaica: el servidor es el de antes de la versión 24.")
     else:
         lineas.append("LAS FICHAS DE ENTREGA no traen todavía lo de «Entregadas»: el servidor es el de antes, o la base no ha llegado a la versión nueva.")
 

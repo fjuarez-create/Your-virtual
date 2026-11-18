@@ -167,13 +167,14 @@ lo decidió Fran el 16-11-2026:
   la LISTA de la visita, y lo firmado va en `medios.datos`. Un conforme
   firmado no se anula ni se borra: si tiene un error, se hace otra
   visita con su conforme y quedan los dos.
-- **Los cuatro botones** (piscina, climatización, domótica y armarios)
-  son hechos de la ficha de entrega. Su valor es el día de la CITA con
-  el instalador (puede ser futuro), vacío, o `no-tiene` (solo piscina y
-  climatización). Nunca «coordinado el».
+- **Los cinco botones** (piscina, climatización, domótica, fotovoltaica
+  y armarios) son hechos de la ficha de entrega. Su valor es el día de
+  la CITA con el instalador (puede ser futuro), vacío, o `no-tiene`
+  (solo piscina y climatización: la domótica, la fotovoltaica y los
+  armarios los tienen todas). Nunca «coordinado el».
 - **Cerrada** se calcula, no se guarda (`situacionPosventa()`, en
   `js/posventa.js`): hay un conforme firmado, no queda ninguna visita a
-  medias ni cita por hacer, los cuatro botones están resueltos y todos
+  medias ni cita por hacer, los cinco botones están resueltos y todos
   los repasos de las visitas están VERIFICADOS. Los repasos de antes de
   la entrega no cuentan.
 - **Quién puede qué**, comprobado en el servidor (`api/lib/posventa.php`

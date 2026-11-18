@@ -27,6 +27,12 @@
  *     El «conforme» de las dos firmadas es un PDF de MUESTRA que lo dice
  *     bien claro (no lo ha firmado nadie): el de verdad lo genera la app
  *     en el móvil al firmar.
+ *   - Con el esquema 24 llega el quinto botón, la fotovoltaica: la 48
+ *     la tiene con cita y la 49, la cerrada, también. A un taller que
+ *     ya estaba sembrado de antes se le pone a esas dos villas UNA vez
+ *     (completar_fotovoltaica_de_muestra), solo si su ficha es de la
+ *     siembra y nadie ha tocado ese botón: es añadir lo que faltaba,
+ *     no pisar nada.
  *   - Y, SOLO si el entorno trae TALLER_POSVENTA_EMAIL y
  *     TALLER_POSVENTA_PASSWORD, una cuenta de pruebas que lleva solo el
  *     chip «Posventa». Si no vienen, no se crea: una cuenta con una
@@ -140,6 +146,7 @@ if ($correoPosventa !== '' && $clavePosventa !== '' && $correoPosventa !== $corr
 }
 
 $sembradas = sembrar_entregadas($pdo);
+$completadas = completar_fotovoltaica_de_muestra($pdo);
 
 // El banco viaja por FTP como un solo fichero: se recoge el diario
 // WAL antes de cerrar, para que no queden flecos aparte. Con un
@@ -152,11 +159,59 @@ $pdo->exec('PRAGMA wal_checkpoint(TRUNCATE)');
 
 echo "Banco del taller sembrado: {$copiados} cuentas copiadas de la app real y la cuenta del robot al mando.\n";
 echo "«Entregadas»: {$sembradas} vivienda(s) de muestra sembrada(s) (villas 46 a 49)"
+    . ($completadas > 0 ? ", {$completadas} con la fotovoltaica puesta ahora" : '')
     . ($conPosventa ? ', y la cuenta de pruebas con el chip «Posventa».' : '. Sin cuenta de pruebas con el chip «Posventa» (no venía en el entorno).') . "\n";
 
 /* ═══════════════════════════════════════════════════════════════
    «Entregadas»: cuatro viviendas de muestra
    ═══════════════════════════════════════════════════════════════ */
+
+/**
+ * La fotovoltaica de las dos villas de muestra que la llevan: a cuántos
+ * días de hoy cae su cita y a cuántos se apuntó (con su hora). La 48,
+ * con la cita por llegar; la 49, la cerrada, con la suya ya pasada.
+ */
+function fotovoltaica_de_muestra(): array
+{
+    // (Una función y no una constante: la siembra corre arriba, antes
+    // de que PHP pase por una «const» escrita aquí abajo.)
+    return [
+        '48' => [7, -3, '11:04'],
+        '49' => [-4, -10, '11:04'],
+    ];
+}
+
+/**
+ * A un taller sembrado ANTES del esquema 24 le faltan, en la 48 y la 49,
+ * la cita de la fotovoltaica (y la 49 dejaría de salir «Cerrada»). Se la
+ * pone, una vez, solo si la ficha es de la siembra y nadie ha tocado
+ * todavía ese botón (su sello está vacío): si alguien lo pulsó en el
+ * taller, se deja como lo dejó. La ficha queda pendiente de numerar
+ * (`recibido = ''`) para que baje a los móviles. Devuelve a cuántas.
+ */
+function completar_fotovoltaica_de_muestra(PDO $pdo): int
+{
+    if (!in_array('fotovoltaica_fijada_en', esquema_columnas($pdo, 'entregas'), true)) {
+        return 0;   // un banco sin el esquema 24: no hay dónde ponerla
+    }
+    $canaria = new DateTimeZone('Atlantic/Canary');
+    $hoy = new DateTimeImmutable('today', $canaria);
+    $dia = static fn (int $dias): string => $hoy->modify(($dias >= 0 ? '+' : '') . $dias . ' days')->format('Y-m-d');
+    $poner = $pdo->prepare(
+        "UPDATE entregas
+            SET fotovoltaica = ?, fotovoltaica_fijada_en = ?, fotovoltaica_por = NULL, fotovoltaica_por_nombre = 'Siembra del taller',
+                actualizado = ?, recibido = ''
+          WHERE id = ? AND creado_por_nombre = 'Siembra del taller' AND fotovoltaica_fijada_en = ''"
+    );
+    $cuantas = 0;
+    foreach (fotovoltaica_de_muestra() as $nn => [$cita, $hace, $hora]) {
+        $apuntada = (new DateTimeImmutable($dia($hace) . ' ' . $hora, $canaria))
+            ->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s.000\Z');
+        $poner->execute([$dia($cita), $apuntada, ahora_iso(), "brassie:{$nn}"]);
+        $cuantas += $poner->rowCount();
+    }
+    return $cuantas;
+}
 
 /** Un identificador con forma de uuid que sale SIEMPRE igual de un mismo nombre: así sembrar dos veces no duplica. */
 function uuid_fijo(string $nombre): string
@@ -245,7 +300,8 @@ function sembrar_entregadas(PDO $pdo): int
     };
     /** Un botón pulsado: su valor (el día de la cita, o «no-tiene»), con su sello y su autor. */
     $boton = static function (string $clave, string $valor, string $cuando) use ($autor): array {
-        $selloDe = ['piscina' => 'piscina_fijada_en', 'clima' => 'clima_fijado_en', 'domotica' => 'domotica_fijada_en', 'armarios' => 'armarios_fijados_en'][$clave];
+        $selloDe = ['piscina' => 'piscina_fijada_en', 'clima' => 'clima_fijado_en', 'domotica' => 'domotica_fijada_en',
+            'fotovoltaica' => 'fotovoltaica_fijada_en', 'armarios' => 'armarios_fijados_en'][$clave];
         return [$clave => $valor, $selloDe => $cuando, "{$clave}_por_nombre" => $autor];
     };
     /**
@@ -303,7 +359,7 @@ function sembrar_entregadas(PDO $pdo): int
             'fechaVisita' => $dia(-$hace), 'horaVisita' => '09:30', 'compradores' => $compradores,
             'fechaEscritura' => $dia(-$firmaHace), 'realizadaPor' => $autor, 'realizadaPorId' => null,
             'fechaOrientativa' => $orientativa, 'observaciones' => $observaciones,
-            'contactos' => ['dados' => true] + $tiene + ['domotica' => true, 'armarios' => true],
+            'contactos' => ['dados' => true] + $tiene + ['domotica' => true, 'fotovoltaica' => true, 'armarios' => true],
             'repasos' => $firmados,
             'firmas' => [['nombre' => $firmante, 'firmadoEn' => $firmada, 'fecha' => $dia(-$hace), 'hora' => '10:40']],
             'paginas' => 1,
@@ -329,12 +385,13 @@ function sembrar_entregadas(PDO $pdo): int
                 'posventa' => $dia(2), 'posventa_hora' => '10:00', 'posventa_fijada_en' => $sello(-1, '17:00'), 'posventa_por_nombre' => $autor,
             ] + $boton('piscina', $dia(6), $sello(-1, '17:05')) + $boton('clima', 'no-tiene', $sello(-1, '17:06')));
         },
-        // 48 · Visita hecha y firmada hace tres días, con repasos por dar por buenos y los armarios sin cita.
+        // 48 · Visita hecha y firmada hace tres días, con repasos por dar por buenos, la fotovoltaica con cita y los armarios sin ella.
         '48' => static function () use ($ficha, $boton, $visita, $dia, $sello, $autor): void {
             $compradores = 'Inversiones Roca Prado, S.L.';
             $ficha('48', $compradores, 30, [
                 'posventa' => $dia(-3), 'posventa_hora' => '09:30', 'posventa_fijada_en' => $sello(-6, '12:00'), 'posventa_por_nombre' => $autor,
-            ] + $boton('piscina', $dia(4), $sello(-3, '11:00')) + $boton('clima', $dia(9), $sello(-3, '11:01')) + $boton('domotica', $dia(-1), $sello(-3, '11:02')));
+            ] + $boton('piscina', $dia(4), $sello(-3, '11:00')) + $boton('clima', $dia(9), $sello(-3, '11:01')) + $boton('domotica', $dia(-1), $sello(-3, '11:02'))
+              + $boton('fotovoltaica', $dia(fotovoltaica_de_muestra()['48'][0]), $sello(fotovoltaica_de_muestra()['48'][1], fotovoltaica_de_muestra()['48'][2])));
             $visita('48', 3, $compradores, 'Nora Prado', 30, [
                 'Ajuste de la puerta del dormitorio principal, que roza al cerrar' => ['verificada', 'Dormitorio suite', 'carpinteria'],
                 'Sellado del plato de ducha del baño de la planta alta' => ['resuelta', 'Baño principal', 'fontaneria'],
@@ -342,13 +399,14 @@ function sembrar_entregadas(PDO $pdo): int
             ], 'Se intentará ajustar la puerta lo antes posible; no podemos garantizar la fecha hasta hablar con el proveedor.',
                 ['piscina' => true, 'clima' => true]);
         },
-        // 49 · Cerrada: visita firmada hace diez días, sus dos repasos dados por buenos y los cuatro botones resueltos.
+        // 49 · Cerrada: visita firmada hace diez días, sus dos repasos dados por buenos y los cinco botones resueltos.
         '49' => static function () use ($ficha, $boton, $visita, $dia, $sello, $autor): void {
             $compradores = 'Hugo Sanz y Nora Prado';
             $ficha('49', $compradores, 45, [
                 'posventa' => $dia(-10), 'posventa_hora' => '09:30', 'posventa_fijada_en' => $sello(-14, '12:00'), 'posventa_por_nombre' => $autor,
             ] + $boton('piscina', 'no-tiene', $sello(-10, '11:00')) + $boton('clima', $dia(-5), $sello(-10, '11:01'))
-              + $boton('domotica', $dia(-6), $sello(-10, '11:02')) + $boton('armarios', $dia(-2), $sello(-10, '11:03')));
+              + $boton('domotica', $dia(-6), $sello(-10, '11:02')) + $boton('armarios', $dia(-2), $sello(-10, '11:03'))
+              + $boton('fotovoltaica', $dia(fotovoltaica_de_muestra()['49'][0]), $sello(fotovoltaica_de_muestra()['49'][1], fotovoltaica_de_muestra()['49'][2])));
             $visita('49', 10, $compradores, 'Hugo Sanz', 45, [
                 'Regulación de la puerta corredera del salón' => ['verificada', 'Salón', 'carpinteria'],
                 'Repaso de pintura en el techo del pasillo' => ['verificada', 'Pasillo', 'pintura'],
