@@ -370,6 +370,60 @@ export function tarjetaDeCita(situacion) {
   return { caso: 'sin-fecha', rotulo: 'Sin fecha', dia: '' };
 }
 
+/* ─── Lo que pinta el calendario ─────────────────────────────── */
+/**
+ * Las visitas de repasos que pintan el calendario (#/entregas) y la
+ * portada, a partir de lo que devuelve store.posventaDePromo (un mapa
+ * unidadId → { entrega, visitas, sueltos }; basta con conRepasos: false).
+ *
+ * Devuelve un mapa unidadId → { cita, hechas }, solo con las viviendas
+ * que tienen algo:
+ *
+ *   cita    la visita prevista mientras esté por hacer (citaPendiente):
+ *           { dia, hora, fijadaEn, por, porNombre }, o null.
+ *   hechas  una por conforme firmado (los de sus visitas y los sueltos
+ *           de este móvil), en el día de la visita que dice el papel:
+ *           [{ dia, conformeId, listaId, horaFirma, diaFirma, firmantes,
+ *           realizadaPor, realizadaPorId, firmadaEn }]. Una visita
+ *           empezada y sin firmar no está hecha y no sale.
+ *
+ * No escribe nada ni decide colores: eso es de js/entregas.js.
+ */
+export function visitasDelCalendario(fichas) {
+  const salida = new Map();
+  for (const [unidadId, ficha] of fichas || []) {
+    const e = ficha?.entrega || {};
+    const conformes = [
+      ...(ficha?.visitas || []).map((v) => v?.conforme).filter(esConforme),
+      ...(ficha?.sueltos || []).filter(esConforme),
+    ];
+    const cita = citaPendiente(e, conformes) ? {
+      dia: e.posventa,
+      hora: /^\d{2}:\d{2}$/.test(e.posventaHora || '') ? e.posventaHora : '',
+      fijadaEn: e.posventaFijadaEn || '',
+      por: e.posventaPor || null,
+      porNombre: e.posventaPorNombre || '',
+    } : null;
+    const hechas = conformes.map((c) => {
+      const firmado = firmadoEl(c);
+      return {
+        dia: diaDeConforme(c),
+        conformeId: c.id,
+        listaId: c.tareaId || '',
+        horaFirma: firmado.hora,
+        diaFirma: firmado.dia,
+        firmantes: firmantesDe(c),
+        realizadaPor: String(c.datos?.realizadaPor || ''),
+        realizadaPorId: c.datos?.realizadaPorId || null,
+        firmadaEn: String(c.creado || ''),
+      };
+    }).filter((v) => E.esDia(v.dia))
+      .sort((a, b) => a.dia.localeCompare(b.dia) || a.firmadaEn.localeCompare(b.firmadaEn));
+    if (cita || hechas.length) salida.set(unidadId, { cita, hechas });
+  }
+  return salida;
+}
+
 /** «Visita de repasos el viernes 20 de noviembre a las 10:30»: el aviso al guardar la cita. */
 export function avisoDeCita(dia, hora = '') {
   if (!dia) return 'Visita de repasos sin fecha';

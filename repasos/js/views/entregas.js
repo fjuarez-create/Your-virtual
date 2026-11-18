@@ -7,7 +7,10 @@
 
      MES      la rejilla de siete columnas con el número de la villa en
               cada día que tiene algo (negro = firma, beige = revisión,
-              verde = revisión hecha, rojo = con incidencias).
+              verde = revisión hecha, rojo = con incidencias, mostaza =
+              visita de repasos, con un ✓ si ya está hecha). Cada día
+              enseña TODAS sus villas, y cada semana mide lo que pida
+              su día más lleno (18-11-2026: el «+1» confundía).
      SEMANA   una tarjeta por día, como las de Partes, con la villa,
               los compradores y qué toca.
      DÍA      una tarjeta grande por visita, con todo: la hora, los
@@ -32,6 +35,15 @@
    por hecha, además de la cita que tenga pendiente (ver hitosDe en
    js/entregas.js).
 
+   Las VISITAS DE REPASOS de Postventa (las de después de entregar)
+   salen en mostaza: la cita mientras está por hacer y cada visita con
+   su conforme firmado, en su día. Una revisión apuntada después del
+   día de la entrega es también una visita de repasos y sale igual. En
+   el día, la flecha de una visita de repasos de Postventa lleva a su
+   ficha de Postventa; las que vienen de la hoja de fechas llevan, como
+   siempre, la flecha a la vivienda y la bola de las fechas (la cita de
+   Postventa se cambia en Postventa).
+
    La vista y la fecha viajan en la dirección, así que atrás vuelve a
    donde se estaba y un enlace copiado abre lo mismo. */
 import { h, icon, avatar } from '../ui.js';
@@ -40,6 +52,7 @@ import { PROMOCIONES, puedePonerFechas } from '../catalog.js';
 import { cabecera, avisoLocal, barraSync } from '../piezas.js';
 import { ir, anotarRuta, refrescar } from '../app.js';
 import * as E from '../entregas.js';
+import { visitasDelCalendario } from '../posventa.js';
 import { hojaFechas, hojaFechasDeOtra } from '../hojaEntrega.js';
 
 const VISTAS = [
@@ -79,7 +92,8 @@ export async function render() {
   const poneFechas = puedePonerFechas(store.sesion());
   const entregas = await store.entregasDePromo(p.id);
   const incidencias = await store.incidenciasPorUnidad(p.id);
-  const hitos = E.hitosDe(entregas, { incidencias, hoy });
+  const posventa = visitasDelCalendario(await store.posventaDePromo(p.id, { conRepasos: false }));
+  const hitos = E.hitosDe(entregas, { incidencias, hoy, posventa });
   const porDia = E.porDia(hitos);
   const diasConAlgo = [...porDia.keys()].sort();
 
@@ -133,6 +147,44 @@ export async function render() {
     }
   };
 
+  /* La marca de una visita de repasos ya hecha: un ✓ delante de la
+     villa, del mismo color que la letra (el dibujo de la casa, no el
+     carácter, que cada móvil pinta con una letra distinta). */
+  const marcaHecha = (e) => (e.tipo === 'visitaHecha' ? h('span.d-marca-hecha', null, icon('check')) : null);
+
+  /* Cada barra del mes dice la villa lo más entera que quepa en su
+     celda, sin cortarla: «Villa 07» o «V 07»; y la visita hecha,
+     «✓ Villa 07», «✓ V 07» o «✓ 07». Se mide en el propio móvil (con su
+     letra, su tamaño de letra y su ancho) y se vuelve a medir si algo
+     de eso cambia. Todo el mes va con la misma forma, para que se lea
+     igual de un día a otro; la hecha nunca va más larga que las demás. */
+  const FORMAS = ['larga', 'media', 'corta'];
+  /* Se mide con decimales y con holgura: el ancho del texto contra el
+     hueco de la barra (su caja menos el relleno), y han de sobrar al
+     menos 0,5 px. scrollWidth y clientWidth van redondeados a píxeles
+     enteros, y daban por buena una barra que se pasaba de menos de 1 px:
+     la elipsis se comía entonces justo la cifra («Villa …»). Se exige
+     además lo de antes, ya sin tolerancia (que no desborde nada), por si
+     algún navegador midiera el texto ya recortado por la elipsis. */
+  const caben = (barras) => barras.every((b) => {
+    const estilo = getComputedStyle(b);
+    const hueco = b.getBoundingClientRect().width - parseFloat(estilo.paddingLeft) - parseFloat(estilo.paddingRight);
+    const texto = document.createRange();
+    texto.selectNodeContents(b);
+    return b.scrollWidth <= b.clientWidth && texto.getBoundingClientRect().width <= hueco - 0.5;
+  });
+  const ajustarBarras = (rejilla) => {
+    if (!rejilla.isConnected) return;
+    const normales = [...rejilla.querySelectorAll('.d-barra:not(.visita-hecha)')];
+    const hechas = [...rejilla.querySelectorAll('.d-barra.visita-hecha')];
+    rejilla.dataset.forma = 'larga';
+    if (!caben(normales)) rejilla.dataset.forma = 'media';
+    for (const forma of FORMAS.slice(FORMAS.indexOf(rejilla.dataset.forma))) {
+      rejilla.dataset.formaHecha = forma;
+      if (caben(hechas)) break;
+    }
+  };
+
   /* ═══ MES: la rejilla tipo Google Calendar, con una barra por villa ═══ */
   const pintarMes = () => {
     const { a, m } = E.partes(fecha);
@@ -152,11 +204,14 @@ export async function render() {
       // «Villa 09» dos veces y taparía a las demás casas. La villa va
       // como palabra («Villa 07»; en los móviles estrechos, «V 07») para
       // que no se confunda con el número del día.
+      //
+      // Y TODAS las villas del día, sin «+N»: si un día hay veinticinco
+      // firmas, salen las veinticinco, y la rejilla estira esa semana
+      // entera hasta lo que mida su día más lleno (18-11-2026).
       const vistas = new Set();
       const villas = eventos.filter((e) => !vistas.has(e.villa) && vistas.add(e.villa));
-      const barras = villas.slice(0, 2).map((e) => h('span.d-barra', { class: E.HITOS[e.tipo].chip },
-        'V', h('span.d-barra-palabra', null, 'illa'), ` ${e.villa}`));
-      if (villas.length > 2) barras.push(h('span.d-barra.mas', null, `+${villas.length - 2}`));
+      const barras = villas.map((e) => h('span.d-barra', { class: E.HITOS[e.tipo].chip },
+        marcaHecha(e), h('span.d-barra-v', null, 'V', h('span.d-barra-palabra', null, 'illa'), ' '), e.villa));
       celdas.push(h('button.dia', {
         class: [fuera ? 'fuera' : '', iso === hoy ? 'hoy' : ''].filter(Boolean).join(' '),
         'aria-label': `${E.fechaConDia(iso)}${iso === hoy ? ', hoy' : ''}${eventos.length ? `, ${eventos.length === 1 ? '1 hito' : `${eventos.length} hitos`}` : ''}. Abrir el día`,
@@ -169,13 +224,21 @@ export async function render() {
     }
 
     const hayIncidencias = hitos.some((x) => x.tipo === 'incidencia');
+    // La forma de las barras se decide con la rejilla ya en pantalla: el
+    // vigilante salta en cuanto tiene medidas (antes de pintarse) y cada
+    // vez que cambian, y otra vez cuando acaba de llegar la letra.
+    const rejilla = h('div.d-calendario', null, ...celdas);
+    if (typeof ResizeObserver === 'function') new ResizeObserver(() => ajustarBarras(rejilla)).observe(rejilla);
+    document.fonts?.ready?.then(() => ajustarBarras(rejilla)).catch(() => {});
     return h('div.d-cal-carta', null,
-      h('div.d-calendario', null, ...celdas),
-      // La leyenda: una barrita de cada color.
+      rejilla,
+      // La leyenda: una barrita de cada color. La visita de repasos
+      // hecha es la misma barrita con su ✓ delante, que se lee sola.
       h('div.d-cal-leyenda', null,
         h('span', null, h('span.d-barra.firma'), 'Firma'),
         h('span', null, h('span.d-barra.revision'), 'Revisión'),
         h('span', null, h('span.d-barra.revisada'), 'Revisada'),
+        h('span', null, h('span.d-barra.visita'), 'Visita de repasos'),
         hayIncidencias ? h('span', null, h('span.d-barra.incidencia'), 'Incidencias') : null,
       ),
     );
@@ -184,7 +247,7 @@ export async function render() {
   /* Una fila de hito: el chip de la villa, los compradores y qué es.
      La comparten la semana y (en grande) la tarjeta del día. */
   const filaHito = (e, rotulo) => h('div.d-hito', null,
-    h('span.d-minichip', { class: E.HITOS[e.tipo].chip }, e.villa),
+    h('span.d-minichip', { class: E.HITOS[e.tipo].chip }, marcaHecha(e), e.villa),
     h('div.d-hito-texto', null,
       h('div.d-hito-nombres', null, e.compradores || e.nombre),
       h('div.d-hito-que', null, rotulo),
@@ -194,6 +257,11 @@ export async function render() {
     if (e.tipo === 'incidencia') return `Entregada · ${e.incidencias} ${e.incidencias === 1 ? 'incidencia' : 'incidencias'}`;
     // La fecha de la firma ya pasó y nadie ha dicho si se entregó.
     if (e.tipo === 'firma' && e.sinConfirmar) return `${E.HITOS.firma.largo}${e.hora ? ` · ${e.hora}` : ''} · sin confirmar`;
+    // La visita de repasos: la cita (con su hora; «sin confirmar» si el
+    // día ya pasó y no se ha hecho) o la hecha, con su conforme firmado
+    // si es de Postventa.
+    if (e.tipo === 'visita') return `${E.HITOS.visita.largo}${e.hora ? ` · ${e.hora}` : ''}${e.sinConfirmar ? ' · sin confirmar' : ''}`;
+    if (e.tipo === 'visitaHecha') return `${E.HITOS.visitaHecha.largo}${e.origen === 'posventa' ? ' · conforme firmado' : ''}`;
     return E.HITOS[e.tipo].largo + (e.hora ? ` · ${e.hora}` : '');
   };
 
@@ -222,6 +290,12 @@ export async function render() {
      es la revisión; su revisión (hecha o prevista) si es la firma. */
   const loOtro = (e) => {
     const v = e.entrega;
+    // Una visita de repasos es siempre de una vivienda entregada: lo otro
+    // es el día en que se entregó.
+    if (E.esVisitaDeRepasos(e)) {
+      const dia = E.diaEntregada(v);
+      return { clase: 'gris', icono: 'key', texto: dia ? `Entregada el ${E.fechaConDia(dia)}` : 'Entregada' };
+    }
     if (e.tipo === 'revision' || e.tipo === 'revisada') {
       return v.firma
         ? { clase: 'gris', icono: 'key', texto: `Firma el ${E.fechaConDia(v.firma)}${v.firmaHora ? ` · ${v.firmaHora}` : ''}` }
@@ -246,11 +320,19 @@ export async function render() {
      vivienda (la vigente y las del historial) tiene su autor. */
   const quienLoFijo = (e) => {
     const v = e.entrega;
+    // Las visitas de repasos de Postventa: la cita, quien la fijó; la
+    // hecha, quien la hizo (lo que dice su conforme). Las que vienen de
+    // la hoja de fechas, como la revisión de la que salen.
+    const dePosventa = e.origen === 'posventa';
     const [id, nombre, cuando, verbo] = e.tipo === 'entregada' || e.tipo === 'incidencia'
       ? [v.entregadaPor, v.entregadaPorNombre, v.entregadaFijadaEn || v.entregadaEn, 'la dio por entregada']
-      : e.tipo === 'revisada'
+      : e.tipo === 'visitaHecha' && dePosventa
+      ? [e.hecha?.realizadaPorId, e.hecha?.realizadaPor, e.hecha?.firmadaEn, 'la hizo']
+      : e.tipo === 'visita' && dePosventa
+      ? [e.cita?.por, e.cita?.porNombre, e.cita?.fijadaEn, 'la fijó']
+      : e.tipo === 'revisada' || e.tipo === 'visitaHecha'
       ? [e.visita?.por, e.visita?.porNombre, e.visita?.hechaEn, 'la dio por hecha']
-      : e.tipo === 'revision'
+      : e.tipo === 'revision' || e.tipo === 'visita'
         ? [v.revisionPor, v.revisionPorNombre, v.revisionFijadaEn, 'la fijó']
         : [v.firmaPor, v.firmaPorNombre, v.firmaFijadaEn, 'la fijó'];
     if (!nombre && !cuando) return null;
@@ -263,7 +345,19 @@ export async function render() {
   };
   const chipTexto = (e) => (e.tipo === 'incidencia' ? 'Entregada con incidencias'
     : e.tipo === 'firma' && e.sinConfirmar ? `${E.HITOS.firma.largo} · sin confirmar`
-      : E.HITOS[e.tipo].largo);
+      // La visita de repasos, corta en el chip: la hora va a su derecha.
+      : e.tipo === 'visita' ? `Visita de repasos${e.sinConfirmar ? ' · sin confirmar' : ''}`
+        : E.HITOS[e.tipo].largo);
+  /* El renglón del conforme de una visita de repasos hecha en
+     Postventa: a qué hora se firmó y quién firmó (y qué día, si no
+     fue el mismo de la visita). */
+  const filaConforme = (e) => {
+    const c = e.hecha;
+    if (!c) return null;
+    const otroDia = c.diaFirma && c.diaFirma !== e.dia ? ` el ${E.diaCorto(c.diaFirma)}` : '';
+    return { clase: 'mostaza', icono: 'documento',
+      texto: `Conforme firmado${otroDia}${c.horaFirma ? ` a las ${c.horaFirma}` : ''}${c.firmantes ? ` por ${c.firmantes}` : ''}` };
+  };
   const villasDe = (iso) => {
     const vs = [...new Set((porDia.get(iso) || []).map((e) => e.nombre))].sort();
     return vs.length > 1 ? `${vs.slice(0, -1).join(', ')} y ${vs[vs.length - 1]}` : vs[0] || '';
@@ -300,28 +394,42 @@ export async function render() {
     }
     return h('div.d-dia-lista', null, ...eventos.map((e) => {
       const otro = loOtro(e);
+      const conforme = e.tipo === 'visitaHecha' ? filaConforme(e) : null;
       const quien = quienLoFijo(e);
       const nn = String(e.unidadId).split(':')[1];
-      return h('div.d-dia-tarjeta', null,
+      // Una visita de repasos de Postventa se mira en su ficha de
+      // Postventa, y su cita se cambia allí: la hoja de fechas no la
+      // lleva. La que sale de una revisión de la hoja de fechas, en
+      // cambio, Postventa no la conoce: su flecha lleva a la vivienda,
+      // como siempre, y lleva su bola de fechas.
+      const visita = E.esVisitaDeRepasos(e) && e.origen === 'posventa';
+      const conHojaDeFechas = poneFechas && e.origen !== 'posventa';
+      return h('div.d-dia-tarjeta', { 'data-tipo': e.tipo, 'data-unidad': e.unidadId },
         h('div.d-dia-cab', null,
-          h('span.d-minichip', { class: E.HITOS[e.tipo].chip }, chipTexto(e)),
+          h('span.d-minichip', { class: E.HITOS[e.tipo].chip }, marcaHecha(e), chipTexto(e)),
           e.hora ? h('span.d-dia-hora', null, e.hora) : null,
         ),
         h('h2.d-dia-titulo', null, e.nombre),
         h('div.d-dia-fila', { class: e.compradores ? '' : 'gris' }, icon('users'),
           h('span', null, e.compradores || 'Compradores sin apuntar')),
+        conforme ? h('div.d-dia-fila', { class: conforme.clase }, icon(conforme.icono), h('span', null, conforme.texto)) : null,
         h('div.d-dia-fila', { class: otro.clase }, icon(otro.icono), h('span', null, otro.texto)),
         h('div.d-dia-pie', null,
           quien ? avatar(quien.persona, { tam: 36 }) : null,
           h('span.d-dia-quien', null, quien ? quien.texto : ''),
-          poneFechas ? h('button.d-dia-bola.fechas', {
+          conHojaDeFechas ? h('button.d-dia-bola.fechas', {
             'aria-label': `Cambiar las fechas de la ${e.nombre} o apuntar su entrega`,
             onclick: () => hojaFechas({ unidadId: e.unidadId, promoId: p.id, nombre: e.nombre, entrega: e.entrega, alCambiar: refrescar }),
           }, icon('calendario')) : null,
-          h('button.d-dia-bola', {
-            'aria-label': `Abrir la ficha de la ${e.nombre}`,
-            onclick: () => ir(`#/p/${p.id}/v/${nn}`),
-          }, icon('flechaSubir')),
+          visita
+            ? h('button.d-dia-bola', {
+                'aria-label': `Abrir la ficha de Postventa de la ${e.nombre}`,
+                onclick: () => ir(`#/entregadas/p/${p.id}/v/${nn}`),
+              }, icon('flechaSubir'))
+            : h('button.d-dia-bola', {
+                'aria-label': `Abrir la ficha de la ${e.nombre}`,
+                onclick: () => ir(`#/p/${p.id}/v/${nn}`),
+              }, icon('flechaSubir')),
         ),
       );
     }));

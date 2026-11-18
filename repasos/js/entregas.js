@@ -374,17 +374,25 @@ export function diaEntregada(entrega) {
 /**
  * Los tipos de hito, con sus palabras. `chip` es la clase del
  * mini-chip del calendario: la firma y lo entregado van en negro,
- * la revisión pendiente en beige, la hecha en verde suave y las
- * incidencias en rojo.
+ * la revisión pendiente en beige, la hecha en verde suave, las
+ * incidencias en rojo y la VISITA DE REPASOS (la de Postventa, después
+ * de entregar) en mostaza, con un ✓ delante cuando ya está hecha
+ * (se pidió el 18-11-2026: en beige se confundía con las
+ * revisiones de antes de la entrega).
  */
 export const HITOS = {
-  revision:   { chip: 'revision',  corto: 'revisión',        largo: 'Revisión con el cliente' },
-  revisada:   { chip: 'revisada',  corto: 'revisión hecha',  largo: 'Revisión hecha' },
-  firma:      { chip: 'firma',     corto: 'firma',           largo: 'Firma / entrega' },
-  entregada:  { chip: 'firma',     corto: 'entregada',       largo: 'Entregada' },
-  incidencia: { chip: 'incidencia', corto: 'con incidencias', largo: 'Entregada con incidencias' },
+  revision:    { chip: 'revision',  corto: 'revisión',        largo: 'Revisión con el cliente' },
+  revisada:    { chip: 'revisada',  corto: 'revisión hecha',  largo: 'Revisión hecha' },
+  visita:      { chip: 'visita',    corto: 'visita de repasos', largo: 'Visita de repasos con el cliente' },
+  visitaHecha: { chip: 'visita-hecha', corto: 'visita de repasos hecha', largo: 'Visita de repasos hecha' },
+  firma:       { chip: 'firma',     corto: 'firma',           largo: 'Firma / entrega' },
+  entregada:   { chip: 'firma',     corto: 'entregada',       largo: 'Entregada' },
+  incidencia:  { chip: 'incidencia', corto: 'con incidencias', largo: 'Entregada con incidencias' },
 };
-const ORDEN_HITO = { revisada: 0, revision: 1, firma: 2, entregada: 3, incidencia: 3 };
+const ORDEN_HITO = { revisada: 0, visitaHecha: 0, revision: 1, visita: 1, firma: 2, entregada: 3, incidencia: 3 };
+
+/** ¿Es un hito de visita de repasos (prevista o hecha)? */
+export const esVisitaDeRepasos = (hito) => hito?.tipo === 'visita' || hito?.tipo === 'visitaHecha';
 
 /**
  * Los hitos de todas las entregas: uno por la revisión prevista, uno
@@ -400,8 +408,29 @@ const ORDEN_HITO = { revisada: 0, revision: 1, firma: 2, entregada: 3, incidenci
  * con la fecha ya pasada y sin esa marca sigue siendo una firma, y
  * lleva `sinConfirmar` para que quien pone fechas vea que le falta
  * decir si se entregó.
+ *
+ * LAS VISITAS DE REPASOS (18-11-2026). `posventa` es lo que da
+ * visitasDelCalendario() de js/posventa.js: unidadId → { cita, hechas }.
+ * Salen como 'visita' la cita prevista de Postventa mientras no se
+ * haya hecho, y como 'visitaHecha' cada visita con su conforme
+ * firmado, en el día de la visita; las dos con `origen: 'posventa'`.
+ *
+ * Y una revisión que cae DESPUÉS del día de la entrega también es, para
+ * la casa, una visita de repasos: antes de existir Postventa se apuntaba
+ * así la de después de entregar. Si la vivienda figura como entregada y
+ * el día de la revisión (prevista o hecha) es posterior al de la
+ * entrega, sale como 'visita' o 'visitaHecha' con `origen: 'revision'`.
+ * Si ese mismo día y en esa misma villa ya hay una visita de Postventa
+ * (cita o hecha), sale solo la de Postventa. Y si esa revisión está
+ * aún por hacer y la villa ya tiene una visita de Postventa firmada ese
+ * día o después, no sale: la visita firmada fue la que la cumplió (si
+ * no, al firmar otro día volvía a salir «sin confirmar»). Las revisiones
+ * de antes de la entrega, o del mismo día, siguen como siempre.
+ *
+ * Una cita de visita de repasos con el día ya pasado y sin hacer lleva
+ * `sinConfirmar`, como la firma.
  */
-export function hitosDe(entregas, { incidencias = new Map(), hoy = hoyIso() } = {}) {
+export function hitosDe(entregas, { incidencias = new Map(), hoy = hoyIso(), posventa = new Map() } = {}) {
   const hitos = [];
   for (const e of entregas) {
     if (!e || e.borrada) continue;
@@ -410,18 +439,47 @@ export function hitosDe(entregas, { incidencias = new Map(), hoy = hoyIso() } = 
       unidadId: e.unidadId, villa: u?.corto || e.unidadId.split(':')[1] || '', nombre: u?.nombre || e.unidadId,
       compradores: e.compradores || '', entrega: e, hora: '',
     };
+    // El día de la entrega, si la vivienda figura como entregada: lo que
+    // caiga después es de Postventa.
+    const entregadaEl = e.entregadaEn ? diaEntregada(e) : '';
+    const despues = (dia) => !!entregadaEl && dia > entregadaEl;
+    const pv = posventa.get(e.unidadId);
+    const suyas = [];
     // La cita vigente, si aún está por hacer; y después todas las
     // visitas hechas: la vigente si ya se hizo y las del historial (y,
     // en una ficha en el estado antiguo, la que lleva la marca).
+    //
+    // Una revisión de después de la entrega que nadie marcó como hecha
+    // deja de pintarse en cuanto la villa tiene una visita de Postventa
+    // firmada ese día o después: esa visita es la que la cumplió, como
+    // la cita de Postventa se da por hecha al firmar (citaPendiente).
     if (e.revision && !revisionHecha(e)) {
-      hitos.push({ ...base, dia: e.revision, tipo: 'revision', hora: e.revisionHora || '' });
+      if (!despues(e.revision)) suyas.push({ ...base, dia: e.revision, tipo: 'revision', hora: e.revisionHora || '' });
+      else if (!pv?.hechas?.some((x) => x.dia >= e.revision)) {
+        suyas.push({ ...base, dia: e.revision, tipo: 'visita', origen: 'revision', hora: e.revisionHora || '', sinConfirmar: e.revision < hoy });
+      }
     }
     for (const visita of todasLasVisitas(e)) {
-      hitos.push({ ...base, dia: visita.dia, tipo: 'revisada', visita });
+      suyas.push(despues(visita.dia)
+        ? { ...base, dia: visita.dia, tipo: 'visitaHecha', origen: 'revision', visita }
+        : { ...base, dia: visita.dia, tipo: 'revisada', visita });
     }
+    // Las de Postventa: la cita por hacer y las visitas firmadas.
+    const dePosventa = [];
+    if (pv?.cita && esDia(pv.cita.dia)) {
+      dePosventa.push({ ...base, dia: pv.cita.dia, tipo: 'visita', origen: 'posventa', hora: pv.cita.hora || '',
+        cita: pv.cita, sinConfirmar: pv.cita.dia < hoy });
+    }
+    for (const hecha of pv?.hechas || []) {
+      if (esDia(hecha.dia)) dePosventa.push({ ...base, dia: hecha.dia, tipo: 'visitaHecha', origen: 'posventa', hecha });
+    }
+    // Una revisión de después de la entrega no se pinta otra vez el día
+    // que la villa ya tiene su visita de Postventa: una sola barra.
+    const diasDePosventa = new Set(dePosventa.map((x) => x.dia));
+    hitos.push(...suyas.filter((x) => !(esVisitaDeRepasos(x) && diasDePosventa.has(x.dia))), ...dePosventa);
     if (e.entregadaEn) {
       const n = incidencias.get(e.unidadId) || 0;
-      hitos.push({ ...base, dia: diaEntregada(e), tipo: n > 0 ? 'incidencia' : 'entregada', incidencias: n });
+      hitos.push({ ...base, dia: entregadaEl, tipo: n > 0 ? 'incidencia' : 'entregada', incidencias: n });
     } else if (e.firma) {
       hitos.push({ ...base, dia: e.firma, tipo: 'firma', hora: e.firmaHora || '', incidencias: 0, sinConfirmar: e.firma < hoy });
     }

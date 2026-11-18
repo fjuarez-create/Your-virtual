@@ -22,6 +22,7 @@ import { avisoLocal, barraSync, bannerMordido as banner, cabecera, tarjetaVilla,
 import { tarjetaReunionViva } from '../piezasObra.js';
 import { ir, conFiltros, refrescar } from '../app.js';
 import * as E from '../entregas.js';
+import { visitasDelCalendario } from '../posventa.js';
 import * as push from '../push.js';
 
 /* El saludo de cazar repasos se retiró en agosto de 2026, cuando la
@@ -109,9 +110,14 @@ export async function render() {
 
   /* ─── Las entregas: cuántas citas hay la semana que cuenta ───
      Hasta el jueves se cuenta la semana en marcha; desde el viernes,
-     la que viene. El banner lleva a esa semana del calendario. */
+     la que viene. El banner lleva a esa semana del calendario. Cuenta
+     lo mismo que pinta el calendario: también las visitas de repasos
+     de Postventa (la cita y las hechas), una más cada una. */
   const semana = E.semanaDePortada();
-  const hitos = E.hitosDe(await store.entregasDePromo(p.id), { incidencias: await store.incidenciasPorUnidad(p.id) });
+  const hitos = E.hitosDe(await store.entregasDePromo(p.id), {
+    incidencias: await store.incidenciasPorUnidad(p.id),
+    posventa: visitasDelCalendario(await store.posventaDePromo(p.id, { conRepasos: false })),
+  });
   const citas = E.hitosEntre(hitos, semana.desde, semana.hasta).length;
 
   /* ─── Los avisos en este móvil: se ofrecen hasta que se activen ─── */

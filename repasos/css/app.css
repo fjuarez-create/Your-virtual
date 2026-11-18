@@ -119,6 +119,9 @@
   --d-rojo: #db3e32;
   --d-rojo-suave: #feeceb;
   --d-rojo-tinta: #683c03;
+  /* La visita de repasos (Postventa) en el calendario: el fondo y su
+     letra. Para cambiar de color, esta línea y nada más. */
+  --d-visita: #e8a820; --d-visita-tinta: #2a1d00;
   --d-gris-suave: #f0f0f0;
   --d-anillo-fondo: #d9d9d9;
   --d-radio: 16px;
@@ -3540,7 +3543,14 @@ body.es-taller::before {
    color con su nombre entero («Villa 07»). Así el día es una cifra y la
    villa una palabra, y no se confunden. ── */
 .d-cal-carta { background: #fff; border-radius: var(--d-radio); padding: 0 0 12px; margin-top: 12px; overflow: hidden; }
-.d-cal-carta .d-calendario { padding: 0; overflow: visible; flex: none; row-gap: 0; column-gap: 0; }
+.d-cal-carta .d-calendario {
+  padding: 0; overflow: visible; flex: none; row-gap: 0; column-gap: 0;
+  /* Siete columnas iguales pase lo que pase dentro (una barra larga, la
+     letra grande): ninguna empuja a las demás ni saca la rejilla de la
+     pantalla. El alto, en cambio, es libre: cada semana mide lo que
+     pida su día más lleno, con todas sus villas (18-11-2026). */
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
 .d-cal-carta .d-calendario .dia {
   aspect-ratio: auto; min-height: 72px; border-radius: 0;
   display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start;
@@ -3567,7 +3577,7 @@ body.es-taller::before {
 .d-cal-carta .dia.hoy .num { background: var(--d-tinta); color: #fff; font-weight: 500; }
 /* La barra de cada villa en la rejilla del mes. */
 .d-barra {
-  display: block; width: 100%; height: 16px; border-radius: 4px;
+  display: block; width: 100%; min-height: 16px; border-radius: 4px; flex: none;
   font-size: 11px; line-height: 16px; font-weight: 500; padding: 0 5px;
   text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   font-variant-numeric: tabular-nums;
@@ -3576,12 +3586,25 @@ body.es-taller::before {
 .d-barra.revision { background: var(--d-beige); color: var(--d-tinta); }
 .d-barra.revisada { background: var(--d-verde-suave); color: var(--d-verde); }
 .d-barra.incidencia { background: var(--d-rojo); color: #fff; }
-.d-barra.mas { background: none; color: var(--d-gris); padding: 0 2px; }
-/* En los móviles más estrechos «Villa 07» no cabe en la celda: se
-   queda en «V 07», que sigue siendo una palabra y no una cifra. */
+.d-barra.visita, .d-barra.visita-hecha { background: var(--d-visita); color: var(--d-visita-tinta); }
+/* El ✓ de la visita de repasos hecha, delante de la villa. */
+.d-marca-hecha { display: inline-flex; vertical-align: -0.12em; margin-right: 0.2em; }
+/* El trazo del icono es fino para una letra de 11 px: se engorda con un
+   contorno del mismo color, para que el ✓ se vea de un vistazo. */
+.d-marca-hecha svg { width: 0.95em; height: 0.95em; stroke: currentColor; stroke-width: 22px; stroke-linejoin: round; overflow: visible; }
+/* Cuando «Villa 07» no cabe en la celda se queda en «V 07», que sigue
+   siendo una palabra y no una cifra; y la visita hecha, si hace falta,
+   en «✓ 07» (el ✓ tampoco es una cifra). Lo decide el propio móvil,
+   midiendo con su letra (ajustarBarras, en js/views/entregas.js): la
+   rejilla lleva la forma en data-forma y data-forma-hecha. */
+.d-calendario[data-forma='media'] .d-barra:not(.visita-hecha) .d-barra-palabra,
+.d-calendario[data-forma='corta'] .d-barra:not(.visita-hecha) .d-barra-palabra,
+.d-calendario[data-forma-hecha='media'] .d-barra.visita-hecha .d-barra-palabra,
+.d-calendario[data-forma-hecha='corta'] .d-barra.visita-hecha .d-barra-v { display: none; }
 @media (max-width: 420px) {
   .d-cal-carta .d-barra { padding: 0 3px; }
-  .d-cal-carta .d-barra .d-barra-palabra { display: none; }
+  /* Si el móvil no ha podido medir, lo de siempre en los estrechos. */
+  .d-cal-carta .d-calendario:not([data-forma]) .d-barra .d-barra-palabra { display: none; }
 }
 /* El mini-chip del número de villa (Semana y Día). Dígitos tabulares y
    ancho fijo: «07» y «15» miden lo mismo y los nombres quedan en columna. */
@@ -3594,19 +3617,23 @@ body.es-taller::before {
 .d-minichip.revision { background: var(--d-beige); color: var(--d-tinta); }
 .d-minichip.revisada { background: var(--d-verde-suave); color: var(--d-verde); }
 .d-minichip.incidencia { background: var(--d-rojo); color: #fff; }
-.d-minichip.mas { background: var(--d-gris-suave); color: var(--d-gris); }
+.d-minichip.visita, .d-minichip.visita-hecha { background: var(--d-visita); color: var(--d-visita-tinta); }
+.d-minichip .d-marca-hecha { margin-right: 3px; }
 .d-cal-leyenda {
   display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
   margin: 12px 16px 0; font-size: 13px; color: var(--d-gris);
 }
 .d-cal-leyenda span { display: inline-flex; align-items: center; gap: 6px; }
-.d-cal-leyenda .d-barra { display: inline-block; width: 26px; height: 12px; border-radius: 3px; }
+.d-cal-leyenda .d-barra { display: inline-block; width: 26px; height: 12px; min-height: 0; border-radius: 3px; }
 
 /* ── SEMANA: dentro de la tarjeta del día, una fila por hito ── */
 .d-actas-dias.entregas { margin-top: 12px; }
 .d-hitos { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
 .d-hito { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
 .d-hito .d-minichip { margin-top: 2px; font-size: 12px; padding: 1px 7px; min-width: 34px; }
+/* Un día con alguna visita de repasos hecha: su ✓ ensancha el chip, y
+   todos los del día miden lo mismo para que los nombres sigan en columna. */
+.d-hitos:has(.d-minichip.visita-hecha) .d-hito .d-minichip { min-width: 3.8em; }
 /* Sobre la tarjeta beige de «hoy», el chip beige de revisión se
    fundiría con el fondo: se aclara, como hacen los chips de Partes. */
 .d-acta-dia.hoy .d-hito .d-minichip.revision { background: rgba(255, 255, 255, .6); }
@@ -3633,6 +3660,8 @@ body.es-taller::before {
 .d-dia-fila.verde svg { width: 20px; height: 20px; color: var(--d-verde); }
 .d-dia-fila.rojo { font-size: 14px; color: var(--d-rojo); margin-top: 8px; }
 .d-dia-fila.rojo svg { width: 20px; height: 20px; color: var(--d-rojo); }
+.d-dia-fila.mostaza { font-size: 14px; color: var(--d-tinta); margin-top: 8px; }
+.d-dia-fila.mostaza svg { width: 20px; height: 20px; color: var(--d-visita-tinta); }
 .d-dia-pie { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
 .d-dia-pie .d-dia-quien { flex: 1; min-width: 0; font-size: 13px; color: var(--d-gris); }
 .d-dia-bola {

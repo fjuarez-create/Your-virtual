@@ -817,8 +817,12 @@ export async function conformesSueltosDeUnidad(unidadId) {
  * FIGURAN COMO ENTREGADAS (lo han apuntado el comercial o el
  * administrador; una firma con la fecha pasada no basta) y ninguna más.
  * Las listas y los repasos se leen una sola vez para las cincuenta.
+ *
+ * Con `conRepasos: false` no se leen los repasos (cada visita sale con
+ * `repasos: []`): el calendario y la portada solo necesitan la cita y
+ * los conformes, y así no recorren el almacén entero de repasos.
  */
-export async function posventaDePromo(promoId) {
+export async function posventaDePromo(promoId, { conRepasos = true } = {}) {
   const salida = new Map();
   for (const e of await entregasDePromo(promoId)) {
     if (e.entregadaEn) salida.set(e.unidadId, { entrega: e, visitas: [], sueltos: [] });
@@ -829,7 +833,7 @@ export async function posventaDePromo(promoId) {
     .filter((l) => !l.borrada && l.promoId === promoId && esListaDeVisita(l) && salida.has(l.unidadId))
     .sort((a, b) => String(a.creado || '').localeCompare(String(b.creado || '')));
   const porLista = new Map(listas.map((l) => [l.id, []]));
-  if (listas.length) {
+  if (listas.length && conRepasos) {
     for (const t of await db.getAll('tareas')) {
       if (!t.borrada && porLista.has(t.listaId)) porLista.get(t.listaId).push(t);
     }
