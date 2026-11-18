@@ -260,7 +260,7 @@ Agrupa las viviendas de Apolo para decidir cuántos renders hacen falta.
 
 Cómo se cuentan los 360: salón/estudio y dormitorios, uno por tipo de ventana
 presente en la tipología (antepecho en planta 1, suelo-techo en el resto);
-baños, uno por tipología (son interiores, sin ventana); terrazas ≥ 10 m², uno
+baños, cada uno una vez por tipología (son interiores, sin ventana); terrazas ≥ 10 m², uno
 por terraza distinta y dos si pasa de 40 m². Una vivienda espejada usa la
 panorámica volteada en horizontal; una girada, la misma con otro rumbo inicial.
 

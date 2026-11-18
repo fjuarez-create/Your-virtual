@@ -4,7 +4,7 @@
  "criterio": "Tipología: misma lista de estancias por tipo con superficies útiles iguales ±0.15 m² (fichas PDF; «Dormitorio individual» = «Dormitorio secundario») y el mismo plano (assets/planos/<id>.png) salvo giro o espejo, correlación ≥ 0.80. La terraza no separa tipologías.",
  "transformaciones": "Cómo se pasa del plano de la vivienda de referencia al de cada vivienda: igual, giro90/180/270 (misma distribución girada) o espejoH/espejoV/traspuesta/transversa (distribución simétrica). «espejadas» = quiralidad contraria a la referencia. margenEspejo = diferencia mínima entre la mejor transformación y la mejor de la quiralidad contraria (cuanto mayor, más seguro).",
  "variantes": "Variante de plano = un render cenital: misma tipología, terraza ±0.5 m², construida interior ±0.15 m² y mismo grupo de plantas (planta 1 / plantas 2-3 / ático). Las espejadas usan la imagen volteada; las giradas, la misma imagen girada.",
- "renders": "cenitales = variantes; cenitalesSinVoltear = si no se acepta voltear la imagen; p360Interior = salón/estudio y dormitorios × tipos de ventana presentes (planta 1 antepecho; resto suelo-techo) + baños (interiores, uno por tipología); p360Terraza = terrazas ≥ 10 m² distintas (2 puntos si ≥ 40 m²).",
+ "renders": "cenitales = variantes; cenitalesSinVoltear = si no se acepta voltear la imagen; p360Interior = salón/estudio y dormitorios × tipos de ventana presentes (planta 1 antepecho; resto suelo-techo) + baños (interiores, cada uno una vez por tipología); p360Terraza = terrazas ≥ 10 m² distintas (2 puntos si ≥ 40 m²).",
  "resumen": {
   "viviendas": 166,
   "tipologias": 43,

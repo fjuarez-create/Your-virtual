@@ -46,8 +46,10 @@ jobs:
             echo "Aún no hay PHP en nuevo/gestion: nada que comprobar."
           fi
 
-      # Los documentos internos, las herramientas y las plantillas de trabajo
-      # se quedan en el repositorio: a la web solo va lo que la web usa.
+      # Los documentos internos, las herramientas, las plantillas de trabajo y
+      # las fuentes cruzadas de datos (llevan notas internas) se quedan en el
+      # repositorio: a la web solo va lo que la web usa. No basta con su
+      # .htaccess: si el hosting sirviera los estáticos con nginx, lo ignoraría.
       - name: Preparar carpeta de publicación
         run: |
           set -eu
@@ -56,7 +58,7 @@ jobs:
           sellar=$(grep -rl "__BUILD__" nuevo --include='*.html' || true)
           [ -z "$sellar" ] || sed -i "s/__BUILD__/${GITHUB_SHA::8}/g" $sellar
           rm -rf publish && mkdir -p publish
-          rsync -a --exclude 'docs/' --exclude 'tools/' --exclude 'plantilla/' --exclude '.gitkeep' nuevo/ publish/nuevo/
+          rsync -a --exclude '/docs/' --exclude '/tools/' --exclude '/plantilla/' --exclude '/data/fuentes/' --exclude '__pycache__/' --exclude '.gitkeep' --exclude '.gitignore' nuevo/ publish/nuevo/
           mkdir -p publish/nuevo/gestion/datos
           test -f publish/nuevo/gestion/datos/.htaccess
           du -sh publish/nuevo

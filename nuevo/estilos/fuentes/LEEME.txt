@@ -1,0 +1,16 @@
+Fuentes de /nuevo/estilos/
+
+nhg-display-45/55/65.woff2, nhg-text-55/65.woff2
+  Neue Haas Grotesk Display y Text convertidas a WOFF2 desde assets/fonts/
+  con nuevo/tools/empaquetar_estilos.py --fuentes (fontTools).
+  Son los ficheros de PRUEBA del repositorio, con licencia "Personal Use Only"
+  (befonts): sirven para previsualizar las propuestas, no para la web pública.
+  Solo traen 74 caracteres: faltan tildes, ñ, €, ², dos puntos, paréntesis,
+  barra y cifras tabulares. Antes de publicar el showroom hace falta la
+  licencia web (Monotype, o Adobe Fonts si hay Creative Cloud) con el juego
+  completo de caracteres.
+
+arimo-400/500.woff2
+  Arimo (subconjunto latino de @fontsource/arimo 5.2.5), SIL Open Font
+  License 1.1 (ver ARIMO-OFL.txt). Pone los caracteres que faltan en los
+  ficheros de prueba cuando el equipo no tiene Helvetica Neue.

@@ -267,7 +267,7 @@ def hoja_leeme(ws, datos):
 
     titulo('Cómo se carga en el panel')
     carga = [
-        ('1', 'Abre el panel con tu dirección privada (la que lleva el parámetro que solo conocéis tú y el director comercial).'),
+        ('1', 'Abre el panel con tu dirección privada: cada persona con acceso tiene la suya, con su propio parámetro secreto, y no se comparte.'),
         ('2', 'Pulsa «Cargar Excel» y elige este fichero. El fichero no sale de tu ordenador: el panel lo lee en el navegador.'),
         ('3', 'El panel lo comprueba y enseña los errores por hoja y fila, por ejemplo: «Viviendas · fila 37 · 136: la suma de '
               'sus estancias es 47,10 m² y la útil dice 47,54 m²». Si hay errores no se carga nada: corrige el Excel y vuelve a cargarlo.'),

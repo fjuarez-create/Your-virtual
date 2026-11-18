@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Propuestas de diseño Serenea</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Tres direcciones de diseño para el showroom de Residencial Serenea, con el flujo del storyboard navegable y un catálogo de micro-interacciones para elegir.">
+<meta property="og:title" content="Propuestas de diseño · Showroom Serenea">
+<meta property="og:description" content="Galería, Plano o Nocturno: elige la dirección y las micro-interacciones del showroom nuevo.">
+<meta property="og:image" content="https://showroom.unikdi.com/nuevo/estilos/img/og-nuevo.jpg">
+<link rel="icon" href="../../assets/icono/favicon.ico">
+<link rel="stylesheet" href="estilos.css">
+</head>
+<body>
+<div class="pagina" id="pagina" data-dir="galeria">
+
+<header class="cabecera" id="cabecera">
+  <div class="cab-fila">
+    <p class="cab-marca"><span class="cab-logo">SERENEA</span><span class="cab-sub">Propuestas de diseño del showroom</span></p>
+    <div class="selector" role="radiogroup" aria-label="Dirección de diseño" id="selector">
+      <button type="button" role="radio" aria-checked="true" data-dir="galeria" id="dir-galeria">Galería</button>
+      <button type="button" role="radio" aria-checked="false" data-dir="plano" id="dir-plano" tabindex="-1">Plano</button>
+      <button type="button" role="radio" aria-checked="false" data-dir="nocturno" id="dir-nocturno" tabindex="-1">Nocturno</button>
+    </div>
+    <a class="cab-codigo" href="#eleccion"><span class="cab-codigo-et">Tu código</span> <span id="codigo-mini" class="cab-codigo-val">Galería · H2 · V1 · R2 · P3 · T1 · L1</span></a>
+  </div>
+  <p class="cab-frase" id="frase-dir" aria-live="polite"></p>
+</header>
+
+<main>
+  <section class="intro" aria-labelledby="intro-titulo">
+    <h1 id="intro-titulo">Tres maneras de vender Apolo en pantalla</h1>
+    <div class="intro-texto">
+      <p>Las tres direcciones recorren las mismas pantallas del storyboard con los datos reales de Apolo. Elige una arriba, navega el prototipo con clics de verdad y prueba más abajo cada micro-interacción. Al final tienes el código de tu elección para enviármelo.</p>
+      <p class="intro-nota">Las imágenes son capturas provisionales del modelo BIM y el estado de venta es de ejemplo: sirven para decidir el diseño, no son los renders definitivos.</p>
+    </div>
+  </section>
+
+  <section class="demo" id="demo" aria-label="Prototipo navegable">
+    <p class="demo-frase" id="demo-frase" aria-hidden="true"></p>
+    <div class="demo-barra">
+      <ol class="demo-pasos" id="demo-pasos" aria-label="Pantallas del flujo">
+        <li><button type="button" data-ir="conjunto"><span class="paso-n">1</span>Conjunto</button></li>
+        <li><button type="button" data-ir="edificio"><span class="paso-n">2</span>Edificio</button></li>
+        <li><button type="button" data-ir="planta"><span class="paso-n">3</span>Planta 2</button></li>
+        <li><button type="button" data-ir="vivienda"><span class="paso-n">4</span>Vivienda</button></li>
+        <li><button type="button" data-ir="360"><span class="paso-n">5</span>360</button></li>
+        <li><button type="button" data-ir="pagos"><span class="paso-n">6</span>Pagos</button></li>
+      </ol>
+      <button type="button" class="boton-linea" id="btn-completa" aria-pressed="false">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 8V3h5M12 3h5v5M17 12v5h-5M8 17H3v-5"/></svg>
+        <span>Pantalla completa</span>
+      </button>
+    </div>
+
+    <div class="proto tema" id="proto" data-h="H2" data-v="V1" data-r="R2" data-p="P3" data-t="T1" data-l="L1" data-escena="conjunto">
+      <div class="p-barra">
+        <button type="button" class="p-atras" id="p-atras" hidden>
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M12.5 4 6.5 10l6 6"/></svg><span>Atrás</span>
+        </button>
+        <p class="p-marca">SERENEA</p>
+        <nav class="p-migas" aria-label="Ruta en el showroom"><ol id="p-migas"></ol></nav>
+        <p class="p-hoja" id="p-hoja"></p>
+        <button type="button" class="p-salir" id="p-salir" hidden>
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5 5 15"/></svg><span>Salir</span>
+        </button>
+      </div>
+
+      <div class="p-escenas" id="p-escenas">
+        <section class="escena" data-escena="conjunto" id="e-conjunto" aria-label="Conjunto Residencial Serenea">
+          <div class="e-visor" id="v-conjunto"></div>
+          <div class="e-info">
+            <p class="e-eyebrow">Las Huesas · Telde</p>
+            <h2 class="e-titulo">Residencial Serenea</h2>
+            <p class="e-cifra"><span class="cifra-grande" id="c-total">166</span><span class="cifra-pie">viviendas en Apolo, <b id="c-disp">96</b> disponibles</span></p>
+            <ol class="lista-edificios" id="lista-edificios"></ol>
+            <div class="cajetin" data-cajetin="conjunto"></div>
+          </div>
+        </section>
+
+        <section class="escena" data-escena="edificio" id="e-edificio" aria-label="Edificio Apolo" hidden>
+          <div class="e-visor" id="v-edificio"></div>
+          <div class="e-info">
+            <p class="e-eyebrow">Edificio 1</p>
+            <h2 class="e-titulo">Apolo</h2>
+            <p class="e-texto" id="ed-texto"></p>
+            <p class="e-ayuda">Pasa por una planta o elígela en la lista.</p>
+            <ol class="lista-plantas" id="lista-plantas"></ol>
+            <div class="cajetin" data-cajetin="edificio"></div>
+          </div>
+        </section>
+
+        <section class="escena" data-escena="planta" id="e-planta" aria-label="Planta 2 de Apolo" hidden>
+          <div class="e-visor" id="v-planta">
+            <div class="zoom" role="group" aria-label="Zoom de la planta">
+              <button type="button" data-zoom="mas" aria-label="Acercar"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4v12M4 10h12"/></svg></button>
+              <button type="button" data-zoom="menos" aria-label="Alejar"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h12"/></svg></button>
+              <button type="button" data-zoom="todo" aria-label="Ver la planta entera"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 7V3h4M13 3h4v4M17 13v4h-4M7 17H3v-4"/></svg></button>
+            </div>
+          </div>
+          <div class="e-info">
+            <p class="e-eyebrow">Apolo</p>
+            <h2 class="e-titulo">Planta 2</h2>
+            <p class="e-cifra"><span class="cifra-grande" id="pl-disp">25</span><span class="cifra-pie">disponibles de <span id="pl-total">46</span></span></p>
+            <ul class="leyenda" id="leyenda-planta"></ul>
+            <div class="cambio-planta" role="group" aria-label="Cambiar de planta" id="cambio-planta"></div>
+            <p class="e-ayuda" id="ayuda-planta">Pulsa una vivienda disponible. Arrastra para moverte y acerca con los botones o con dos dedos.</p>
+            <div class="cajetin" data-cajetin="planta"></div>
+          </div>
+        </section>
+      </div>
+
+      <div class="p-modal" id="p-modal" role="dialog" aria-modal="false" aria-labelledby="f-titulo" data-vista="plano" hidden>
+        <aside class="ficha" id="ficha">
+          <button type="button" class="ficha-asa" id="ficha-asa" aria-expanded="false" aria-controls="ficha-cuerpo">
+            <span class="asa-raya" aria-hidden="true"></span><span class="asa-texto">Ver ficha</span>
+          </button>
+          <div class="ficha-cuerpo" id="ficha-cuerpo">
+            <figure class="ficha-imagen"><img id="f-imagen" alt="Edificio Apolo" width="1200" height="900"></figure>
+            <div class="ficha-cab">
+              <p class="e-eyebrow" id="f-ubicacion">Apolo · Planta 2</p>
+              <h2 class="ficha-titulo" id="f-titulo">Vivienda 238</h2>
+              <p class="ficha-ref" id="f-ref">SEAP-238</p>
+            </div>
+            <p class="ficha-aviso" id="f-aviso" hidden></p>
+            <p class="ficha-precio"><span class="precio" id="f-precio">226.000 €</span><span class="precio-imp" id="f-imp">+ IGIC</span></p>
+            <p class="ficha-tipo" id="f-tipo"></p>
+            <button type="button" class="boton-primario" id="f-pagos">Ver pagos</button>
+            <section class="ficha-bloque" aria-labelledby="f-sup-t">
+              <h3 class="ficha-sub" id="f-sup-t">Superficies</h3>
+              <dl class="filas" id="f-superficies"></dl>
+            </section>
+            <section class="ficha-bloque" aria-labelledby="f-est-t">
+              <h3 class="ficha-sub" id="f-est-t">Estancias <span class="ficha-sub-nota">superficie útil</span></h3>
+              <ul class="filas estancias" id="f-estancias"></ul>
+            </section>
+            <div class="cajetin" data-cajetin="vivienda"></div>
+          </div>
+        </aside>
+
+        <div class="m-zona" id="m-zona">
+          <div class="m-acciones">
+            <p class="m-titulo" id="m-titulo">Plano de la vivienda</p>
+            <button type="button" class="m-boton" id="m-volver" hidden>
+              <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M12.5 4 6.5 10l6 6"/></svg><span>Volver al plano</span>
+            </button>
+            <button type="button" class="m-boton m-cerrar" id="m-cerrar" aria-label="Cerrar la vivienda">
+              <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5 5 15"/></svg><span>Cerrar</span>
+            </button>
+          </div>
+          <div class="m-vistas">
+            <div class="m-vista" data-vista="plano" id="mv-plano">
+              <div class="e-visor m-visor" id="v-vivienda"></div>
+              <div class="e-visor m-visor" id="v-recorte" hidden></div>
+              <p class="m-pie" id="m-pie-plano">Pulsa un punto para entrar en la estancia.</p>
+            </div>
+            <div class="m-vista" data-vista="360" id="mv-360" hidden>
+              <div class="e-visor m-visor" id="v-360"></div>
+              <div class="r360-cab">
+                <p class="r360-titulo" id="r360-titulo">Salón - comedor</p>
+                <p class="r360-nota"><span class="nota-larga">Simulación: el visor 360 real llegará con los renders. Imagen de referencia de la decoración, no de esta vivienda.</span><span class="nota-corta">Simulación con una imagen de referencia, no de esta vivienda.</span></p>
+              </div>
+              <div class="minimapa" id="minimapa" aria-label="Estancias de la vivienda"></div>
+              <p class="m-pie r360-pista" id="r360-pista">Arrastra para mirar alrededor.</p>
+            </div>
+            <div class="m-vista" data-vista="pagos" id="mv-pagos" hidden>
+              <div class="pagos" id="pagos"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="p-aviso" id="p-aviso" role="status" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <section class="catalogo" id="catalogo" aria-labelledby="cat-titulo">
+    <div class="sec-cab">
+      <h2 id="cat-titulo">Micro-interacciones</h2>
+      <p>Cada opción funciona en vivo: pasa el ratón o toca la muestra para verla y púlsala para elegirla. Lo que elijas se aplica también al prototipo de arriba, con la dirección que tengas seleccionada.</p>
+    </div>
+    <div id="grupos"></div>
+  </section>
+
+  <section class="eleccion" id="eleccion" aria-labelledby="el-titulo">
+    <div class="tarjeta">
+      <h2 class="tarjeta-eyebrow" id="el-titulo">Tu elección</h2>
+      <p class="tarjeta-codigo" id="codigo" aria-live="polite">Galería · H2 · V1 · R2 · P3 · T1 · L1</p>
+      <dl class="tarjeta-lista" id="eleccion-lista"></dl>
+      <div class="tarjeta-acciones">
+        <button type="button" class="boton-primario" id="copiar">Copiar el código</button>
+        <button type="button" class="boton-linea" id="restablecer" disabled>Usas las recomendadas de Galería</button>
+      </div>
+      <p class="tarjeta-nota" id="copiar-estado" role="status" aria-live="polite">Se guarda en este navegador. Copia el código y envíamelo por correo o WhatsApp, con cualquier comentario.</p>
+    </div>
+  </section>
+
+  <footer class="pie">
+    <p><b>Tipografía.</b> Neue Haas Grotesk Display y Text en sus ficheros de prueba: no traen tildes, eñes ni símbolos como € o m², y esos caracteres se ven en una letra muy parecida. Las cifras de las tablas usan esa misma letra de apoyo porque la de prueba no tiene cifras tabulares. Con la licencia web todo se verá en Neue Haas Grotesk.</p>
+    <p><b>Imágenes.</b> Conjunto, edificio, planta y vivienda son capturas provisionales del modelo BIM; las capas interactivas casan con ellas al píxel y casarán igual con los renders definitivos. La imagen del 360 es un fotograma de referencia de la línea de decoración y no corresponde a la vivienda 238.</p>
+    <p><b>Datos.</b> Precios, superficies y estancias de la plantilla de carga de Apolo. Estado de venta de ejemplo. El plan de pagos es un ejemplo.</p>
+  </footer>
+</main>
+
+</div>
+<script src="estilos.js"></script>
+</body>
+</html>

@@ -572,7 +572,7 @@ def main():
                       'volteada; las giradas, la misma imagen girada.' % (TOL_TERRAZA, TOL)),
         ('renders', 'cenitales = variantes; cenitalesSinVoltear = si no se acepta voltear la imagen; p360Interior = '
                     'salón/estudio y dormitorios × tipos de ventana presentes (planta 1 antepecho; resto suelo-techo) + '
-                    'baños (interiores, uno por tipología); p360Terraza = terrazas ≥ 10 m² distintas (2 puntos si ≥ 40 m²).'),
+                    'baños (interiores, cada uno una vez por tipología); p360Terraza = terrazas ≥ 10 m² distintas (2 puntos si ≥ 40 m²).'),
         ('resumen', resumen),
         ('familias', lista_familias),
         ('parejasDeFamilia', [{'a': a, 'b': b, 'transformacion': t, 'similitud': p} for a, b, t, p in casi]),
