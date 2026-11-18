@@ -22,9 +22,11 @@ on:
   workflow_dispatch:
 
 # Grupo propio: un deploy de /nuevo no cancela nunca el de la web principal.
+# Sin cancelar el que está en marcha: si no, un push con [wip] (que no
+# publica nada) abortaría a medias la subida del commit anterior.
 concurrency:
   group: hosting-nuevo
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   deploy:
