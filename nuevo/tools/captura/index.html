@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex, nofollow">
+<title>Captura BIM</title>
+<!-- Herramienta de trabajo, no se publica para el público: se sirve en local
+     desde la RAÍZ del repositorio (python3 -m http.server) y la conduce
+     capturar.mjs con Playwright. Ver LEEME.md. Las rutas assets/ y data/
+     resuelven a la raíz gracias a <base href="/">, igual que en el visor. -->
+<base href="/">
+<style>
+  html, body { margin: 0; background: #000; overflow: hidden; }
+  canvas { display: block; }
+</style>
+<!-- Mismo mapa de importación que las demos del visor (js/visor/CONTRATO.md). -->
+<script type="importmap">{"imports":{
+ "three":"/vendor/three/three.module.min.js",
+ "three/addons/":"/vendor/three/addons/",
+ "three/examples/jsm/":"/vendor/three/addons/",
+ "three-mesh-bvh":"/vendor/three-mesh-bvh.js",
+ "three-bvh-csg":"/vendor/three-bvh-csg.js",
+ "three-gpu-pathtracer":"/vendor/three-gpu-pathtracer.js",
+ "camera-controls":"/vendor/camera-controls.js",
+ "xatlas-web":"/vendor/xatlas-web.js",
+ "app/":"/js/"
+}}</script>
+</head>
+<body>
+<canvas id="lienzo"></canvas>
+<script type="module" src="/nuevo/tools/captura/captura.js"></script>
+</body>
+</html>
