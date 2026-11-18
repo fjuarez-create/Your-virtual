@@ -58,15 +58,20 @@ de cada JSON.
   (`js/visor/escena.js` renderer AgX, `luz.js` cielo horneado y sol en
   cascada del momento «Mediodía», `post.js` GTAO + SSR + bloom + SMAA +
   grado, `materiales.js`, `texturas.js`, el vidrio físico de `edificio.js` y
-  las tapas de `tapas.js`). Dos modos por carga de página:
+  las tapas de `tapas.js`). Tres modos por carga de página:
   - `?modo=exterior`: `entorno.glb` + `apolo_envolvente.glb`, cámara en perspectiva;
   - `?modo=planta&planta=p1`: `apolo_corte_p1.glb` + mobiliario (lo de su
     planta, recortado con el plano de corte de cada cajón) + poché de
     `data/tapas_serenea.json`, sin entorno, fondo liso y cámara ortográfica
     cenital (norte = −z del SketchUp arriba). Claves de planta: nivel 1 =
-    `baja`, 2 = `p1`, 3 = `p2`, 4 = `atico`.
+    `baja`, 2 = `p1`, 3 = `p2`, 4 = `atico`;
+  - `?modo=interior360&vivienda=238`: panorámica 360 exacta desde dentro de
+    una vivienda (ver «360 exacto desde el BIM», más abajo).
   Expone `window.captura` (cámaras, `renderizar`, `mascaraPlantas`,
-  `mascaraEdificios`, `mascaraViviendas`, `seccion`, `mobiliarioEn`).
+  `mascaraEdificios`, `mascaraViviendas`, `seccion`, `mobiliarioEn` y, en
+  interior360, `camaraInterior`, `luzInterior`, `puertasInterior`,
+  `panoramica360`, `vistaPlana360`).
+- `equirect.js`: cubo de 6 caras → equirectangular, pases y leyenda.
 - `vistas.json`: las vistas, con la cámara exacta. Cámara exterior por pose
   (`azimut` desde +z hacia +x, 0° = sur; `elevacion`; `distancia`;
   `objetivo`; `fov` vertical en grados), la misma convención que el visor.
@@ -189,6 +194,248 @@ Una imagen generada o retocada con IA (Nano Banana, Veo, Weave…) a partir
 de estas capturas no garantiza la geometría: hay que volver a superponer los
 polígonos (los PNG de comprobación) y, si se mueve, retrazar.
 
+## 360 exacto desde el BIM (`?modo=interior360`)
+
+Base estructural para la pasada de IA de los 360. Es una equirectangular 2:1
+dibujada desde el modelo con la cámara del punto 360 de la estancia. Con la
+**misma cámara** salen además tres pases que fijan la geometría:
+profundidad, normales y segmentación. La IA pondrá la luz y los acabados.
+Estos pases dicen dónde está cada muro, ventana, puerta y mueble, y después
+sirven para comprobar que la IA no los ha movido (`comparar360.py`).
+
+### Receta
+
+Desde la raíz del repositorio:
+
+```bash
+python3 -m http.server 8793 --bind 127.0.0.1 &
+SERVIDOR=$!
+node nuevo/tools/captura/capturar360.mjs --salida /tmp/brutos-360 \
+     --vivienda 238 --estancia "Salón - comedor" --nombre base-238-salon \
+     --altura 1.6 --cara 2048 --ancho 4096 --muestras 3 --master 8192 --cara-master 3072
+python3 nuevo/tools/captura/procesar360.py --brutos /tmp/brutos-360 --nombre base-238-salon \
+     --salida /tmp/base-360 --jpg nuevo/estilos/img/360/base-238-salon.jpg \
+     --json-web nuevo/estilos/img/360/base-238-salon.json
+kill $SERVIDOR
+```
+
+Tiempos medidos el 18-nov-2026 en este contenedor (4 CPU, WebGL por
+SwiftShader):
+
+| Paso | Tiempo |
+|---|---|
+| Carga de la página: envolvente, mobiliario, entorno y cielo | 1,5 s |
+| Color 4096×2048 (cubo de 2048 + reproyección con 3×3 submuestras) | ≈ 100 s |
+| Profundidad, normales e id | 5–8 s cada uno |
+| Máster de color 8192×4096 (cubo de 3072, 2×2 submuestras, por franjas) | ≈ 200 s |
+| Vistas planas de referencia y ventana de cerca | ≈ 50 s |
+| **Total de `capturar360.mjs`** | **≈ 6 min** |
+| `procesar360.py` | 17 s |
+
+Dos ejecuciones seguidas dan PNG idénticos byte a byte (0 píxeles distintos
+en los cuatro pases).
+
+### Piezas
+
+- `captura.js`, modo `interior360` (`&vivienda=<id>`, `&entorno=0` para
+  quitar el entorno). Carga lo que hace falta para que la estancia esté
+  completa:
+  - `apolo_envolvente.glb` entero. Los cortes de planta no sirven aquí: para
+    el nivel 2 es `apolo_corte_p1.glb`, que tiene los muros cortados a
+    +1,41 m y no tiene techo. La envolvente trae los muros y los vidrios a
+    altura completa y los forjados. El techo es la cara inferior del forjado
+    del nivel 3.
+  - El mobiliario de la misma plataforma que arranca en esa planta (cota
+    mínima entre el suelo −0,3 m y el suelo +2,7 m), sin personas (`Sree_*`).
+  - `entorno.glb`, para lo que se ve por las ventanas.
+  - Los pilares llevan pintura interior: el modelo los trae en hormigón visto
+    y dentro de la vivienda van enlucidos.
+
+  Sin `luz.js` ni `post.js`, porque el CSM y las pasadas de pantalla van
+  atadas a una sola cámara en perspectiva. La luz es neutra a propósito:
+  - IBL de degradado acromático (cenit 1,0, horizonte 0,8, nadir 0,5). Con el
+    HDR como IBL, cada muro cogía el tinte de su trozo de cielo.
+  - Un relleno direccional sin sombra, para que cada paño de muro tenga un
+    tono distinto según hacia dónde mira.
+  - El sol de la hora maestra con una sombra direccional de 4096 px: brújula
+    241°, altura 28°, norte a 12,55° (PRODUCCION_IMAGENES §2).
+  - `sky_day.hdr` solo de fondo, tono Neutral.
+  - Vidrio casi transparente en color y opaco en los pases.
+- `equirect.js` hace el `CubeCamera` de 6 caras y la reproyección a
+  equirectangular con un sombreador propio: N×N submuestras por píxel en
+  color y una muestra al vecino más cercano en los pases de datos. También
+  dibuja los materiales de los pases, la leyenda (`CLASES`) y la vista plana
+  de referencia.
+  - Si el lienzo WebGL no admite el tamaño pedido, reproyecta por franjas y
+    las compone en un lienzo 2D. Chromium reduce el búfer por encima de unos
+    33 Mpx sin avisar: un 8192×4096 sale a 8145×4072 y **recortado**.
+  - Cada franja comprueba su búfer. La composición es exacta: id por franjas
+    frente a entero, 0 píxeles distintos; color, diferencia máxima de 1
+    nivel.
+- `capturar360.mjs` calcula la cámara y las direcciones de comprobación
+  desde el modelo:
+  - ventana: el centro del vidrio que está en el contorno de la estancia;
+  - cocina: el centroide de la encimera dentro de la estancia;
+  - entrada: el hueco de puerta más cercano a `entrada` de
+    `viviendas_serenea.json`;
+  - pasillo: el hueco que toca a la vez la estancia y el distribuidor.
+
+  Después guarda los pases, las vistas planas y una toma auxiliar de la
+  ventana de cerca.
+- `procesar360.py` convierte la profundidad empaquetada a 16 bit, mide las
+  comprobaciones y escribe el JSON, las imágenes de `comprobacion/` y el JPG.
+- `comparar360.py` comprueba una panorámica retocada (IA) contra los pases
+  del BIM (ver más abajo).
+
+### Cámara
+
+- Punto: el `(x, y)` de la estancia en `vivienda-<id>.json`, llevado al
+  mundo con su transformación: `x = (px − c)/a`, `z = (py − d)/b`.
+  - En la 238, «Salón - comedor» está en px (695,2; 794,3), que es el punto
+    (14,862; −14,937) del modelo.
+  - El suelo terminado es el primer impacto hacia abajo en la envolvente (el
+    vinílico, cota 12,6597). Cámara a **+1,60 m** (`--altura`): y = 14,2597.
+  - PRODUCCION_IMAGENES §2 dice 1,50 m. Aquí va 1,60 porque así se encargó.
+- `camaraInterior()` comprueba que el punto cae dentro del polígono de la
+  estancia (a 0,825 m de su borde) y de la vivienda. Las distancias libres
+  se miden después en la propia panorámica (ver comprobaciones).
+
+### Convención (la de `<n>.json`)
+
+- **Rumbo β** en grados: horario visto desde arriba, desde el norte del
+  modelo (−z). 0 = −z, 90 = +x, 180 = +z, 270 = −x. Rumbo de brújula = β −
+  12,55.
+- **Columna:** `u = 0,5 + (β − rumboCentro)/360`. Con `rumboCentro` = 0, el
+  centro de la imagen mira al norte del modelo (la cocina en la 238) y la
+  costura queda a 180°, sobre el tabique liso del dormitorio.
+- **Fila:** `v = 0,5 − φ/180`, φ la elevación. Arriba está el cenit.
+- **En Photo Sphere Viewer:** `yaw = β − rumboCentro` (comprobado con
+  capturas). La vista principal se guarda aparte, en `rumboPrincipal`
+  (311,13° en la 238, hacia la ventana).
+
+### Ficheros
+
+| Fichero | Qué es |
+|---|---|
+| `<n>.png` | color 4096×2048, 8 bit sRGB |
+| `<n>-8k.png` | máster de color 8192×4096 |
+| `<n>-depth.png` | profundidad 16 bit, cerca = claro: `v = 65535·(1 − d/dmax)`, `d` = distancia **radial** a la cámara; `dmax` en el JSON (6,0 m en la 238); 0 = sin geometría |
+| `<n>-depth-mm.png` | la misma distancia en mm, 16 bit (métrica) |
+| `<n>-normal.png` | normal de mundo de la cara visible, `RGB = n·0,5 + 0,5` (R = +x este, G = +y arriba, B = +z sur) |
+| `<n>-id.png` | segmentación en colores planos exactos |
+| `<n>.json` | cámara, luz, convención, leyenda, direcciones, huecos de puerta, vidrios, tiempos y todas las comprobaciones |
+| `nuevo/estilos/img/360/<n>.jpg` + `.json` | versión web (4096×2048, calidad 82, progresivo: 293 kB) y su JSON reducido |
+
+Leyenda del id (colores de ADE20K donde existe la clase, los de los
+ControlNet de segmentación):
+
+| Clase | Color | ADE20K |
+|---|---|---|
+| muro (tabique, pilar, rodapié) | 120,120,120 | wall |
+| suelo | 80,50,50 | floor |
+| techo | 120,120,80 | ceiling |
+| vidrio | 230,230,230 | windowpane |
+| carpintería de ventana | 255,160,20 | — |
+| puerta (hoja, marco, herraje) | 8,255,51 | door |
+| mobiliario suelto | 11,102,255 | — |
+| cocina y armarios | 224,5,255 | cabinet |
+| sanitarios | 0,200,200 | — |
+| entorno exterior | 180,120,120 | building |
+| sin geometría | 0,0,0 | — |
+
+En la envolvente, suelo, techo y muro se separan por la orientación de la
+cara (`|n_y| > 0,7`), porque forjados y muros vienen en las mismas mallas.
+
+### Comprobaciones medidas (238, salón)
+
+- **Estancia cerrada.** 0 de 8.388.608 píxeles sin geometría y 0 colores
+  fuera de la leyenda.
+- **Costura.** Diferencia media entre la primera y la última columna: 0,22
+  niveles, frente a una mediana de 0,30 entre dos columnas vecinas
+  cualesquiera. El id coincide en el 100 % de las filas y la profundidad
+  difiere 0 mm. En el máster 8K, 0,14.
+- **Polos.**
+  - La fila del cenit es 100 % techo, a 0,901 m, con desviación de color 0.
+  - La del nadir es 100 % suelo, a 1,600 m.
+  - Ni huecos ni estrellas en las 8 primeras ni en las 8 últimas filas.
+- **Alturas medidas en la panorámica.**
+  - Cámara a 1,600 m del suelo y altura libre de 2,501 m.
+  - Techo plano: cota 15,1597–15,1613 m (percentiles 1–99).
+  - Suelo plano: 12,6590–12,6605 m.
+- **Verticales.**
+  - 4 aristas verticales de muro (esquinas y mochetas, de 212 a 622 filas
+    cada una): desviación de su columna ≤ 0,06 px y recorrido ≤ 1,5 px.
+  - Bordes de vidrio y de puerta: 77–100 % de las filas a ±1 px de la
+    columna mediana. Las que se salen son la manilla, el travesaño y el
+    respaldo del sofá, que corta el pie de la ventana: no son verticales.
+- **Reproyección frente a vistas planas.** Cuatro vistas en perspectiva
+  directa (fov 75°, 1200×800: ventana, cocina, entrada, pasillo) frente a las
+  mismas remuestreadas de la equirectangular:
+  - color: PSNR de 41,2 a 51,0 dB;
+  - id: 99,81–99,88 % de píxeles iguales, y el 99,2–100 % de los distintos
+    están a 1 px de un borde;
+  - desplazamiento por correlación de fase: ≤ 0,07 px.
+- **Distancias libres** (radiales, desde la cámara):
+  - muro: 0,865 m (el tabique del dormitorio, al sur);
+  - mobiliario: 1,07 m (una silla);
+  - cocina: 3,28 m;
+  - puerta: 1,51 m;
+  - vidrio: 4,03 m.
+
+  Cumple las reglas de ≥ 0,6 m del mobiliario y ≥ 1,0 m del vidrio.
+- **Ventana del salón**, medida de cerca (toma auxiliar a 1,25 m del vidrio;
+  desde el punto 360, el sofá tapa su pie):
+  - hueco con carpintería de 0,79 m de ancho, de +0,16 a +2,35 m;
+  - vidrio de 0,60 m, de +0,25 a +2,20 m, en dos hojas con travesaño a
+    +1,00/+1,10;
+  - techo a +2,50 m, así que el dintel es de 0,15 m.
+
+  En altura es prácticamente suelo-techo. En anchura es una ventana
+  estrecha, y es la única ventana de la estancia.
+
+### Visor 360 de comprobación
+
+Photo Sphere Viewer 5.15.1 con three 0.185.1 (ARQUITECTURA §8), instalado
+con npm en una carpeta de trabajo, con una página mínima. Playwright saca
+capturas con `visor.rotate({ yaw, pitch })` hacia la ventana, la cocina, la
+entrada, el pasillo, el techo y el suelo. Hay que mirarlas siempre antes de
+dar nada por bueno.
+
+### Para la pasada de IA y después
+
+- Pases como guía: `-depth.png` (cerca = claro, el formato de los ControlNet
+  de profundidad), `-normal.png` e `-id.png` (segmentación con colores de
+  ADE20K).
+  - Si la herramienta no trabaja en equirectangular, se pasa a 6 caras con
+    `ffmpeg -vf v360=e:c6x1` y se vuelve con `v360=c6x1:e`.
+  - La costura y los polos son los puntos donde la IA suele romper: mirarlos.
+- `comparar360.py` compara la panorámica nueva con los bordes del BIM:
+  bordes entre clases del id, pliegues de normal de más de 20° y saltos de
+  profundidad de más del 4 %. Da:
+  - la recuperación de bordes a 2 y 4 px, por par de clases;
+  - los bordes **inventados** sobre paños lisos de muro y techo (una ventana
+    o un hueco que no existen), con su rumbo;
+  - una imagen de control: verde, hay borde; rojo, falta; magenta,
+    inventado.
+
+  ```bash
+  python3 nuevo/tools/captura/comparar360.py --id base-238-salon-id.png \
+          --leyenda base-238-salon.json --nueva ia.jpg --salida control.jpg
+  ```
+
+  Se calibra con la base contra sí misma: 0 bordes inventados, y los pares
+  muro/techo, muro/suelo, muro/carpintería y vidrio/carpintería al 100 %.
+  Los blancos sobre blancos (puerta lacada sobre muro, frentes de cocina)
+  apenas tienen contraste en la base y salen bajos ya de partida.
+
+  Prueba con una copia manipulada (ventana borrada y otra pintada en el
+  muro de la cocina):
+  - vidrio/carpintería y muro/carpintería caen de 1,00 a 0,00;
+  - la ventana falsa sale como manchas inventadas a 351°.
+- Otra estancia: `--estancia "Dormitorio principal" --nombre
+  base-238-dormitorio`. Otra vivienda necesita antes su `vivienda-<id>.json`
+  (`procesar.py`).
+
 ## Limitaciones conocidas
 
 - Calidad de captura en tiempo real (three.js por CPU), no de render: el
@@ -197,3 +444,20 @@ polígonos (los PNG de comprobación) y, si se mueve, retrazar.
 - La tipografía Neue Haas Grotesk no interviene aquí.
 - Los números 2–5 de los otros edificios y el nombre «Hera» del 4 son una
   deducción del storyboard: confirmar con el cliente.
+- 360 base (`interior360`):
+  - Luz de captura en tiempo real: sin rebotes ni oclusión ambiental, y los
+    materiales son los del modelo, así que se ve plano.
+  - La vista por la ventana es la maqueta de `entorno.glb`.
+  - El sol de la hora maestra no entra en el salón de la 238. Lo tapa el
+    edificio vecino del oeste, a unos 4 m. Sin el entorno (`&entorno=0`),
+    la mancha de sol cae en el extremo de la cocina.
+  - La puerta de entrada no se ve desde el punto 360 del salón: la tapa el
+    bloque del baño secundario.
+  - **La geometría del BIM no coincide con el plano comercial de la 238**
+    (`assets/planos/238.png`). En el BIM, la fachada del salón es recta y
+    tiene una sola ventana estrecha junto a la cocina. En el plano
+    comercial, la fachada de la cocina va retranqueada unos 0,6 m y hay un
+    ventanal de unos 1,3 m más al sur. Ver
+    `comprobacion/bim-vs-ficha-238.jpg`. Hay que decidir qué vale antes de
+    vender con estos 360.
+

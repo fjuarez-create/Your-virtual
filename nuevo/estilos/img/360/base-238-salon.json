@@ -1,0 +1,260 @@
+{
+ "nombre": "base-238-salon",
+ "vivienda": "238",
+ "estancia": "Salón - comedor",
+ "provisional": true,
+ "origen": "Panorámica equirectangular 2:1 desde el BIM (three.js, CubeCamera de 6 caras + reproyección propia). Coordenadas del SketchUp: metros, Y arriba, norte del modelo = −z.",
+ "convencion": {
+  "rumbo": "grados, horario visto desde arriba, desde el norte del modelo (−z): 0 = −z, 90 = +x, 180 = +z, 270 = −x",
+  "columna": "u = 0,5 + (rumbo − rumboCentro)/360 (u = 0 izquierda, 1 derecha); costura en rumboCentro + 180",
+  "fila": "v = 0,5 − elevación/180 (v = 0 arriba = cenit)",
+  "direccion": "(sin β·cos φ, sin φ, −cos β·cos φ) en el mundo de three",
+  "nortes": "el norte real está 12,55° en sentido horario desde el −z del modelo (PRODUCCION_IMAGENES §2): rumbo de brújula = rumbo del modelo − 12,55"
+ },
+ "rumboCentro": 0,
+ "leyenda": [
+  {
+   "id": 0,
+   "clave": "vacio",
+   "nombre": "Sin geometría",
+   "color": [
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "id": 1,
+   "clave": "muro",
+   "nombre": "Muro, tabique, pilar, rodapié",
+   "color": [
+    120,
+    120,
+    120
+   ],
+   "ade20k": "wall"
+  },
+  {
+   "id": 2,
+   "clave": "suelo",
+   "nombre": "Suelo",
+   "color": [
+    80,
+    50,
+    50
+   ],
+   "ade20k": "floor"
+  },
+  {
+   "id": 3,
+   "clave": "techo",
+   "nombre": "Techo",
+   "color": [
+    120,
+    120,
+    80
+   ],
+   "ade20k": "ceiling"
+  },
+  {
+   "id": 4,
+   "clave": "vidrio",
+   "nombre": "Vidrio / ventana",
+   "color": [
+    230,
+    230,
+    230
+   ],
+   "ade20k": "windowpane"
+  },
+  {
+   "id": 5,
+   "clave": "carpinteria",
+   "nombre": "Carpintería de ventana (aluminio)",
+   "color": [
+    255,
+    160,
+    20
+   ]
+  },
+  {
+   "id": 6,
+   "clave": "puerta",
+   "nombre": "Puerta (hoja, marco y herrajes)",
+   "color": [
+    8,
+    255,
+    51
+   ],
+   "ade20k": "door"
+  },
+  {
+   "id": 7,
+   "clave": "mobiliario",
+   "nombre": "Mobiliario suelto (sofá, mesa, sillas, textiles, lámparas, plantas)",
+   "color": [
+    11,
+    102,
+    255
+   ]
+  },
+  {
+   "id": 8,
+   "clave": "mueble_fijo",
+   "nombre": "Cocina y armarios",
+   "color": [
+    224,
+    5,
+    255
+   ],
+   "ade20k": "cabinet"
+  },
+  {
+   "id": 9,
+   "clave": "sanitarios",
+   "nombre": "Baño: sanitarios, mueble, espejo, mampara",
+   "color": [
+    0,
+    200,
+    200
+   ]
+  },
+  {
+   "id": 10,
+   "clave": "exterior",
+   "nombre": "Entorno exterior",
+   "color": [
+    180,
+    120,
+    120
+   ],
+   "ade20k": "building"
+  }
+ ],
+ "imagen": "base-238-salon.jpg",
+ "ancho": 4096,
+ "alto": 2048,
+ "camara": {
+  "posicion": [
+   14.8622,
+   14.2597,
+   -14.9372
+  ],
+  "alturaSobreSuelo": 1.6,
+  "sueloTerminado": 12.6597,
+  "alturaLibre": 2.5009,
+  "puntoPx": [
+   695.2,
+   794.3
+  ]
+ },
+ "rumboPrincipal": 311.13,
+ "direcciones": {
+  "ventana": {
+   "rumbo": 311.13,
+   "elevacion": 0
+  },
+  "cocina": {
+   "rumbo": 339.32,
+   "elevacion": 0
+  },
+  "entrada": {
+   "rumbo": 50.54,
+   "elevacion": 0
+  },
+  "pasillo": {
+   "rumbo": 118.47,
+   "elevacion": 0
+  }
+ },
+ "comprobaciones": {
+  "huecos": {
+   "pixelesSinGeometria": 0,
+   "pixelesClaseVacio": 0,
+   "pixelesFueraDeLeyenda": 0,
+   "total": 8388608
+  },
+  "costura": {
+   "colorDifMediaPrimeraUltima": 0.222,
+   "colorDifMediaColumnasVecinasMediana": 0.299,
+   "colorDifMediaColumnasVecinasP95": 0.799,
+   "idFilasIgualesPrimeraUltima": 1.0,
+   "profundidadDifMediaMm": 0.0,
+   "nota": "La costura está en el rumbo centro + 180°. Si cuadra, la diferencia entre la primera y la última columna es como la de dos columnas vecinas."
+  },
+  "alturas": {
+   "camaraSobreSueloM": 1.6,
+   "techoSobreCamaraM": 0.901,
+   "alturaLibreM": 2.501,
+   "nota": "Profundidad en la fila del nadir y del cenit (centro de píxel a 90° − 180°/(2·alto)) proyectada en vertical.",
+   "techoCotaM": [
+    15.1597,
+    15.1606,
+    15.1613
+   ],
+   "sueloCotaM": [
+    12.659,
+    12.6597,
+    12.6605
+   ]
+  }
+ },
+ "reproyeccion": [
+  {
+   "vista": "ventana",
+   "rumbo": 311.13,
+   "fov": 75,
+   "colorDifMedia": 0.277,
+   "colorPSNRdB": 42.59,
+   "idPixelesIguales": 0.99807,
+   "idDistintos": 1852,
+   "idDistintosEnBorde1px": 0.9924,
+   "desplazamientoPx": [
+    -0.014,
+    -0.061
+   ]
+  },
+  {
+   "vista": "cocina",
+   "rumbo": 339.32,
+   "fov": 75,
+   "colorDifMedia": 0.336,
+   "colorPSNRdB": 42.08,
+   "idPixelesIguales": 0.99842,
+   "idDistintos": 1519,
+   "idDistintosEnBorde1px": 0.9928,
+   "desplazamientoPx": [
+    -0.019,
+    -0.023
+   ]
+  },
+  {
+   "vista": "entrada",
+   "rumbo": 50.54,
+   "fov": 75,
+   "colorDifMedia": 0.27,
+   "colorPSNRdB": 41.24,
+   "idPixelesIguales": 0.99829,
+   "idDistintos": 1644,
+   "idDistintosEnBorde1px": 1.0,
+   "desplazamientoPx": [
+    0.001,
+    -0.033
+   ]
+  },
+  {
+   "vista": "pasillo",
+   "rumbo": 118.47,
+   "fov": 75,
+   "colorDifMedia": 0.055,
+   "colorPSNRdB": 50.97,
+   "idPixelesIguales": 0.99877,
+   "idDistintos": 1185,
+   "idDistintosEnBorde1px": 1.0,
+   "desplazamientoPx": [
+    -0.035,
+    -0.072
+   ]
+  }
+ ]
+}

@@ -15,10 +15,17 @@
    bloom, SMAA, grado), materiales.js (color y acabado reales), texturas.js,
    tapas.js (poché de los muros cortados) y el vidrio físico de edificio.js.
 
-   Dos modos, uno por carga de página (?modo=…):
+   Tres modos, uno por carga de página (?modo=…):
    · exterior: entorno.glb + apolo_envolvente.glb, cámara en perspectiva.
    · planta:   apolo_corte_<planta>.glb + mobiliario recortado + tapas, sin
                entorno, cámara ORTOGRÁFICA cenital (norte = −z arriba).
+   · interior360 (&vivienda=238): apolo_envolvente.glb ENTERO (muros, techos
+               y vidrios a altura completa) + el mobiliario de la planta y
+               plataforma de la vivienda + entorno (lo que se ve por las
+               ventanas), luz propia (cielo HDR como IBL + sol con sombra
+               única, sin CSM ni post) y panorámica 360 exacta con
+               equirect.js: color, profundidad, normales y segmentación desde
+               el punto 360 de una estancia de vivienda-<id>.json.
 
    La conduce capturar.mjs (Playwright) por `window.captura`. Ver LEEME.md.
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -32,9 +39,13 @@ import { ajustarMaterial, asignarMapa } from 'app/visor/materiales.js';
 import { limitarMaterial } from 'app/visor/texturas.js';
 import { crearVidrioFisico } from 'app/visor/edificio.js';
 import { triangularPoligonos } from 'app/visor/tapas.js';
+import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
+import { crearEquirect, CLASES } from './equirect.js';
 
 const q = new URLSearchParams(location.search);
-const MODO = q.get('modo') === 'planta' ? 'planta' : 'exterior';
+const MODO = ['planta', 'interior360'].includes(q.get('modo')) ? q.get('modo') : 'exterior';
+const INTERIOR = MODO === 'interior360';
+const VIVIENDA = q.get('vivienda') || '238';
 const PLANTA = ['baja', 'p1', 'p2', 'atico'].includes(q.get('planta')) ? q.get('planta') : 'p1';
 const TEXTURA_MAX = 2048;          // fotos fijas: sin el tope de 1024 del visor
 const RUTAS = {
@@ -45,6 +56,8 @@ const RUTAS = {
   cortes: 'data/cortes.json',
   viviendas: 'data/viviendas_serenea.json',
   tapas: 'data/tapas_serenea.json',
+  cielo: 'assets/sky_day.hdr',
+  vivienda: (id) => `nuevo/estilos/img/vivienda-${id}.json`,
 };
 const ORDEN_PLANTAS = ['baja', 'p1', 'p2', 'atico'];
 const NIEBLA = { near: 1900, far: 6800 };   // la de main.js
@@ -78,11 +91,16 @@ function tamano(w, h) {
 }
 tamano(+q.get('ancho') || 1280, +q.get('alto') || 720);
 
-const luz = crearLuz(ctx);
-scene.fog.near = NIEBLA.near;
-scene.fog.far = NIEBLA.far;
-const post = crearPost(ctx, luz);
-post.setGrado(MOMENTOS.dia.grado);
+/* En interior360 no hay luz.js ni post.js: el CSM y las pasadas de pantalla
+   dependen de UNA cámara en perspectiva, y aquí se dibujan seis caras de
+   cubo. La luz del interior la pone prepararLuzInterior(). */
+const luz = INTERIOR ? null : crearLuz(ctx);
+if (luz) {
+  scene.fog.near = NIEBLA.near;
+  scene.fog.far = NIEBLA.far;
+}
+const post = INTERIOR ? null : crearPost(ctx, luz);
+post?.setGrado(MOMENTOS.dia.grado);
 
 /* ── Carga ── */
 const cargador = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
@@ -108,7 +126,11 @@ function sanearNormales(g) {
 const materiales = new Map();
 let vidrio = null;
 function vidrioFisico() {
-  if (!vidrio) { vidrio = crearVidrioFisico(); vidrio.name = 'vidrio_fisico'; luz.aplicarMaterial(vidrio); }
+  if (!vidrio) {
+    vidrio = INTERIOR ? crearVidrioInterior() : crearVidrioFisico();
+    vidrio.name = INTERIOR ? 'vidrio_interior' : 'vidrio_fisico';
+    luz?.aplicarMaterial(vidrio);
+  }
   return vidrio;
 }
 function materialEdificio(m) {
@@ -125,7 +147,9 @@ function materialEdificio(m) {
     r.envMapIntensity = 1;
     r.userData = { baseOpacity: r.opacity, baseEnv: 1, baseColor: r.color?.clone?.() };
     ajustarMaterial(r);
-    luz.aplicarMaterial(r);
+    luz?.aplicarMaterial(r);
+    /* Dentro de la vivienda una cara invertida del SketchUp sería un hueco. */
+    if (INTERIOR) r.side = THREE.DoubleSide;
   }
   materiales.set(nombre, r);
   return r;
@@ -172,7 +196,7 @@ function materialEntorno(m) {
     else if (nombre === 'metal') { r.roughness = 0.45; r.metalness = 0.7; }
     else if (/^ortho$|^PNOA_/.test(nombre)) { r.roughness = 1; r.metalness = 0; }
     ajustarMaterial(r);
-    luz.aplicarMaterial(r);
+    luz?.aplicarMaterial(r);
   }
   materiales.set(`entorno|${nombre}`, r);
   return r;
@@ -777,11 +801,340 @@ function mobiliarioEn({ poligono, y0, y1, triangulos = false }) {
   return out;
 }
 
+/* ══ Interior 360 ════════════════════════════════════════════════════════
+   La vivienda completa desde dentro: la envolvente ENTERA (los cortes de
+   planta tienen los muros a 1,4 m y sin techo), el mobiliario de su planta y
+   plataforma (sin las personas del modelo: los 360 van sin personas,
+   PRODUCCION_IMAGENES §2.4) y el entorno para lo que se ve por las ventanas.
+   Luz neutra a propósito (la pondrá la pasada de IA): el cielo HDR del visor
+   como IBL sin oclusión, más un sol de tarde con UNA sombra direccional que
+   cubre la vivienda y lo que la tapa. Sin post: seis caras de cubo. */
+const interior = { vivienda: null, ficha: null, sol: null, dirSol: new THREE.Vector3(), camara: null, equirect: null, personas: 0 };
+
+/* Vidrio casi transparente: desde dentro tiene que verse lo de fuera. */
+function crearVidrioInterior() {
+  const m = new THREE.MeshPhysicalMaterial({
+    color: 0xf2f6f6, roughness: 0.03, metalness: 0, transparent: true, opacity: 0.16,
+    envMapIntensity: 0.6, side: THREE.DoubleSide, depthWrite: false,
+  });
+  m.userData = { baseOpacity: m.opacity, baseEnv: 0.6 };
+  return m;
+}
+
+const mallasMobiliario = new Set();
+const conjuntoEntorno = new Set();
+
+async function cargarInterior() {
+  let t0 = performance.now();
+  const sinEntorno = q.get('entorno') === '0';
+  const [env, mob, ent, viviendas, ficha, cielo] = await Promise.all([
+    cargarGLB(RUTAS.envolvente), cargarGLB(RUTAS.mobiliario), sinEntorno ? null : cargarGLB(RUTAS.entorno),
+    cargarJSON(RUTAS.viviendas), cargarJSON(RUTAS.vivienda(VIVIENDA)), new HDRLoader().loadAsync(RUTAS.cielo),
+  ]);
+  estado.tiempos.descarga = ms(t0);
+  t0 = performance.now();
+  const v = viviendas.viviendas[VIVIENDA];
+  if (!v) throw new Error(`vivienda ${VIVIENDA} no está en ${RUTAS.viviendas}`);
+  datos = { cortes: null, viviendas: viviendas.viviendas };
+  interior.vivienda = { id: VIVIENDA, ...v };
+  interior.ficha = ficha;
+
+  adoptarEdificio(env.scene, { mobiliario: false });
+  grupos.edificio = env.scene; grupos.edificio.name = 'edificio';
+  scene.add(grupos.edificio);
+
+  /* Mobiliario de la misma plataforma que arranca en su planta: cota mínima
+     entre el suelo −0,3 m y el suelo +2,7 m (por encima empieza la planta de
+     arriba, cuyo forjado es el techo). */
+  mob.scene.updateMatrixWorld(true);
+  const quitar = [];
+  let visibles = 0;
+  mob.scene.traverse((o) => {
+    if (!o.isMesh) return;
+    const p = plataformaDe(o.name), y = yminDe(o.name);
+    const nombre = (Array.isArray(o.material) ? o.material[0] : o.material)?.name || '';
+    if (p !== v.plataforma || !(y >= v.y0 - 0.3 && y < v.y0 + 2.7)) { quitar.push(o); return; }
+    if (/^Sree_/.test(nombre)) { interior.personas++; quitar.push(o); return; }
+    visibles++;
+  });
+  for (const o of quitar) o.parent.remove(o);
+  adoptarEdificio(mob.scene, { mobiliario: true });
+  mob.scene.traverse((o) => { if (o.isMesh) mallasMobiliario.add(o); });
+  grupos.mobiliario = mob.scene; grupos.mobiliario.name = 'mobiliario';
+  scene.add(grupos.mobiliario);
+  estado.mobiliario = { visibles, descartadas: quitar.length, personasQuitadas: interior.personas };
+
+  if (ent) {
+    ent.scene.updateMatrixWorld(true);
+    ent.scene.traverse((o) => {
+      if (!o.isMesh) return;
+      sanearNormales(o.geometry);
+      o.material = Array.isArray(o.material) ? o.material.map(materialEntorno) : materialEntorno(o.material);
+      const m = Array.isArray(o.material) ? o.material[0] : o.material;
+      if (m?.userData?.uvMundo) hornearMundoConUV(o);
+      o.castShadow = !ES_VIDRIO.test(m?.name || '');
+      o.receiveShadow = true;
+      mallasEntorno.push(o);
+      conjuntoEntorno.add(o);
+    });
+    grupos.entorno = ent.scene; grupos.entorno.name = 'entorno';
+    scene.add(grupos.entorno);
+  }
+
+  /* Pilares: el modelo los trae en hormigón visto, pero dentro de la
+     vivienda van enlucidos y pintados: pintura interior, como los muros. */
+  const pintura = materiales.get('APOLO V6 | Pintura interior blanca mate');
+  if (pintura) for (const o of mallasEdificio) if (/^pilar__/.test(o.name)) o.material = pintura;
+
+  /* Cielo: la foto HDR del mediodía del visor, SOLO de fondo (lo que se ve
+     por las ventanas). La IBL es neutra a propósito: un degradado acromático
+     (cenit 1,0 → horizonte 0,8 → nadir 0,5). Con el HDR como IBL cada muro
+     cogía el tinte de su trozo de cielo (el que mira al norte salía azul). */
+  cielo.mapping = THREE.EquirectangularReflectionMapping;
+  scene.background = cielo;
+  const W = 64, H = 32, gris = new Float32Array(W * H * 4);
+  for (let j = 0; j < H; j++) {
+    const y = Math.sin(((j + 0.5) / H - 0.5) * Math.PI);    // fila 0 = abajo (flipY false)
+    const l = y >= 0 ? 0.8 + 0.2 * y : 0.8 + 0.3 * y;
+    for (let i = 0; i < W; i++) gris.set([l, l, l, 1], (j * W + i) * 4);
+  }
+  const neutro = new THREE.DataTexture(gris, W, H, THREE.RGBAFormat, THREE.FloatType);
+  neutro.mapping = THREE.EquirectangularReflectionMapping;
+  neutro.colorSpace = THREE.LinearSRGBColorSpace;
+  neutro.magFilter = neutro.minFilter = THREE.LinearFilter;
+  neutro.needsUpdate = true;
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromEquirectangular(neutro).texture;
+  pmrem.dispose();
+  scene.fog = null;
+  renderer.toneMapping = THREE.NeutralToneMapping;
+  luzInterior({});
+  interior.equirect = crearEquirect({ renderer, scene, canvas });
+  estado.tiempos.preparar = ms(t0);
+}
+
+/* Sol por elevación y rumbo de brújula; `norte` = giro horario del norte
+   real respecto al −z del modelo (PRODUCCION_IMAGENES §2: 12,55°; tarde de
+   octubre hacia las 17:15 = 241° / 28°). Con el entorno puesto, el edificio
+   vecino del oeste lo tapa a esa hora: no entra sol (es la geometría real).
+   `relleno`: luz direccional SIN sombra (atraviesa el forjado) que solo
+   sirve para que cada paño de muro tenga un tono distinto según hacia dónde
+   mira; sin ella los muros blancos se funden entre sí. */
+function luzInterior({ elev = 28, brujula = 241, norte = 12.55, sol = 2.6, ibl = 0.95, fondo = 1.0, exposicion = 1.0, color = 0xfff0dc,
+  relleno = 0.55, rellenoRumbo = 215, rellenoElev = 40 }) {
+  if (!interior.relleno) {
+    interior.relleno = new THREE.DirectionalLight(0xffffff, relleno);
+    interior.relleno.name = 'relleno_interior';
+    interior.relleno.castShadow = false;
+    scene.add(interior.relleno, interior.relleno.target);
+  }
+  {
+    const b = THREE.MathUtils.degToRad(rellenoRumbo), e = THREE.MathUtils.degToRad(rellenoElev);
+    interior.relleno.intensity = relleno;
+    interior.relleno.position.set(Math.sin(b) * Math.cos(e), Math.sin(e), -Math.cos(b) * Math.cos(e)).multiplyScalar(100);
+    interior.relleno.target.position.set(0, 0, 0);
+    interior.relleno.updateMatrixWorld(true); interior.relleno.target.updateMatrixWorld(true);
+  }
+  if (!interior.sol) {
+    const s = new THREE.DirectionalLight(color, sol);
+    s.name = 'sol_interior';
+    s.castShadow = true;
+    s.shadow.mapSize.set(4096, 4096);
+    Object.assign(s.shadow.camera, { left: -18, right: 18, top: 18, bottom: -18, near: 1, far: 320 });
+    s.shadow.camera.updateProjectionMatrix();
+    s.shadow.bias = -0.0002;
+    s.shadow.normalBias = 0.025;
+    scene.add(s, s.target);
+    interior.sol = s;
+  }
+  const b = THREE.MathUtils.degToRad(brujula + norte), e = THREE.MathUtils.degToRad(elev);
+  interior.dirSol.set(Math.sin(b) * Math.cos(e), Math.sin(e), -Math.cos(b) * Math.cos(e));
+  interior.sol.color.set(color);
+  interior.sol.intensity = sol;
+  scene.environmentIntensity = ibl;
+  scene.backgroundIntensity = fondo;
+  renderer.toneMappingExposure = exposicion;
+  interior.luz = { elev, brujula, norte, sol, ibl, fondo, exposicion, rumboModelo: brujula + norte, direccion: interior.dirSol.toArray().map((x) => +x.toFixed(4)), relleno, rellenoRumbo, rellenoElev };
+  if (interior.camara) apuntarSol(interior.camara.vector);
+  return interior.luz;
+}
+function apuntarSol(centro) {
+  const s = interior.sol;
+  s.target.position.copy(centro);
+  s.position.copy(centro).addScaledVector(interior.dirSol, 150);
+  s.target.updateMatrixWorld(true);
+  s.updateMatrixWorld(true);
+  s.shadow.camera.updateProjectionMatrix();
+}
+
+/* Clase de segmentación de cada malla (ver CLASES en equirect.js). */
+function clasificarInterior(o) {
+  const m = Array.isArray(o.material) ? o.material[0] : o.material;
+  const nm = m?.name || '';
+  if (conjuntoEntorno.has(o)) return { clase: 'exterior' };
+  if (mallasMobiliario.has(o)) {
+    if (/^puerta__/.test(o.name)) return { clase: 'puerta' };
+    if (/sanitarios|^Mueble_blanco_satinado|^Junta_mueble_blanco|^Banda_retroiluminada|^Espejo_plata|mampara/i.test(nm)) return { clase: 'sanitarios' };
+    if (/^V4_|^Casco_blanco_roto|^Frente_blanco_roto_mate|^Junta_y_zocalo|^Tirador_metal|^Lavadora/.test(nm)) return { clase: 'mueble_fijo' };
+    return { clase: 'mobiliario' };
+  }
+  if (m === vidrio || /^vidrio__/.test(o.name)) return { clase: 'vidrio' };
+  if (/^carpinteria__/.test(o.name) || /Aluminio/i.test(nm)) return { clase: 'carpinteria' };
+  if (/Rodapie/i.test(nm)) return { clase: 'muro' };
+  return { clase: 'muro', porOrientacion: true };
+}
+
+function dentroDe(poligono, x, z) {
+  let r = false;
+  for (let i = 0, j = poligono.length - 1; i < poligono.length; j = i++) {
+    const [xi, zi] = poligono[i], [xj, zj] = poligono[j];
+    if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) r = !r;
+  }
+  return r;
+}
+function distanciaABorde(poligono, x, z) {
+  let d = Infinity;
+  for (let i = 0, j = poligono.length - 1; i < poligono.length; j = i++) {
+    const [ax, az] = poligono[j], [bx, bz] = poligono[i];
+    const dx = bx - ax, dz = bz - az, l = dx * dx + dz * dz;
+    const t = l ? Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l)) : 0;
+    d = Math.min(d, Math.hypot(x - ax - t * dx, z - az - t * dz));
+  }
+  return d;
+}
+
+/* Primer impacto de un rayo vertical, con lo que toca. */
+function rayoVertical(x, y, z, sentido, filtro) {
+  const ray = new THREE.Raycaster(new THREE.Vector3(x, y, z), new THREE.Vector3(0, sentido, 0), 0, 6);
+  const objetos = mallasEdificio.filter((o) => filtro(o) && o.visible);
+  const hit = ray.intersectObjects(objetos, false)[0];
+  if (!hit) return null;
+  const c = clasificarInterior(hit.object);
+  return { y: +hit.point.y.toFixed(4), distancia: +hit.distance.toFixed(4), malla: hit.object.name, material: (Array.isArray(hit.object.material) ? hit.object.material[0] : hit.object.material).name, clase: c.clase };
+}
+
+/* Punto 360 de una estancia: el (x, y) en píxeles de vivienda-<id>.json →
+   mundo con su transformación (px = a·x + c, py = b·z + d), a `altura` m
+   sobre el suelo terminado (el primer impacto hacia abajo en la envolvente,
+   es decir, el vinílico; se informa también de lo que haya encima, p. ej.
+   una alfombra). `desplazamiento` [dx, dz] en metros por si hay que moverlo. */
+function camaraInterior({ estancia = 'Salón - comedor', altura = 1.6, desplazamiento = [0, 0], posicion = null } = {}) {
+  const f = interior.ficha, T = f.transformacion;
+  const e = f.estancias.find((s) => s.nombre === estancia);
+  if (!e) throw new Error(`estancia "${estancia}" no está en vivienda-${VIVIENDA}.json`);
+  const conPoligono = e.poligono ? e : f.estancias.find((s) => s.poligono && s.estanciaFicha && s.estanciaFicha === e.estanciaFicha);
+  const aMundo = ([px, py]) => [(px - T.c) / T.a, (py - T.d) / T.b];
+  const poli = conPoligono ? conPoligono.poligono.map(aMundo) : null;
+  let [x, z] = aMundo([e.x, e.y]);
+  x += desplazamiento[0]; z += desplazamiento[1];
+  if (posicion) [x, , z] = posicion;
+  const v = interior.vivienda;
+  const sueloEnv = rayoVertical(x, v.y0 + 1.0, z, -1, (o) => !mallasMobiliario.has(o) && !conjuntoEntorno.has(o) && o.material !== vidrio);
+  const sueloTodo = rayoVertical(x, v.y0 + 1.0, z, -1, (o) => !conjuntoEntorno.has(o));
+  const techo = rayoVertical(x, v.y0 + 1.0, z, 1, (o) => !conjuntoEntorno.has(o));
+  const suelo = sueloEnv ? sueloEnv.y : v.y0;
+  const y = posicion ? posicion[1] : suelo + altura;
+  const vector = new THREE.Vector3(x, y, z);
+  interior.camara = {
+    vivienda: VIVIENDA, estancia, poligonoEstancia: conPoligono?.nombre ?? null,
+    puntoPx: [e.x, e.y], desplazamiento, posicion: [x, y, z].map((n) => +n.toFixed(4)), vector,
+    alturaSobreSuelo: +(y - suelo).toFixed(4), sueloTerminado: suelo, sueloVivienda: v.y0,
+    impactoAbajoEnvolvente: sueloEnv, impactoAbajo: sueloTodo, impactoArriba: techo,
+    alturaLibre: techo && sueloEnv ? +(techo.y - sueloEnv.y).toFixed(4) : null,
+    dentroDeEstancia: poli ? dentroDe(poli, x, z) : null,
+    distanciaAlBordeEstancia: poli ? +distanciaABorde(poli, x, z).toFixed(3) : null,
+    dentroDeVivienda: dentroDe(v.poligono, x, z),
+  };
+  apuntarSol(vector);
+  const { vector: _, ...json } = interior.camara;
+  return json;
+}
+
+/* Puertas del mobiliario de la vivienda (para los enlaces del 360 y para
+   orientar las vistas de comprobación). Los vértices de las piezas lacadas
+   se agrupan por proximidad en planta (rejilla de 10 cm): salen los dos
+   marcos de cada hueco por separado (la hoja cerrada solo tiene vértices en
+   sus esquinas), así que se emparejan marcos alineados a 0,6–1,0 m y el
+   centro del hueco es el punto medio. Devuelve { piezas, vanos }. */
+function puertasInterior({ margen = 0.4 } = {}) {
+  const v = interior.vivienda;
+  const xs = v.poligono.map((p) => p[0]), zs = v.poligono.map((p) => p[1]);
+  const caja = { x0: Math.min(...xs) - margen, x1: Math.max(...xs) + margen, z0: Math.min(...zs) - margen, z1: Math.max(...zs) + margen };
+  const a = new THREE.Vector3();
+  const pts = [];
+  for (const o of mallasMobiliario) {
+    if (!/^puerta__/.test(o.name) || !/lacado/i.test((Array.isArray(o.material) ? o.material[0] : o.material).name)) continue;
+    const pos = o.geometry.getAttribute('position');
+    for (let i = 0; i < pos.count; i++) {
+      a.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld);
+      if (a.x >= caja.x0 && a.x <= caja.x1 && a.z >= caja.z0 && a.z <= caja.z1 && a.y >= v.y0 - 0.1 && a.y <= v.y0 + 2.6) pts.push([a.x, a.y, a.z]);
+    }
+  }
+  /* Agrupa los vértices en hojas por proximidad en planta (rejilla de 10 cm). */
+  const celda = new Map();
+  for (const p of pts) {
+    const k = `${Math.floor(p[0] / 0.1)}|${Math.floor(p[2] / 0.1)}`;
+    if (!celda.has(k)) celda.set(k, []);
+    celda.get(k).push(p);
+  }
+  const visto = new Set(), grupos = [];
+  for (const k of celda.keys()) {
+    if (visto.has(k)) continue;
+    const pila = [k], g = [];
+    visto.add(k);
+    while (pila.length) {
+      const c = pila.pop();
+      g.push(...celda.get(c));
+      const [i, j] = c.split('|').map(Number);
+      for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) {
+        const n = `${i + di}|${j + dj}`;
+        if (celda.has(n) && !visto.has(n)) { visto.add(n); pila.push(n); }
+      }
+    }
+    const xs2 = g.map((p) => p[0]), ys2 = g.map((p) => p[1]), zs2 = g.map((p) => p[2]);
+    const r = (n) => +n.toFixed(3);
+    grupos.push({ centro: [r((Math.min(...xs2) + Math.max(...xs2)) / 2), r((Math.min(...ys2) + Math.max(...ys2)) / 2), r((Math.min(...zs2) + Math.max(...zs2)) / 2)], caja: [Math.min(...xs2), Math.max(...xs2), Math.min(...ys2), Math.max(...ys2), Math.min(...zs2), Math.max(...zs2)].map(r), vertices: g.length });
+  }
+  const piezas = grupos.filter((g) => g.caja[3] - g.caja[2] > 1.5);
+  const vanos = [], usadas = new Set();
+  const r3 = (n) => +n.toFixed(3);
+  for (let i = 0; i < piezas.length; i++) {
+    for (let j = i + 1; j < piezas.length; j++) {
+      if (usadas.has(i) || usadas.has(j)) continue;
+      const a = piezas[i].centro, b = piezas[j].centro;
+      const dx = Math.abs(a[0] - b[0]), dz = Math.abs(a[2] - b[2]);
+      const enX = dz < 0.06 && dx > 0.6 && dx < 1.0, enZ = dx < 0.06 && dz > 0.6 && dz < 1.0;
+      if (!enX && !enZ) continue;
+      usadas.add(i); usadas.add(j);
+      vanos.push({ centro: [r3((a[0] + b[0]) / 2), r3(Math.min(piezas[i].caja[2], piezas[j].caja[2])), r3((a[2] + b[2]) / 2)], muro: enX ? 'paralelo a x' : 'paralelo a z', luz: r3(enX ? dx : dz), alto: r3(Math.max(piezas[i].caja[3], piezas[j].caja[3]) - Math.min(piezas[i].caja[2], piezas[j].caja[2])), piezas: [i, j] });
+    }
+  }
+  /* Piezas sin pareja con muchos vértices (la puerta de entrada, con su
+     herraje, sale de una pieza): también son huecos. */
+  piezas.forEach((g, i) => { if (!usadas.has(i) && g.vertices > 200) vanos.push({ centro: [g.centro[0], g.caja[2], g.centro[2]], muro: null, luz: null, alto: r3(g.caja[3] - g.caja[2]), piezas: [i] }); });
+  return { piezas, vanos };
+}
+
+function panoramica360(tipo, { cara = 2048, ancho = 4096, rumbo = 0, muestras = 3, franja = 0 } = {}) {
+  if (!interior.camara) throw new Error('falta camaraInterior()');
+  const t0 = performance.now();
+  const r = interior.equirect.pase(tipo, interior.camara.vector, { cara, ancho, rumbo, muestras, franja, clasificar: clasificarInterior });
+  estado.tiempos[`360-${tipo}`] = ms(t0);
+  return r;
+}
+function vistaPlana360(tipo, opciones = {}) {
+  if (!interior.camara) throw new Error('falta camaraInterior()');
+  return interior.equirect.vistaPlana(tipo, interior.camara.vector, { ...opciones, clasificar: clasificarInterior });
+}
+
 /* ── Arranque ── */
 window.captura = {
   estado, info,
   tamano, camaraPerspectiva, camaraCenital, describirCamara, proyectar, setSol,
   renderizar, mascaraPlantas, mascaraEdificios, mascaraViviendas, seccion, mobiliarioEn,
+  /* interior360 */
+  camaraInterior, luzInterior, puertasInterior, panoramica360, vistaPlana360, CLASES,
+  get interior() { const { vector, ...c } = interior.camara || {}; return { camara: interior.camara ? c : null, luz: interior.luz, personasQuitadas: interior.personas }; },
   /* Fondo liso: hex sRGB o [r, g, b] lineales (pasa por el tono y el grado,
      así que el color final se mide en la imagen; ver procesar.py). */
   setFondo(valor) { scene.background = Array.isArray(valor) ? new THREE.Color().setRGB(...valor, THREE.LinearSRGBColorSpace) : new THREE.Color(valor); },
@@ -795,18 +1148,19 @@ window.captura = {
   try {
     const t0 = performance.now();
     estado.etapa = 'luz';
-    await luz.listo;
+    if (luz) await luz.listo;
     estado.etapa = 'modelos';
     if (MODO === 'exterior') await cargarExterior();
-    else await cargarPlanta();
-    if (vidrio) post.setReflectantes?.(mallasEdificio.filter((o) => o.material === vidrio));
+    else if (MODO === 'planta') await cargarPlanta();
+    else await cargarInterior();
+    if (vidrio && post) post.setReflectantes?.(mallasEdificio.filter((o) => o.material === vidrio));
     if (MODO === 'planta') {
       post.setOclusion('interior');
       luz.setRealcePlanta(true, { duracion: 0 });
     }
     estado.etapa = 'compilar';
     renderer.compile(scene, camara);
-    avanzar(1);
+    if (!INTERIOR) avanzar(1);
     estado.tiempos.total = ms(t0);
     estado.mallas = { edificio: mallasEdificio.length, entorno: mallasEntorno.length };
     estado.etapa = 'listo';
