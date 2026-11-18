@@ -1,0 +1,5847 @@
+{
+ "generado": "2026-11-18",
+ "edificio": "apolo",
+ "criterio": "Misma lista de estancias por tipo con superficies útiles iguales ±0.15 m² (fichas PDF) y mismo plano (assets/planos/<id>.png) salvo giro o espejo, con correlación ≥ 0.93. Las terrazas no separan tipologías: forman variantes (±0.5 m²).",
+ "transformaciones": "Cómo se pasa del plano de la vivienda de referencia al de cada vivienda: igual, giro90/180/270 (misma distribución girada) o espejoH/espejoV/traspuesta/transversa (distribución simétrica). Las «espejadas» son las de quiralidad contraria a la referencia.",
+ "renders": "cenitales = una imagen por variante (terraza distinta) reutilizando la imagen volteada en las espejadas; cenitalesSinEspejo = si no se quiere voltear la imagen; p360Interior = puntos con 360 (salón/estudio, dormitorios, baños) × tipos de ventana presentes (nivel 1 antepecho; niveles 2-4 suelo-techo); p360Terraza = terrazas ≥ 10 m² (2 puntos si ≥ 40 m²).",
+ "resumen": {
+  "viviendas": 166,
+  "tipologias": 54,
+  "tipologiasConUnaSolaVivienda": 23,
+  "rendersCenitales": 55,
+  "rendersCenitalesSinReutilizarEspejos": 65,
+  "puntos360Interior": 243,
+  "puntos360Terraza": 24
+ },
+ "planosCasiIgualesEntreTipologias": [
+  {
+   "a": "133",
+   "b": "135",
+   "transformacion": "igual",
+   "similitud": 0.943
+  },
+  {
+   "a": "136",
+   "b": "138",
+   "transformacion": "igual",
+   "similitud": 0.939
+  },
+  {
+   "a": "410",
+   "b": "412",
+   "transformacion": "igual",
+   "similitud": 0.959
+  },
+  {
+   "a": "410",
+   "b": "424",
+   "transformacion": "igual",
+   "similitud": 0.967
+  }
+ ],
+ "tipologias": [
+  {
+   "codigo": "2D-01",
+   "ids": [
+    "101",
+    "201",
+    "301"
+   ],
+   "recuento": 3,
+   "niveles": [
+    1,
+    2,
+    3
+   ],
+   "dormitorios": 2,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 21.76,
+     "rango": [
+      21.76,
+      21.76
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 13.52,
+     "rango": [
+      13.52,
+      13.52
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D2",
+     "tipo": "dormitorio",
+     "nombre": "Dormitorio secundario",
+     "sup": 9.24,
+     "rango": [
+      9.24,
+      9.24
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.25,
+     "rango": [
+      3.25,
+      3.25
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "VE",
+     "tipo": "vestidor",
+     "nombre": "Vestidor",
+     "sup": 2.83,
+     "rango": [
+      2.83,
+      2.83
+     ],
+     "tiene360": false
+    },
+    {
+     "codigo": "DI",
+     "tipo": "distribuidor",
+     "nombre": "Distribuidor",
+     "sup": 2.89,
+     "rango": [
+      2.89,
+      2.89
+     ],
+     "tiene360": false
+    }
+   ],
+   "supUtil": [
+    53.49,
+    53.49
+   ],
+   "supConstruidaInterior": [
+    60.87,
+    60.87
+   ],
+   "orientaciones": {
+    "Suroeste": 3
+   },
+   "referencia": "101",
+   "espejadas": [],
+   "transformaciones": {
+    "101": "igual",
+    "201": "igual",
+    "301": "igual"
+   },
+   "similitudMinima": 0.943,
+   "margenQuiralidad": 0.351,
+   "variantes": [
+    {
+     "terraza": 0.0,
+     "ids": [
+      "101",
+      "201",
+      "301"
+     ],
+     "espejadas": []
+    }
+   ],
+   "ventanas": [
+    "antepecho",
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 1,
+    "p360Interior": 8,
+    "p360Terraza": 0
+   }
+  },
+  {
+   "codigo": "2D-02",
+   "ids": [
+    "102"
+   ],
+   "recuento": 1,
+   "niveles": [
+    1
+   ],
+   "dormitorios": 2,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 21.54,
+     "rango": [
+      21.54,
+      21.54
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 12.69,
+     "rango": [
+      12.69,
+      12.69
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D2",
+     "tipo": "dormitorio",
+     "nombre": "Dormitorio secundario",
+     "sup": 8.89,
+     "rango": [
+      8.89,
+      8.89
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.25,
+     "rango": [
+      3.25,
+      3.25
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "VE",
+     "tipo": "vestidor",
+     "nombre": "Vestidor",
+     "sup": 2.83,
+     "rango": [
+      2.83,
+      2.83
+     ],
+     "tiene360": false
+    },
+    {
+     "codigo": "DI",
+     "tipo": "distribuidor",
+     "nombre": "Distribuidor",
+     "sup": 2.89,
+     "rango": [
+      2.89,
+      2.89
+     ],
+     "tiene360": false
+    }
+   ],
+   "supUtil": [
+    52.09,
+    52.09
+   ],
+   "supConstruidaInterior": [
+    57.99,
+    57.99
+   ],
+   "orientaciones": {
+    "Suroeste": 1
+   },
+   "referencia": "102",
+   "espejadas": [],
+   "transformaciones": {
+    "102": "igual"
+   },
+   "similitudMinima": null,
+   "margenQuiralidad": null,
+   "variantes": [
+    {
+     "terraza": 0.0,
+     "ids": [
+      "102"
+     ],
+     "espejadas": []
+    }
+   ],
+   "ventanas": [
+    "antepecho"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 1,
+    "p360Interior": 4,
+    "p360Terraza": 0
+   }
+  },
+  {
+   "codigo": "2D-03",
+   "ids": [
+    "103",
+    "203",
+    "303"
+   ],
+   "recuento": 3,
+   "niveles": [
+    1,
+    2,
+    3
+   ],
+   "dormitorios": 2,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 20.65,
+     "rango": [
+      20.65,
+      20.65
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 12.52,
+     "rango": [
+      12.52,
+      12.52
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D2",
+     "tipo": "dormitorio",
+     "nombre": "Dormitorio secundario",
+     "sup": 8.55,
+     "rango": [
+      8.55,
+      8.55
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.25,
+     "rango": [
+      3.25,
+      3.25
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "VE",
+     "tipo": "vestidor",
+     "nombre": "Vestidor",
+     "sup": 2.83,
+     "rango": [
+      2.83,
+      2.83
+     ],
+     "tiene360": false
+    },
+    {
+     "codigo": "DI",
+     "tipo": "distribuidor",
+     "nombre": "Distribuidor",
+     "sup": 2.89,
+     "rango": [
+      2.89,
+      2.89
+     ],
+     "tiene360": false
+    }
+   ],
+   "supUtil": [
+    50.69,
+    50.69
+   ],
+   "supConstruidaInterior": [
+    56.52,
+    56.52
+   ],
+   "orientaciones": {
+    "Suroeste": 3
+   },
+   "referencia": "103",
+   "espejadas": [],
+   "transformaciones": {
+    "103": "igual",
+    "203": "igual",
+    "303": "igual"
+   },
+   "similitudMinima": 0.979,
+   "margenQuiralidad": 0.453,
+   "variantes": [
+    {
+     "terraza": 0.0,
+     "ids": [
+      "103",
+      "203",
+      "303"
+     ],
+     "espejadas": []
+    }
+   ],
+   "ventanas": [
+    "antepecho",
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 1,
+    "p360Interior": 8,
+    "p360Terraza": 0
+   }
+  },
+  {
+   "codigo": "2D-04",
+   "ids": [
+    "104",
+    "204",
+    "304"
+   ],
+   "recuento": 3,
+   "niveles": [
+    1,
+    2,
+    3
+   ],
+   "dormitorios": 2,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 20.45,
+     "rango": [
+      20.45,
+      20.45
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 11.78,
+     "rango": [
+      11.78,
+      11.78
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D2",
+     "tipo": "dormitorio",
+     "nombre": "Dormitorio secundario",
+     "sup": 8.2,
+     "rango": [
+      8.2,
+      8.2
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.25,
+     "rango": [
+      3.25,
+      3.25
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "VE",
+     "tipo": "vestidor",
+     "nombre": "Vestidor",
+     "sup": 2.83,
+     "rango": [
+      2.83,
+      2.83
+     ],
+     "tiene360": false
+    },
+    {
+     "codigo": "DI",
+     "tipo": "distribuidor",
+     "nombre": "Distribuidor",
+     "sup": 2.89,
+     "rango": [
+      2.89,
+      2.89
+     ],
+     "tiene360": false
+    }
+   ],
+   "supUtil": [
+    49.4,
+    49.4
+   ],
+   "supConstruidaInterior": [
+    55.2,
+    55.2
+   ],
+   "orientaciones": {
+    "Suroeste": 3
+   },
+   "referencia": "104",
+   "espejadas": [],
+   "transformaciones": {
+    "104": "igual",
+    "204": "igual",
+    "304": "igual"
+   },
+   "similitudMinima": 0.972,
+   "margenQuiralidad": 0.438,
+   "variantes": [
+    {
+     "terraza": 0.0,
+     "ids": [
+      "104",
+      "204",
+      "304"
+     ],
+     "espejadas": []
+    }
+   ],
+   "ventanas": [
+    "antepecho",
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 1,
+    "p360Interior": 8,
+    "p360Terraza": 0
+   }
+  },
+  {
+   "codigo": "2D-05",
+   "ids": [
+    "105"
+   ],
+   "recuento": 1,
+   "niveles": [
+    1
+   ],
+   "dormitorios": 2,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 19.76,
+     "rango": [
+      19.76,
+      19.76
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 11.65,
+     "rango": [
+      11.65,
+      11.65
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D2",
+     "tipo": "dormitorio",
+     "nombre": "Dormitorio secundario",
+     "sup": 7.97,
+     "rango": [
+      7.97,
+      7.97
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.25,
+     "rango": [
+      3.25,
+      3.25
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "VE",
+     "tipo": "vestidor",
+     "nombre": "Vestidor",
+     "sup": 2.83,
+     "rango": [
+      2.83,
+      2.83
+     ],
+     "tiene360": false
+    },
+    {
+     "codigo": "DI",
+     "tipo": "distribuidor",
+     "nombre": "Distribuidor",
+     "sup": 2.89,
+     "rango": [
+      2.89,
+      2.89
+     ],
+     "tiene360": false
+    }
+   ],
+   "supUtil": [
+    48.35,
+    48.35
+   ],
+   "supConstruidaInterior": [
+    53.95,
+    53.95
+   ],
+   "orientaciones": {
+    "Suroeste": 1
+   },
+   "referencia": "105",
+   "espejadas": [],
+   "transformaciones": {
+    "105": "igual"
+   },
+   "similitudMinima": null,
+   "margenQuiralidad": null,
+   "variantes": [
+    {
+     "terraza": 0.0,
+     "ids": [
+      "105"
+     ],
+     "espejadas": []
+    }
+   ],
+   "ventanas": [
+    "antepecho"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 1,
+    "p360Interior": 4,
+    "p360Terraza": 0
+   }
+  },
+  {
+   "codigo": "2D-06",
+   "ids": [
+    "106",
+    "206",
+    "306"
+   ],
+   "recuento": 3,
+   "niveles": [
+    1,
+    2,
+    3
+   ],
+   "dormitorios": 2,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 19.48,
+     "rango": [
+      19.48,
+      19.48
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 10.76,
+     "rango": [
+      10.76,
+      10.76
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D2",
+     "tipo": "dormitorio",
+     "nombre": "Dormitorio secundario",
+     "sup": 7.56,
+     "rango": [
+      7.56,
+      7.56
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.25,
+     "rango": [
+      3.25,
+      3.25
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "VE",
+     "tipo": "vestidor",
+     "nombre": "Vestidor",
+     "sup": 2.83,
+     "rango": [
+      2.83,
+      2.83
+     ],
+     "tiene360": false
+    },
+    {
+     "codigo": "DI",
+     "tipo": "distribuidor",
+     "nombre": "Distribuidor",
+     "sup": 2.89,
+     "rango": [
+      2.89,
+      2.89
+     ],
+     "tiene360": false
+    }
+   ],
+   "supUtil": [
+    46.77,
+    46.77
+   ],
+   "supConstruidaInterior": [
+    52.45,
+    52.45
+   ],
+   "orientaciones": {
+    "Suroeste": 3
+   },
+   "referencia": "106",
+   "espejadas": [],
+   "transformaciones": {
+    "106": "igual",
+    "206": "igual",
+    "306": "igual"
+   },
+   "similitudMinima": 0.983,
+   "margenQuiralidad": 0.451,
+   "variantes": [
+    {
+     "terraza": 0.0,
+     "ids": [
+      "106",
+      "206",
+      "306"
+     ],
+     "espejadas": []
+    }
+   ],
+   "ventanas": [
+    "antepecho",
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 1,
+    "p360Interior": 8,
+    "p360Terraza": 0
+   }
+  },
+  {
+   "codigo": "1D-01",
+   "ids": [
+    "107",
+    "108",
+    "116",
+    "117",
+    "123",
+    "124",
+    "336"
+   ],
+   "recuento": 7,
+   "niveles": [
+    1,
+    3
+   ],
+   "dormitorios": 1,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 23.79,
+     "rango": [
+      23.76,
+      23.79
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 10.09,
+     "rango": [
+      10.09,
+      10.11
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.4,
+     "rango": [
+      3.4,
+      3.4
+     ],
+     "tiene360": true
+    }
+   ],
+   "supUtil": [
+    37.27,
+    37.28
+   ],
+   "supConstruidaInterior": [
+    42.09,
+    42.09
+   ],
+   "orientaciones": {
+    "Jardín interior": 7
+   },
+   "referencia": "107",
+   "espejadas": [
+    "108",
+    "117",
+    "124"
+   ],
+   "transformaciones": {
+    "107": "igual",
+    "108": "espejoV",
+    "116": "igual",
+    "117": "espejoV",
+    "123": "igual",
+    "124": "espejoV",
+    "336": "sin plano"
+   },
+   "similitudMinima": 0.988,
+   "margenQuiralidad": 0.355,
+   "variantes": [
+    {
+     "terraza": [
+      11.92,
+      11.94
+     ],
+     "ids": [
+      "107",
+      "108",
+      "116",
+      "117",
+      "123",
+      "124"
+     ],
+     "espejadas": [
+      "108",
+      "117",
+      "124"
+     ]
+    },
+    {
+     "terraza": 2.95,
+     "ids": [
+      "336"
+     ],
+     "espejadas": []
+    }
+   ],
+   "ventanas": [
+    "antepecho",
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 2,
+    "cenitalesSinEspejo": 3,
+    "p360Interior": 6,
+    "p360Terraza": 1
+   }
+  },
+  {
+   "codigo": "1D-02",
+   "ids": [
+    "109",
+    "208",
+    "211",
+    "308",
+    "311"
+   ],
+   "recuento": 5,
+   "niveles": [
+    1,
+    2,
+    3
+   ],
+   "dormitorios": 1,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 20.93,
+     "rango": [
+      20.85,
+      20.93
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 13.5,
+     "rango": [
+      13.37,
+      13.5
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.51,
+     "rango": [
+      3.51,
+      3.52
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "DI",
+     "tipo": "distribuidor",
+     "nombre": "Distribuidor",
+     "sup": 0.97,
+     "rango": [
+      0.97,
+      0.98
+     ],
+     "tiene360": false
+    }
+   ],
+   "supUtil": [
+    38.72,
+    38.91
+   ],
+   "supConstruidaInterior": [
+    43.28,
+    43.48
+   ],
+   "orientaciones": {
+    "Noreste": 5
+   },
+   "referencia": "109",
+   "espejadas": [
+    "208",
+    "308"
+   ],
+   "transformaciones": {
+    "109": "igual",
+    "208": "espejoV",
+    "211": "igual",
+    "308": "espejoV",
+    "311": "igual"
+   },
+   "similitudMinima": 0.97,
+   "margenQuiralidad": 0.249,
+   "variantes": [
+    {
+     "terraza": 0.0,
+     "ids": [
+      "109",
+      "208",
+      "211",
+      "308",
+      "311"
+     ],
+     "espejadas": [
+      "208",
+      "308"
+     ]
+    }
+   ],
+   "ventanas": [
+    "antepecho",
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 2,
+    "p360Interior": 6,
+    "p360Terraza": 0
+   }
+  },
+  {
+   "codigo": "2D-07",
+   "ids": [
+    "110",
+    "212",
+    "312"
+   ],
+   "recuento": 3,
+   "niveles": [
+    1,
+    2,
+    3
+   ],
+   "dormitorios": 2,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 28.68,
+     "rango": [
+      28.68,
+      28.68
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 14.17,
+     "rango": [
+      14.17,
+      14.17
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D2",
+     "tipo": "dormitorio",
+     "nombre": "Dormitorio secundario",
+     "sup": 6.16,
+     "rango": [
+      6.16,
+      6.16
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.55,
+     "rango": [
+      3.55,
+      3.55
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "VE",
+     "tipo": "vestidor",
+     "nombre": "Vestidor",
+     "sup": 2.63,
+     "rango": [
+      2.63,
+      2.63
+     ],
+     "tiene360": false
+    },
+    {
+     "codigo": "DI",
+     "tipo": "distribuidor",
+     "nombre": "Distribuidor",
+     "sup": 1.19,
+     "rango": [
+      1.19,
+      1.19
+     ],
+     "tiene360": false
+    }
+   ],
+   "supUtil": [
+    56.38,
+    56.38
+   ],
+   "supConstruidaInterior": [
+    62.54,
+    62.54
+   ],
+   "orientaciones": {
+    "Noreste": 3
+   },
+   "referencia": "110",
+   "espejadas": [],
+   "transformaciones": {
+    "110": "igual",
+    "212": "igual",
+    "312": "igual"
+   },
+   "similitudMinima": 0.968,
+   "margenQuiralidad": 0.39,
+   "variantes": [
+    {
+     "terraza": 0.0,
+     "ids": [
+      "110",
+      "212",
+      "312"
+     ],
+     "espejadas": []
+    }
+   ],
+   "ventanas": [
+    "antepecho",
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 1,
+    "p360Interior": 8,
+    "p360Terraza": 0
+   }
+  },
+  {
+   "codigo": "2D-08",
+   "ids": [
+    "111",
+    "112",
+    "113",
+    "118",
+    "120",
+    "125",
+    "126",
+    "213",
+    "214",
+    "215",
+    "216",
+    "221",
+    "222",
+    "223",
+    "224",
+    "229",
+    "230",
+    "231",
+    "313",
+    "314",
+    "315",
+    "316",
+    "321",
+    "322",
+    "323",
+    "324",
+    "329",
+    "330",
+    "331"
+   ],
+   "recuento": 29,
+   "niveles": [
+    1,
+    2,
+    3
+   ],
+   "dormitorios": 2,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 20.69,
+     "rango": [
+      20.69,
+      20.73
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 12.06,
+     "rango": [
+      12.06,
+      12.06
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D2",
+     "tipo": "dormitorio",
+     "nombre": "Dormitorio secundario",
+     "sup": 8.23,
+     "rango": [
+      8.23,
+      8.33
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.37,
+     "rango": [
+      3.37,
+      3.37
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "VE",
+     "tipo": "vestidor",
+     "nombre": "Vestidor",
+     "sup": 2.8,
+     "rango": [
+      2.8,
+      2.83
+     ],
+     "tiene360": false
+    },
+    {
+     "codigo": "DI",
+     "tipo": "distribuidor",
+     "nombre": "Distribuidor",
+     "sup": 2.73,
+     "rango": [
+      2.73,
+      2.75
+     ],
+     "tiene360": false
+    }
+   ],
+   "supUtil": [
+    49.88,
+    50.07
+   ],
+   "supConstruidaInterior": [
+    56.16,
+    57.52
+   ],
+   "orientaciones": {
+    "Noreste": 29
+   },
+   "referencia": "111",
+   "espejadas": [
+    "112",
+    "113",
+    "120",
+    "126",
+    "214",
+    "216",
+    "222",
+    "224",
+    "230",
+    "314",
+    "316",
+    "322",
+    "324",
+    "330"
+   ],
+   "transformaciones": {
+    "111": "igual",
+    "112": "espejoH",
+    "113": "espejoH",
+    "118": "igual",
+    "120": "espejoH",
+    "125": "igual",
+    "126": "espejoH",
+    "213": "igual",
+    "214": "espejoH",
+    "215": "igual",
+    "216": "espejoH",
+    "221": "igual",
+    "222": "espejoH",
+    "223": "igual",
+    "224": "espejoH",
+    "229": "igual",
+    "230": "espejoH",
+    "231": "igual",
+    "313": "igual",
+    "314": "espejoH",
+    "315": "igual",
+    "316": "espejoH",
+    "321": "igual",
+    "322": "espejoH",
+    "323": "igual",
+    "324": "espejoH",
+    "329": "igual",
+    "330": "espejoH",
+    "331": "igual"
+   },
+   "similitudMinima": 0.936,
+   "margenQuiralidad": 0.315,
+   "variantes": [
+    {
+     "terraza": 0.0,
+     "ids": [
+      "111",
+      "112",
+      "113",
+      "118",
+      "120",
+      "125",
+      "126",
+      "213",
+      "214",
+      "215",
+      "216",
+      "221",
+      "222",
+      "223",
+      "224",
+      "229",
+      "230",
+      "231",
+      "313",
+      "314",
+      "315",
+      "316",
+      "321",
+      "322",
+      "323",
+      "324",
+      "329",
+      "330",
+      "331"
+     ],
+     "espejadas": [
+      "112",
+      "113",
+      "120",
+      "126",
+      "214",
+      "216",
+      "222",
+      "224",
+      "230",
+      "314",
+      "316",
+      "322",
+      "324",
+      "330"
+     ]
+    }
+   ],
+   "ventanas": [
+    "antepecho",
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 2,
+    "p360Interior": 8,
+    "p360Terraza": 0
+   }
+  },
+  {
+   "codigo": "1D-03",
+   "ids": [
+    "114",
+    "115",
+    "121",
+    "122"
+   ],
+   "recuento": 4,
+   "niveles": [
+    1
+   ],
+   "dormitorios": 1,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 26.16,
+     "rango": [
+      26.16,
+      26.16
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 10.98,
+     "rango": [
+      10.98,
+      10.98
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.4,
+     "rango": [
+      3.4,
+      3.4
+     ],
+     "tiene360": true
+    }
+   ],
+   "supUtil": [
+    40.54,
+    40.54
+   ],
+   "supConstruidaInterior": [
+    45.22,
+    45.22
+   ],
+   "orientaciones": {
+    "Jardín interior": 4
+   },
+   "referencia": "114",
+   "espejadas": [
+    "115",
+    "122"
+   ],
+   "transformaciones": {
+    "114": "igual",
+    "115": "espejoV",
+    "121": "igual",
+    "122": "espejoV"
+   },
+   "similitudMinima": 0.967,
+   "margenQuiralidad": 0.228,
+   "variantes": [
+    {
+     "terraza": 0.0,
+     "ids": [
+      "114",
+      "115",
+      "121",
+      "122"
+     ],
+     "espejadas": [
+      "115",
+      "122"
+     ]
+    }
+   ],
+   "ventanas": [
+    "antepecho"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 2,
+    "p360Interior": 3,
+    "p360Terraza": 0
+   }
+  },
+  {
+   "codigo": "2D-09",
+   "ids": [
+    "119"
+   ],
+   "recuento": 1,
+   "niveles": [
+    1
+   ],
+   "dormitorios": 2,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 20.73,
+     "rango": [
+      20.73,
+      20.73
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 12.06,
+     "rango": [
+      12.06,
+      12.06
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D2",
+     "tipo": "dormitorio",
+     "nombre": "Dormitorio secundario",
+     "sup": 8.33,
+     "rango": [
+      8.33,
+      8.33
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.37,
+     "rango": [
+      3.37,
+      3.37
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "VE",
+     "tipo": "vestidor",
+     "nombre": "Vestidor",
+     "sup": 2.83,
+     "rango": [
+      2.83,
+      2.83
+     ],
+     "tiene360": false
+    },
+    {
+     "codigo": "DI",
+     "tipo": "distribuidor",
+     "nombre": "Distribuidor",
+     "sup": 2.75,
+     "rango": [
+      2.75,
+      2.75
+     ],
+     "tiene360": false
+    }
+   ],
+   "supUtil": [
+    50.07,
+    50.07
+   ],
+   "supConstruidaInterior": [
+    57.52,
+    57.52
+   ],
+   "orientaciones": {
+    "Noreste": 1
+   },
+   "referencia": "119",
+   "espejadas": [],
+   "transformaciones": {
+    "119": "igual"
+   },
+   "similitudMinima": null,
+   "margenQuiralidad": null,
+   "variantes": [
+    {
+     "terraza": 0.0,
+     "ids": [
+      "119"
+     ],
+     "espejadas": []
+    }
+   ],
+   "ventanas": [
+    "antepecho"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 1,
+    "p360Interior": 4,
+    "p360Terraza": 0
+   }
+  },
+  {
+   "codigo": "2D-10",
+   "ids": [
+    "127",
+    "232",
+    "332"
+   ],
+   "recuento": 3,
+   "niveles": [
+    1,
+    2,
+    3
+   ],
+   "dormitorios": 2,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 32.36,
+     "rango": [
+      32.36,
+      32.36
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 11.56,
+     "rango": [
+      11.56,
+      11.56
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D2",
+     "tipo": "dormitorio",
+     "nombre": "Dormitorio secundario",
+     "sup": 11.48,
+     "rango": [
+      11.48,
+      11.48
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.37,
+     "rango": [
+      3.37,
+      3.37
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "VE",
+     "tipo": "vestidor",
+     "nombre": "Vestidor",
+     "sup": 2.19,
+     "rango": [
+      2.19,
+      2.19
+     ],
+     "tiene360": false
+    },
+    {
+     "codigo": "DI",
+     "tipo": "distribuidor",
+     "nombre": "Distribuidor",
+     "sup": 3.46,
+     "rango": [
+      3.46,
+      3.46
+     ],
+     "tiene360": false
+    },
+    {
+     "codigo": "LA",
+     "tipo": "lavadero",
+     "nombre": "Lavadero",
+     "sup": 2.25,
+     "rango": [
+      2.25,
+      2.25
+     ],
+     "tiene360": false
+    }
+   ],
+   "supUtil": [
+    66.67,
+    66.67
+   ],
+   "supConstruidaInterior": [
+    73.3,
+    73.3
+   ],
+   "orientaciones": {
+    "Noreste": 3
+   },
+   "referencia": "127",
+   "espejadas": [],
+   "transformaciones": {
+    "127": "igual",
+    "232": "igual",
+    "332": "igual"
+   },
+   "similitudMinima": 0.986,
+   "margenQuiralidad": 0.25,
+   "variantes": [
+    {
+     "terraza": 0.0,
+     "ids": [
+      "127",
+      "232",
+      "332"
+     ],
+     "espejadas": []
+    }
+   ],
+   "ventanas": [
+    "antepecho",
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 1,
+    "p360Interior": 8,
+    "p360Terraza": 0
+   }
+  },
+  {
+   "codigo": "2D-11",
+   "ids": [
+    "128",
+    "233",
+    "333"
+   ],
+   "recuento": 3,
+   "niveles": [
+    1,
+    2,
+    3
+   ],
+   "dormitorios": 2,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 29.59,
+     "rango": [
+      29.59,
+      29.59
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 13.96,
+     "rango": [
+      13.96,
+      13.96
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D2",
+     "tipo": "dormitorio",
+     "nombre": "Dormitorio secundario",
+     "sup": 6.02,
+     "rango": [
+      6.02,
+      6.02
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.59,
+     "rango": [
+      3.59,
+      3.59
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "VE",
+     "tipo": "vestidor",
+     "nombre": "Vestidor",
+     "sup": 2.68,
+     "rango": [
+      2.68,
+      2.68
+     ],
+     "tiene360": false
+    },
+    {
+     "codigo": "DI",
+     "tipo": "distribuidor",
+     "nombre": "Distribuidor",
+     "sup": 1.17,
+     "rango": [
+      1.17,
+      1.17
+     ],
+     "tiene360": false
+    }
+   ],
+   "supUtil": [
+    57.01,
+    57.01
+   ],
+   "supConstruidaInterior": [
+    63.28,
+    63.28
+   ],
+   "orientaciones": {
+    "Noreste": 3
+   },
+   "referencia": "128",
+   "espejadas": [],
+   "transformaciones": {
+    "128": "igual",
+    "233": "igual",
+    "333": "igual"
+   },
+   "similitudMinima": 0.993,
+   "margenQuiralidad": 0.463,
+   "variantes": [
+    {
+     "terraza": 0.0,
+     "ids": [
+      "128",
+      "233",
+      "333"
+     ],
+     "espejadas": []
+    }
+   ],
+   "ventanas": [
+    "antepecho",
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 1,
+    "p360Interior": 8,
+    "p360Terraza": 0
+   }
+  },
+  {
+   "codigo": "1D-04",
+   "ids": [
+    "129",
+    "234",
+    "334"
+   ],
+   "recuento": 3,
+   "niveles": [
+    1,
+    2,
+    3
+   ],
+   "dormitorios": 1,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 23.79,
+     "rango": [
+      23.79,
+      23.79
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 10.93,
+     "rango": [
+      10.93,
+      10.93
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.95,
+     "rango": [
+      3.95,
+      3.95
+     ],
+     "tiene360": true
+    }
+   ],
+   "supUtil": [
+    38.67,
+    38.67
+   ],
+   "supConstruidaInterior": [
+    44.12,
+    44.12
+   ],
+   "orientaciones": {
+    "Suroeste": 3
+   },
+   "referencia": "129",
+   "espejadas": [],
+   "transformaciones": {
+    "129": "igual",
+    "234": "igual",
+    "334": "igual"
+   },
+   "similitudMinima": 0.996,
+   "margenQuiralidad": 0.417,
+   "variantes": [
+    {
+     "terraza": 0.0,
+     "ids": [
+      "129",
+      "234",
+      "334"
+     ],
+     "espejadas": []
+    }
+   ],
+   "ventanas": [
+    "antepecho",
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 1,
+    "p360Interior": 6,
+    "p360Terraza": 0
+   }
+  },
+  {
+   "codigo": "1D-05",
+   "ids": [
+    "130",
+    "131"
+   ],
+   "recuento": 2,
+   "niveles": [
+    1
+   ],
+   "dormitorios": 1,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 23.76,
+     "rango": [
+      23.76,
+      23.76
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 10.11,
+     "rango": [
+      10.11,
+      10.11
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.4,
+     "rango": [
+      3.4,
+      3.4
+     ],
+     "tiene360": true
+    }
+   ],
+   "supUtil": [
+    37.27,
+    37.27
+   ],
+   "supConstruidaInterior": [
+    42.09,
+    42.09
+   ],
+   "orientaciones": {
+    "Jardín interior": 2
+   },
+   "referencia": "130",
+   "espejadas": [
+    "131"
+   ],
+   "transformaciones": {
+    "130": "igual",
+    "131": "espejoV"
+   },
+   "similitudMinima": 0.981,
+   "margenQuiralidad": 0.324,
+   "variantes": [
+    {
+     "terraza": 0.0,
+     "ids": [
+      "130",
+      "131"
+     ],
+     "espejadas": [
+      "131"
+     ]
+    }
+   ],
+   "ventanas": [
+    "antepecho"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 2,
+    "p360Interior": 3,
+    "p360Terraza": 0
+   }
+  },
+  {
+   "codigo": "1D-06",
+   "ids": [
+    "132",
+    "237",
+    "337"
+   ],
+   "recuento": 3,
+   "niveles": [
+    1,
+    2,
+    3
+   ],
+   "dormitorios": 1,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 23.62,
+     "rango": [
+      23.62,
+      23.62
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 10.5,
+     "rango": [
+      10.5,
+      10.5
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.95,
+     "rango": [
+      3.95,
+      3.95
+     ],
+     "tiene360": true
+    }
+   ],
+   "supUtil": [
+    38.07,
+    38.07
+   ],
+   "supConstruidaInterior": [
+    43.67,
+    43.67
+   ],
+   "orientaciones": {
+    "Suroeste": 3
+   },
+   "referencia": "132",
+   "espejadas": [],
+   "transformaciones": {
+    "132": "igual",
+    "237": "igual",
+    "337": "igual"
+   },
+   "similitudMinima": 0.946,
+   "margenQuiralidad": 0.383,
+   "variantes": [
+    {
+     "terraza": 0.0,
+     "ids": [
+      "132",
+      "237",
+      "337"
+     ],
+     "espejadas": []
+    }
+   ],
+   "ventanas": [
+    "antepecho",
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 1,
+    "p360Interior": 6,
+    "p360Terraza": 0
+   }
+  },
+  {
+   "codigo": "1D-07",
+   "ids": [
+    "133",
+    "239",
+    "339"
+   ],
+   "recuento": 3,
+   "niveles": [
+    1,
+    2,
+    3
+   ],
+   "dormitorios": 1,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 25.81,
+     "rango": [
+      25.81,
+      25.81
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 14.04,
+     "rango": [
+      14.04,
+      14.04
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.68,
+     "rango": [
+      3.68,
+      3.68
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "VE",
+     "tipo": "vestidor",
+     "nombre": "Vestidor",
+     "sup": 4.52,
+     "rango": [
+      4.52,
+      4.52
+     ],
+     "tiene360": false
+    }
+   ],
+   "supUtil": [
+    48.05,
+    48.05
+   ],
+   "supConstruidaInterior": [
+    52.87,
+    52.87
+   ],
+   "orientaciones": {
+    "Suroeste": 3
+   },
+   "referencia": "133",
+   "espejadas": [],
+   "transformaciones": {
+    "133": "igual",
+    "239": "igual",
+    "339": "igual"
+   },
+   "similitudMinima": 0.964,
+   "margenQuiralidad": 0.3,
+   "variantes": [
+    {
+     "terraza": 0.0,
+     "ids": [
+      "133",
+      "239",
+      "339"
+     ],
+     "espejadas": []
+    }
+   ],
+   "ventanas": [
+    "antepecho",
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 1,
+    "p360Interior": 6,
+    "p360Terraza": 0
+   }
+  },
+  {
+   "codigo": "1D-08",
+   "ids": [
+    "134"
+   ],
+   "recuento": 1,
+   "niveles": [
+    1
+   ],
+   "dormitorios": 1,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 25.81,
+     "rango": [
+      25.81,
+      25.81
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 13.38,
+     "rango": [
+      13.38,
+      13.38
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.68,
+     "rango": [
+      3.68,
+      3.68
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "VE",
+     "tipo": "vestidor",
+     "nombre": "Vestidor",
+     "sup": 4.5,
+     "rango": [
+      4.5,
+      4.5
+     ],
+     "tiene360": false
+    }
+   ],
+   "supUtil": [
+    47.37,
+    47.37
+   ],
+   "supConstruidaInterior": [
+    52.2,
+    52.2
+   ],
+   "orientaciones": {
+    "Suroeste": 1
+   },
+   "referencia": "134",
+   "espejadas": [],
+   "transformaciones": {
+    "134": "igual"
+   },
+   "similitudMinima": null,
+   "margenQuiralidad": null,
+   "variantes": [
+    {
+     "terraza": 0.0,
+     "ids": [
+      "134"
+     ],
+     "espejadas": []
+    }
+   ],
+   "ventanas": [
+    "antepecho"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 1,
+    "p360Interior": 3,
+    "p360Terraza": 0
+   }
+  },
+  {
+   "codigo": "1D-09",
+   "ids": [
+    "135",
+    "241",
+    "341"
+   ],
+   "recuento": 3,
+   "niveles": [
+    1,
+    2,
+    3
+   ],
+   "dormitorios": 1,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 25.15,
+     "rango": [
+      25.15,
+      25.15
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 13.21,
+     "rango": [
+      13.21,
+      13.21
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.68,
+     "rango": [
+      3.68,
+      3.68
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "VE",
+     "tipo": "vestidor",
+     "nombre": "Vestidor",
+     "sup": 4.5,
+     "rango": [
+      4.5,
+      4.5
+     ],
+     "tiene360": false
+    }
+   ],
+   "supUtil": [
+    46.54,
+    46.54
+   ],
+   "supConstruidaInterior": [
+    51.33,
+    51.33
+   ],
+   "orientaciones": {
+    "Suroeste": 3
+   },
+   "referencia": "135",
+   "espejadas": [],
+   "transformaciones": {
+    "135": "igual",
+    "241": "igual",
+    "341": "igual"
+   },
+   "similitudMinima": 0.975,
+   "margenQuiralidad": 0.315,
+   "variantes": [
+    {
+     "terraza": 0.0,
+     "ids": [
+      "135",
+      "241",
+      "341"
+     ],
+     "espejadas": []
+    }
+   ],
+   "ventanas": [
+    "antepecho",
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 1,
+    "p360Interior": 6,
+    "p360Terraza": 0
+   }
+  },
+  {
+   "codigo": "1D-10",
+   "ids": [
+    "136",
+    "242",
+    "342"
+   ],
+   "recuento": 3,
+   "niveles": [
+    1,
+    2,
+    3
+   ],
+   "dormitorios": 1,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 24.23,
+     "rango": [
+      24.23,
+      24.23
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 12.39,
+     "rango": [
+      12.39,
+      12.39
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.57,
+     "rango": [
+      3.57,
+      3.57
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "VE",
+     "tipo": "vestidor",
+     "nombre": "Vestidor",
+     "sup": 4.35,
+     "rango": [
+      4.35,
+      4.35
+     ],
+     "tiene360": false
+    }
+   ],
+   "supUtil": [
+    44.54,
+    44.54
+   ],
+   "supConstruidaInterior": [
+    49.21,
+    49.21
+   ],
+   "orientaciones": {
+    "Suroeste": 3
+   },
+   "referencia": "136",
+   "espejadas": [],
+   "transformaciones": {
+    "136": "igual",
+    "242": "igual",
+    "342": "igual"
+   },
+   "similitudMinima": 0.967,
+   "margenQuiralidad": 0.301,
+   "variantes": [
+    {
+     "terraza": 0.0,
+     "ids": [
+      "136",
+      "242",
+      "342"
+     ],
+     "espejadas": []
+    }
+   ],
+   "ventanas": [
+    "antepecho",
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 1,
+    "p360Interior": 6,
+    "p360Terraza": 0
+   }
+  },
+  {
+   "codigo": "1D-11",
+   "ids": [
+    "137",
+    "243",
+    "343"
+   ],
+   "recuento": 3,
+   "niveles": [
+    1,
+    2,
+    3
+   ],
+   "dormitorios": 1,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 24.02,
+     "rango": [
+      24.02,
+      24.02
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 11.82,
+     "rango": [
+      11.82,
+      11.82
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.55,
+     "rango": [
+      3.55,
+      3.55
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "VE",
+     "tipo": "vestidor",
+     "nombre": "Vestidor",
+     "sup": 4.35,
+     "rango": [
+      4.35,
+      4.35
+     ],
+     "tiene360": false
+    }
+   ],
+   "supUtil": [
+    43.74,
+    43.74
+   ],
+   "supConstruidaInterior": [
+    48.37,
+    48.37
+   ],
+   "orientaciones": {
+    "Suroeste": 3
+   },
+   "referencia": "137",
+   "espejadas": [],
+   "transformaciones": {
+    "137": "igual",
+    "243": "igual",
+    "343": "igual"
+   },
+   "similitudMinima": 0.962,
+   "margenQuiralidad": 0.316,
+   "variantes": [
+    {
+     "terraza": 0.0,
+     "ids": [
+      "137",
+      "243",
+      "343"
+     ],
+     "espejadas": []
+    }
+   ],
+   "ventanas": [
+    "antepecho",
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 1,
+    "p360Interior": 6,
+    "p360Terraza": 0
+   }
+  },
+  {
+   "codigo": "1D-12",
+   "ids": [
+    "138",
+    "244",
+    "344"
+   ],
+   "recuento": 3,
+   "niveles": [
+    1,
+    2,
+    3
+   ],
+   "dormitorios": 1,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 23.32,
+     "rango": [
+      23.32,
+      23.32
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 11.66,
+     "rango": [
+      11.66,
+      11.66
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.57,
+     "rango": [
+      3.57,
+      3.57
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "VE",
+     "tipo": "vestidor",
+     "nombre": "Vestidor",
+     "sup": 4.35,
+     "rango": [
+      4.35,
+      4.35
+     ],
+     "tiene360": false
+    }
+   ],
+   "supUtil": [
+    42.9,
+    42.9
+   ],
+   "supConstruidaInterior": [
+    47.54,
+    47.54
+   ],
+   "orientaciones": {
+    "Suroeste": 3
+   },
+   "referencia": "138",
+   "espejadas": [],
+   "transformaciones": {
+    "138": "igual",
+    "244": "igual",
+    "344": "igual"
+   },
+   "similitudMinima": 0.954,
+   "margenQuiralidad": 0.315,
+   "variantes": [
+    {
+     "terraza": 0.0,
+     "ids": [
+      "138",
+      "244",
+      "344"
+     ],
+     "espejadas": []
+    }
+   ],
+   "ventanas": [
+    "antepecho",
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 1,
+    "p360Interior": 6,
+    "p360Terraza": 0
+   }
+  },
+  {
+   "codigo": "2D-12",
+   "ids": [
+    "202",
+    "302"
+   ],
+   "recuento": 2,
+   "niveles": [
+    2,
+    3
+   ],
+   "dormitorios": 2,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 21.54,
+     "rango": [
+      21.54,
+      21.54
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 12.69,
+     "rango": [
+      12.69,
+      12.69
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D2",
+     "tipo": "dormitorio",
+     "nombre": "Dormitorio secundario",
+     "sup": 8.89,
+     "rango": [
+      8.89,
+      8.89
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.25,
+     "rango": [
+      3.25,
+      3.25
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "VE",
+     "tipo": "vestidor",
+     "nombre": "Vestidor",
+     "sup": 2.83,
+     "rango": [
+      2.83,
+      2.83
+     ],
+     "tiene360": false
+    },
+    {
+     "codigo": "DI",
+     "tipo": "distribuidor",
+     "nombre": "Distribuidor",
+     "sup": 2.89,
+     "rango": [
+      2.89,
+      2.89
+     ],
+     "tiene360": false
+    }
+   ],
+   "supUtil": [
+    52.09,
+    52.09
+   ],
+   "supConstruidaInterior": [
+    57.99,
+    57.99
+   ],
+   "orientaciones": {
+    "Suroeste": 2
+   },
+   "referencia": "202",
+   "espejadas": [],
+   "transformaciones": {
+    "202": "igual",
+    "302": "igual"
+   },
+   "similitudMinima": 0.999,
+   "margenQuiralidad": 0.477,
+   "variantes": [
+    {
+     "terraza": 0.0,
+     "ids": [
+      "202",
+      "302"
+     ],
+     "espejadas": []
+    }
+   ],
+   "ventanas": [
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 1,
+    "p360Interior": 4,
+    "p360Terraza": 0
+   }
+  },
+  {
+   "codigo": "2D-13",
+   "ids": [
+    "205",
+    "305"
+   ],
+   "recuento": 2,
+   "niveles": [
+    2,
+    3
+   ],
+   "dormitorios": 2,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 19.76,
+     "rango": [
+      19.76,
+      19.76
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 11.65,
+     "rango": [
+      11.65,
+      11.65
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D2",
+     "tipo": "dormitorio",
+     "nombre": "Dormitorio secundario",
+     "sup": 7.97,
+     "rango": [
+      7.97,
+      7.97
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.25,
+     "rango": [
+      3.25,
+      3.25
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "VE",
+     "tipo": "vestidor",
+     "nombre": "Vestidor",
+     "sup": 2.83,
+     "rango": [
+      2.83,
+      2.83
+     ],
+     "tiene360": false
+    },
+    {
+     "codigo": "DI",
+     "tipo": "distribuidor",
+     "nombre": "Distribuidor",
+     "sup": 2.89,
+     "rango": [
+      2.89,
+      2.89
+     ],
+     "tiene360": false
+    }
+   ],
+   "supUtil": [
+    48.35,
+    48.35
+   ],
+   "supConstruidaInterior": [
+    53.95,
+    53.95
+   ],
+   "orientaciones": {
+    "Suroeste": 2
+   },
+   "referencia": "205",
+   "espejadas": [],
+   "transformaciones": {
+    "205": "igual",
+    "305": "igual"
+   },
+   "similitudMinima": 0.999,
+   "margenQuiralidad": 0.481,
+   "variantes": [
+    {
+     "terraza": 0.0,
+     "ids": [
+      "205",
+      "305"
+     ],
+     "espejadas": []
+    }
+   ],
+   "ventanas": [
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 1,
+    "p360Interior": 4,
+    "p360Terraza": 0
+   }
+  },
+  {
+   "codigo": "2D-14",
+   "ids": [
+    "207",
+    "307"
+   ],
+   "recuento": 2,
+   "niveles": [
+    2,
+    3
+   ],
+   "dormitorios": 2,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 26.06,
+     "rango": [
+      26.06,
+      26.06
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 11.79,
+     "rango": [
+      11.79,
+      11.79
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D2",
+     "tipo": "dormitorio",
+     "nombre": "Dormitorio secundario",
+     "sup": 6.15,
+     "rango": [
+      6.15,
+      6.15
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.33,
+     "rango": [
+      3.33,
+      3.33
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "VE",
+     "tipo": "vestidor",
+     "nombre": "Vestidor",
+     "sup": 2.52,
+     "rango": [
+      2.52,
+      2.52
+     ],
+     "tiene360": false
+    },
+    {
+     "codigo": "DI",
+     "tipo": "distribuidor",
+     "nombre": "Distribuidor",
+     "sup": 1.1,
+     "rango": [
+      1.1,
+      1.1
+     ],
+     "tiene360": false
+    }
+   ],
+   "supUtil": [
+    50.95,
+    50.95
+   ],
+   "supConstruidaInterior": [
+    57.01,
+    57.01
+   ],
+   "orientaciones": {
+    "Noreste": 2
+   },
+   "referencia": "207",
+   "espejadas": [],
+   "transformaciones": {
+    "207": "igual",
+    "307": "igual"
+   },
+   "similitudMinima": 1.0,
+   "margenQuiralidad": 0.389,
+   "variantes": [
+    {
+     "terraza": 0.0,
+     "ids": [
+      "207",
+      "307"
+     ],
+     "espejadas": []
+    }
+   ],
+   "ventanas": [
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 1,
+    "p360Interior": 4,
+    "p360Terraza": 0
+   }
+  },
+  {
+   "codigo": "1D-13",
+   "ids": [
+    "209",
+    "210",
+    "219",
+    "220",
+    "227",
+    "228",
+    "235",
+    "236",
+    "309",
+    "310",
+    "319",
+    "320",
+    "327",
+    "328",
+    "335",
+    "408",
+    "416",
+    "421",
+    "429",
+    "430"
+   ],
+   "recuento": 20,
+   "niveles": [
+    2,
+    3,
+    4
+   ],
+   "dormitorios": 1,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 23.79,
+     "rango": [
+      23.76,
+      23.79
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 10.09,
+     "rango": [
+      10.09,
+      10.11
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.4,
+     "rango": [
+      3.4,
+      3.4
+     ],
+     "tiene360": true
+    }
+   ],
+   "supUtil": [
+    37.27,
+    37.28
+   ],
+   "supConstruidaInterior": [
+    42.09,
+    42.09
+   ],
+   "orientaciones": {
+    "Jardín interior": 20
+   },
+   "referencia": "209",
+   "espejadas": [
+    "210",
+    "220",
+    "228",
+    "236",
+    "310",
+    "320",
+    "328",
+    "408",
+    "416",
+    "430"
+   ],
+   "transformaciones": {
+    "209": "igual",
+    "210": "espejoV",
+    "219": "igual",
+    "220": "espejoV",
+    "227": "igual",
+    "228": "espejoV",
+    "235": "giro180",
+    "236": "espejoH",
+    "309": "igual",
+    "310": "espejoV",
+    "319": "igual",
+    "320": "espejoV",
+    "327": "igual",
+    "328": "espejoV",
+    "335": "giro180",
+    "408": "espejoV",
+    "416": "espejoV",
+    "421": "igual",
+    "429": "giro180",
+    "430": "espejoH"
+   },
+   "similitudMinima": 0.949,
+   "margenQuiralidad": 0.395,
+   "variantes": [
+    {
+     "terraza": [
+      2.94,
+      2.95
+     ],
+     "ids": [
+      "209",
+      "210",
+      "219",
+      "220",
+      "227",
+      "228",
+      "235",
+      "236",
+      "309",
+      "310",
+      "319",
+      "320",
+      "327",
+      "328",
+      "335",
+      "408",
+      "416",
+      "421",
+      "429",
+      "430"
+     ],
+     "espejadas": [
+      "210",
+      "220",
+      "228",
+      "236",
+      "310",
+      "320",
+      "328",
+      "408",
+      "416",
+      "430"
+     ]
+    }
+   ],
+   "ventanas": [
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 2,
+    "p360Interior": 3,
+    "p360Terraza": 0
+   }
+  },
+  {
+   "codigo": "1D-14",
+   "ids": [
+    "217",
+    "218",
+    "225",
+    "226",
+    "317",
+    "318",
+    "325",
+    "326",
+    "413",
+    "414",
+    "419",
+    "420"
+   ],
+   "recuento": 12,
+   "niveles": [
+    2,
+    3,
+    4
+   ],
+   "dormitorios": 1,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 26.25,
+     "rango": [
+      26.25,
+      26.25
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 11.06,
+     "rango": [
+      11.06,
+      11.06
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.4,
+     "rango": [
+      3.4,
+      3.4
+     ],
+     "tiene360": true
+    }
+   ],
+   "supUtil": [
+    40.71,
+    40.71
+   ],
+   "supConstruidaInterior": [
+    45.22,
+    45.22
+   ],
+   "orientaciones": {
+    "Jardín interior": 12
+   },
+   "referencia": "217",
+   "espejadas": [
+    "218",
+    "226",
+    "318",
+    "326",
+    "414",
+    "420"
+   ],
+   "transformaciones": {
+    "217": "igual",
+    "218": "espejoV",
+    "225": "igual",
+    "226": "espejoV",
+    "317": "igual",
+    "318": "espejoV",
+    "325": "igual",
+    "326": "espejoV",
+    "413": "igual",
+    "414": "espejoV",
+    "419": "igual",
+    "420": "espejoV"
+   },
+   "similitudMinima": 0.955,
+   "margenQuiralidad": 0.315,
+   "variantes": [
+    {
+     "terraza": [
+      2.94,
+      2.95
+     ],
+     "ids": [
+      "217",
+      "218",
+      "225",
+      "226",
+      "317",
+      "318",
+      "325",
+      "326",
+      "413",
+      "414",
+      "419",
+      "420"
+     ],
+     "espejadas": [
+      "218",
+      "226",
+      "318",
+      "326",
+      "414",
+      "420"
+     ]
+    }
+   ],
+   "ventanas": [
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 2,
+    "p360Interior": 3,
+    "p360Terraza": 0
+   }
+  },
+  {
+   "codigo": "3D-01",
+   "ids": [
+    "238",
+    "338"
+   ],
+   "recuento": 2,
+   "niveles": [
+    2,
+    3
+   ],
+   "dormitorios": 3,
+   "banos": 2,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 28.9,
+     "rango": [
+      28.9,
+      28.9
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 13.69,
+     "rango": [
+      13.69,
+      13.69
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D2",
+     "tipo": "dormitorio",
+     "nombre": "Dormitorio secundario 2",
+     "sup": 7.66,
+     "rango": [
+      7.66,
+      7.66
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D3",
+     "tipo": "dormitorio",
+     "nombre": "Dormitorio secundario",
+     "sup": 6.98,
+     "rango": [
+      6.98,
+      6.98
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.71,
+     "rango": [
+      3.71,
+      3.71
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B2",
+     "tipo": "bano",
+     "nombre": "Baño secundario",
+     "sup": 2.68,
+     "rango": [
+      2.68,
+      2.68
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "DI",
+     "tipo": "distribuidor",
+     "nombre": "Distribuidor",
+     "sup": 2.96,
+     "rango": [
+      2.96,
+      2.96
+     ],
+     "tiene360": false
+    }
+   ],
+   "supUtil": [
+    66.58,
+    66.58
+   ],
+   "supConstruidaInterior": [
+    73.56,
+    73.56
+   ],
+   "orientaciones": {
+    "Suroeste": 2
+   },
+   "referencia": "238",
+   "espejadas": [],
+   "transformaciones": {
+    "238": "igual",
+    "338": "igual"
+   },
+   "similitudMinima": 1.0,
+   "margenQuiralidad": 0.5,
+   "variantes": [
+    {
+     "terraza": 0.0,
+     "ids": [
+      "238",
+      "338"
+     ],
+     "espejadas": []
+    }
+   ],
+   "ventanas": [
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 1,
+    "p360Interior": 6,
+    "p360Terraza": 0
+   }
+  },
+  {
+   "codigo": "1D-15",
+   "ids": [
+    "240",
+    "340"
+   ],
+   "recuento": 2,
+   "niveles": [
+    2,
+    3
+   ],
+   "dormitorios": 1,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 25.81,
+     "rango": [
+      25.81,
+      25.81
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 13.38,
+     "rango": [
+      13.38,
+      13.38
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.68,
+     "rango": [
+      3.68,
+      3.68
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "VE",
+     "tipo": "vestidor",
+     "nombre": "Vestidor",
+     "sup": 4.5,
+     "rango": [
+      4.5,
+      4.5
+     ],
+     "tiene360": false
+    }
+   ],
+   "supUtil": [
+    47.37,
+    47.37
+   ],
+   "supConstruidaInterior": [
+    52.2,
+    52.2
+   ],
+   "orientaciones": {
+    "Suroeste": 2
+   },
+   "referencia": "240",
+   "espejadas": [],
+   "transformaciones": {
+    "240": "igual",
+    "340": "igual"
+   },
+   "similitudMinima": 1.0,
+   "margenQuiralidad": 0.356,
+   "variantes": [
+    {
+     "terraza": 0.0,
+     "ids": [
+      "240",
+      "340"
+     ],
+     "espejadas": []
+    }
+   ],
+   "ventanas": [
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 1,
+    "p360Interior": 3,
+    "p360Terraza": 0
+   }
+  },
+  {
+   "codigo": "1D-16",
+   "ids": [
+    "245",
+    "345"
+   ],
+   "recuento": 2,
+   "niveles": [
+    2,
+    3
+   ],
+   "dormitorios": 1,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 23.09,
+     "rango": [
+      23.09,
+      23.09
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 11.1,
+     "rango": [
+      11.1,
+      11.1
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.57,
+     "rango": [
+      3.57,
+      3.57
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "VE",
+     "tipo": "vestidor",
+     "nombre": "Vestidor",
+     "sup": 4.35,
+     "rango": [
+      4.35,
+      4.35
+     ],
+     "tiene360": false
+    }
+   ],
+   "supUtil": [
+    42.11,
+    42.11
+   ],
+   "supConstruidaInterior": [
+    46.71,
+    46.71
+   ],
+   "orientaciones": {
+    "Suroeste": 2
+   },
+   "referencia": "245",
+   "espejadas": [],
+   "transformaciones": {
+    "245": "igual",
+    "345": "igual"
+   },
+   "similitudMinima": 0.999,
+   "margenQuiralidad": 0.383,
+   "variantes": [
+    {
+     "terraza": 0.0,
+     "ids": [
+      "245",
+      "345"
+     ],
+     "espejadas": []
+    }
+   ],
+   "ventanas": [
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 1,
+    "p360Interior": 3,
+    "p360Terraza": 0
+   }
+  },
+  {
+   "codigo": "2D-15",
+   "ids": [
+    "246",
+    "346"
+   ],
+   "recuento": 2,
+   "niveles": [
+    2,
+    3
+   ],
+   "dormitorios": 2,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 22.65,
+     "rango": [
+      22.65,
+      22.65
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 13.74,
+     "rango": [
+      13.74,
+      13.74
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D2",
+     "tipo": "dormitorio",
+     "nombre": "Dormitorio secundario",
+     "sup": 9.59,
+     "rango": [
+      9.59,
+      9.59
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.25,
+     "rango": [
+      3.25,
+      3.25
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "VE",
+     "tipo": "vestidor",
+     "nombre": "Vestidor",
+     "sup": 2.83,
+     "rango": [
+      2.83,
+      2.83
+     ],
+     "tiene360": false
+    },
+    {
+     "codigo": "DI",
+     "tipo": "distribuidor",
+     "nombre": "Distribuidor",
+     "sup": 2.89,
+     "rango": [
+      2.89,
+      2.89
+     ],
+     "tiene360": false
+    }
+   ],
+   "supUtil": [
+    54.95,
+    54.95
+   ],
+   "supConstruidaInterior": [
+    61.47,
+    61.47
+   ],
+   "orientaciones": {
+    "Suroeste": 2
+   },
+   "referencia": "246",
+   "espejadas": [],
+   "transformaciones": {
+    "246": "igual",
+    "346": "igual"
+   },
+   "similitudMinima": 0.999,
+   "margenQuiralidad": 0.423,
+   "variantes": [
+    {
+     "terraza": 0.0,
+     "ids": [
+      "246",
+      "346"
+     ],
+     "espejadas": []
+    }
+   ],
+   "ventanas": [
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 1,
+    "p360Interior": 4,
+    "p360Terraza": 0
+   }
+  },
+  {
+   "codigo": "1D-17",
+   "ids": [
+    "401"
+   ],
+   "recuento": 1,
+   "niveles": [
+    4
+   ],
+   "dormitorios": 1,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 28.71,
+     "rango": [
+      28.71,
+      28.71
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 11.35,
+     "rango": [
+      11.35,
+      11.35
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.66,
+     "rango": [
+      3.66,
+      3.66
+     ],
+     "tiene360": true
+    }
+   ],
+   "supUtil": [
+    43.72,
+    43.72
+   ],
+   "supConstruidaInterior": [
+    49.42,
+    49.42
+   ],
+   "orientaciones": {
+    "Suroeste": 1
+   },
+   "referencia": "401",
+   "espejadas": [],
+   "transformaciones": {
+    "401": "igual"
+   },
+   "similitudMinima": null,
+   "margenQuiralidad": null,
+   "variantes": [
+    {
+     "terraza": 31.6,
+     "ids": [
+      "401"
+     ],
+     "espejadas": []
+    }
+   ],
+   "ventanas": [
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 1,
+    "p360Interior": 3,
+    "p360Terraza": 1
+   }
+  },
+  {
+   "codigo": "1D-18",
+   "ids": [
+    "402"
+   ],
+   "recuento": 1,
+   "niveles": [
+    4
+   ],
+   "dormitorios": 1,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 27.28,
+     "rango": [
+      27.28,
+      27.28
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 10.24,
+     "rango": [
+      10.24,
+      10.24
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.65,
+     "rango": [
+      3.65,
+      3.65
+     ],
+     "tiene360": true
+    }
+   ],
+   "supUtil": [
+    41.17,
+    41.17
+   ],
+   "supConstruidaInterior": [
+    46.16,
+    46.16
+   ],
+   "orientaciones": {
+    "Suroeste": 1
+   },
+   "referencia": "402",
+   "espejadas": [],
+   "transformaciones": {
+    "402": "igual"
+   },
+   "similitudMinima": null,
+   "margenQuiralidad": null,
+   "variantes": [
+    {
+     "terraza": 31.22,
+     "ids": [
+      "402"
+     ],
+     "espejadas": []
+    }
+   ],
+   "ventanas": [
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 1,
+    "p360Interior": 3,
+    "p360Terraza": 1
+   }
+  },
+  {
+   "codigo": "1D-19",
+   "ids": [
+    "403"
+   ],
+   "recuento": 1,
+   "niveles": [
+    4
+   ],
+   "dormitorios": 1,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 25.06,
+     "rango": [
+      25.06,
+      25.06
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 10.05,
+     "rango": [
+      10.05,
+      10.05
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.66,
+     "rango": [
+      3.66,
+      3.66
+     ],
+     "tiene360": true
+    }
+   ],
+   "supUtil": [
+    38.77,
+    38.77
+   ],
+   "supConstruidaInterior": [
+    43.75,
+    43.75
+   ],
+   "orientaciones": {
+    "Suroeste": 1
+   },
+   "referencia": "403",
+   "espejadas": [],
+   "transformaciones": {
+    "403": "igual"
+   },
+   "similitudMinima": null,
+   "margenQuiralidad": null,
+   "variantes": [
+    {
+     "terraza": 31.21,
+     "ids": [
+      "403"
+     ],
+     "espejadas": []
+    }
+   ],
+   "ventanas": [
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 1,
+    "p360Interior": 3,
+    "p360Terraza": 1
+   }
+  },
+  {
+   "codigo": "1D-20",
+   "ids": [
+    "404"
+   ],
+   "recuento": 1,
+   "niveles": [
+    4
+   ],
+   "dormitorios": 1,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 22.32,
+     "rango": [
+      22.32,
+      22.32
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 10.25,
+     "rango": [
+      10.25,
+      10.25
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 4.12,
+     "rango": [
+      4.12,
+      4.12
+     ],
+     "tiene360": true
+    }
+   ],
+   "supUtil": [
+    36.69,
+    36.69
+   ],
+   "supConstruidaInterior": [
+    41.35,
+    41.35
+   ],
+   "orientaciones": {
+    "Suroeste": 1
+   },
+   "referencia": "404",
+   "espejadas": [],
+   "transformaciones": {
+    "404": "igual"
+   },
+   "similitudMinima": null,
+   "margenQuiralidad": null,
+   "variantes": [
+    {
+     "terraza": 31.21,
+     "ids": [
+      "404"
+     ],
+     "espejadas": []
+    }
+   ],
+   "ventanas": [
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 1,
+    "p360Interior": 3,
+    "p360Terraza": 1
+   }
+  },
+  {
+   "codigo": "2D-16",
+   "ids": [
+    "405"
+   ],
+   "recuento": 1,
+   "niveles": [
+    4
+   ],
+   "dormitorios": 2,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 25.92,
+     "rango": [
+      25.92,
+      25.92
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 10.13,
+     "rango": [
+      10.13,
+      10.13
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D2",
+     "tipo": "dormitorio",
+     "nombre": "Dormitorio secundario",
+     "sup": 6.45,
+     "rango": [
+      6.45,
+      6.45
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.37,
+     "rango": [
+      3.37,
+      3.37
+     ],
+     "tiene360": true
+    }
+   ],
+   "supUtil": [
+    45.87,
+    45.87
+   ],
+   "supConstruidaInterior": [
+    52.44,
+    52.44
+   ],
+   "orientaciones": {
+    "Noreste": 1
+   },
+   "referencia": "405",
+   "espejadas": [],
+   "transformaciones": {
+    "405": "igual"
+   },
+   "similitudMinima": null,
+   "margenQuiralidad": null,
+   "variantes": [
+    {
+     "terraza": 59.09,
+     "ids": [
+      "405"
+     ],
+     "espejadas": []
+    }
+   ],
+   "ventanas": [
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 1,
+    "p360Interior": 4,
+    "p360Terraza": 2
+   }
+  },
+  {
+   "codigo": "1D-21",
+   "ids": [
+    "406"
+   ],
+   "recuento": 1,
+   "niveles": [
+    4
+   ],
+   "dormitorios": 1,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 20.0,
+     "rango": [
+      20.0,
+      20.0
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 11.23,
+     "rango": [
+      11.23,
+      11.23
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.65,
+     "rango": [
+      3.65,
+      3.65
+     ],
+     "tiene360": true
+    }
+   ],
+   "supUtil": [
+    34.88,
+    34.88
+   ],
+   "supConstruidaInterior": [
+    39.58,
+    39.58
+   ],
+   "orientaciones": {
+    "Noreste": 1
+   },
+   "referencia": "406",
+   "espejadas": [],
+   "transformaciones": {
+    "406": "igual"
+   },
+   "similitudMinima": null,
+   "margenQuiralidad": null,
+   "variantes": [
+    {
+     "terraza": 27.64,
+     "ids": [
+      "406"
+     ],
+     "espejadas": []
+    }
+   ],
+   "ventanas": [
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 1,
+    "p360Interior": 3,
+    "p360Terraza": 1
+   }
+  },
+  {
+   "codigo": "1D-22",
+   "ids": [
+    "407"
+   ],
+   "recuento": 1,
+   "niveles": [
+    4
+   ],
+   "dormitorios": 1,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 23.79,
+     "rango": [
+      23.79,
+      23.79
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 10.09,
+     "rango": [
+      10.09,
+      10.09
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.4,
+     "rango": [
+      3.4,
+      3.4
+     ],
+     "tiene360": true
+    }
+   ],
+   "supUtil": [
+    37.28,
+    37.28
+   ],
+   "supConstruidaInterior": [
+    42.09,
+    42.09
+   ],
+   "orientaciones": {
+    "Jardín interior": 1
+   },
+   "referencia": "407",
+   "espejadas": [],
+   "transformaciones": {
+    "407": "igual"
+   },
+   "similitudMinima": null,
+   "margenQuiralidad": null,
+   "variantes": [
+    {
+     "terraza": 2.95,
+     "ids": [
+      "407"
+     ],
+     "espejadas": []
+    }
+   ],
+   "ventanas": [
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 1,
+    "p360Interior": 3,
+    "p360Terraza": 0
+   }
+  },
+  {
+   "codigo": "2D-17",
+   "ids": [
+    "409"
+   ],
+   "recuento": 1,
+   "niveles": [
+    4
+   ],
+   "dormitorios": 2,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 20.62,
+     "rango": [
+      20.62,
+      20.62
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 10.65,
+     "rango": [
+      10.65,
+      10.65
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D2",
+     "tipo": "dormitorio",
+     "nombre": "Dormitorio secundario",
+     "sup": 9.01,
+     "rango": [
+      9.01,
+      9.01
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.86,
+     "rango": [
+      3.86,
+      3.86
+     ],
+     "tiene360": true
+    }
+   ],
+   "supUtil": [
+    44.14,
+    44.14
+   ],
+   "supConstruidaInterior": [
+    49.76,
+    49.76
+   ],
+   "orientaciones": {
+    "Noreste": 1
+   },
+   "referencia": "409",
+   "espejadas": [],
+   "transformaciones": {
+    "409": "igual"
+   },
+   "similitudMinima": null,
+   "margenQuiralidad": null,
+   "variantes": [
+    {
+     "terraza": 53.68,
+     "ids": [
+      "409"
+     ],
+     "espejadas": []
+    }
+   ],
+   "ventanas": [
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 1,
+    "p360Interior": 4,
+    "p360Terraza": 2
+   }
+  },
+  {
+   "codigo": "1D-23",
+   "ids": [
+    "410",
+    "411",
+    "417",
+    "418"
+   ],
+   "recuento": 4,
+   "niveles": [
+    4
+   ],
+   "dormitorios": 1,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 25.78,
+     "rango": [
+      25.78,
+      25.78
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 10.15,
+     "rango": [
+      10.15,
+      10.15
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.21,
+     "rango": [
+      3.21,
+      3.21
+     ],
+     "tiene360": true
+    }
+   ],
+   "supUtil": [
+    39.14,
+    39.14
+   ],
+   "supConstruidaInterior": [
+    44.78,
+    45.36
+   ],
+   "orientaciones": {
+    "Noreste": 4
+   },
+   "referencia": "410",
+   "espejadas": [
+    "411",
+    "417"
+   ],
+   "transformaciones": {
+    "410": "igual",
+    "411": "espejoH",
+    "417": "espejoH",
+    "418": "igual"
+   },
+   "similitudMinima": 0.986,
+   "margenQuiralidad": 0.282,
+   "variantes": [
+    {
+     "terraza": [
+      31.2,
+      31.6
+     ],
+     "ids": [
+      "410",
+      "411",
+      "417",
+      "418"
+     ],
+     "espejadas": [
+      "411",
+      "417"
+     ]
+    }
+   ],
+   "ventanas": [
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 2,
+    "p360Interior": 3,
+    "p360Terraza": 1
+   }
+  },
+  {
+   "codigo": "1D-24",
+   "ids": [
+    "412",
+    "423"
+   ],
+   "recuento": 2,
+   "niveles": [
+    4
+   ],
+   "dormitorios": 1,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 25.78,
+     "rango": [
+      25.78,
+      25.78
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 10.15,
+     "rango": [
+      10.15,
+      10.15
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.7,
+     "rango": [
+      3.7,
+      3.7
+     ],
+     "tiene360": true
+    }
+   ],
+   "supUtil": [
+    39.63,
+    39.63
+   ],
+   "supConstruidaInterior": [
+    44.78,
+    44.78
+   ],
+   "orientaciones": {
+    "Noreste": 2
+   },
+   "referencia": "412",
+   "espejadas": [
+    "423"
+   ],
+   "transformaciones": {
+    "412": "igual",
+    "423": "espejoH"
+   },
+   "similitudMinima": 0.993,
+   "margenQuiralidad": 0.267,
+   "variantes": [
+    {
+     "terraza": 31.2,
+     "ids": [
+      "412",
+      "423"
+     ],
+     "espejadas": [
+      "423"
+     ]
+    }
+   ],
+   "ventanas": [
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 2,
+    "p360Interior": 3,
+    "p360Terraza": 1
+   }
+  },
+  {
+   "codigo": "1D-25",
+   "ids": [
+    "415"
+   ],
+   "recuento": 1,
+   "niveles": [
+    4
+   ],
+   "dormitorios": 1,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 23.79,
+     "rango": [
+      23.79,
+      23.79
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 10.09,
+     "rango": [
+      10.09,
+      10.09
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.4,
+     "rango": [
+      3.4,
+      3.4
+     ],
+     "tiene360": true
+    }
+   ],
+   "supUtil": [
+    37.28,
+    37.28
+   ],
+   "supConstruidaInterior": [
+    42.09,
+    42.09
+   ],
+   "orientaciones": {
+    "Jardín interior": 1
+   },
+   "referencia": "415",
+   "espejadas": [],
+   "transformaciones": {
+    "415": "igual"
+   },
+   "similitudMinima": null,
+   "margenQuiralidad": null,
+   "variantes": [
+    {
+     "terraza": 2.95,
+     "ids": [
+      "415"
+     ],
+     "espejadas": []
+    }
+   ],
+   "ventanas": [
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 1,
+    "p360Interior": 3,
+    "p360Terraza": 0
+   }
+  },
+  {
+   "codigo": "1D-26",
+   "ids": [
+    "422"
+   ],
+   "recuento": 1,
+   "niveles": [
+    4
+   ],
+   "dormitorios": 1,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 23.79,
+     "rango": [
+      23.79,
+      23.79
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 10.09,
+     "rango": [
+      10.09,
+      10.09
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.4,
+     "rango": [
+      3.4,
+      3.4
+     ],
+     "tiene360": true
+    }
+   ],
+   "supUtil": [
+    37.28,
+    37.28
+   ],
+   "supConstruidaInterior": [
+    42.09,
+    42.09
+   ],
+   "orientaciones": {
+    "Jardín interior": 1
+   },
+   "referencia": "422",
+   "espejadas": [],
+   "transformaciones": {
+    "422": "igual"
+   },
+   "similitudMinima": null,
+   "margenQuiralidad": null,
+   "variantes": [
+    {
+     "terraza": 2.94,
+     "ids": [
+      "422"
+     ],
+     "espejadas": []
+    }
+   ],
+   "ventanas": [
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 1,
+    "p360Interior": 3,
+    "p360Terraza": 0
+   }
+  },
+  {
+   "codigo": "1D-27",
+   "ids": [
+    "424",
+    "425"
+   ],
+   "recuento": 2,
+   "niveles": [
+    4
+   ],
+   "dormitorios": 1,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 25.78,
+     "rango": [
+      25.78,
+      25.78
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 10.15,
+     "rango": [
+      10.15,
+      10.15
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.66,
+     "rango": [
+      3.66,
+      3.66
+     ],
+     "tiene360": true
+    }
+   ],
+   "supUtil": [
+    39.59,
+    39.59
+   ],
+   "supConstruidaInterior": [
+    44.78,
+    44.78
+   ],
+   "orientaciones": {
+    "Noreste": 2
+   },
+   "referencia": "424",
+   "espejadas": [
+    "425"
+   ],
+   "transformaciones": {
+    "424": "igual",
+    "425": "espejoH"
+   },
+   "similitudMinima": 0.993,
+   "margenQuiralidad": 0.235,
+   "variantes": [
+    {
+     "terraza": 31.2,
+     "ids": [
+      "424",
+      "425"
+     ],
+     "espejadas": [
+      "425"
+     ]
+    }
+   ],
+   "ventanas": [
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 2,
+    "p360Interior": 3,
+    "p360Terraza": 1
+   }
+  },
+  {
+   "codigo": "1D-28",
+   "ids": [
+    "426"
+   ],
+   "recuento": 1,
+   "niveles": [
+    4
+   ],
+   "dormitorios": 1,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 20.12,
+     "rango": [
+      20.12,
+      20.12
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 10.43,
+     "rango": [
+      10.43,
+      10.43
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.65,
+     "rango": [
+      3.65,
+      3.65
+     ],
+     "tiene360": true
+    }
+   ],
+   "supUtil": [
+    34.2,
+    34.2
+   ],
+   "supConstruidaInterior": [
+    38.92,
+    38.92
+   ],
+   "orientaciones": {
+    "Noreste": 1
+   },
+   "referencia": "426",
+   "espejadas": [],
+   "transformaciones": {
+    "426": "igual"
+   },
+   "similitudMinima": null,
+   "margenQuiralidad": null,
+   "variantes": [
+    {
+     "terraza": 27.12,
+     "ids": [
+      "426"
+     ],
+     "espejadas": []
+    }
+   ],
+   "ventanas": [
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 1,
+    "p360Interior": 3,
+    "p360Terraza": 1
+   }
+  },
+  {
+   "codigo": "1D-29",
+   "ids": [
+    "427"
+   ],
+   "recuento": 1,
+   "niveles": [
+    4
+   ],
+   "dormitorios": 1,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 19.19,
+     "rango": [
+      19.19,
+      19.19
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 10.91,
+     "rango": [
+      10.91,
+      10.91
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.28,
+     "rango": [
+      3.28,
+      3.28
+     ],
+     "tiene360": true
+    }
+   ],
+   "supUtil": [
+    33.38,
+    33.38
+   ],
+   "supConstruidaInterior": [
+    38.07,
+    38.07
+   ],
+   "orientaciones": {
+    "Suroeste": 1
+   },
+   "referencia": "427",
+   "espejadas": [],
+   "transformaciones": {
+    "427": "igual"
+   },
+   "similitudMinima": null,
+   "margenQuiralidad": null,
+   "variantes": [
+    {
+     "terraza": 46.01,
+     "ids": [
+      "427"
+     ],
+     "espejadas": []
+    }
+   ],
+   "ventanas": [
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 1,
+    "p360Interior": 3,
+    "p360Terraza": 2
+   }
+  },
+  {
+   "codigo": "E-01",
+   "ids": [
+    "428"
+   ],
+   "recuento": 1,
+   "niveles": [
+    4
+   ],
+   "dormitorios": 0,
+   "banos": 1,
+   "estudio": true,
+   "estancias": [
+    {
+     "codigo": "EST",
+     "tipo": "estudio",
+     "nombre": "Dormitorio-salón - comedor - cocina",
+     "sup": 26.09,
+     "rango": [
+      26.09,
+      26.09
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.54,
+     "rango": [
+      3.54,
+      3.54
+     ],
+     "tiene360": true
+    }
+   ],
+   "supUtil": [
+    29.63,
+    29.63
+   ],
+   "supConstruidaInterior": [
+    33.19,
+    33.19
+   ],
+   "orientaciones": {
+    "Suroeste": 1
+   },
+   "referencia": "428",
+   "espejadas": [],
+   "transformaciones": {
+    "428": "igual"
+   },
+   "similitudMinima": null,
+   "margenQuiralidad": null,
+   "variantes": [
+    {
+     "terraza": 23.09,
+     "ids": [
+      "428"
+     ],
+     "espejadas": []
+    }
+   ],
+   "ventanas": [
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 1,
+    "p360Interior": 2,
+    "p360Terraza": 1
+   }
+  },
+  {
+   "codigo": "3D-02",
+   "ids": [
+    "431"
+   ],
+   "recuento": 1,
+   "niveles": [
+    4
+   ],
+   "dormitorios": 3,
+   "banos": 2,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 23.83,
+     "rango": [
+      23.83,
+      23.83
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 11.28,
+     "rango": [
+      11.28,
+      11.28
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D2",
+     "tipo": "dormitorio",
+     "nombre": "Dormitorio secundario",
+     "sup": 11.87,
+     "rango": [
+      11.87,
+      11.87
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D3",
+     "tipo": "dormitorio",
+     "nombre": "Dormitorio secundario 2",
+     "sup": 7.08,
+     "rango": [
+      7.08,
+      7.08
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.46,
+     "rango": [
+      3.46,
+      3.46
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B2",
+     "tipo": "bano",
+     "nombre": "Baño secundario",
+     "sup": 3.24,
+     "rango": [
+      3.24,
+      3.24
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "DI",
+     "tipo": "distribuidor",
+     "nombre": "Distribuidor",
+     "sup": 2.05,
+     "rango": [
+      2.05,
+      2.05
+     ],
+     "tiene360": false
+    }
+   ],
+   "supUtil": [
+    62.81,
+    62.81
+   ],
+   "supConstruidaInterior": [
+    70.27,
+    70.27
+   ],
+   "orientaciones": {
+    "Suroeste": 1
+   },
+   "referencia": "431",
+   "espejadas": [],
+   "transformaciones": {
+    "431": "igual"
+   },
+   "similitudMinima": null,
+   "margenQuiralidad": null,
+   "variantes": [
+    {
+     "terraza": 60.46,
+     "ids": [
+      "431"
+     ],
+     "espejadas": []
+    }
+   ],
+   "ventanas": [
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 1,
+    "p360Interior": 6,
+    "p360Terraza": 2
+   }
+  },
+  {
+   "codigo": "E-02",
+   "ids": [
+    "432"
+   ],
+   "recuento": 1,
+   "niveles": [
+    4
+   ],
+   "dormitorios": 0,
+   "banos": 1,
+   "estudio": true,
+   "estancias": [
+    {
+     "codigo": "EST",
+     "tipo": "estudio",
+     "nombre": "Dormitorio-salón - comedor - cocina",
+     "sup": 28.48,
+     "rango": [
+      28.48,
+      28.48
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.19,
+     "rango": [
+      3.19,
+      3.19
+     ],
+     "tiene360": true
+    }
+   ],
+   "supUtil": [
+    31.67,
+    31.67
+   ],
+   "supConstruidaInterior": [
+    34.8,
+    34.8
+   ],
+   "orientaciones": {
+    "Suroeste": 1
+   },
+   "referencia": "432",
+   "espejadas": [],
+   "transformaciones": {
+    "432": "igual"
+   },
+   "similitudMinima": null,
+   "margenQuiralidad": null,
+   "variantes": [
+    {
+     "terraza": 18.01,
+     "ids": [
+      "432"
+     ],
+     "espejadas": []
+    }
+   ],
+   "ventanas": [
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 1,
+    "p360Interior": 2,
+    "p360Terraza": 1
+   }
+  },
+  {
+   "codigo": "E-03",
+   "ids": [
+    "433"
+   ],
+   "recuento": 1,
+   "niveles": [
+    4
+   ],
+   "dormitorios": 0,
+   "banos": 1,
+   "estudio": true,
+   "estancias": [
+    {
+     "codigo": "EST",
+     "tipo": "estudio",
+     "nombre": "Dormitorio-salón - comedor - cocina",
+     "sup": 27.65,
+     "rango": [
+      27.65,
+      27.65
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.19,
+     "rango": [
+      3.19,
+      3.19
+     ],
+     "tiene360": true
+    }
+   ],
+   "supUtil": [
+    30.84,
+    30.84
+   ],
+   "supConstruidaInterior": [
+    33.93,
+    33.93
+   ],
+   "orientaciones": {
+    "Suroeste": 1
+   },
+   "referencia": "433",
+   "espejadas": [],
+   "transformaciones": {
+    "433": "igual"
+   },
+   "similitudMinima": null,
+   "margenQuiralidad": null,
+   "variantes": [
+    {
+     "terraza": 18.01,
+     "ids": [
+      "433"
+     ],
+     "espejadas": []
+    }
+   ],
+   "ventanas": [
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 1,
+    "p360Interior": 2,
+    "p360Terraza": 1
+   }
+  },
+  {
+   "codigo": "2D-18",
+   "ids": [
+    "434"
+   ],
+   "recuento": 1,
+   "niveles": [
+    4
+   ],
+   "dormitorios": 2,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 28.46,
+     "rango": [
+      28.46,
+      28.46
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 10.69,
+     "rango": [
+      10.69,
+      10.69
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D2",
+     "tipo": "dormitorio",
+     "nombre": "Dormitorio secundario",
+     "sup": 7.35,
+     "rango": [
+      7.35,
+      7.35
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.63,
+     "rango": [
+      3.63,
+      3.63
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "VE",
+     "tipo": "vestidor",
+     "nombre": "Vestidor",
+     "sup": 2.57,
+     "rango": [
+      2.57,
+      2.57
+     ],
+     "tiene360": false
+    },
+    {
+     "codigo": "DI",
+     "tipo": "distribuidor",
+     "nombre": "Distribuidor",
+     "sup": 4.79,
+     "rango": [
+      4.79,
+      4.79
+     ],
+     "tiene360": false
+    }
+   ],
+   "supUtil": [
+    57.49,
+    57.49
+   ],
+   "supConstruidaInterior": [
+    63.65,
+    63.65
+   ],
+   "orientaciones": {
+    "Suroeste": 1
+   },
+   "referencia": "434",
+   "espejadas": [],
+   "transformaciones": {
+    "434": "igual"
+   },
+   "similitudMinima": null,
+   "margenQuiralidad": null,
+   "variantes": [
+    {
+     "terraza": 35.11,
+     "ids": [
+      "434"
+     ],
+     "espejadas": []
+    }
+   ],
+   "ventanas": [
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 1,
+    "p360Interior": 4,
+    "p360Terraza": 1
+   }
+  },
+  {
+   "codigo": "2D-19",
+   "ids": [
+    "435"
+   ],
+   "recuento": 1,
+   "niveles": [
+    4
+   ],
+   "dormitorios": 2,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 24.2,
+     "rango": [
+      24.2,
+      24.2
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 10.09,
+     "rango": [
+      10.09,
+      10.09
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D2",
+     "tipo": "dormitorio",
+     "nombre": "Dormitorio secundario",
+     "sup": 7.24,
+     "rango": [
+      7.24,
+      7.24
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.63,
+     "rango": [
+      3.63,
+      3.63
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "VE",
+     "tipo": "vestidor",
+     "nombre": "Vestidor",
+     "sup": 3.56,
+     "rango": [
+      3.56,
+      3.56
+     ],
+     "tiene360": false
+    },
+    {
+     "codigo": "DI",
+     "tipo": "distribuidor",
+     "nombre": "Distribuidor",
+     "sup": 5.47,
+     "rango": [
+      5.47,
+      5.47
+     ],
+     "tiene360": false
+    }
+   ],
+   "supUtil": [
+    54.19,
+    54.19
+   ],
+   "supConstruidaInterior": [
+    60.32,
+    60.32
+   ],
+   "orientaciones": {
+    "Suroeste": 1
+   },
+   "referencia": "435",
+   "espejadas": [],
+   "transformaciones": {
+    "435": "igual"
+   },
+   "similitudMinima": null,
+   "margenQuiralidad": null,
+   "variantes": [
+    {
+     "terraza": 35.11,
+     "ids": [
+      "435"
+     ],
+     "espejadas": []
+    }
+   ],
+   "ventanas": [
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 1,
+    "p360Interior": 4,
+    "p360Terraza": 1
+   }
+  },
+  {
+   "codigo": "1D-30",
+   "ids": [
+    "436"
+   ],
+   "recuento": 1,
+   "niveles": [
+    4
+   ],
+   "dormitorios": 1,
+   "banos": 1,
+   "estudio": false,
+   "estancias": [
+    {
+     "codigo": "SCC",
+     "tipo": "salon-comedor-cocina",
+     "nombre": "Salón - comedor - cocina",
+     "sup": 18.93,
+     "rango": [
+      18.93,
+      18.93
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "D1",
+     "tipo": "dormitorio-principal",
+     "nombre": "Dormitorio principal",
+     "sup": 12.04,
+     "rango": [
+      12.04,
+      12.04
+     ],
+     "tiene360": true
+    },
+    {
+     "codigo": "B1",
+     "tipo": "bano",
+     "nombre": "Baño",
+     "sup": 3.5,
+     "rango": [
+      3.5,
+      3.5
+     ],
+     "tiene360": true
+    }
+   ],
+   "supUtil": [
+    34.47,
+    34.47
+   ],
+   "supConstruidaInterior": [
+    39.0,
+    39.0
+   ],
+   "orientaciones": {
+    "Suroeste": 1
+   },
+   "referencia": "436",
+   "espejadas": [],
+   "transformaciones": {
+    "436": "igual"
+   },
+   "similitudMinima": null,
+   "margenQuiralidad": null,
+   "variantes": [
+    {
+     "terraza": 23.8,
+     "ids": [
+      "436"
+     ],
+     "espejadas": []
+    }
+   ],
+   "ventanas": [
+    "suelo-techo"
+   ],
+   "renders": {
+    "cenitales": 1,
+    "cenitalesSinEspejo": 1,
+    "p360Interior": 3,
+    "p360Terraza": 1
+   }
+  }
+ ]
+}

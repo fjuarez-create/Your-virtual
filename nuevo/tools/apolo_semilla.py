@@ -133,17 +133,24 @@ def vectores_plano(png):
     """Dos capas (muros; muros + mobiliario + puertas) recortadas a la caja de los
     muros, engrosadas, reducidas a 96×96 y normalizadas, para cada transformación."""
     g = Image.open(png).convert('L')
-    muros = g.point(lambda v: 255 if v < 90 else 0)
-    lineas = g.point(lambda v: 255 if v < 170 else 0)
+    muros = g.point([255 if v < 90 else 0 for v in range(256)])
+    lineas = g.point([255 if v < 170 else 0 for v in range(256)])
     caja = muros.getbbox()
-    capas = [muros.crop(caja), lineas.crop(caja)]
+    # engrosar y reducir una sola vez; los giros y espejos se aplican a la matriz
+    # reducida (con un filtro de caja da lo mismo que transformar antes)
+    capas = [np.asarray(c.crop(caja).filter(ImageFilter.MaxFilter(5)).resize((LADO, LADO), Image.BOX),
+                        dtype=np.float64) for c in (muros, lineas)]
+    ops = {
+        'igual': lambda a: a, 'giro180': lambda a: np.rot90(a, 2),
+        'giro90': lambda a: np.rot90(a, 1), 'giro270': lambda a: np.rot90(a, 3),
+        'espejoH': np.fliplr, 'espejoV': np.flipud,
+        'traspuesta': lambda a: a.T, 'transversa': lambda a: np.rot90(a, 2).T,
+    }
     out = {}
-    for nombre, (tr, _) in TRANSFORMACIONES.items():
+    for nombre in TRANSFORMACIONES:
         vs = []
         for c in capas:
-            im = c.transpose(tr) if tr is not None else c
-            a = np.asarray(im.filter(ImageFilter.MaxFilter(5)).resize((LADO, LADO), Image.BOX),
-                           dtype=np.float64).ravel()
+            a = ops[nombre](c).ravel()
             a = a - a.mean()
             a /= (np.linalg.norm(a) or 1.0)
             vs.append(a)
