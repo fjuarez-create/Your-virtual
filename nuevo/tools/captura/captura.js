@@ -243,8 +243,14 @@ function adoptarEdificio(raiz, { mobiliario }) {
 
 /* Plataforma de una malla por su nombre (`…__T<n>__…`). */
 const plataformaDe = (nombre) => { const r = /__T(\d+)__/.exec(nombre); return r ? +r[1] : -1; };
-/* Cota mínima del nombre del mobiliario (`…__y<ymin>`, ver cortes.js). */
-const yminDe = (nombre) => { const r = /__y(-?\d+(?:\.\d+)?)$/.exec(nombre); return r ? parseFloat(r[1]) : NaN; };
+/* Cota mínima del nombre del mobiliario (`…__y<ymin>`, ver cortes.js).
+   GLTFLoader sanea los nombres de nodo y les quita los puntos: sin punto,
+   el valor va en centímetros. */
+const yminDe = (nombre) => {
+  const r = /__y(-?\d+)(?:\.(\d+))?$/.exec(nombre);
+  if (!r) return NaN;
+  return r[2] != null ? parseFloat(`${r[1]}.${r[2]}`) : parseInt(r[1], 10) / 100;
+};
 
 async function cargarPlanta() {
   let t0 = performance.now();
@@ -475,7 +481,7 @@ void main() {
    cajón (data/viviendas_serenea.json) menos `bajo` (para que el canto del
    forjado vaya con la planta que pisa encima); si un cajón no tiene
    viviendas en una planta, su corte menos la altura de sección típica. */
-function limitesDeNivel({ cortes, viviendas }, { bajo = 0.15, techoSobreAtico = 4.2 } = {}) {
+function limitesDeNivel({ cortes, viviendas }, { bajo = 0.15, techoSobreAtico = 2.95 } = {}) {
   const cajones = cortes.plantas.baja;
   const seccion = { baja: 1.95, p1: 1.38, p2: 1.38, atico: 1.40 };
   const min = {};
@@ -546,6 +552,114 @@ async function mascaraPlantas(opciones = {}) {
   }, renderMascara);
   for (const m of porLado.values()) m.dispose();
   return { url, limites: lim };
+}
+
+/* Máscara de edificios: Apolo en rojo puro; cada uno de los otros edificios
+   SERENEA en verde con su número en el azul (B = n), y el resto, negro.
+   Los otros edificios son lo del entorno que lleva materiales 'APOLO …' (el
+   entorno los trae modelados con los mismos acabados), pero sus mallas están
+   fusionadas por material y una misma malla puede abarcar dos edificios: se
+   separan EN PLANTA. Los vértices de esas mallas se marcan en una rejilla de
+   1 m, se engorda una celda y cada mancha conexa de al menos `huellaMin` m²
+   es un edificio; el sombreador mira en qué mancha cae cada fragmento.
+   Colores sin conversión (ShaderMaterial): el byte que sale es el pedido. */
+function mascaraEdificios({ huellaMin = 150, paso = 1 } = {}) {
+  const edificio = new Set(mallasEdificio);
+  const candidatas = new Set(mallasEntorno.filter((o) => /^APOLO/.test((Array.isArray(o.material) ? o.material[0] : o.material)?.name || '')));
+  /* Cada triángulo se muestrea en su plano cada medio metro (aristas e
+     interior): un paño de fachada marca toda su traza y una cubierta, toda
+     su huella. */
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+  const pts = [];
+  let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+  for (const o of candidatas) {
+    const g = o.geometry, pos = g.getAttribute('position'), idx = g.index;
+    const n = idx ? idx.count : pos.count;
+    for (let t = 0; t < n; t += 3) {
+      a.fromBufferAttribute(pos, idx ? idx.getX(t) : t).applyMatrix4(o.matrixWorld);
+      b.fromBufferAttribute(pos, idx ? idx.getX(t + 1) : t + 1).applyMatrix4(o.matrixWorld);
+      c.fromBufferAttribute(pos, idx ? idx.getX(t + 2) : t + 2).applyMatrix4(o.matrixWorld);
+      const lado = Math.max(Math.hypot(b.x - a.x, b.z - a.z), Math.hypot(c.x - a.x, c.z - a.z), Math.hypot(c.x - b.x, c.z - b.z));
+      const k = Math.min(400, Math.max(1, Math.ceil(lado / (paso / 2))));
+      for (let i = 0; i <= k; i++) {
+        for (let j = 0; j <= k - i; j++) {
+          const u = i / k, w = j / k;
+          const x = a.x + u * (b.x - a.x) + w * (c.x - a.x), z = a.z + u * (b.z - a.z) + w * (c.z - a.z);
+          pts.push(x, z);
+          if (x < x0) x0 = x; if (x > x1) x1 = x; if (z < z0) z0 = z; if (z > z1) z1 = z;
+        }
+      }
+    }
+  }
+  x0 -= 2; z0 -= 2;
+  const W = Math.ceil((x1 - x0) / paso) + 3, H = Math.ceil((z1 - z0) / paso) + 3;
+  const ocupada = new Uint8Array(W * H);
+  for (let i = 0; i < pts.length; i += 2) {
+    const ci = Math.floor((pts[i] - x0) / paso), cj = Math.floor((pts[i + 1] - z0) / paso);
+    for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) ocupada[(cj + dj) * W + ci + di] = 1;
+  }
+  const etiqueta = new Int32Array(W * H);
+  const manchas = [];
+  for (let k = 0; k < W * H; k++) {
+    if (!ocupada[k] || etiqueta[k]) continue;
+    const id = manchas.length + 1, pila = [k];
+    const m = { id, celdas: 0, i0: Infinity, i1: -Infinity, j0: Infinity, j1: -Infinity };
+    etiqueta[k] = id;
+    while (pila.length) {
+      const c = pila.pop(), ci = c % W, cj = (c - ci) / W;
+      m.celdas++; m.i0 = Math.min(m.i0, ci); m.i1 = Math.max(m.i1, ci); m.j0 = Math.min(m.j0, cj); m.j1 = Math.max(m.j1, cj);
+      for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+        const ni = ci + di, nj = cj + dj;
+        if (ni < 0 || nj < 0 || ni >= W || nj >= H) continue;
+        const n = nj * W + ni;
+        if (ocupada[n] && !etiqueta[n]) { etiqueta[n] = id; pila.push(n); }
+      }
+    }
+    manchas.push(m);
+  }
+  const buenas = manchas.filter((m) => m.celdas * paso * paso >= huellaMin).sort((a, b) => a.i0 - b.i0);
+  const numero = new Map(buenas.map((m, k) => [m.id, k + 1]));
+  const rejilla = new Uint8Array(W * H);
+  for (let k = 0; k < W * H; k++) rejilla[k] = numero.get(etiqueta[k]) || 0;
+  const tex = new THREE.DataTexture(rejilla, W, H, THREE.RedFormat, THREE.UnsignedByteType);
+  tex.minFilter = tex.magFilter = THREE.NearestFilter;
+  tex.needsUpdate = true;
+  const mats = new Map();
+  const material = (tipo, lado) => {
+    const k = `${tipo}|${lado}`;
+    let m = mats.get(k);
+    if (!m) {
+      m = new THREE.ShaderMaterial({
+        uniforms: { uTipo: { value: tipo }, uRejilla: { value: tex }, uOrigen: { value: new THREE.Vector2(x0, z0) }, uTam: { value: new THREE.Vector2(W * paso, H * paso) } },
+        vertexShader: 'varying vec3 vMundo; void main() { vec4 w = modelMatrix * vec4(position, 1.0); vMundo = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
+        fragmentShader: `uniform int uTipo; uniform sampler2D uRejilla; uniform vec2 uOrigen; uniform vec2 uTam; varying vec3 vMundo;
+          void main() {
+            if (uTipo == 1) { gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0); return; }
+            if (uTipo == 0) { gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); return; }
+            vec2 uv = (vMundo.xz - uOrigen) / uTam;
+            float n = (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) ? 0.0 : texture2D(uRejilla, uv).r;
+            gl_FragColor = n > 0.0 ? vec4(0.0, 1.0, n, 1.0) : vec4(0.0, 0.0, 0.0, 1.0);
+          }`,
+        side: lado, toneMapped: false, fog: false,
+      });
+      mats.set(k, m);
+    }
+    return m;
+  };
+  const url = conMateriales((o) => {
+    const orig = Array.isArray(o.material) ? o.material[0] : o.material;
+    const lado = orig?.side ?? THREE.FrontSide;
+    return material(edificio.has(o) ? 1 : candidatas.has(o) ? 2 : 0, lado);
+  }, renderMascara);
+  for (const m of mats.values()) m.dispose();
+  tex.dispose();
+  return {
+    url,
+    grupos: buenas.map((m, k) => ({
+      grupo: k + 1, huellaM2: Math.round(m.celdas * paso * paso),
+      caja: { x0: +(x0 + m.i0 * paso).toFixed(1), x1: +(x0 + (m.i1 + 1) * paso).toFixed(1), z0: +(z0 + m.j0 * paso).toFixed(1), z1: +(z0 + (m.j1 + 1) * paso).toFixed(1) },
+    })),
+  };
 }
 
 /* Máscara de viviendas: el prisma de cada vivienda pedida, con su índice
@@ -620,7 +734,7 @@ function seccion({ y, x0, x1, z0, z1, conPuertas = true }) {
 /* Mobiliario dentro de un polígono: por material, área en planta y
    centroide de los triángulos cuyo centro cae dentro y entre y0 e y1. Sirve
    para situar la cocina, el sofá, la cama o el inodoro. */
-function mobiliarioEn({ poligono, y0, y1 }) {
+function mobiliarioEn({ poligono, y0, y1, triangulos = false }) {
   const dentro = (x, z) => {
     let r = false;
     for (let i = 0, j = poligono.length - 1; i < poligono.length; j = i++) {
@@ -631,6 +745,7 @@ function mobiliarioEn({ poligono, y0, y1 }) {
   };
   const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
   const acc = {};
+  const tris = [], indiceMaterial = new Map();
   for (const o of mallasEdificio) {
     if (!o.userData.mobiliario) continue;
     const g = o.geometry, pos = g.getAttribute('position');
@@ -647,12 +762,18 @@ function mobiliarioEn({ poligono, y0, y1 }) {
       e.area += ar; e.sx += cx * ar; e.sz += cz * ar; e.ymax = Math.max(e.ymax, a.y, b.y, c.y);
       e.x0 = Math.min(e.x0, a.x, b.x, c.x); e.x1 = Math.max(e.x1, a.x, b.x, c.x);
       e.z0 = Math.min(e.z0, a.z, b.z, c.z); e.z1 = Math.max(e.z1, a.z, b.z, c.z);
+      if (triangulos) {
+        if (!indiceMaterial.has(nombre)) indiceMaterial.set(nombre, indiceMaterial.size);
+        /* en centímetros enteros: [material, xa, za, xb, zb, xc, zc, ymax] */
+        tris.push([indiceMaterial.get(nombre), ...[a.x, a.z, b.x, b.z, c.x, c.z].map((v) => Math.round(v * 100)), Math.round(Math.max(a.y, b.y, c.y) * 100)]);
+      }
     }
   }
   const out = {};
   for (const [k, e] of Object.entries(acc)) {
     out[k] = { area: +e.area.toFixed(3), x: +(e.sx / e.area).toFixed(3), z: +(e.sz / e.area).toFixed(3), ymax: +e.ymax.toFixed(2), caja: [e.x0, e.x1, e.z0, e.z1].map((v) => +v.toFixed(2)) };
   }
+  if (triangulos) return { materiales: out, nombres: [...indiceMaterial.keys()], triangulos: tris };
   return out;
 }
 
@@ -660,8 +781,10 @@ function mobiliarioEn({ poligono, y0, y1 }) {
 window.captura = {
   estado, info,
   tamano, camaraPerspectiva, camaraCenital, describirCamara, proyectar, setSol,
-  renderizar, mascaraPlantas, mascaraViviendas, seccion, mobiliarioEn,
-  setFondo(hex) { scene.background = new THREE.Color(hex); },
+  renderizar, mascaraPlantas, mascaraEdificios, mascaraViviendas, seccion, mobiliarioEn,
+  /* Fondo liso: hex sRGB o [r, g, b] lineales (pasa por el tono y el grado,
+     así que el color final se mide en la imagen; ver procesar.py). */
+  setFondo(valor) { scene.background = Array.isArray(valor) ? new THREE.Color().setRGB(...valor, THREE.LinearSRGBColorSpace) : new THREE.Color(valor); },
   setAlcanceSombras: (m) => luz.setAlcanceSombras(m),
   setOclusion: (p) => post.setOclusion(p),
   setReflejos(activo) { post.ssrActivo = !!activo; },

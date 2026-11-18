@@ -1,0 +1,9 @@
+# Carpeta de trabajo: no se sirve en la web (plantilla con notas internas,
+# scripts y datos de origen). Apache 2.4 y, por si acaso, 2.2.
+<IfModule mod_authz_core.c>
+  Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+  Order allow,deny
+  Deny from all
+</IfModule>

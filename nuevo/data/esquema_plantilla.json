@@ -1,0 +1,680 @@
+{
+ "version": 1,
+ "hojas": {
+  "Edificios": [
+   {
+    "cabeceraExcel": "ID *",
+    "cabecera": "ID",
+    "campo": "id",
+    "tipo": "id",
+    "obligatoria": true,
+    "ancho": 10,
+    "ayuda": "Identificador corto, sin espacios (apolo, hera…). No se cambia nunca una vez publicado: lo usan las URL y los renders."
+   },
+   {
+    "cabeceraExcel": "Nombre visible *",
+    "cabecera": "Nombre visible",
+    "campo": "nombre",
+    "tipo": "texto",
+    "obligatoria": true,
+    "ancho": 18,
+    "ayuda": "Como se verá en la web: «Apolo»."
+   },
+   {
+    "cabeceraExcel": "Nº en el plano del conjunto *",
+    "cabecera": "Nº en el plano del conjunto",
+    "campo": "numero",
+    "tipo": "entero",
+    "obligatoria": true,
+    "ancho": 12,
+    "ayuda": "El número de la chincheta en la vista del conjunto (1 a 5).",
+    "min": 1,
+    "max": 99
+   },
+   {
+    "cabeceraExcel": "Nº de plantas",
+    "cabecera": "Nº de plantas",
+    "campo": "numPlantas",
+    "tipo": "entero",
+    "obligatoria": false,
+    "ancho": 10,
+    "ayuda": "Solo de control: tiene que coincidir con las filas del edificio en la hoja Plantas.",
+    "min": 1,
+    "max": 60
+   },
+   {
+    "cabeceraExcel": "Orden *",
+    "cabecera": "Orden",
+    "campo": "orden",
+    "tipo": "entero",
+    "obligatoria": true,
+    "ancho": 8,
+    "ayuda": "Orden en menús y listados (1 = primero).",
+    "min": 1,
+    "max": 99
+   },
+   {
+    "cabeceraExcel": "Estado comercial *",
+    "cabecera": "Estado comercial",
+    "campo": "estado",
+    "tipo": "lista:estadosEdificio",
+    "obligatoria": true,
+    "ancho": 15,
+    "ayuda": "En venta, Próximamente, Agotado u Oculto (no se muestra en la web)."
+   },
+   {
+    "cabeceraExcel": "Texto breve",
+    "cabecera": "Texto breve",
+    "campo": "texto",
+    "tipo": "texto",
+    "obligatoria": false,
+    "ancho": 50,
+    "ayuda": "Una o dos frases para la tarjeta del edificio. Máximo 200 caracteres.",
+    "maxlen": 200
+   },
+   {
+    "cabeceraExcel": "Notas internas",
+    "cabecera": "Notas internas",
+    "campo": "notas",
+    "tipo": "texto",
+    "obligatoria": false,
+    "ancho": 40,
+    "ayuda": "No se publica."
+   }
+  ],
+  "Plantas": [
+   {
+    "cabeceraExcel": "Edificio *",
+    "cabecera": "Edificio",
+    "campo": "edificio",
+    "tipo": "ref:Edificios",
+    "obligatoria": true,
+    "ancho": 10,
+    "ayuda": "ID del edificio (hoja Edificios)."
+   },
+   {
+    "cabeceraExcel": "Código *",
+    "cabecera": "Código",
+    "campo": "codigo",
+    "tipo": "lista:codigosPlanta",
+    "obligatoria": true,
+    "ancho": 9,
+    "ayuda": "P1, P2… (P0 = baja si la hubiera, P-1 = sótano). Único dentro del edificio."
+   },
+   {
+    "cabeceraExcel": "Nombre visible *",
+    "cabecera": "Nombre visible",
+    "campo": "nombre",
+    "tipo": "texto",
+    "obligatoria": true,
+    "ancho": 14,
+    "ayuda": "Como se verá en el selector de plantas: «Planta 1», «Ático»."
+   },
+   {
+    "cabeceraExcel": "Orden *",
+    "cabecera": "Orden",
+    "campo": "orden",
+    "tipo": "entero",
+    "obligatoria": true,
+    "ancho": 8,
+    "ayuda": "De abajo arriba: 1 = la más baja.",
+    "min": 1,
+    "max": 99
+   },
+   {
+    "cabeceraExcel": "Tipo de ventana *",
+    "cabecera": "Tipo de ventana",
+    "campo": "ventana",
+    "tipo": "lista:ventanas",
+    "obligatoria": true,
+    "ancho": 13,
+    "ayuda": "antepecho (con pretil blanco, planta 1) o suelo-techo (resto). Lo usan los renders."
+   },
+   {
+    "cabeceraExcel": "Notas internas",
+    "cabecera": "Notas internas",
+    "campo": "notas",
+    "tipo": "texto",
+    "obligatoria": false,
+    "ancho": 40,
+    "ayuda": "No se publica."
+   }
+  ],
+  "Viviendas": [
+   {
+    "cabeceraExcel": "Edificio *",
+    "cabecera": "Edificio",
+    "campo": "edificio",
+    "tipo": "ref:Edificios",
+    "obligatoria": true,
+    "ancho": 10,
+    "ayuda": "ID del edificio (hoja Edificios)."
+   },
+   {
+    "cabeceraExcel": "ID *",
+    "cabecera": "ID",
+    "campo": "id",
+    "tipo": "id",
+    "obligatoria": true,
+    "ancho": 8,
+    "ayuda": "Identificador único en TODA la promoción. Apolo: 101–436 (los mismos del ejecutable de Unreal y de /gestion/api/estado.php). Otros edificios: con prefijo, p. ej. HE-1A."
+   },
+   {
+    "cabeceraExcel": "Referencia *",
+    "cabecera": "Referencia",
+    "campo": "referencia",
+    "tipo": "texto",
+    "obligatoria": true,
+    "ancho": 12,
+    "ayuda": "Referencia comercial que ve el cliente: SEAP-101. Única en toda la promoción."
+   },
+   {
+    "cabeceraExcel": "Planta *",
+    "cabecera": "Planta",
+    "campo": "planta",
+    "tipo": "lista:codigosPlanta",
+    "obligatoria": true,
+    "ancho": 8,
+    "ayuda": "Código de la planta (hoja Plantas) de ese edificio."
+   },
+   {
+    "cabeceraExcel": "Tipología",
+    "cabecera": "Tipología",
+    "campo": "tipologia",
+    "tipo": "texto",
+    "obligatoria": false,
+    "ancho": 10,
+    "ayuda": "Código de tipología (1D-01…). Las viviendas de una misma tipología comparten render cenital y 360. Ver nuevo/data/tipologias.json."
+   },
+   {
+    "cabeceraExcel": "Dormitorios *",
+    "cabecera": "Dormitorios",
+    "campo": "dormitorios",
+    "tipo": "entero",
+    "obligatoria": true,
+    "ancho": 11,
+    "ayuda": "0 = estudio. Tiene que cuadrar con los dormitorios de la hoja Estancias.",
+    "min": 0,
+    "max": 9
+   },
+   {
+    "cabeceraExcel": "Baños *",
+    "cabecera": "Baños",
+    "campo": "banos",
+    "tipo": "entero",
+    "obligatoria": true,
+    "ancho": 8,
+    "ayuda": "Baños y aseos. Tiene que cuadrar con la hoja Estancias.",
+    "min": 0,
+    "max": 9
+   },
+   {
+    "cabeceraExcel": "Orientación",
+    "cabecera": "Orientación",
+    "campo": "orientacion",
+    "tipo": "lista:orientaciones",
+    "obligatoria": false,
+    "ancho": 14,
+    "ayuda": "Fachada principal o «Jardín interior»."
+   },
+   {
+    "cabeceraExcel": "Sup. útil (m²) *",
+    "cabecera": "Sup. útil (m²)",
+    "campo": "supUtil",
+    "tipo": "m2",
+    "obligatoria": true,
+    "ancho": 12,
+    "ayuda": "Suma de las superficies útiles de las estancias interiores (sin terraza). Dos decimales."
+   },
+   {
+    "cabeceraExcel": "Sup. construida interior (m²) *",
+    "cabecera": "Sup. construida interior (m²)",
+    "campo": "supConstruidaInterior",
+    "tipo": "m2",
+    "obligatoria": true,
+    "ancho": 14,
+    "ayuda": "«Superficie construida interior» de la ficha."
+   },
+   {
+    "cabeceraExcel": "Sup. construida con ZZCC (m²)",
+    "cabecera": "Sup. construida con ZZCC (m²)",
+    "campo": "supConstruidaZZCC",
+    "tipo": "m2",
+    "obligatoria": false,
+    "ancho": 14,
+    "ayuda": "«Superficie construida RZZCC» de la ficha (con repercusión de zonas comunes)."
+   },
+   {
+    "cabeceraExcel": "Terraza (m²)",
+    "cabecera": "Terraza (m²)",
+    "campo": "terraza",
+    "tipo": "m2",
+    "obligatoria": false,
+    "ancho": 11,
+    "ayuda": "«Superficie construida exterior» de la ficha. Vacío o 0 si no tiene."
+   },
+   {
+    "cabeceraExcel": "Precio sin impuestos (€)",
+    "cabecera": "Precio sin impuestos (€)",
+    "campo": "precio",
+    "tipo": "euros",
+    "obligatoria": false,
+    "ancho": 14,
+    "ayuda": "Sin IGIC y sin decimales. Obligatorio si está Disponible o Reservada."
+   },
+   {
+    "cabeceraExcel": "IGIC (%)",
+    "cabecera": "IGIC (%)",
+    "campo": "igic",
+    "tipo": "porcentaje",
+    "obligatoria": false,
+    "ancho": 9,
+    "ayuda": "Vacío = el de la hoja Promoción. Escribe 7 para un 7 %."
+   },
+   {
+    "cabeceraExcel": "Estado *",
+    "cabecera": "Estado",
+    "campo": "estado",
+    "tipo": "lista:estados",
+    "obligatoria": true,
+    "ancho": 13,
+    "ayuda": "Disponible, Reservada, Vendida o No a la venta."
+   },
+   {
+    "cabeceraExcel": "Visible en web *",
+    "cabecera": "Visible en web",
+    "campo": "visible",
+    "tipo": "sino",
+    "obligatoria": true,
+    "ancho": 10,
+    "ayuda": "No = aparece en el plano con velo gris y sin datos ni precio."
+   },
+   {
+    "cabeceraExcel": "Plan de pagos",
+    "cabecera": "Plan de pagos",
+    "campo": "planPagos",
+    "tipo": "ref:PlanesPago",
+    "obligatoria": false,
+    "ancho": 12,
+    "ayuda": "Código de la hoja PlanesPago. Vacío = sin botón «Ver pagos»."
+   },
+   {
+    "cabeceraExcel": "Notas internas",
+    "cabecera": "Notas internas",
+    "campo": "notas",
+    "tipo": "texto",
+    "obligatoria": false,
+    "ancho": 50,
+    "ayuda": "No se publica."
+   }
+  ],
+  "Estancias": [
+   {
+    "cabeceraExcel": "Vivienda *",
+    "cabecera": "Vivienda",
+    "campo": "vivienda",
+    "tipo": "ref:Viviendas",
+    "obligatoria": true,
+    "ancho": 9,
+    "ayuda": "ID de la vivienda (hoja Viviendas)."
+   },
+   {
+    "cabeceraExcel": "Orden *",
+    "cabecera": "Orden",
+    "campo": "orden",
+    "tipo": "entero",
+    "obligatoria": true,
+    "ancho": 7,
+    "ayuda": "Orden de la lista en la ficha (1, 2, 3…).",
+    "min": 1,
+    "max": 99
+   },
+   {
+    "cabeceraExcel": "Código *",
+    "cabecera": "Código",
+    "campo": "codigo",
+    "tipo": "id",
+    "obligatoria": true,
+    "ancho": 8,
+    "ayuda": "Único dentro de la vivienda: SCC, D1, D2, B1, VE, DI, TE… Nombra los 360: <tipología>_<código>.",
+    "maxlen": 12
+   },
+   {
+    "cabeceraExcel": "Nombre visible *",
+    "cabecera": "Nombre visible",
+    "campo": "nombre",
+    "tipo": "texto",
+    "obligatoria": true,
+    "ancho": 28,
+    "ayuda": "Como se verá en la ficha: «Dormitorio principal»."
+   },
+   {
+    "cabeceraExcel": "Tipo *",
+    "cabecera": "Tipo",
+    "campo": "tipo",
+    "tipo": "lista:tiposEstancia",
+    "obligatoria": true,
+    "ancho": 22,
+    "ayuda": "De la lista. Terraza y Patio no cuentan en la superficie útil."
+   },
+   {
+    "cabeceraExcel": "Sup. útil (m²)",
+    "cabecera": "Sup. útil (m²)",
+    "campo": "superficie",
+    "tipo": "m2",
+    "obligatoria": false,
+    "ancho": 12,
+    "ayuda": "Obligatoria salvo en Terraza y Patio (las fichas solo dan su superficie construida, que va en Viviendas › Terraza)."
+   },
+   {
+    "cabeceraExcel": "Tiene 360 *",
+    "cabecera": "Tiene 360",
+    "campo": "tiene360",
+    "tipo": "sino",
+    "obligatoria": true,
+    "ancho": 9,
+    "ayuda": "Sí = lleva bolita y panorámica 360 en el plano de la vivienda."
+   },
+   {
+    "cabeceraExcel": "Puntos 360",
+    "cabecera": "Puntos 360",
+    "campo": "puntos360",
+    "tipo": "entero",
+    "obligatoria": false,
+    "ancho": 9,
+    "ayuda": "Cuántas bolitas (1 por defecto; 2 en terrazas grandes).",
+    "min": 0,
+    "max": 4
+   },
+   {
+    "cabeceraExcel": "Notas internas",
+    "cabecera": "Notas internas",
+    "campo": "notas",
+    "tipo": "texto",
+    "obligatoria": false,
+    "ancho": 40,
+    "ayuda": "No se publica."
+   }
+  ],
+  "PlanesPago": [
+   {
+    "cabeceraExcel": "Código *",
+    "cabecera": "Código",
+    "campo": "codigo",
+    "tipo": "id",
+    "obligatoria": true,
+    "ancho": 12,
+    "ayuda": "Identificador del plan (sin espacios): ESTANDAR, OBRA-24… Es lo que se elige en Viviendas › Plan de pagos.",
+    "maxlen": 20
+   },
+   {
+    "cabeceraExcel": "Nombre visible *",
+    "cabecera": "Nombre visible",
+    "campo": "nombre",
+    "tipo": "texto",
+    "obligatoria": true,
+    "ancho": 28,
+    "ayuda": "Título en la ventana «Ver pagos»."
+   },
+   {
+    "cabeceraExcel": "Reserva (%)",
+    "cabecera": "Reserva (%)",
+    "campo": "reservaPct",
+    "tipo": "porcentaje",
+    "obligatoria": false,
+    "ancho": 10,
+    "ayuda": "Porcentaje del precio a la reserva. Si la reserva es un importe fijo, deja 0 % y usa la columna siguiente."
+   },
+   {
+    "cabeceraExcel": "Reserva (importe fijo, €)",
+    "cabecera": "Reserva (importe fijo, €)",
+    "campo": "reservaImporte",
+    "tipo": "euros",
+    "obligatoria": false,
+    "ancho": 13,
+    "ayuda": "Importe fijo de reserva. Se descuenta del pago a la firma del contrato."
+   },
+   {
+    "cabeceraExcel": "Firma del contrato (%) *",
+    "cabecera": "Firma del contrato (%)",
+    "campo": "contratoPct",
+    "tipo": "porcentaje",
+    "obligatoria": true,
+    "ancho": 12,
+    "ayuda": "Porcentaje a la firma del contrato privado de compraventa."
+   },
+   {
+    "cabeceraExcel": "Aplazado durante la obra (%) *",
+    "cabecera": "Aplazado durante la obra (%)",
+    "campo": "aplazadoPct",
+    "tipo": "porcentaje",
+    "obligatoria": true,
+    "ancho": 13,
+    "ayuda": "Porcentaje que se paga en cuotas durante la obra."
+   },
+   {
+    "cabeceraExcel": "Nº de cuotas del aplazado",
+    "cabecera": "Nº de cuotas del aplazado",
+    "campo": "cuotas",
+    "tipo": "entero",
+    "obligatoria": false,
+    "ancho": 11,
+    "ayuda": "Número de cuotas (mensuales) del aplazado.",
+    "min": 0,
+    "max": 120
+   },
+   {
+    "cabeceraExcel": "Entrega de llaves (%) *",
+    "cabecera": "Entrega de llaves (%)",
+    "campo": "entregaPct",
+    "tipo": "porcentaje",
+    "obligatoria": true,
+    "ancho": 12,
+    "ayuda": "Resto a la escritura y entrega. Los cuatro porcentajes suman 100 %."
+   },
+   {
+    "cabeceraExcel": "Es ejemplo *",
+    "cabecera": "Es ejemplo",
+    "campo": "ejemplo",
+    "tipo": "sino",
+    "obligatoria": true,
+    "ancho": 9,
+    "ayuda": "Sí = fila de ejemplo: no se carga. Bórrala o pon No cuando sea un plan real."
+   },
+   {
+    "cabeceraExcel": "Notas internas",
+    "cabecera": "Notas internas",
+    "campo": "notas",
+    "tipo": "texto",
+    "obligatoria": false,
+    "ancho": 40,
+    "ayuda": "No se publica."
+   }
+  ]
+ },
+ "promocion": [
+  {
+   "etiqueta": "ID de la promoción",
+   "campo": "id",
+   "tipo": "id",
+   "obligatoria": true,
+   "ayuda": "Identificador corto y fijo: serenea."
+  },
+  {
+   "etiqueta": "Nombre visible",
+   "campo": "nombre",
+   "tipo": "texto",
+   "obligatoria": true,
+   "ayuda": "Como se verá en la web."
+  },
+  {
+   "etiqueta": "Promotora",
+   "campo": "promotora",
+   "tipo": "texto",
+   "obligatoria": true,
+   "ayuda": "Razón social que figura en las fichas."
+  },
+  {
+   "etiqueta": "Dirección",
+   "campo": "direccion",
+   "tipo": "texto",
+   "obligatoria": false,
+   "ayuda": "Calle y número."
+  },
+  {
+   "etiqueta": "Localidad",
+   "campo": "localidad",
+   "tipo": "texto",
+   "obligatoria": false,
+   "ayuda": "Barrio y municipio."
+  },
+  {
+   "etiqueta": "IGIC por defecto (%)",
+   "campo": "igic",
+   "tipo": "porcentaje",
+   "obligatoria": false,
+   "ayuda": "Se aplica a todas las viviendas que no tengan su propio IGIC. Escribe 7 para un 7 %."
+  },
+  {
+   "etiqueta": "Texto junto al precio",
+   "campo": "textoPrecio",
+   "tipo": "texto",
+   "obligatoria": false,
+   "ayuda": "Lo que acompaña al precio en la ficha: «+ IGIC»."
+  },
+  {
+   "etiqueta": "Teléfono de contacto",
+   "campo": "telefono",
+   "tipo": "texto",
+   "obligatoria": false,
+   "ayuda": "Para el botón de contacto de la ficha."
+  },
+  {
+   "etiqueta": "Correo de contacto",
+   "campo": "correo",
+   "tipo": "texto",
+   "obligatoria": false,
+   "ayuda": "Para el botón de contacto de la ficha."
+  },
+  {
+   "etiqueta": "Aviso legal",
+   "campo": "avisoLegal",
+   "tipo": "texto",
+   "obligatoria": false,
+   "ayuda": "Pie de la ficha: «Superficies e imágenes orientativas…»."
+  },
+  {
+   "etiqueta": "Versión de los precios",
+   "campo": "versionPrecios",
+   "tipo": "texto",
+   "obligatoria": false,
+   "ayuda": "De dónde salen los precios (p. ej. «Pricing v.07»). No se publica."
+  }
+ ],
+ "listas": {
+  "estados": [
+   "Disponible",
+   "Reservada",
+   "Vendida",
+   "No a la venta"
+  ],
+  "sino": [
+   "Sí",
+   "No"
+  ],
+  "tiposEstancia": [
+   "Salón-comedor-cocina",
+   "Salón-comedor",
+   "Salón",
+   "Cocina",
+   "Estudio (dormitorio-salón-comedor-cocina)",
+   "Dormitorio principal",
+   "Dormitorio",
+   "Baño",
+   "Aseo",
+   "Vestidor",
+   "Distribuidor",
+   "Lavadero",
+   "Trastero interior",
+   "Terraza",
+   "Patio",
+   "Otro"
+  ],
+  "ventanas": [
+   "antepecho",
+   "suelo-techo"
+  ],
+  "orientaciones": [
+   "Norte",
+   "Noreste",
+   "Este",
+   "Sureste",
+   "Sur",
+   "Suroeste",
+   "Oeste",
+   "Noroeste",
+   "Jardín interior"
+  ],
+  "estadosEdificio": [
+   "En venta",
+   "Próximamente",
+   "Agotado",
+   "Oculto"
+  ],
+  "codigosPlanta": [
+   "P-1",
+   "P0",
+   "P1",
+   "P2",
+   "P3",
+   "P4",
+   "P5",
+   "P6",
+   "P7",
+   "P8",
+   "P9",
+   "P10"
+  ]
+ },
+ "codigos": {
+  "estados": {
+   "Disponible": "disponible",
+   "Reservada": "reservada",
+   "Vendida": "vendida",
+   "No a la venta": "no-a-la-venta"
+  },
+  "tiposEstancia": {
+   "Salón-comedor-cocina": "salon-comedor-cocina",
+   "Salón-comedor": "salon-comedor",
+   "Salón": "salon",
+   "Cocina": "cocina",
+   "Estudio (dormitorio-salón-comedor-cocina)": "estudio",
+   "Dormitorio principal": "dormitorio-principal",
+   "Dormitorio": "dormitorio",
+   "Baño": "bano",
+   "Aseo": "aseo",
+   "Vestidor": "vestidor",
+   "Distribuidor": "distribuidor",
+   "Lavadero": "lavadero",
+   "Trastero interior": "trastero",
+   "Terraza": "terraza",
+   "Patio": "patio",
+   "Otro": "otro"
+  },
+  "estadosEdificio": {
+   "En venta": "en-venta",
+   "Próximamente": "proximamente",
+   "Agotado": "agotado",
+   "Oculto": "oculto"
+  }
+ },
+ "exteriores": [
+  "patio",
+  "terraza"
+ ],
+ "toleranciaSumaEstancias": 0.05,
+ "razonUtilConstruida": [
+  0.7,
+  0.97
+ ]
+}

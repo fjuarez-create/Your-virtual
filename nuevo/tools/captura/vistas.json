@@ -1,0 +1,170 @@
+{
+ "descripcion": "Vistas de captura (ver LEEME.md). Coordenadas del SketchUp: metros, Y arriba, norte = −z. Acimut desde +z hacia +x (0° = sur), como luz.js y el visor.",
+ "exterior": [
+  {
+   "nombre": "conjunto",
+   "camara": {
+    "ancho": 2400,
+    "alto": 1350,
+    "posicion": [
+     -146.7,
+     190.177,
+     -201.555
+    ],
+    "objetivo": [
+     78,
+     5,
+     -26
+    ],
+    "fov": 35,
+    "pose": {
+     "azimut": 232,
+     "elevacion": 33,
+     "distancia": 340
+    }
+   },
+   "sombras": 900,
+   "fotogramas": 3,
+   "mascaras": [
+    "edificios"
+   ]
+  },
+  {
+   "nombre": "edificio",
+   "camara": {
+    "ancho": 2400,
+    "alto": 1350,
+    "posicion": [
+     -36.765,
+     32.443,
+     -105.852
+    ],
+    "objetivo": [
+     68,
+     9,
+     -24
+    ],
+    "fov": 34,
+    "pose": {
+     "azimut": 232,
+     "elevacion": 10,
+     "distancia": 135
+    }
+   },
+   "sombras": 300,
+   "fotogramas": 3,
+   "mascaras": [
+    "plantas",
+    "edificios"
+   ]
+  }
+ ],
+ "planta": [
+  {
+   "nombre": "planta-2",
+   "planta": "p1",
+   "camara": {
+    "x0": 6.72,
+    "z0": -42.94,
+    "s": 20,
+    "ancho": 2400,
+    "alto": 760
+   },
+   "sol": {
+    "elev": 70,
+    "azim": 26
+   },
+   "fondo": [
+    2.0,
+    2.0,
+    1.97
+   ],
+   "fotogramas": 3,
+   "mascaras": [
+    "viviendas"
+   ],
+   "viviendas": [
+    "201",
+    "202",
+    "203",
+    "204",
+    "205",
+    "206",
+    "207",
+    "208",
+    "209",
+    "210",
+    "211",
+    "212",
+    "213",
+    "214",
+    "215",
+    "216",
+    "217",
+    "218",
+    "219",
+    "220",
+    "221",
+    "222",
+    "223",
+    "224",
+    "225",
+    "226",
+    "227",
+    "228",
+    "229",
+    "230",
+    "231",
+    "232",
+    "233",
+    "234",
+    "235",
+    "236",
+    "237",
+    "238",
+    "239",
+    "240",
+    "241",
+    "242",
+    "243",
+    "244",
+    "245",
+    "246"
+   ]
+  },
+  {
+   "nombre": "vivienda-238",
+   "planta": "p1",
+   "camara": {
+    "x0": 11.0,
+    "z0": -19.35,
+    "s": 180,
+    "ancho": 1480,
+    "alto": 2060,
+    "sombras": 40
+   },
+   "sol": {
+    "elev": 70,
+    "azim": 26
+   },
+   "fondo": [
+    2.0,
+    2.0,
+    1.97
+   ],
+   "fotogramas": 3,
+   "mascaras": [
+    "viviendas"
+   ],
+   "viviendas": [
+    "238"
+   ],
+   "estancias": {
+    "id": "238",
+    "alturas": [
+     1.0
+    ]
+   }
+  }
+ ]
+}

@@ -1,42 +1,427 @@
 {
  "generado": "2026-11-18",
  "edificio": "apolo",
- "criterio": "Misma lista de estancias por tipo con superficies útiles iguales ±0.15 m² (fichas PDF) y mismo plano (assets/planos/<id>.png) salvo giro o espejo, con correlación ≥ 0.93. Las terrazas no separan tipologías: forman variantes (±0.5 m²).",
- "transformaciones": "Cómo se pasa del plano de la vivienda de referencia al de cada vivienda: igual, giro90/180/270 (misma distribución girada) o espejoH/espejoV/traspuesta/transversa (distribución simétrica). Las «espejadas» son las de quiralidad contraria a la referencia.",
- "renders": "cenitales = una imagen por variante (terraza distinta) reutilizando la imagen volteada en las espejadas; cenitalesSinEspejo = si no se quiere voltear la imagen; p360Interior = puntos con 360 (salón/estudio, dormitorios, baños) × tipos de ventana presentes (nivel 1 antepecho; niveles 2-4 suelo-techo); p360Terraza = terrazas ≥ 10 m² (2 puntos si ≥ 40 m²).",
+ "criterio": "Tipología: misma lista de estancias por tipo con superficies útiles iguales ±0.15 m² (fichas PDF; «Dormitorio individual» = «Dormitorio secundario») y el mismo plano (assets/planos/<id>.png) salvo giro o espejo, correlación ≥ 0.80. La terraza no separa tipologías.",
+ "transformaciones": "Cómo se pasa del plano de la vivienda de referencia al de cada vivienda: igual, giro90/180/270 (misma distribución girada) o espejoH/espejoV/traspuesta/transversa (distribución simétrica). «espejadas» = quiralidad contraria a la referencia. margenEspejo = diferencia mínima entre la mejor transformación y la mejor de la quiralidad contraria (cuanto mayor, más seguro).",
+ "variantes": "Variante de plano = un render cenital: misma tipología, terraza ±0.5 m², construida interior ±0.15 m² y mismo grupo de plantas (planta 1 / plantas 2-3 / ático). Las espejadas usan la imagen volteada; las giradas, la misma imagen girada.",
+ "renders": "cenitales = variantes; cenitalesSinVoltear = si no se acepta voltear la imagen; p360Interior = salón/estudio y dormitorios × tipos de ventana presentes (planta 1 antepecho; resto suelo-techo) + baños (interiores, uno por tipología); p360Terraza = terrazas ≥ 10 m² distintas (2 puntos si ≥ 40 m²).",
  "resumen": {
   "viviendas": 166,
-  "tipologias": 54,
-  "tipologiasConUnaSolaVivienda": 23,
-  "rendersCenitales": 55,
-  "rendersCenitalesSinReutilizarEspejos": 65,
-  "puntos360Interior": 243,
-  "puntos360Terraza": 24
+  "tipologias": 43,
+  "tipologiasDeUnaVivienda": 16,
+  "variantesCenital": 72,
+  "cenitalesSinVoltear": 84,
+  "puntos360Interior": 200,
+  "puntos360Terraza": 23,
+  "variantesCenitalSinSepararPlanta1": 52,
+  "familias": 27,
+  "puntos360InteriorPorFamilia": 118
  },
- "planosCasiIgualesEntreTipologias": [
+ "familias": [
+  {
+   "codigo": "F01",
+   "tipologias": [
+    "2D-01",
+    "2D-02",
+    "2D-03",
+    "2D-04",
+    "2D-05",
+    "2D-06",
+    "2D-12"
+   ],
+   "recuento": 20,
+   "p360Interior": 7,
+   "p360Terraza": 0
+  },
+  {
+   "codigo": "F02",
+   "tipologias": [
+    "1D-01"
+   ],
+   "recuento": 32,
+   "p360Interior": 5,
+   "p360Terraza": 1
+  },
+  {
+   "codigo": "F03",
+   "tipologias": [
+    "1D-02"
+   ],
+   "recuento": 5,
+   "p360Interior": 5,
+   "p360Terraza": 0
+  },
+  {
+   "codigo": "F04",
+   "tipologias": [
+    "2D-07",
+    "2D-10"
+   ],
+   "recuento": 6,
+   "p360Interior": 7,
+   "p360Terraza": 0
+  },
+  {
+   "codigo": "F05",
+   "tipologias": [
+    "2D-08"
+   ],
+   "recuento": 30,
+   "p360Interior": 7,
+   "p360Terraza": 0
+  },
+  {
+   "codigo": "F06",
+   "tipologias": [
+    "1D-03"
+   ],
+   "recuento": 16,
+   "p360Interior": 5,
+   "p360Terraza": 0
+  },
+  {
+   "codigo": "F07",
+   "tipologias": [
+    "2D-09"
+   ],
+   "recuento": 3,
+   "p360Interior": 7,
+   "p360Terraza": 0
+  },
+  {
+   "codigo": "F08",
+   "tipologias": [
+    "1D-04",
+    "1D-05"
+   ],
+   "recuento": 6,
+   "p360Interior": 5,
+   "p360Terraza": 0
+  },
+  {
+   "codigo": "F09",
+   "tipologias": [
+    "1D-06",
+    "1D-07",
+    "1D-08"
+   ],
+   "recuento": 9,
+   "p360Interior": 5,
+   "p360Terraza": 0
+  },
+  {
+   "codigo": "F10",
+   "tipologias": [
+    "1D-09",
+    "1D-10",
+    "1D-11",
+    "1D-12"
+   ],
+   "recuento": 11,
+   "p360Interior": 5,
+   "p360Terraza": 0
+  },
+  {
+   "codigo": "F11",
+   "tipologias": [
+    "2D-11"
+   ],
+   "recuento": 2,
+   "p360Interior": 4,
+   "p360Terraza": 0
+  },
+  {
+   "codigo": "F12",
+   "tipologias": [
+    "3D-01"
+   ],
+   "recuento": 2,
+   "p360Interior": 6,
+   "p360Terraza": 0
+  },
+  {
+   "codigo": "F13",
+   "tipologias": [
+    "1D-13"
+   ],
+   "recuento": 1,
+   "p360Interior": 3,
+   "p360Terraza": 1
+  },
+  {
+   "codigo": "F14",
+   "tipologias": [
+    "1D-14"
+   ],
+   "recuento": 1,
+   "p360Interior": 3,
+   "p360Terraza": 1
+  },
+  {
+   "codigo": "F15",
+   "tipologias": [
+    "1D-15"
+   ],
+   "recuento": 1,
+   "p360Interior": 3,
+   "p360Terraza": 1
+  },
+  {
+   "codigo": "F16",
+   "tipologias": [
+    "1D-16"
+   ],
+   "recuento": 1,
+   "p360Interior": 3,
+   "p360Terraza": 1
+  },
+  {
+   "codigo": "F17",
+   "tipologias": [
+    "2D-13"
+   ],
+   "recuento": 1,
+   "p360Interior": 4,
+   "p360Terraza": 2
+  },
+  {
+   "codigo": "F18",
+   "tipologias": [
+    "1D-17",
+    "1D-20"
+   ],
+   "recuento": 2,
+   "p360Interior": 3,
+   "p360Terraza": 2
+  },
+  {
+   "codigo": "F19",
+   "tipologias": [
+    "2D-14"
+   ],
+   "recuento": 1,
+   "p360Interior": 4,
+   "p360Terraza": 2
+  },
+  {
+   "codigo": "F20",
+   "tipologias": [
+    "1D-18",
+    "1D-19"
+   ],
+   "recuento": 8,
+   "p360Interior": 3,
+   "p360Terraza": 2
+  },
+  {
+   "codigo": "F21",
+   "tipologias": [
+    "1D-21"
+   ],
+   "recuento": 1,
+   "p360Interior": 3,
+   "p360Terraza": 2
+  },
+  {
+   "codigo": "F22",
+   "tipologias": [
+    "E-01"
+   ],
+   "recuento": 1,
+   "p360Interior": 2,
+   "p360Terraza": 1
+  },
+  {
+   "codigo": "F23",
+   "tipologias": [
+    "3D-02"
+   ],
+   "recuento": 1,
+   "p360Interior": 6,
+   "p360Terraza": 2
+  },
+  {
+   "codigo": "F24",
+   "tipologias": [
+    "E-02",
+    "E-03"
+   ],
+   "recuento": 2,
+   "p360Interior": 2,
+   "p360Terraza": 2
+  },
+  {
+   "codigo": "F25",
+   "tipologias": [
+    "2D-15"
+   ],
+   "recuento": 1,
+   "p360Interior": 4,
+   "p360Terraza": 1
+  },
+  {
+   "codigo": "F26",
+   "tipologias": [
+    "2D-16"
+   ],
+   "recuento": 1,
+   "p360Interior": 4,
+   "p360Terraza": 1
+  },
+  {
+   "codigo": "F27",
+   "tipologias": [
+    "1D-22"
+   ],
+   "recuento": 1,
+   "p360Interior": 3,
+   "p360Terraza": 1
+  }
+ ],
+ "parejasDeFamilia": [
+  {
+   "a": "101",
+   "b": "102",
+   "transformacion": "espejoH",
+   "similitud": 0.854
+  },
+  {
+   "a": "101",
+   "b": "246",
+   "transformacion": "espejoH",
+   "similitud": 0.82
+  },
+  {
+   "a": "102",
+   "b": "103",
+   "transformacion": "espejoH",
+   "similitud": 0.846
+  },
+  {
+   "a": "102",
+   "b": "104",
+   "transformacion": "igual",
+   "similitud": 0.842
+  },
+  {
+   "a": "102",
+   "b": "105",
+   "transformacion": "espejoH",
+   "similitud": 0.807
+  },
+  {
+   "a": "102",
+   "b": "106",
+   "transformacion": "igual",
+   "similitud": 0.828
+  },
+  {
+   "a": "103",
+   "b": "104",
+   "transformacion": "espejoH",
+   "similitud": 0.862
+  },
+  {
+   "a": "103",
+   "b": "105",
+   "transformacion": "igual",
+   "similitud": 0.843
+  },
+  {
+   "a": "104",
+   "b": "105",
+   "transformacion": "espejoH",
+   "similitud": 0.854
+  },
+  {
+   "a": "104",
+   "b": "106",
+   "transformacion": "igual",
+   "similitud": 0.848
+  },
+  {
+   "a": "105",
+   "b": "106",
+   "transformacion": "espejoH",
+   "similitud": 0.855
+  },
+  {
+   "a": "110",
+   "b": "128",
+   "transformacion": "espejoH",
+   "similitud": 0.808
+  },
+  {
+   "a": "129",
+   "b": "132",
+   "transformacion": "espejoV",
+   "similitud": 0.881
+  },
+  {
+   "a": "133",
+   "b": "134",
+   "transformacion": "espejoH",
+   "similitud": 0.875
+  },
   {
    "a": "133",
    "b": "135",
    "transformacion": "igual",
-   "similitud": 0.943
+   "similitud": 0.863
+  },
+  {
+   "a": "134",
+   "b": "135",
+   "transformacion": "espejoH",
+   "similitud": 0.879
+  },
+  {
+   "a": "136",
+   "b": "137",
+   "transformacion": "espejoH",
+   "similitud": 0.906
   },
   {
    "a": "136",
    "b": "138",
    "transformacion": "igual",
-   "similitud": 0.939
+   "similitud": 0.879
+  },
+  {
+   "a": "137",
+   "b": "138",
+   "transformacion": "espejoH",
+   "similitud": 0.882
+  },
+  {
+   "a": "137",
+   "b": "245",
+   "transformacion": "igual",
+   "similitud": 0.825
+  },
+  {
+   "a": "138",
+   "b": "245",
+   "transformacion": "espejoH",
+   "similitud": 0.852
+  },
+  {
+   "a": "406",
+   "b": "426",
+   "transformacion": "giro90",
+   "similitud": 0.855
   },
   {
    "a": "410",
    "b": "412",
    "transformacion": "igual",
-   "similitud": 0.959
+   "similitud": 0.965
   },
   {
-   "a": "410",
-   "b": "424",
-   "transformacion": "igual",
-   "similitud": 0.967
+   "a": "432",
+   "b": "433",
+   "transformacion": "espejoH",
+   "similitud": 0.83
   }
  ],
  "tipologias": [
@@ -142,38 +527,66 @@
     "201": "igual",
     "301": "igual"
    },
-   "similitudMinima": 0.943,
-   "margenQuiralidad": 0.351,
-   "variantes": [
-    {
-     "terraza": 0.0,
-     "ids": [
-      "101",
-      "201",
-      "301"
-     ],
-     "espejadas": []
-    }
-   ],
+   "similitudMinima": 0.954,
+   "margenEspejo": 0.23,
    "ventanas": [
     "antepecho",
     "suelo-techo"
    ],
+   "variantes": [
+    {
+     "grupoPlantas": "planta 1",
+     "ids": [
+      "101"
+     ],
+     "codigo": "2D-01a",
+     "terraza": 0.0,
+     "supConstruidaInterior": 60.87,
+     "espejadas": [],
+     "referencia": "101",
+     "similitudMinima": null,
+     "transformaciones": {
+      "101": "igual"
+     }
+    },
+    {
+     "grupoPlantas": "plantas 2-3",
+     "ids": [
+      "201",
+      "301"
+     ],
+     "codigo": "2D-01b",
+     "terraza": 0.0,
+     "supConstruidaInterior": 60.87,
+     "espejadas": [],
+     "referencia": "201",
+     "similitudMinima": 1.0,
+     "transformaciones": {
+      "201": "igual",
+      "301": "igual"
+     }
+    }
+   ],
    "renders": {
-    "cenitales": 1,
-    "cenitalesSinEspejo": 1,
-    "p360Interior": 8,
+    "cenitales": 2,
+    "cenitalesSinVoltear": 2,
+    "p360Interior": 7,
     "p360Terraza": 0
-   }
+   },
+   "familia": "F01"
   },
   {
    "codigo": "2D-02",
    "ids": [
-    "102"
+    "102",
+    "202",
+    "302"
    ],
-   "recuento": 1,
+   "recuento": 3,
    "niveles": [
-    1
+    1,
+    2,
+    3
    ],
    "dormitorios": 2,
    "banos": 1,
@@ -255,33 +668,62 @@
     57.99
    ],
    "orientaciones": {
-    "Suroeste": 1
+    "Suroeste": 3
    },
    "referencia": "102",
    "espejadas": [],
    "transformaciones": {
-    "102": "igual"
+    "102": "igual",
+    "202": "igual",
+    "302": "igual"
    },
-   "similitudMinima": null,
-   "margenQuiralidad": null,
+   "similitudMinima": 0.927,
+   "margenEspejo": 0.256,
+   "ventanas": [
+    "antepecho",
+    "suelo-techo"
+   ],
    "variantes": [
     {
-     "terraza": 0.0,
+     "grupoPlantas": "planta 1",
      "ids": [
       "102"
      ],
-     "espejadas": []
+     "codigo": "2D-02a",
+     "terraza": 0.0,
+     "supConstruidaInterior": 57.99,
+     "espejadas": [],
+     "referencia": "102",
+     "similitudMinima": null,
+     "transformaciones": {
+      "102": "igual"
+     }
+    },
+    {
+     "grupoPlantas": "plantas 2-3",
+     "ids": [
+      "202",
+      "302"
+     ],
+     "codigo": "2D-02b",
+     "terraza": 0.0,
+     "supConstruidaInterior": 57.99,
+     "espejadas": [],
+     "referencia": "202",
+     "similitudMinima": 0.999,
+     "transformaciones": {
+      "202": "igual",
+      "302": "igual"
+     }
     }
    ],
-   "ventanas": [
-    "antepecho"
-   ],
    "renders": {
-    "cenitales": 1,
-    "cenitalesSinEspejo": 1,
-    "p360Interior": 4,
+    "cenitales": 2,
+    "cenitalesSinVoltear": 2,
+    "p360Interior": 7,
     "p360Terraza": 0
-   }
+   },
+   "familia": "F01"
   },
   {
    "codigo": "2D-03",
@@ -385,29 +827,53 @@
     "203": "igual",
     "303": "igual"
    },
-   "similitudMinima": 0.979,
-   "margenQuiralidad": 0.453,
-   "variantes": [
-    {
-     "terraza": 0.0,
-     "ids": [
-      "103",
-      "203",
-      "303"
-     ],
-     "espejadas": []
-    }
-   ],
+   "similitudMinima": 0.982,
+   "margenEspejo": 0.307,
    "ventanas": [
     "antepecho",
     "suelo-techo"
    ],
+   "variantes": [
+    {
+     "grupoPlantas": "planta 1",
+     "ids": [
+      "103"
+     ],
+     "codigo": "2D-03a",
+     "terraza": 0.0,
+     "supConstruidaInterior": 56.52,
+     "espejadas": [],
+     "referencia": "103",
+     "similitudMinima": null,
+     "transformaciones": {
+      "103": "igual"
+     }
+    },
+    {
+     "grupoPlantas": "plantas 2-3",
+     "ids": [
+      "203",
+      "303"
+     ],
+     "codigo": "2D-03b",
+     "terraza": 0.0,
+     "supConstruidaInterior": 56.52,
+     "espejadas": [],
+     "referencia": "203",
+     "similitudMinima": 0.999,
+     "transformaciones": {
+      "203": "igual",
+      "303": "igual"
+     }
+    }
+   ],
    "renders": {
-    "cenitales": 1,
-    "cenitalesSinEspejo": 1,
-    "p360Interior": 8,
+    "cenitales": 2,
+    "cenitalesSinVoltear": 2,
+    "p360Interior": 7,
     "p360Terraza": 0
-   }
+   },
+   "familia": "F01"
   },
   {
    "codigo": "2D-04",
@@ -511,38 +977,66 @@
     "204": "igual",
     "304": "igual"
    },
-   "similitudMinima": 0.972,
-   "margenQuiralidad": 0.438,
-   "variantes": [
-    {
-     "terraza": 0.0,
-     "ids": [
-      "104",
-      "204",
-      "304"
-     ],
-     "espejadas": []
-    }
-   ],
+   "similitudMinima": 0.952,
+   "margenEspejo": 0.273,
    "ventanas": [
     "antepecho",
     "suelo-techo"
    ],
+   "variantes": [
+    {
+     "grupoPlantas": "planta 1",
+     "ids": [
+      "104"
+     ],
+     "codigo": "2D-04a",
+     "terraza": 0.0,
+     "supConstruidaInterior": 55.2,
+     "espejadas": [],
+     "referencia": "104",
+     "similitudMinima": null,
+     "transformaciones": {
+      "104": "igual"
+     }
+    },
+    {
+     "grupoPlantas": "plantas 2-3",
+     "ids": [
+      "204",
+      "304"
+     ],
+     "codigo": "2D-04b",
+     "terraza": 0.0,
+     "supConstruidaInterior": 55.2,
+     "espejadas": [],
+     "referencia": "204",
+     "similitudMinima": 0.999,
+     "transformaciones": {
+      "204": "igual",
+      "304": "igual"
+     }
+    }
+   ],
    "renders": {
-    "cenitales": 1,
-    "cenitalesSinEspejo": 1,
-    "p360Interior": 8,
+    "cenitales": 2,
+    "cenitalesSinVoltear": 2,
+    "p360Interior": 7,
     "p360Terraza": 0
-   }
+   },
+   "familia": "F01"
   },
   {
    "codigo": "2D-05",
    "ids": [
-    "105"
+    "105",
+    "205",
+    "305"
    ],
-   "recuento": 1,
+   "recuento": 3,
    "niveles": [
-    1
+    1,
+    2,
+    3
    ],
    "dormitorios": 2,
    "banos": 1,
@@ -624,33 +1118,62 @@
     53.95
    ],
    "orientaciones": {
-    "Suroeste": 1
+    "Suroeste": 3
    },
    "referencia": "105",
    "espejadas": [],
    "transformaciones": {
-    "105": "igual"
+    "105": "igual",
+    "205": "igual",
+    "305": "igual"
    },
-   "similitudMinima": null,
-   "margenQuiralidad": null,
+   "similitudMinima": 0.937,
+   "margenEspejo": 0.288,
+   "ventanas": [
+    "antepecho",
+    "suelo-techo"
+   ],
    "variantes": [
     {
-     "terraza": 0.0,
+     "grupoPlantas": "planta 1",
      "ids": [
       "105"
      ],
-     "espejadas": []
+     "codigo": "2D-05a",
+     "terraza": 0.0,
+     "supConstruidaInterior": 53.95,
+     "espejadas": [],
+     "referencia": "105",
+     "similitudMinima": null,
+     "transformaciones": {
+      "105": "igual"
+     }
+    },
+    {
+     "grupoPlantas": "plantas 2-3",
+     "ids": [
+      "205",
+      "305"
+     ],
+     "codigo": "2D-05b",
+     "terraza": 0.0,
+     "supConstruidaInterior": 53.95,
+     "espejadas": [],
+     "referencia": "205",
+     "similitudMinima": 0.999,
+     "transformaciones": {
+      "205": "igual",
+      "305": "igual"
+     }
     }
    ],
-   "ventanas": [
-    "antepecho"
-   ],
    "renders": {
-    "cenitales": 1,
-    "cenitalesSinEspejo": 1,
-    "p360Interior": 4,
+    "cenitales": 2,
+    "cenitalesSinVoltear": 2,
+    "p360Interior": 7,
     "p360Terraza": 0
-   }
+   },
+   "familia": "F01"
   },
   {
    "codigo": "2D-06",
@@ -754,29 +1277,53 @@
     "206": "igual",
     "306": "igual"
    },
-   "similitudMinima": 0.983,
-   "margenQuiralidad": 0.451,
-   "variantes": [
-    {
-     "terraza": 0.0,
-     "ids": [
-      "106",
-      "206",
-      "306"
-     ],
-     "espejadas": []
-    }
-   ],
+   "similitudMinima": 0.987,
+   "margenEspejo": 0.308,
    "ventanas": [
     "antepecho",
     "suelo-techo"
    ],
+   "variantes": [
+    {
+     "grupoPlantas": "planta 1",
+     "ids": [
+      "106"
+     ],
+     "codigo": "2D-06a",
+     "terraza": 0.0,
+     "supConstruidaInterior": 52.45,
+     "espejadas": [],
+     "referencia": "106",
+     "similitudMinima": null,
+     "transformaciones": {
+      "106": "igual"
+     }
+    },
+    {
+     "grupoPlantas": "plantas 2-3",
+     "ids": [
+      "206",
+      "306"
+     ],
+     "codigo": "2D-06b",
+     "terraza": 0.0,
+     "supConstruidaInterior": 52.45,
+     "espejadas": [],
+     "referencia": "206",
+     "similitudMinima": 0.999,
+     "transformaciones": {
+      "206": "igual",
+      "306": "igual"
+     }
+    }
+   ],
    "renders": {
-    "cenitales": 1,
-    "cenitalesSinEspejo": 1,
-    "p360Interior": 8,
+    "cenitales": 2,
+    "cenitalesSinVoltear": 2,
+    "p360Interior": 7,
     "p360Terraza": 0
-   }
+   },
+   "familia": "F01"
   },
   {
    "codigo": "1D-01",
@@ -787,12 +1334,39 @@
     "117",
     "123",
     "124",
-    "336"
+    "130",
+    "131",
+    "209",
+    "210",
+    "219",
+    "220",
+    "227",
+    "228",
+    "235",
+    "236",
+    "309",
+    "310",
+    "319",
+    "320",
+    "327",
+    "328",
+    "335",
+    "336",
+    "407",
+    "408",
+    "415",
+    "416",
+    "421",
+    "422",
+    "429",
+    "430"
    ],
-   "recuento": 7,
+   "recuento": 32,
    "niveles": [
     1,
-    3
+    2,
+    3,
+    4
    ],
    "dormitorios": 1,
    "banos": 1,
@@ -841,13 +1415,26 @@
     42.09
    ],
    "orientaciones": {
-    "Jardín interior": 7
+    "Jardín interior": 32
    },
    "referencia": "107",
    "espejadas": [
     "108",
     "117",
-    "124"
+    "124",
+    "131",
+    "210",
+    "220",
+    "228",
+    "236",
+    "310",
+    "320",
+    "328",
+    "336",
+    "408",
+    "416",
+    "422",
+    "430"
    ],
    "transformaciones": {
     "107": "igual",
@@ -856,16 +1443,42 @@
     "117": "espejoV",
     "123": "igual",
     "124": "espejoV",
-    "336": "sin plano"
+    "130": "giro180",
+    "131": "espejoH",
+    "209": "igual",
+    "210": "espejoV",
+    "219": "igual",
+    "220": "espejoV",
+    "227": "igual",
+    "228": "espejoV",
+    "235": "giro180",
+    "236": "espejoH",
+    "309": "igual",
+    "310": "espejoV",
+    "319": "igual",
+    "320": "espejoV",
+    "327": "igual",
+    "328": "espejoV",
+    "335": "giro180",
+    "336": "espejoH (plano de la 236)",
+    "407": "igual",
+    "408": "espejoV",
+    "415": "igual",
+    "416": "espejoV",
+    "421": "igual",
+    "422": "espejoV",
+    "429": "giro180",
+    "430": "espejoH"
    },
-   "similitudMinima": 0.988,
-   "margenQuiralidad": 0.355,
+   "similitudMinima": 0.887,
+   "margenEspejo": 0.258,
+   "ventanas": [
+    "antepecho",
+    "suelo-techo"
+   ],
    "variantes": [
     {
-     "terraza": [
-      11.92,
-      11.94
-     ],
+     "grupoPlantas": "planta 1",
      "ids": [
       "107",
       "108",
@@ -874,30 +1487,149 @@
       "123",
       "124"
      ],
+     "codigo": "1D-01a",
+     "terraza": [
+      11.92,
+      11.94
+     ],
+     "supConstruidaInterior": 42.09,
      "espejadas": [
       "108",
       "117",
       "124"
-     ]
+     ],
+     "referencia": "107",
+     "similitudMinima": 0.978,
+     "transformaciones": {
+      "107": "igual",
+      "108": "espejoV",
+      "116": "igual",
+      "117": "espejoV",
+      "123": "igual",
+      "124": "espejoV"
+     }
     },
     {
-     "terraza": 2.95,
+     "grupoPlantas": "planta 1",
      "ids": [
+      "130",
+      "131"
+     ],
+     "codigo": "1D-01b",
+     "terraza": 0.0,
+     "supConstruidaInterior": 42.09,
+     "espejadas": [
+      "131"
+     ],
+     "referencia": "130",
+     "similitudMinima": 0.983,
+     "transformaciones": {
+      "130": "igual",
+      "131": "espejoV"
+     }
+    },
+    {
+     "grupoPlantas": "plantas 2-3",
+     "ids": [
+      "209",
+      "210",
+      "219",
+      "220",
+      "227",
+      "228",
+      "235",
+      "236",
+      "309",
+      "310",
+      "319",
+      "320",
+      "327",
+      "328",
+      "335",
       "336"
      ],
-     "espejadas": []
+     "codigo": "1D-01c",
+     "terraza": [
+      2.94,
+      2.95
+     ],
+     "supConstruidaInterior": 42.09,
+     "espejadas": [
+      "210",
+      "220",
+      "228",
+      "236",
+      "310",
+      "320",
+      "328",
+      "336"
+     ],
+     "referencia": "209",
+     "similitudMinima": 0.978,
+     "transformaciones": {
+      "209": "igual",
+      "210": "espejoV",
+      "219": "igual",
+      "220": "espejoV",
+      "227": "igual",
+      "228": "espejoV",
+      "235": "giro180",
+      "236": "espejoH",
+      "309": "igual",
+      "310": "espejoV",
+      "319": "igual",
+      "320": "espejoV",
+      "327": "igual",
+      "328": "espejoV",
+      "335": "giro180",
+      "336": "espejoH"
+     }
+    },
+    {
+     "grupoPlantas": "ático",
+     "ids": [
+      "407",
+      "408",
+      "415",
+      "416",
+      "421",
+      "422",
+      "429",
+      "430"
+     ],
+     "codigo": "1D-01d",
+     "terraza": [
+      2.94,
+      2.95
+     ],
+     "supConstruidaInterior": 42.09,
+     "espejadas": [
+      "408",
+      "416",
+      "422",
+      "430"
+     ],
+     "referencia": "407",
+     "similitudMinima": 0.89,
+     "transformaciones": {
+      "407": "igual",
+      "408": "espejoV",
+      "415": "igual",
+      "416": "espejoV",
+      "421": "igual",
+      "422": "espejoV",
+      "429": "giro180",
+      "430": "espejoH"
+     }
     }
    ],
-   "ventanas": [
-    "antepecho",
-    "suelo-techo"
-   ],
    "renders": {
-    "cenitales": 2,
-    "cenitalesSinEspejo": 3,
-    "p360Interior": 6,
+    "cenitales": 4,
+    "cenitalesSinVoltear": 8,
+    "p360Interior": 5,
     "p360Terraza": 1
-   }
+   },
+   "familia": "F02"
   },
   {
    "codigo": "1D-02",
@@ -986,34 +1718,73 @@
     "308": "espejoV",
     "311": "igual"
    },
-   "similitudMinima": 0.97,
-   "margenQuiralidad": 0.249,
-   "variantes": [
-    {
-     "terraza": 0.0,
-     "ids": [
-      "109",
-      "208",
-      "211",
-      "308",
-      "311"
-     ],
-     "espejadas": [
-      "208",
-      "308"
-     ]
-    }
-   ],
+   "similitudMinima": 0.946,
+   "margenEspejo": 0.173,
    "ventanas": [
     "antepecho",
     "suelo-techo"
    ],
+   "variantes": [
+    {
+     "grupoPlantas": "planta 1",
+     "ids": [
+      "109"
+     ],
+     "codigo": "1D-02a",
+     "terraza": 0.0,
+     "supConstruidaInterior": 43.48,
+     "espejadas": [],
+     "referencia": "109",
+     "similitudMinima": null,
+     "transformaciones": {
+      "109": "igual"
+     }
+    },
+    {
+     "grupoPlantas": "plantas 2-3",
+     "ids": [
+      "208",
+      "308"
+     ],
+     "codigo": "1D-02b",
+     "terraza": 0.0,
+     "supConstruidaInterior": 43.28,
+     "espejadas": [
+      "208",
+      "308"
+     ],
+     "referencia": "208",
+     "similitudMinima": 0.998,
+     "transformaciones": {
+      "208": "igual",
+      "308": "igual"
+     }
+    },
+    {
+     "grupoPlantas": "plantas 2-3",
+     "ids": [
+      "211",
+      "311"
+     ],
+     "codigo": "1D-02c",
+     "terraza": 0.0,
+     "supConstruidaInterior": 43.48,
+     "espejadas": [],
+     "referencia": "211",
+     "similitudMinima": 1.0,
+     "transformaciones": {
+      "211": "igual",
+      "311": "igual"
+     }
+    }
+   ],
    "renders": {
-    "cenitales": 1,
-    "cenitalesSinEspejo": 2,
-    "p360Interior": 6,
+    "cenitales": 3,
+    "cenitalesSinVoltear": 3,
+    "p360Interior": 5,
     "p360Terraza": 0
-   }
+   },
+   "familia": "F03"
   },
   {
    "codigo": "2D-07",
@@ -1117,29 +1888,53 @@
     "212": "igual",
     "312": "igual"
    },
-   "similitudMinima": 0.968,
-   "margenQuiralidad": 0.39,
-   "variantes": [
-    {
-     "terraza": 0.0,
-     "ids": [
-      "110",
-      "212",
-      "312"
-     ],
-     "espejadas": []
-    }
-   ],
+   "similitudMinima": 0.972,
+   "margenEspejo": 0.318,
    "ventanas": [
     "antepecho",
     "suelo-techo"
    ],
+   "variantes": [
+    {
+     "grupoPlantas": "planta 1",
+     "ids": [
+      "110"
+     ],
+     "codigo": "2D-07a",
+     "terraza": 0.0,
+     "supConstruidaInterior": 62.54,
+     "espejadas": [],
+     "referencia": "110",
+     "similitudMinima": null,
+     "transformaciones": {
+      "110": "igual"
+     }
+    },
+    {
+     "grupoPlantas": "plantas 2-3",
+     "ids": [
+      "212",
+      "312"
+     ],
+     "codigo": "2D-07b",
+     "terraza": 0.0,
+     "supConstruidaInterior": 62.54,
+     "espejadas": [],
+     "referencia": "212",
+     "similitudMinima": 0.999,
+     "transformaciones": {
+      "212": "igual",
+      "312": "igual"
+     }
+    }
+   ],
    "renders": {
-    "cenitales": 1,
-    "cenitalesSinEspejo": 1,
-    "p360Interior": 8,
+    "cenitales": 2,
+    "cenitalesSinVoltear": 2,
+    "p360Interior": 7,
     "p360Terraza": 0
-   }
+   },
+   "familia": "F04"
   },
   {
    "codigo": "2D-08",
@@ -1148,6 +1943,7 @@
     "112",
     "113",
     "118",
+    "119",
     "120",
     "125",
     "126",
@@ -1174,7 +1970,7 @@
     "330",
     "331"
    ],
-   "recuento": 29,
+   "recuento": 30,
    "niveles": [
     1,
     2,
@@ -1260,12 +2056,13 @@
     57.52
    ],
    "orientaciones": {
-    "Noreste": 29
+    "Noreste": 30
    },
    "referencia": "111",
    "espejadas": [
     "112",
     "113",
+    "119",
     "120",
     "126",
     "214",
@@ -1284,6 +2081,7 @@
     "112": "espejoH",
     "113": "espejoH",
     "118": "igual",
+    "119": "espejoH",
     "120": "espejoH",
     "125": "igual",
     "126": "espejoH",
@@ -1310,11 +2108,15 @@
     "330": "espejoH",
     "331": "igual"
    },
-   "similitudMinima": 0.936,
-   "margenQuiralidad": 0.315,
+   "similitudMinima": 0.839,
+   "margenEspejo": 0.192,
+   "ventanas": [
+    "antepecho",
+    "suelo-techo"
+   ],
    "variantes": [
     {
-     "terraza": 0.0,
+     "grupoPlantas": "planta 1",
      "ids": [
       "111",
       "112",
@@ -1322,14 +2124,57 @@
       "118",
       "120",
       "125",
-      "126",
+      "126"
+     ],
+     "codigo": "2D-08a",
+     "terraza": 0.0,
+     "supConstruidaInterior": [
+      56.16,
+      56.24
+     ],
+     "espejadas": [
+      "112",
+      "113",
+      "120",
+      "126"
+     ],
+     "referencia": "111",
+     "similitudMinima": 0.901,
+     "transformaciones": {
+      "111": "igual",
+      "112": "espejoH",
+      "113": "espejoH",
+      "118": "igual",
+      "120": "espejoH",
+      "125": "igual",
+      "126": "espejoH"
+     }
+    },
+    {
+     "grupoPlantas": "planta 1",
+     "ids": [
+      "119"
+     ],
+     "codigo": "2D-08b",
+     "terraza": 0.0,
+     "supConstruidaInterior": 57.52,
+     "espejadas": [
+      "119"
+     ],
+     "referencia": "119",
+     "similitudMinima": null,
+     "transformaciones": {
+      "119": "igual"
+     }
+    },
+    {
+     "grupoPlantas": "plantas 2-3",
+     "ids": [
       "213",
       "214",
       "215",
       "216",
       "221",
-      "222",
-      "223",
       "224",
       "229",
       "230",
@@ -1339,41 +2184,95 @@
       "315",
       "316",
       "321",
-      "322",
-      "323",
       "324",
       "329",
       "330",
       "331"
      ],
+     "codigo": "2D-08c",
+     "terraza": 0.0,
+     "supConstruidaInterior": [
+      56.16,
+      56.24
+     ],
      "espejadas": [
-      "112",
-      "113",
-      "120",
-      "126",
       "214",
       "216",
-      "222",
       "224",
       "230",
       "314",
       "316",
-      "322",
       "324",
       "330"
-     ]
+     ],
+     "referencia": "213",
+     "similitudMinima": 0.918,
+     "transformaciones": {
+      "213": "igual",
+      "214": "espejoH",
+      "215": "igual",
+      "216": "espejoH",
+      "221": "igual",
+      "224": "espejoH",
+      "229": "igual",
+      "230": "espejoH",
+      "231": "igual",
+      "313": "igual",
+      "314": "espejoH",
+      "315": "igual",
+      "316": "espejoH",
+      "321": "igual",
+      "324": "espejoH",
+      "329": "igual",
+      "330": "espejoH",
+      "331": "igual"
+     }
+    },
+    {
+     "grupoPlantas": "plantas 2-3",
+     "ids": [
+      "222",
+      "322"
+     ],
+     "codigo": "2D-08d",
+     "terraza": 0.0,
+     "supConstruidaInterior": 57.52,
+     "espejadas": [
+      "222",
+      "322"
+     ],
+     "referencia": "222",
+     "similitudMinima": 0.998,
+     "transformaciones": {
+      "222": "igual",
+      "322": "igual"
+     }
+    },
+    {
+     "grupoPlantas": "plantas 2-3",
+     "ids": [
+      "223",
+      "323"
+     ],
+     "codigo": "2D-08e",
+     "terraza": 0.0,
+     "supConstruidaInterior": 56.77,
+     "espejadas": [],
+     "referencia": "223",
+     "similitudMinima": 0.998,
+     "transformaciones": {
+      "223": "igual",
+      "323": "igual"
+     }
     }
    ],
-   "ventanas": [
-    "antepecho",
-    "suelo-techo"
-   ],
    "renders": {
-    "cenitales": 1,
-    "cenitalesSinEspejo": 2,
-    "p360Interior": 8,
+    "cenitales": 5,
+    "cenitalesSinVoltear": 7,
+    "p360Interior": 7,
     "p360Terraza": 0
-   }
+   },
+   "familia": "F05"
   },
   {
    "codigo": "1D-03",
@@ -1381,11 +2280,26 @@
     "114",
     "115",
     "121",
-    "122"
+    "122",
+    "217",
+    "218",
+    "225",
+    "226",
+    "317",
+    "318",
+    "325",
+    "326",
+    "413",
+    "414",
+    "419",
+    "420"
    ],
-   "recuento": 4,
+   "recuento": 16,
    "niveles": [
-    1
+    1,
+    2,
+    3,
+    4
    ],
    "dormitorios": 1,
    "banos": 1,
@@ -1398,7 +2312,7 @@
      "sup": 26.16,
      "rango": [
       26.16,
-      26.16
+      26.25
      ],
      "tiene360": true
     },
@@ -1409,7 +2323,7 @@
      "sup": 10.98,
      "rango": [
       10.98,
-      10.98
+      11.06
      ],
      "tiene360": true
     },
@@ -1427,172 +2341,150 @@
    ],
    "supUtil": [
     40.54,
-    40.54
+    40.71
    ],
    "supConstruidaInterior": [
     45.22,
     45.22
    ],
    "orientaciones": {
-    "Jardín interior": 4
+    "Jardín interior": 16
    },
    "referencia": "114",
    "espejadas": [
     "115",
-    "122"
+    "122",
+    "218",
+    "226",
+    "318",
+    "326",
+    "414",
+    "420"
    ],
    "transformaciones": {
     "114": "igual",
     "115": "espejoV",
     "121": "igual",
-    "122": "espejoV"
+    "122": "espejoV",
+    "217": "igual",
+    "218": "espejoV",
+    "225": "igual",
+    "226": "espejoV",
+    "317": "igual",
+    "318": "espejoV",
+    "325": "igual",
+    "326": "espejoV",
+    "413": "igual",
+    "414": "espejoV",
+    "419": "igual",
+    "420": "espejoV"
    },
-   "similitudMinima": 0.967,
-   "margenQuiralidad": 0.228,
+   "similitudMinima": 0.89,
+   "margenEspejo": 0.145,
+   "ventanas": [
+    "antepecho",
+    "suelo-techo"
+   ],
    "variantes": [
     {
-     "terraza": 0.0,
+     "grupoPlantas": "planta 1",
      "ids": [
       "114",
       "115",
       "121",
       "122"
      ],
+     "codigo": "1D-03a",
+     "terraza": 0.0,
+     "supConstruidaInterior": 45.22,
      "espejadas": [
       "115",
       "122"
-     ]
+     ],
+     "referencia": "114",
+     "similitudMinima": 0.975,
+     "transformaciones": {
+      "114": "igual",
+      "115": "espejoV",
+      "121": "igual",
+      "122": "espejoV"
+     }
+    },
+    {
+     "grupoPlantas": "plantas 2-3",
+     "ids": [
+      "217",
+      "218",
+      "225",
+      "226",
+      "317",
+      "318",
+      "325",
+      "326"
+     ],
+     "codigo": "1D-03b",
+     "terraza": [
+      2.94,
+      2.95
+     ],
+     "supConstruidaInterior": 45.22,
+     "espejadas": [
+      "218",
+      "226",
+      "318",
+      "326"
+     ],
+     "referencia": "217",
+     "similitudMinima": 0.937,
+     "transformaciones": {
+      "217": "igual",
+      "218": "espejoV",
+      "225": "igual",
+      "226": "espejoV",
+      "317": "igual",
+      "318": "espejoV",
+      "325": "igual",
+      "326": "espejoV"
+     }
+    },
+    {
+     "grupoPlantas": "ático",
+     "ids": [
+      "413",
+      "414",
+      "419",
+      "420"
+     ],
+     "codigo": "1D-03c",
+     "terraza": [
+      2.94,
+      2.95
+     ],
+     "supConstruidaInterior": 45.22,
+     "espejadas": [
+      "414",
+      "420"
+     ],
+     "referencia": "413",
+     "similitudMinima": 0.94,
+     "transformaciones": {
+      "413": "igual",
+      "414": "espejoV",
+      "419": "igual",
+      "420": "espejoV"
+     }
     }
    ],
-   "ventanas": [
-    "antepecho"
-   ],
    "renders": {
-    "cenitales": 1,
-    "cenitalesSinEspejo": 2,
-    "p360Interior": 3,
+    "cenitales": 3,
+    "cenitalesSinVoltear": 6,
+    "p360Interior": 5,
     "p360Terraza": 0
-   }
+   },
+   "familia": "F06"
   },
   {
    "codigo": "2D-09",
-   "ids": [
-    "119"
-   ],
-   "recuento": 1,
-   "niveles": [
-    1
-   ],
-   "dormitorios": 2,
-   "banos": 1,
-   "estudio": false,
-   "estancias": [
-    {
-     "codigo": "SCC",
-     "tipo": "salon-comedor-cocina",
-     "nombre": "Salón - comedor - cocina",
-     "sup": 20.73,
-     "rango": [
-      20.73,
-      20.73
-     ],
-     "tiene360": true
-    },
-    {
-     "codigo": "D1",
-     "tipo": "dormitorio-principal",
-     "nombre": "Dormitorio principal",
-     "sup": 12.06,
-     "rango": [
-      12.06,
-      12.06
-     ],
-     "tiene360": true
-    },
-    {
-     "codigo": "D2",
-     "tipo": "dormitorio",
-     "nombre": "Dormitorio secundario",
-     "sup": 8.33,
-     "rango": [
-      8.33,
-      8.33
-     ],
-     "tiene360": true
-    },
-    {
-     "codigo": "B1",
-     "tipo": "bano",
-     "nombre": "Baño",
-     "sup": 3.37,
-     "rango": [
-      3.37,
-      3.37
-     ],
-     "tiene360": true
-    },
-    {
-     "codigo": "VE",
-     "tipo": "vestidor",
-     "nombre": "Vestidor",
-     "sup": 2.83,
-     "rango": [
-      2.83,
-      2.83
-     ],
-     "tiene360": false
-    },
-    {
-     "codigo": "DI",
-     "tipo": "distribuidor",
-     "nombre": "Distribuidor",
-     "sup": 2.75,
-     "rango": [
-      2.75,
-      2.75
-     ],
-     "tiene360": false
-    }
-   ],
-   "supUtil": [
-    50.07,
-    50.07
-   ],
-   "supConstruidaInterior": [
-    57.52,
-    57.52
-   ],
-   "orientaciones": {
-    "Noreste": 1
-   },
-   "referencia": "119",
-   "espejadas": [],
-   "transformaciones": {
-    "119": "igual"
-   },
-   "similitudMinima": null,
-   "margenQuiralidad": null,
-   "variantes": [
-    {
-     "terraza": 0.0,
-     "ids": [
-      "119"
-     ],
-     "espejadas": []
-    }
-   ],
-   "ventanas": [
-    "antepecho"
-   ],
-   "renders": {
-    "cenitales": 1,
-    "cenitalesSinEspejo": 1,
-    "p360Interior": 4,
-    "p360Terraza": 0
-   }
-  },
-  {
-   "codigo": "2D-10",
    "ids": [
     "127",
     "232",
@@ -1705,31 +2597,55 @@
     "332": "igual"
    },
    "similitudMinima": 0.986,
-   "margenQuiralidad": 0.25,
-   "variantes": [
-    {
-     "terraza": 0.0,
-     "ids": [
-      "127",
-      "232",
-      "332"
-     ],
-     "espejadas": []
-    }
-   ],
+   "margenEspejo": 0.219,
    "ventanas": [
     "antepecho",
     "suelo-techo"
    ],
+   "variantes": [
+    {
+     "grupoPlantas": "planta 1",
+     "ids": [
+      "127"
+     ],
+     "codigo": "2D-09a",
+     "terraza": 0.0,
+     "supConstruidaInterior": 73.3,
+     "espejadas": [],
+     "referencia": "127",
+     "similitudMinima": null,
+     "transformaciones": {
+      "127": "igual"
+     }
+    },
+    {
+     "grupoPlantas": "plantas 2-3",
+     "ids": [
+      "232",
+      "332"
+     ],
+     "codigo": "2D-09b",
+     "terraza": 0.0,
+     "supConstruidaInterior": 73.3,
+     "espejadas": [],
+     "referencia": "232",
+     "similitudMinima": 0.997,
+     "transformaciones": {
+      "232": "igual",
+      "332": "igual"
+     }
+    }
+   ],
    "renders": {
-    "cenitales": 1,
-    "cenitalesSinEspejo": 1,
-    "p360Interior": 8,
+    "cenitales": 2,
+    "cenitalesSinVoltear": 2,
+    "p360Interior": 7,
     "p360Terraza": 0
-   }
+   },
+   "familia": "F07"
   },
   {
-   "codigo": "2D-11",
+   "codigo": "2D-10",
    "ids": [
     "128",
     "233",
@@ -1830,29 +2746,53 @@
     "233": "igual",
     "333": "igual"
    },
-   "similitudMinima": 0.993,
-   "margenQuiralidad": 0.463,
-   "variantes": [
-    {
-     "terraza": 0.0,
-     "ids": [
-      "128",
-      "233",
-      "333"
-     ],
-     "espejadas": []
-    }
-   ],
+   "similitudMinima": 0.994,
+   "margenEspejo": 0.385,
    "ventanas": [
     "antepecho",
     "suelo-techo"
    ],
+   "variantes": [
+    {
+     "grupoPlantas": "planta 1",
+     "ids": [
+      "128"
+     ],
+     "codigo": "2D-10a",
+     "terraza": 0.0,
+     "supConstruidaInterior": 63.28,
+     "espejadas": [],
+     "referencia": "128",
+     "similitudMinima": null,
+     "transformaciones": {
+      "128": "igual"
+     }
+    },
+    {
+     "grupoPlantas": "plantas 2-3",
+     "ids": [
+      "233",
+      "333"
+     ],
+     "codigo": "2D-10b",
+     "terraza": 0.0,
+     "supConstruidaInterior": 63.28,
+     "espejadas": [],
+     "referencia": "233",
+     "similitudMinima": 1.0,
+     "transformaciones": {
+      "233": "igual",
+      "333": "igual"
+     }
+    }
+   ],
    "renders": {
-    "cenitales": 1,
-    "cenitalesSinEspejo": 1,
-    "p360Interior": 8,
+    "cenitales": 2,
+    "cenitalesSinVoltear": 2,
+    "p360Interior": 7,
     "p360Terraza": 0
-   }
+   },
+   "familia": "F04"
   },
   {
    "codigo": "1D-04",
@@ -1923,123 +2863,56 @@
     "234": "igual",
     "334": "igual"
    },
-   "similitudMinima": 0.996,
-   "margenQuiralidad": 0.417,
-   "variantes": [
-    {
-     "terraza": 0.0,
-     "ids": [
-      "129",
-      "234",
-      "334"
-     ],
-     "espejadas": []
-    }
-   ],
+   "similitudMinima": 0.998,
+   "margenEspejo": 0.314,
    "ventanas": [
     "antepecho",
     "suelo-techo"
    ],
+   "variantes": [
+    {
+     "grupoPlantas": "planta 1",
+     "ids": [
+      "129"
+     ],
+     "codigo": "1D-04a",
+     "terraza": 0.0,
+     "supConstruidaInterior": 44.12,
+     "espejadas": [],
+     "referencia": "129",
+     "similitudMinima": null,
+     "transformaciones": {
+      "129": "igual"
+     }
+    },
+    {
+     "grupoPlantas": "plantas 2-3",
+     "ids": [
+      "234",
+      "334"
+     ],
+     "codigo": "1D-04b",
+     "terraza": 0.0,
+     "supConstruidaInterior": 44.12,
+     "espejadas": [],
+     "referencia": "234",
+     "similitudMinima": 1.0,
+     "transformaciones": {
+      "234": "igual",
+      "334": "igual"
+     }
+    }
+   ],
    "renders": {
-    "cenitales": 1,
-    "cenitalesSinEspejo": 1,
-    "p360Interior": 6,
+    "cenitales": 2,
+    "cenitalesSinVoltear": 2,
+    "p360Interior": 5,
     "p360Terraza": 0
-   }
+   },
+   "familia": "F08"
   },
   {
    "codigo": "1D-05",
-   "ids": [
-    "130",
-    "131"
-   ],
-   "recuento": 2,
-   "niveles": [
-    1
-   ],
-   "dormitorios": 1,
-   "banos": 1,
-   "estudio": false,
-   "estancias": [
-    {
-     "codigo": "SCC",
-     "tipo": "salon-comedor-cocina",
-     "nombre": "Salón - comedor - cocina",
-     "sup": 23.76,
-     "rango": [
-      23.76,
-      23.76
-     ],
-     "tiene360": true
-    },
-    {
-     "codigo": "D1",
-     "tipo": "dormitorio-principal",
-     "nombre": "Dormitorio principal",
-     "sup": 10.11,
-     "rango": [
-      10.11,
-      10.11
-     ],
-     "tiene360": true
-    },
-    {
-     "codigo": "B1",
-     "tipo": "bano",
-     "nombre": "Baño",
-     "sup": 3.4,
-     "rango": [
-      3.4,
-      3.4
-     ],
-     "tiene360": true
-    }
-   ],
-   "supUtil": [
-    37.27,
-    37.27
-   ],
-   "supConstruidaInterior": [
-    42.09,
-    42.09
-   ],
-   "orientaciones": {
-    "Jardín interior": 2
-   },
-   "referencia": "130",
-   "espejadas": [
-    "131"
-   ],
-   "transformaciones": {
-    "130": "igual",
-    "131": "espejoV"
-   },
-   "similitudMinima": 0.981,
-   "margenQuiralidad": 0.324,
-   "variantes": [
-    {
-     "terraza": 0.0,
-     "ids": [
-      "130",
-      "131"
-     ],
-     "espejadas": [
-      "131"
-     ]
-    }
-   ],
-   "ventanas": [
-    "antepecho"
-   ],
-   "renders": {
-    "cenitales": 1,
-    "cenitalesSinEspejo": 2,
-    "p360Interior": 3,
-    "p360Terraza": 0
-   }
-  },
-  {
-   "codigo": "1D-06",
    "ids": [
     "132",
     "237",
@@ -2107,32 +2980,56 @@
     "237": "igual",
     "337": "igual"
    },
-   "similitudMinima": 0.946,
-   "margenQuiralidad": 0.383,
-   "variantes": [
-    {
-     "terraza": 0.0,
-     "ids": [
-      "132",
-      "237",
-      "337"
-     ],
-     "espejadas": []
-    }
-   ],
+   "similitudMinima": 0.956,
+   "margenEspejo": 0.294,
    "ventanas": [
     "antepecho",
     "suelo-techo"
    ],
+   "variantes": [
+    {
+     "grupoPlantas": "planta 1",
+     "ids": [
+      "132"
+     ],
+     "codigo": "1D-05a",
+     "terraza": 0.0,
+     "supConstruidaInterior": 43.67,
+     "espejadas": [],
+     "referencia": "132",
+     "similitudMinima": null,
+     "transformaciones": {
+      "132": "igual"
+     }
+    },
+    {
+     "grupoPlantas": "plantas 2-3",
+     "ids": [
+      "237",
+      "337"
+     ],
+     "codigo": "1D-05b",
+     "terraza": 0.0,
+     "supConstruidaInterior": 43.67,
+     "espejadas": [],
+     "referencia": "237",
+     "similitudMinima": 1.0,
+     "transformaciones": {
+      "237": "igual",
+      "337": "igual"
+     }
+    }
+   ],
    "renders": {
-    "cenitales": 1,
-    "cenitalesSinEspejo": 1,
-    "p360Interior": 6,
+    "cenitales": 2,
+    "cenitalesSinVoltear": 2,
+    "p360Interior": 5,
     "p360Terraza": 0
-   }
+   },
+   "familia": "F08"
   },
   {
-   "codigo": "1D-07",
+   "codigo": "1D-06",
    "ids": [
     "133",
     "239",
@@ -2211,38 +3108,66 @@
     "239": "igual",
     "339": "igual"
    },
-   "similitudMinima": 0.964,
-   "margenQuiralidad": 0.3,
-   "variantes": [
-    {
-     "terraza": 0.0,
-     "ids": [
-      "133",
-      "239",
-      "339"
-     ],
-     "espejadas": []
-    }
-   ],
+   "similitudMinima": 0.97,
+   "margenEspejo": 0.214,
    "ventanas": [
     "antepecho",
     "suelo-techo"
    ],
+   "variantes": [
+    {
+     "grupoPlantas": "planta 1",
+     "ids": [
+      "133"
+     ],
+     "codigo": "1D-06a",
+     "terraza": 0.0,
+     "supConstruidaInterior": 52.87,
+     "espejadas": [],
+     "referencia": "133",
+     "similitudMinima": null,
+     "transformaciones": {
+      "133": "igual"
+     }
+    },
+    {
+     "grupoPlantas": "plantas 2-3",
+     "ids": [
+      "239",
+      "339"
+     ],
+     "codigo": "1D-06b",
+     "terraza": 0.0,
+     "supConstruidaInterior": 52.87,
+     "espejadas": [],
+     "referencia": "239",
+     "similitudMinima": 0.999,
+     "transformaciones": {
+      "239": "igual",
+      "339": "igual"
+     }
+    }
+   ],
    "renders": {
-    "cenitales": 1,
-    "cenitalesSinEspejo": 1,
-    "p360Interior": 6,
+    "cenitales": 2,
+    "cenitalesSinVoltear": 2,
+    "p360Interior": 5,
     "p360Terraza": 0
-   }
+   },
+   "familia": "F09"
   },
   {
-   "codigo": "1D-08",
+   "codigo": "1D-07",
    "ids": [
-    "134"
+    "134",
+    "240",
+    "340"
    ],
-   "recuento": 1,
+   "recuento": 3,
    "niveles": [
-    1
+    1,
+    2,
+    3
    ],
    "dormitorios": 1,
    "banos": 1,
@@ -2302,36 +3227,65 @@
     52.2
    ],
    "orientaciones": {
-    "Suroeste": 1
+    "Suroeste": 3
    },
    "referencia": "134",
    "espejadas": [],
    "transformaciones": {
-    "134": "igual"
+    "134": "igual",
+    "240": "igual",
+    "340": "igual"
    },
-   "similitudMinima": null,
-   "margenQuiralidad": null,
+   "similitudMinima": 0.915,
+   "margenEspejo": 0.183,
+   "ventanas": [
+    "antepecho",
+    "suelo-techo"
+   ],
    "variantes": [
     {
-     "terraza": 0.0,
+     "grupoPlantas": "planta 1",
      "ids": [
       "134"
      ],
-     "espejadas": []
+     "codigo": "1D-07a",
+     "terraza": 0.0,
+     "supConstruidaInterior": 52.2,
+     "espejadas": [],
+     "referencia": "134",
+     "similitudMinima": null,
+     "transformaciones": {
+      "134": "igual"
+     }
+    },
+    {
+     "grupoPlantas": "plantas 2-3",
+     "ids": [
+      "240",
+      "340"
+     ],
+     "codigo": "1D-07b",
+     "terraza": 0.0,
+     "supConstruidaInterior": 52.2,
+     "espejadas": [],
+     "referencia": "240",
+     "similitudMinima": 0.999,
+     "transformaciones": {
+      "240": "igual",
+      "340": "igual"
+     }
     }
    ],
-   "ventanas": [
-    "antepecho"
-   ],
    "renders": {
-    "cenitales": 1,
-    "cenitalesSinEspejo": 1,
-    "p360Interior": 3,
+    "cenitales": 2,
+    "cenitalesSinVoltear": 2,
+    "p360Interior": 5,
     "p360Terraza": 0
-   }
+   },
+   "familia": "F09"
   },
   {
-   "codigo": "1D-09",
+   "codigo": "1D-08",
    "ids": [
     "135",
     "241",
@@ -2410,32 +3364,56 @@
     "241": "igual",
     "341": "igual"
    },
-   "similitudMinima": 0.975,
-   "margenQuiralidad": 0.315,
-   "variantes": [
-    {
-     "terraza": 0.0,
-     "ids": [
-      "135",
-      "241",
-      "341"
-     ],
-     "espejadas": []
-    }
-   ],
+   "similitudMinima": 0.978,
+   "margenEspejo": 0.226,
    "ventanas": [
     "antepecho",
     "suelo-techo"
    ],
+   "variantes": [
+    {
+     "grupoPlantas": "planta 1",
+     "ids": [
+      "135"
+     ],
+     "codigo": "1D-08a",
+     "terraza": 0.0,
+     "supConstruidaInterior": 51.33,
+     "espejadas": [],
+     "referencia": "135",
+     "similitudMinima": null,
+     "transformaciones": {
+      "135": "igual"
+     }
+    },
+    {
+     "grupoPlantas": "plantas 2-3",
+     "ids": [
+      "241",
+      "341"
+     ],
+     "codigo": "1D-08b",
+     "terraza": 0.0,
+     "supConstruidaInterior": 51.33,
+     "espejadas": [],
+     "referencia": "241",
+     "similitudMinima": 0.999,
+     "transformaciones": {
+      "241": "igual",
+      "341": "igual"
+     }
+    }
+   ],
    "renders": {
-    "cenitales": 1,
-    "cenitalesSinEspejo": 1,
-    "p360Interior": 6,
+    "cenitales": 2,
+    "cenitalesSinVoltear": 2,
+    "p360Interior": 5,
     "p360Terraza": 0
-   }
+   },
+   "familia": "F09"
   },
   {
-   "codigo": "1D-10",
+   "codigo": "1D-09",
    "ids": [
     "136",
     "242",
@@ -2514,32 +3492,56 @@
     "242": "igual",
     "342": "igual"
    },
-   "similitudMinima": 0.967,
-   "margenQuiralidad": 0.301,
-   "variantes": [
-    {
-     "terraza": 0.0,
-     "ids": [
-      "136",
-      "242",
-      "342"
-     ],
-     "espejadas": []
-    }
-   ],
+   "similitudMinima": 0.97,
+   "margenEspejo": 0.222,
    "ventanas": [
     "antepecho",
     "suelo-techo"
    ],
+   "variantes": [
+    {
+     "grupoPlantas": "planta 1",
+     "ids": [
+      "136"
+     ],
+     "codigo": "1D-09a",
+     "terraza": 0.0,
+     "supConstruidaInterior": 49.21,
+     "espejadas": [],
+     "referencia": "136",
+     "similitudMinima": null,
+     "transformaciones": {
+      "136": "igual"
+     }
+    },
+    {
+     "grupoPlantas": "plantas 2-3",
+     "ids": [
+      "242",
+      "342"
+     ],
+     "codigo": "1D-09b",
+     "terraza": 0.0,
+     "supConstruidaInterior": 49.21,
+     "espejadas": [],
+     "referencia": "242",
+     "similitudMinima": 0.999,
+     "transformaciones": {
+      "242": "igual",
+      "342": "igual"
+     }
+    }
+   ],
    "renders": {
-    "cenitales": 1,
-    "cenitalesSinEspejo": 1,
-    "p360Interior": 6,
+    "cenitales": 2,
+    "cenitalesSinVoltear": 2,
+    "p360Interior": 5,
     "p360Terraza": 0
-   }
+   },
+   "familia": "F10"
   },
   {
-   "codigo": "1D-11",
+   "codigo": "1D-10",
    "ids": [
     "137",
     "243",
@@ -2618,32 +3620,56 @@
     "243": "igual",
     "343": "igual"
    },
-   "similitudMinima": 0.962,
-   "margenQuiralidad": 0.316,
-   "variantes": [
-    {
-     "terraza": 0.0,
-     "ids": [
-      "137",
-      "243",
-      "343"
-     ],
-     "espejadas": []
-    }
-   ],
+   "similitudMinima": 0.966,
+   "margenEspejo": 0.222,
    "ventanas": [
     "antepecho",
     "suelo-techo"
    ],
+   "variantes": [
+    {
+     "grupoPlantas": "planta 1",
+     "ids": [
+      "137"
+     ],
+     "codigo": "1D-10a",
+     "terraza": 0.0,
+     "supConstruidaInterior": 48.37,
+     "espejadas": [],
+     "referencia": "137",
+     "similitudMinima": null,
+     "transformaciones": {
+      "137": "igual"
+     }
+    },
+    {
+     "grupoPlantas": "plantas 2-3",
+     "ids": [
+      "243",
+      "343"
+     ],
+     "codigo": "1D-10b",
+     "terraza": 0.0,
+     "supConstruidaInterior": 48.37,
+     "espejadas": [],
+     "referencia": "243",
+     "similitudMinima": 0.999,
+     "transformaciones": {
+      "243": "igual",
+      "343": "igual"
+     }
+    }
+   ],
    "renders": {
-    "cenitales": 1,
-    "cenitalesSinEspejo": 1,
-    "p360Interior": 6,
+    "cenitales": 2,
+    "cenitalesSinVoltear": 2,
+    "p360Interior": 5,
     "p360Terraza": 0
-   }
+   },
+   "familia": "F10"
   },
   {
-   "codigo": "1D-12",
+   "codigo": "1D-11",
    "ids": [
     "138",
     "244",
@@ -2722,274 +3748,56 @@
     "244": "igual",
     "344": "igual"
    },
-   "similitudMinima": 0.954,
-   "margenQuiralidad": 0.315,
-   "variantes": [
-    {
-     "terraza": 0.0,
-     "ids": [
-      "138",
-      "244",
-      "344"
-     ],
-     "espejadas": []
-    }
-   ],
+   "similitudMinima": 0.96,
+   "margenEspejo": 0.223,
    "ventanas": [
     "antepecho",
     "suelo-techo"
    ],
-   "renders": {
-    "cenitales": 1,
-    "cenitalesSinEspejo": 1,
-    "p360Interior": 6,
-    "p360Terraza": 0
-   }
-  },
-  {
-   "codigo": "2D-12",
-   "ids": [
-    "202",
-    "302"
-   ],
-   "recuento": 2,
-   "niveles": [
-    2,
-    3
-   ],
-   "dormitorios": 2,
-   "banos": 1,
-   "estudio": false,
-   "estancias": [
-    {
-     "codigo": "SCC",
-     "tipo": "salon-comedor-cocina",
-     "nombre": "Salón - comedor - cocina",
-     "sup": 21.54,
-     "rango": [
-      21.54,
-      21.54
-     ],
-     "tiene360": true
-    },
-    {
-     "codigo": "D1",
-     "tipo": "dormitorio-principal",
-     "nombre": "Dormitorio principal",
-     "sup": 12.69,
-     "rango": [
-      12.69,
-      12.69
-     ],
-     "tiene360": true
-    },
-    {
-     "codigo": "D2",
-     "tipo": "dormitorio",
-     "nombre": "Dormitorio secundario",
-     "sup": 8.89,
-     "rango": [
-      8.89,
-      8.89
-     ],
-     "tiene360": true
-    },
-    {
-     "codigo": "B1",
-     "tipo": "bano",
-     "nombre": "Baño",
-     "sup": 3.25,
-     "rango": [
-      3.25,
-      3.25
-     ],
-     "tiene360": true
-    },
-    {
-     "codigo": "VE",
-     "tipo": "vestidor",
-     "nombre": "Vestidor",
-     "sup": 2.83,
-     "rango": [
-      2.83,
-      2.83
-     ],
-     "tiene360": false
-    },
-    {
-     "codigo": "DI",
-     "tipo": "distribuidor",
-     "nombre": "Distribuidor",
-     "sup": 2.89,
-     "rango": [
-      2.89,
-      2.89
-     ],
-     "tiene360": false
-    }
-   ],
-   "supUtil": [
-    52.09,
-    52.09
-   ],
-   "supConstruidaInterior": [
-    57.99,
-    57.99
-   ],
-   "orientaciones": {
-    "Suroeste": 2
-   },
-   "referencia": "202",
-   "espejadas": [],
-   "transformaciones": {
-    "202": "igual",
-    "302": "igual"
-   },
-   "similitudMinima": 0.999,
-   "margenQuiralidad": 0.477,
    "variantes": [
     {
-     "terraza": 0.0,
+     "grupoPlantas": "planta 1",
      "ids": [
-      "202",
-      "302"
+      "138"
      ],
-     "espejadas": []
+     "codigo": "1D-11a",
+     "terraza": 0.0,
+     "supConstruidaInterior": 47.54,
+     "espejadas": [],
+     "referencia": "138",
+     "similitudMinima": null,
+     "transformaciones": {
+      "138": "igual"
+     }
+    },
+    {
+     "grupoPlantas": "plantas 2-3",
+     "ids": [
+      "244",
+      "344"
+     ],
+     "codigo": "1D-11b",
+     "terraza": 0.0,
+     "supConstruidaInterior": 47.54,
+     "espejadas": [],
+     "referencia": "244",
+     "similitudMinima": 0.998,
+     "transformaciones": {
+      "244": "igual",
+      "344": "igual"
+     }
     }
-   ],
-   "ventanas": [
-    "suelo-techo"
    ],
    "renders": {
-    "cenitales": 1,
-    "cenitalesSinEspejo": 1,
-    "p360Interior": 4,
+    "cenitales": 2,
+    "cenitalesSinVoltear": 2,
+    "p360Interior": 5,
     "p360Terraza": 0
-   }
+   },
+   "familia": "F10"
   },
   {
-   "codigo": "2D-13",
-   "ids": [
-    "205",
-    "305"
-   ],
-   "recuento": 2,
-   "niveles": [
-    2,
-    3
-   ],
-   "dormitorios": 2,
-   "banos": 1,
-   "estudio": false,
-   "estancias": [
-    {
-     "codigo": "SCC",
-     "tipo": "salon-comedor-cocina",
-     "nombre": "Salón - comedor - cocina",
-     "sup": 19.76,
-     "rango": [
-      19.76,
-      19.76
-     ],
-     "tiene360": true
-    },
-    {
-     "codigo": "D1",
-     "tipo": "dormitorio-principal",
-     "nombre": "Dormitorio principal",
-     "sup": 11.65,
-     "rango": [
-      11.65,
-      11.65
-     ],
-     "tiene360": true
-    },
-    {
-     "codigo": "D2",
-     "tipo": "dormitorio",
-     "nombre": "Dormitorio secundario",
-     "sup": 7.97,
-     "rango": [
-      7.97,
-      7.97
-     ],
-     "tiene360": true
-    },
-    {
-     "codigo": "B1",
-     "tipo": "bano",
-     "nombre": "Baño",
-     "sup": 3.25,
-     "rango": [
-      3.25,
-      3.25
-     ],
-     "tiene360": true
-    },
-    {
-     "codigo": "VE",
-     "tipo": "vestidor",
-     "nombre": "Vestidor",
-     "sup": 2.83,
-     "rango": [
-      2.83,
-      2.83
-     ],
-     "tiene360": false
-    },
-    {
-     "codigo": "DI",
-     "tipo": "distribuidor",
-     "nombre": "Distribuidor",
-     "sup": 2.89,
-     "rango": [
-      2.89,
-      2.89
-     ],
-     "tiene360": false
-    }
-   ],
-   "supUtil": [
-    48.35,
-    48.35
-   ],
-   "supConstruidaInterior": [
-    53.95,
-    53.95
-   ],
-   "orientaciones": {
-    "Suroeste": 2
-   },
-   "referencia": "205",
-   "espejadas": [],
-   "transformaciones": {
-    "205": "igual",
-    "305": "igual"
-   },
-   "similitudMinima": 0.999,
-   "margenQuiralidad": 0.481,
-   "variantes": [
-    {
-     "terraza": 0.0,
-     "ids": [
-      "205",
-      "305"
-     ],
-     "espejadas": []
-    }
-   ],
-   "ventanas": [
-    "suelo-techo"
-   ],
-   "renders": {
-    "cenitales": 1,
-    "cenitalesSinEspejo": 1,
-    "p360Interior": 4,
-    "p360Terraza": 0
-   }
-  },
-  {
-   "codigo": "2D-14",
+   "codigo": "2D-11",
    "ids": [
     "207",
     "307"
@@ -3088,330 +3896,36 @@
     "307": "igual"
    },
    "similitudMinima": 1.0,
-   "margenQuiralidad": 0.389,
+   "margenEspejo": 0.457,
+   "ventanas": [
+    "suelo-techo"
+   ],
    "variantes": [
     {
-     "terraza": 0.0,
+     "grupoPlantas": "plantas 2-3",
      "ids": [
       "207",
       "307"
      ],
-     "espejadas": []
+     "codigo": "2D-11a",
+     "terraza": 0.0,
+     "supConstruidaInterior": 57.01,
+     "espejadas": [],
+     "referencia": "207",
+     "similitudMinima": 1.0,
+     "transformaciones": {
+      "207": "igual",
+      "307": "igual"
+     }
     }
-   ],
-   "ventanas": [
-    "suelo-techo"
    ],
    "renders": {
     "cenitales": 1,
-    "cenitalesSinEspejo": 1,
+    "cenitalesSinVoltear": 1,
     "p360Interior": 4,
     "p360Terraza": 0
-   }
-  },
-  {
-   "codigo": "1D-13",
-   "ids": [
-    "209",
-    "210",
-    "219",
-    "220",
-    "227",
-    "228",
-    "235",
-    "236",
-    "309",
-    "310",
-    "319",
-    "320",
-    "327",
-    "328",
-    "335",
-    "408",
-    "416",
-    "421",
-    "429",
-    "430"
-   ],
-   "recuento": 20,
-   "niveles": [
-    2,
-    3,
-    4
-   ],
-   "dormitorios": 1,
-   "banos": 1,
-   "estudio": false,
-   "estancias": [
-    {
-     "codigo": "SCC",
-     "tipo": "salon-comedor-cocina",
-     "nombre": "Salón - comedor - cocina",
-     "sup": 23.79,
-     "rango": [
-      23.76,
-      23.79
-     ],
-     "tiene360": true
-    },
-    {
-     "codigo": "D1",
-     "tipo": "dormitorio-principal",
-     "nombre": "Dormitorio principal",
-     "sup": 10.09,
-     "rango": [
-      10.09,
-      10.11
-     ],
-     "tiene360": true
-    },
-    {
-     "codigo": "B1",
-     "tipo": "bano",
-     "nombre": "Baño",
-     "sup": 3.4,
-     "rango": [
-      3.4,
-      3.4
-     ],
-     "tiene360": true
-    }
-   ],
-   "supUtil": [
-    37.27,
-    37.28
-   ],
-   "supConstruidaInterior": [
-    42.09,
-    42.09
-   ],
-   "orientaciones": {
-    "Jardín interior": 20
    },
-   "referencia": "209",
-   "espejadas": [
-    "210",
-    "220",
-    "228",
-    "236",
-    "310",
-    "320",
-    "328",
-    "408",
-    "416",
-    "430"
-   ],
-   "transformaciones": {
-    "209": "igual",
-    "210": "espejoV",
-    "219": "igual",
-    "220": "espejoV",
-    "227": "igual",
-    "228": "espejoV",
-    "235": "giro180",
-    "236": "espejoH",
-    "309": "igual",
-    "310": "espejoV",
-    "319": "igual",
-    "320": "espejoV",
-    "327": "igual",
-    "328": "espejoV",
-    "335": "giro180",
-    "408": "espejoV",
-    "416": "espejoV",
-    "421": "igual",
-    "429": "giro180",
-    "430": "espejoH"
-   },
-   "similitudMinima": 0.949,
-   "margenQuiralidad": 0.395,
-   "variantes": [
-    {
-     "terraza": [
-      2.94,
-      2.95
-     ],
-     "ids": [
-      "209",
-      "210",
-      "219",
-      "220",
-      "227",
-      "228",
-      "235",
-      "236",
-      "309",
-      "310",
-      "319",
-      "320",
-      "327",
-      "328",
-      "335",
-      "408",
-      "416",
-      "421",
-      "429",
-      "430"
-     ],
-     "espejadas": [
-      "210",
-      "220",
-      "228",
-      "236",
-      "310",
-      "320",
-      "328",
-      "408",
-      "416",
-      "430"
-     ]
-    }
-   ],
-   "ventanas": [
-    "suelo-techo"
-   ],
-   "renders": {
-    "cenitales": 1,
-    "cenitalesSinEspejo": 2,
-    "p360Interior": 3,
-    "p360Terraza": 0
-   }
-  },
-  {
-   "codigo": "1D-14",
-   "ids": [
-    "217",
-    "218",
-    "225",
-    "226",
-    "317",
-    "318",
-    "325",
-    "326",
-    "413",
-    "414",
-    "419",
-    "420"
-   ],
-   "recuento": 12,
-   "niveles": [
-    2,
-    3,
-    4
-   ],
-   "dormitorios": 1,
-   "banos": 1,
-   "estudio": false,
-   "estancias": [
-    {
-     "codigo": "SCC",
-     "tipo": "salon-comedor-cocina",
-     "nombre": "Salón - comedor - cocina",
-     "sup": 26.25,
-     "rango": [
-      26.25,
-      26.25
-     ],
-     "tiene360": true
-    },
-    {
-     "codigo": "D1",
-     "tipo": "dormitorio-principal",
-     "nombre": "Dormitorio principal",
-     "sup": 11.06,
-     "rango": [
-      11.06,
-      11.06
-     ],
-     "tiene360": true
-    },
-    {
-     "codigo": "B1",
-     "tipo": "bano",
-     "nombre": "Baño",
-     "sup": 3.4,
-     "rango": [
-      3.4,
-      3.4
-     ],
-     "tiene360": true
-    }
-   ],
-   "supUtil": [
-    40.71,
-    40.71
-   ],
-   "supConstruidaInterior": [
-    45.22,
-    45.22
-   ],
-   "orientaciones": {
-    "Jardín interior": 12
-   },
-   "referencia": "217",
-   "espejadas": [
-    "218",
-    "226",
-    "318",
-    "326",
-    "414",
-    "420"
-   ],
-   "transformaciones": {
-    "217": "igual",
-    "218": "espejoV",
-    "225": "igual",
-    "226": "espejoV",
-    "317": "igual",
-    "318": "espejoV",
-    "325": "igual",
-    "326": "espejoV",
-    "413": "igual",
-    "414": "espejoV",
-    "419": "igual",
-    "420": "espejoV"
-   },
-   "similitudMinima": 0.955,
-   "margenQuiralidad": 0.315,
-   "variantes": [
-    {
-     "terraza": [
-      2.94,
-      2.95
-     ],
-     "ids": [
-      "217",
-      "218",
-      "225",
-      "226",
-      "317",
-      "318",
-      "325",
-      "326",
-      "413",
-      "414",
-      "419",
-      "420"
-     ],
-     "espejadas": [
-      "218",
-      "226",
-      "318",
-      "326",
-      "414",
-      "420"
-     ]
-    }
-   ],
-   "ventanas": [
-    "suelo-techo"
-   ],
-   "renders": {
-    "cenitales": 1,
-    "cenitalesSinEspejo": 2,
-    "p360Interior": 3,
-    "p360Terraza": 0
-   }
+   "familia": "F11"
   },
   {
    "codigo": "3D-01",
@@ -3453,22 +3967,22 @@
     {
      "codigo": "D2",
      "tipo": "dormitorio",
-     "nombre": "Dormitorio secundario 2",
-     "sup": 7.66,
+     "nombre": "Dormitorio secundario",
+     "sup": 6.98,
      "rango": [
-      7.66,
-      7.66
+      6.98,
+      6.98
      ],
      "tiene360": true
     },
     {
      "codigo": "D3",
      "tipo": "dormitorio",
-     "nombre": "Dormitorio secundario",
-     "sup": 6.98,
+     "nombre": "Dormitorio secundario 2",
+     "sup": 7.66,
      "rango": [
-      6.98,
-      6.98
+      7.66,
+      7.66
      ],
      "tiene360": true
     },
@@ -3524,128 +4038,39 @@
     "338": "igual"
    },
    "similitudMinima": 1.0,
-   "margenQuiralidad": 0.5,
+   "margenEspejo": 0.397,
+   "ventanas": [
+    "suelo-techo"
+   ],
    "variantes": [
     {
-     "terraza": 0.0,
+     "grupoPlantas": "plantas 2-3",
      "ids": [
       "238",
       "338"
      ],
-     "espejadas": []
+     "codigo": "3D-01a",
+     "terraza": 0.0,
+     "supConstruidaInterior": 73.56,
+     "espejadas": [],
+     "referencia": "238",
+     "similitudMinima": 1.0,
+     "transformaciones": {
+      "238": "igual",
+      "338": "igual"
+     }
     }
-   ],
-   "ventanas": [
-    "suelo-techo"
    ],
    "renders": {
     "cenitales": 1,
-    "cenitalesSinEspejo": 1,
+    "cenitalesSinVoltear": 1,
     "p360Interior": 6,
     "p360Terraza": 0
-   }
+   },
+   "familia": "F12"
   },
   {
-   "codigo": "1D-15",
-   "ids": [
-    "240",
-    "340"
-   ],
-   "recuento": 2,
-   "niveles": [
-    2,
-    3
-   ],
-   "dormitorios": 1,
-   "banos": 1,
-   "estudio": false,
-   "estancias": [
-    {
-     "codigo": "SCC",
-     "tipo": "salon-comedor-cocina",
-     "nombre": "Salón - comedor - cocina",
-     "sup": 25.81,
-     "rango": [
-      25.81,
-      25.81
-     ],
-     "tiene360": true
-    },
-    {
-     "codigo": "D1",
-     "tipo": "dormitorio-principal",
-     "nombre": "Dormitorio principal",
-     "sup": 13.38,
-     "rango": [
-      13.38,
-      13.38
-     ],
-     "tiene360": true
-    },
-    {
-     "codigo": "B1",
-     "tipo": "bano",
-     "nombre": "Baño",
-     "sup": 3.68,
-     "rango": [
-      3.68,
-      3.68
-     ],
-     "tiene360": true
-    },
-    {
-     "codigo": "VE",
-     "tipo": "vestidor",
-     "nombre": "Vestidor",
-     "sup": 4.5,
-     "rango": [
-      4.5,
-      4.5
-     ],
-     "tiene360": false
-    }
-   ],
-   "supUtil": [
-    47.37,
-    47.37
-   ],
-   "supConstruidaInterior": [
-    52.2,
-    52.2
-   ],
-   "orientaciones": {
-    "Suroeste": 2
-   },
-   "referencia": "240",
-   "espejadas": [],
-   "transformaciones": {
-    "240": "igual",
-    "340": "igual"
-   },
-   "similitudMinima": 1.0,
-   "margenQuiralidad": 0.356,
-   "variantes": [
-    {
-     "terraza": 0.0,
-     "ids": [
-      "240",
-      "340"
-     ],
-     "espejadas": []
-    }
-   ],
-   "ventanas": [
-    "suelo-techo"
-   ],
-   "renders": {
-    "cenitales": 1,
-    "cenitalesSinEspejo": 1,
-    "p360Interior": 3,
-    "p360Terraza": 0
-   }
-  },
-  {
-   "codigo": "1D-16",
+   "codigo": "1D-12",
    "ids": [
     "245",
     "345"
@@ -3721,30 +4146,40 @@
     "245": "igual",
     "345": "igual"
    },
-   "similitudMinima": 0.999,
-   "margenQuiralidad": 0.383,
+   "similitudMinima": 1.0,
+   "margenEspejo": 0.273,
+   "ventanas": [
+    "suelo-techo"
+   ],
    "variantes": [
     {
-     "terraza": 0.0,
+     "grupoPlantas": "plantas 2-3",
      "ids": [
       "245",
       "345"
      ],
-     "espejadas": []
+     "codigo": "1D-12a",
+     "terraza": 0.0,
+     "supConstruidaInterior": 46.71,
+     "espejadas": [],
+     "referencia": "245",
+     "similitudMinima": 1.0,
+     "transformaciones": {
+      "245": "igual",
+      "345": "igual"
+     }
     }
-   ],
-   "ventanas": [
-    "suelo-techo"
    ],
    "renders": {
     "cenitales": 1,
-    "cenitalesSinEspejo": 1,
+    "cenitalesSinVoltear": 1,
     "p360Interior": 3,
     "p360Terraza": 0
-   }
+   },
+   "familia": "F10"
   },
   {
-   "codigo": "2D-15",
+   "codigo": "2D-12",
    "ids": [
     "246",
     "346"
@@ -3842,30 +4277,40 @@
     "246": "igual",
     "346": "igual"
    },
-   "similitudMinima": 0.999,
-   "margenQuiralidad": 0.423,
+   "similitudMinima": 1.0,
+   "margenEspejo": 0.271,
+   "ventanas": [
+    "suelo-techo"
+   ],
    "variantes": [
     {
-     "terraza": 0.0,
+     "grupoPlantas": "plantas 2-3",
      "ids": [
       "246",
       "346"
      ],
-     "espejadas": []
+     "codigo": "2D-12a",
+     "terraza": 0.0,
+     "supConstruidaInterior": 61.47,
+     "espejadas": [],
+     "referencia": "246",
+     "similitudMinima": 1.0,
+     "transformaciones": {
+      "246": "igual",
+      "346": "igual"
+     }
     }
-   ],
-   "ventanas": [
-    "suelo-techo"
    ],
    "renders": {
     "cenitales": 1,
-    "cenitalesSinEspejo": 1,
+    "cenitalesSinVoltear": 1,
     "p360Interior": 4,
     "p360Terraza": 0
-   }
+   },
+   "familia": "F01"
   },
   {
-   "codigo": "1D-17",
+   "codigo": "1D-13",
    "ids": [
     "401"
    ],
@@ -3928,28 +4373,37 @@
     "401": "igual"
    },
    "similitudMinima": null,
-   "margenQuiralidad": null,
-   "variantes": [
-    {
-     "terraza": 31.6,
-     "ids": [
-      "401"
-     ],
-     "espejadas": []
-    }
-   ],
+   "margenEspejo": null,
    "ventanas": [
     "suelo-techo"
    ],
+   "variantes": [
+    {
+     "grupoPlantas": "ático",
+     "ids": [
+      "401"
+     ],
+     "codigo": "1D-13a",
+     "terraza": 31.6,
+     "supConstruidaInterior": 49.42,
+     "espejadas": [],
+     "referencia": "401",
+     "similitudMinima": null,
+     "transformaciones": {
+      "401": "igual"
+     }
+    }
+   ],
    "renders": {
     "cenitales": 1,
-    "cenitalesSinEspejo": 1,
+    "cenitalesSinVoltear": 1,
     "p360Interior": 3,
     "p360Terraza": 1
-   }
+   },
+   "familia": "F13"
   },
   {
-   "codigo": "1D-18",
+   "codigo": "1D-14",
    "ids": [
     "402"
    ],
@@ -4012,28 +4466,37 @@
     "402": "igual"
    },
    "similitudMinima": null,
-   "margenQuiralidad": null,
-   "variantes": [
-    {
-     "terraza": 31.22,
-     "ids": [
-      "402"
-     ],
-     "espejadas": []
-    }
-   ],
+   "margenEspejo": null,
    "ventanas": [
     "suelo-techo"
    ],
+   "variantes": [
+    {
+     "grupoPlantas": "ático",
+     "ids": [
+      "402"
+     ],
+     "codigo": "1D-14a",
+     "terraza": 31.22,
+     "supConstruidaInterior": 46.16,
+     "espejadas": [],
+     "referencia": "402",
+     "similitudMinima": null,
+     "transformaciones": {
+      "402": "igual"
+     }
+    }
+   ],
    "renders": {
     "cenitales": 1,
-    "cenitalesSinEspejo": 1,
+    "cenitalesSinVoltear": 1,
     "p360Interior": 3,
     "p360Terraza": 1
-   }
+   },
+   "familia": "F14"
   },
   {
-   "codigo": "1D-19",
+   "codigo": "1D-15",
    "ids": [
     "403"
    ],
@@ -4096,28 +4559,37 @@
     "403": "igual"
    },
    "similitudMinima": null,
-   "margenQuiralidad": null,
-   "variantes": [
-    {
-     "terraza": 31.21,
-     "ids": [
-      "403"
-     ],
-     "espejadas": []
-    }
-   ],
+   "margenEspejo": null,
    "ventanas": [
     "suelo-techo"
    ],
+   "variantes": [
+    {
+     "grupoPlantas": "ático",
+     "ids": [
+      "403"
+     ],
+     "codigo": "1D-15a",
+     "terraza": 31.21,
+     "supConstruidaInterior": 43.75,
+     "espejadas": [],
+     "referencia": "403",
+     "similitudMinima": null,
+     "transformaciones": {
+      "403": "igual"
+     }
+    }
+   ],
    "renders": {
     "cenitales": 1,
-    "cenitalesSinEspejo": 1,
+    "cenitalesSinVoltear": 1,
     "p360Interior": 3,
     "p360Terraza": 1
-   }
+   },
+   "familia": "F15"
   },
   {
-   "codigo": "1D-20",
+   "codigo": "1D-16",
    "ids": [
     "404"
    ],
@@ -4180,28 +4652,37 @@
     "404": "igual"
    },
    "similitudMinima": null,
-   "margenQuiralidad": null,
-   "variantes": [
-    {
-     "terraza": 31.21,
-     "ids": [
-      "404"
-     ],
-     "espejadas": []
-    }
-   ],
+   "margenEspejo": null,
    "ventanas": [
     "suelo-techo"
    ],
+   "variantes": [
+    {
+     "grupoPlantas": "ático",
+     "ids": [
+      "404"
+     ],
+     "codigo": "1D-16a",
+     "terraza": 31.21,
+     "supConstruidaInterior": 41.35,
+     "espejadas": [],
+     "referencia": "404",
+     "similitudMinima": null,
+     "transformaciones": {
+      "404": "igual"
+     }
+    }
+   ],
    "renders": {
     "cenitales": 1,
-    "cenitalesSinEspejo": 1,
+    "cenitalesSinVoltear": 1,
     "p360Interior": 3,
     "p360Terraza": 1
-   }
+   },
+   "familia": "F16"
   },
   {
-   "codigo": "2D-16",
+   "codigo": "2D-13",
    "ids": [
     "405"
    ],
@@ -4275,28 +4756,37 @@
     "405": "igual"
    },
    "similitudMinima": null,
-   "margenQuiralidad": null,
-   "variantes": [
-    {
-     "terraza": 59.09,
-     "ids": [
-      "405"
-     ],
-     "espejadas": []
-    }
-   ],
+   "margenEspejo": null,
    "ventanas": [
     "suelo-techo"
    ],
+   "variantes": [
+    {
+     "grupoPlantas": "ático",
+     "ids": [
+      "405"
+     ],
+     "codigo": "2D-13a",
+     "terraza": 59.09,
+     "supConstruidaInterior": 52.44,
+     "espejadas": [],
+     "referencia": "405",
+     "similitudMinima": null,
+     "transformaciones": {
+      "405": "igual"
+     }
+    }
+   ],
    "renders": {
     "cenitales": 1,
-    "cenitalesSinEspejo": 1,
+    "cenitalesSinVoltear": 1,
     "p360Interior": 4,
     "p360Terraza": 2
-   }
+   },
+   "familia": "F17"
   },
   {
-   "codigo": "1D-21",
+   "codigo": "1D-17",
    "ids": [
     "406"
    ],
@@ -4359,112 +4849,37 @@
     "406": "igual"
    },
    "similitudMinima": null,
-   "margenQuiralidad": null,
+   "margenEspejo": null,
+   "ventanas": [
+    "suelo-techo"
+   ],
    "variantes": [
     {
-     "terraza": 27.64,
+     "grupoPlantas": "ático",
      "ids": [
       "406"
      ],
-     "espejadas": []
+     "codigo": "1D-17a",
+     "terraza": 27.64,
+     "supConstruidaInterior": 39.58,
+     "espejadas": [],
+     "referencia": "406",
+     "similitudMinima": null,
+     "transformaciones": {
+      "406": "igual"
+     }
     }
-   ],
-   "ventanas": [
-    "suelo-techo"
    ],
    "renders": {
     "cenitales": 1,
-    "cenitalesSinEspejo": 1,
+    "cenitalesSinVoltear": 1,
     "p360Interior": 3,
     "p360Terraza": 1
-   }
+   },
+   "familia": "F18"
   },
   {
-   "codigo": "1D-22",
-   "ids": [
-    "407"
-   ],
-   "recuento": 1,
-   "niveles": [
-    4
-   ],
-   "dormitorios": 1,
-   "banos": 1,
-   "estudio": false,
-   "estancias": [
-    {
-     "codigo": "SCC",
-     "tipo": "salon-comedor-cocina",
-     "nombre": "Salón - comedor - cocina",
-     "sup": 23.79,
-     "rango": [
-      23.79,
-      23.79
-     ],
-     "tiene360": true
-    },
-    {
-     "codigo": "D1",
-     "tipo": "dormitorio-principal",
-     "nombre": "Dormitorio principal",
-     "sup": 10.09,
-     "rango": [
-      10.09,
-      10.09
-     ],
-     "tiene360": true
-    },
-    {
-     "codigo": "B1",
-     "tipo": "bano",
-     "nombre": "Baño",
-     "sup": 3.4,
-     "rango": [
-      3.4,
-      3.4
-     ],
-     "tiene360": true
-    }
-   ],
-   "supUtil": [
-    37.28,
-    37.28
-   ],
-   "supConstruidaInterior": [
-    42.09,
-    42.09
-   ],
-   "orientaciones": {
-    "Jardín interior": 1
-   },
-   "referencia": "407",
-   "espejadas": [],
-   "transformaciones": {
-    "407": "igual"
-   },
-   "similitudMinima": null,
-   "margenQuiralidad": null,
-   "variantes": [
-    {
-     "terraza": 2.95,
-     "ids": [
-      "407"
-     ],
-     "espejadas": []
-    }
-   ],
-   "ventanas": [
-    "suelo-techo"
-   ],
-   "renders": {
-    "cenitales": 1,
-    "cenitalesSinEspejo": 1,
-    "p360Interior": 3,
-    "p360Terraza": 0
-   }
-  },
-  {
-   "codigo": "2D-17",
+   "codigo": "2D-14",
    "ids": [
     "409"
    ],
@@ -4538,28 +4953,37 @@
     "409": "igual"
    },
    "similitudMinima": null,
-   "margenQuiralidad": null,
-   "variantes": [
-    {
-     "terraza": 53.68,
-     "ids": [
-      "409"
-     ],
-     "espejadas": []
-    }
-   ],
+   "margenEspejo": null,
    "ventanas": [
     "suelo-techo"
    ],
+   "variantes": [
+    {
+     "grupoPlantas": "ático",
+     "ids": [
+      "409"
+     ],
+     "codigo": "2D-14a",
+     "terraza": 53.68,
+     "supConstruidaInterior": 49.76,
+     "espejadas": [],
+     "referencia": "409",
+     "similitudMinima": null,
+     "transformaciones": {
+      "409": "igual"
+     }
+    }
+   ],
    "renders": {
     "cenitales": 1,
-    "cenitalesSinEspejo": 1,
+    "cenitalesSinVoltear": 1,
     "p360Interior": 4,
     "p360Terraza": 2
-   }
+   },
+   "familia": "F19"
   },
   {
-   "codigo": "1D-23",
+   "codigo": "1D-18",
    "ids": [
     "410",
     "411",
@@ -4630,43 +5054,74 @@
     "417": "espejoH",
     "418": "igual"
    },
-   "similitudMinima": 0.986,
-   "margenQuiralidad": 0.282,
-   "variantes": [
-    {
-     "terraza": [
-      31.2,
-      31.6
-     ],
-     "ids": [
-      "410",
-      "411",
-      "417",
-      "418"
-     ],
-     "espejadas": [
-      "411",
-      "417"
-     ]
-    }
-   ],
+   "similitudMinima": 0.98,
+   "margenEspejo": 0.233,
    "ventanas": [
     "suelo-techo"
    ],
+   "variantes": [
+    {
+     "grupoPlantas": "ático",
+     "ids": [
+      "410",
+      "411"
+     ],
+     "codigo": "1D-18a",
+     "terraza": 31.2,
+     "supConstruidaInterior": 44.78,
+     "espejadas": [
+      "411"
+     ],
+     "referencia": "410",
+     "similitudMinima": 0.991,
+     "transformaciones": {
+      "410": "igual",
+      "411": "espejoH"
+     }
+    },
+    {
+     "grupoPlantas": "ático",
+     "ids": [
+      "417",
+      "418"
+     ],
+     "codigo": "1D-18b",
+     "terraza": [
+      31.58,
+      31.6
+     ],
+     "supConstruidaInterior": [
+      45.32,
+      45.36
+     ],
+     "espejadas": [
+      "417"
+     ],
+     "referencia": "417",
+     "similitudMinima": 0.991,
+     "transformaciones": {
+      "417": "igual",
+      "418": "espejoH"
+     }
+    }
+   ],
    "renders": {
-    "cenitales": 1,
-    "cenitalesSinEspejo": 2,
+    "cenitales": 2,
+    "cenitalesSinVoltear": 4,
     "p360Interior": 3,
     "p360Terraza": 1
-   }
+   },
+   "familia": "F20"
   },
   {
-   "codigo": "1D-24",
+   "codigo": "1D-19",
    "ids": [
     "412",
-    "423"
+    "423",
+    "424",
+    "425"
    ],
-   "recuento": 2,
+   "recuento": 4,
    "niveles": [
     4
    ],
@@ -4702,14 +5157,14 @@
      "nombre": "Baño",
      "sup": 3.7,
      "rango": [
-      3.7,
+      3.66,
       3.7
      ],
      "tiene360": true
     }
    ],
    "supUtil": [
-    39.63,
+    39.59,
     39.63
    ],
    "supConstruidaInterior": [
@@ -4717,301 +5172,60 @@
     44.78
    ],
    "orientaciones": {
-    "Noreste": 2
+    "Noreste": 4
    },
    "referencia": "412",
    "espejadas": [
-    "423"
+    "423",
+    "425"
    ],
    "transformaciones": {
     "412": "igual",
-    "423": "espejoH"
-   },
-   "similitudMinima": 0.993,
-   "margenQuiralidad": 0.267,
-   "variantes": [
-    {
-     "terraza": 31.2,
-     "ids": [
-      "412",
-      "423"
-     ],
-     "espejadas": [
-      "423"
-     ]
-    }
-   ],
-   "ventanas": [
-    "suelo-techo"
-   ],
-   "renders": {
-    "cenitales": 1,
-    "cenitalesSinEspejo": 2,
-    "p360Interior": 3,
-    "p360Terraza": 1
-   }
-  },
-  {
-   "codigo": "1D-25",
-   "ids": [
-    "415"
-   ],
-   "recuento": 1,
-   "niveles": [
-    4
-   ],
-   "dormitorios": 1,
-   "banos": 1,
-   "estudio": false,
-   "estancias": [
-    {
-     "codigo": "SCC",
-     "tipo": "salon-comedor-cocina",
-     "nombre": "Salón - comedor - cocina",
-     "sup": 23.79,
-     "rango": [
-      23.79,
-      23.79
-     ],
-     "tiene360": true
-    },
-    {
-     "codigo": "D1",
-     "tipo": "dormitorio-principal",
-     "nombre": "Dormitorio principal",
-     "sup": 10.09,
-     "rango": [
-      10.09,
-      10.09
-     ],
-     "tiene360": true
-    },
-    {
-     "codigo": "B1",
-     "tipo": "bano",
-     "nombre": "Baño",
-     "sup": 3.4,
-     "rango": [
-      3.4,
-      3.4
-     ],
-     "tiene360": true
-    }
-   ],
-   "supUtil": [
-    37.28,
-    37.28
-   ],
-   "supConstruidaInterior": [
-    42.09,
-    42.09
-   ],
-   "orientaciones": {
-    "Jardín interior": 1
-   },
-   "referencia": "415",
-   "espejadas": [],
-   "transformaciones": {
-    "415": "igual"
-   },
-   "similitudMinima": null,
-   "margenQuiralidad": null,
-   "variantes": [
-    {
-     "terraza": 2.95,
-     "ids": [
-      "415"
-     ],
-     "espejadas": []
-    }
-   ],
-   "ventanas": [
-    "suelo-techo"
-   ],
-   "renders": {
-    "cenitales": 1,
-    "cenitalesSinEspejo": 1,
-    "p360Interior": 3,
-    "p360Terraza": 0
-   }
-  },
-  {
-   "codigo": "1D-26",
-   "ids": [
-    "422"
-   ],
-   "recuento": 1,
-   "niveles": [
-    4
-   ],
-   "dormitorios": 1,
-   "banos": 1,
-   "estudio": false,
-   "estancias": [
-    {
-     "codigo": "SCC",
-     "tipo": "salon-comedor-cocina",
-     "nombre": "Salón - comedor - cocina",
-     "sup": 23.79,
-     "rango": [
-      23.79,
-      23.79
-     ],
-     "tiene360": true
-    },
-    {
-     "codigo": "D1",
-     "tipo": "dormitorio-principal",
-     "nombre": "Dormitorio principal",
-     "sup": 10.09,
-     "rango": [
-      10.09,
-      10.09
-     ],
-     "tiene360": true
-    },
-    {
-     "codigo": "B1",
-     "tipo": "bano",
-     "nombre": "Baño",
-     "sup": 3.4,
-     "rango": [
-      3.4,
-      3.4
-     ],
-     "tiene360": true
-    }
-   ],
-   "supUtil": [
-    37.28,
-    37.28
-   ],
-   "supConstruidaInterior": [
-    42.09,
-    42.09
-   ],
-   "orientaciones": {
-    "Jardín interior": 1
-   },
-   "referencia": "422",
-   "espejadas": [],
-   "transformaciones": {
-    "422": "igual"
-   },
-   "similitudMinima": null,
-   "margenQuiralidad": null,
-   "variantes": [
-    {
-     "terraza": 2.94,
-     "ids": [
-      "422"
-     ],
-     "espejadas": []
-    }
-   ],
-   "ventanas": [
-    "suelo-techo"
-   ],
-   "renders": {
-    "cenitales": 1,
-    "cenitalesSinEspejo": 1,
-    "p360Interior": 3,
-    "p360Terraza": 0
-   }
-  },
-  {
-   "codigo": "1D-27",
-   "ids": [
-    "424",
-    "425"
-   ],
-   "recuento": 2,
-   "niveles": [
-    4
-   ],
-   "dormitorios": 1,
-   "banos": 1,
-   "estudio": false,
-   "estancias": [
-    {
-     "codigo": "SCC",
-     "tipo": "salon-comedor-cocina",
-     "nombre": "Salón - comedor - cocina",
-     "sup": 25.78,
-     "rango": [
-      25.78,
-      25.78
-     ],
-     "tiene360": true
-    },
-    {
-     "codigo": "D1",
-     "tipo": "dormitorio-principal",
-     "nombre": "Dormitorio principal",
-     "sup": 10.15,
-     "rango": [
-      10.15,
-      10.15
-     ],
-     "tiene360": true
-    },
-    {
-     "codigo": "B1",
-     "tipo": "bano",
-     "nombre": "Baño",
-     "sup": 3.66,
-     "rango": [
-      3.66,
-      3.66
-     ],
-     "tiene360": true
-    }
-   ],
-   "supUtil": [
-    39.59,
-    39.59
-   ],
-   "supConstruidaInterior": [
-    44.78,
-    44.78
-   ],
-   "orientaciones": {
-    "Noreste": 2
-   },
-   "referencia": "424",
-   "espejadas": [
-    "425"
-   ],
-   "transformaciones": {
+    "423": "espejoH",
     "424": "igual",
     "425": "espejoH"
    },
-   "similitudMinima": 0.993,
-   "margenQuiralidad": 0.235,
-   "variantes": [
-    {
-     "terraza": 31.2,
-     "ids": [
-      "424",
-      "425"
-     ],
-     "espejadas": [
-      "425"
-     ]
-    }
-   ],
+   "similitudMinima": 0.935,
+   "margenEspejo": 0.153,
    "ventanas": [
     "suelo-techo"
    ],
+   "variantes": [
+    {
+     "grupoPlantas": "ático",
+     "ids": [
+      "412",
+      "423",
+      "424",
+      "425"
+     ],
+     "codigo": "1D-19a",
+     "terraza": 31.2,
+     "supConstruidaInterior": 44.78,
+     "espejadas": [
+      "423",
+      "425"
+     ],
+     "referencia": "412",
+     "similitudMinima": 0.935,
+     "transformaciones": {
+      "412": "igual",
+      "423": "espejoH",
+      "424": "igual",
+      "425": "espejoH"
+     }
+    }
+   ],
    "renders": {
     "cenitales": 1,
-    "cenitalesSinEspejo": 2,
+    "cenitalesSinVoltear": 2,
     "p360Interior": 3,
     "p360Terraza": 1
-   }
+   },
+   "familia": "F20"
   },
   {
-   "codigo": "1D-28",
+   "codigo": "1D-20",
    "ids": [
     "426"
    ],
@@ -5074,28 +5288,37 @@
     "426": "igual"
    },
    "similitudMinima": null,
-   "margenQuiralidad": null,
-   "variantes": [
-    {
-     "terraza": 27.12,
-     "ids": [
-      "426"
-     ],
-     "espejadas": []
-    }
-   ],
+   "margenEspejo": null,
    "ventanas": [
     "suelo-techo"
    ],
+   "variantes": [
+    {
+     "grupoPlantas": "ático",
+     "ids": [
+      "426"
+     ],
+     "codigo": "1D-20a",
+     "terraza": 27.12,
+     "supConstruidaInterior": 38.92,
+     "espejadas": [],
+     "referencia": "426",
+     "similitudMinima": null,
+     "transformaciones": {
+      "426": "igual"
+     }
+    }
+   ],
    "renders": {
     "cenitales": 1,
-    "cenitalesSinEspejo": 1,
+    "cenitalesSinVoltear": 1,
     "p360Interior": 3,
     "p360Terraza": 1
-   }
+   },
+   "familia": "F18"
   },
   {
-   "codigo": "1D-29",
+   "codigo": "1D-21",
    "ids": [
     "427"
    ],
@@ -5158,25 +5381,34 @@
     "427": "igual"
    },
    "similitudMinima": null,
-   "margenQuiralidad": null,
-   "variantes": [
-    {
-     "terraza": 46.01,
-     "ids": [
-      "427"
-     ],
-     "espejadas": []
-    }
-   ],
+   "margenEspejo": null,
    "ventanas": [
     "suelo-techo"
    ],
+   "variantes": [
+    {
+     "grupoPlantas": "ático",
+     "ids": [
+      "427"
+     ],
+     "codigo": "1D-21a",
+     "terraza": 46.01,
+     "supConstruidaInterior": 38.07,
+     "espejadas": [],
+     "referencia": "427",
+     "similitudMinima": null,
+     "transformaciones": {
+      "427": "igual"
+     }
+    }
+   ],
    "renders": {
     "cenitales": 1,
-    "cenitalesSinEspejo": 1,
+    "cenitalesSinVoltear": 1,
     "p360Interior": 3,
     "p360Terraza": 2
-   }
+   },
+   "familia": "F21"
   },
   {
    "codigo": "E-01",
@@ -5231,25 +5463,34 @@
     "428": "igual"
    },
    "similitudMinima": null,
-   "margenQuiralidad": null,
-   "variantes": [
-    {
-     "terraza": 23.09,
-     "ids": [
-      "428"
-     ],
-     "espejadas": []
-    }
-   ],
+   "margenEspejo": null,
    "ventanas": [
     "suelo-techo"
    ],
+   "variantes": [
+    {
+     "grupoPlantas": "ático",
+     "ids": [
+      "428"
+     ],
+     "codigo": "E-01a",
+     "terraza": 23.09,
+     "supConstruidaInterior": 33.19,
+     "espejadas": [],
+     "referencia": "428",
+     "similitudMinima": null,
+     "transformaciones": {
+      "428": "igual"
+     }
+    }
+   ],
    "renders": {
     "cenitales": 1,
-    "cenitalesSinEspejo": 1,
+    "cenitalesSinVoltear": 1,
     "p360Interior": 2,
     "p360Terraza": 1
-   }
+   },
+   "familia": "F22"
   },
   {
    "codigo": "3D-02",
@@ -5359,25 +5600,34 @@
     "431": "igual"
    },
    "similitudMinima": null,
-   "margenQuiralidad": null,
-   "variantes": [
-    {
-     "terraza": 60.46,
-     "ids": [
-      "431"
-     ],
-     "espejadas": []
-    }
-   ],
+   "margenEspejo": null,
    "ventanas": [
     "suelo-techo"
    ],
+   "variantes": [
+    {
+     "grupoPlantas": "ático",
+     "ids": [
+      "431"
+     ],
+     "codigo": "3D-02a",
+     "terraza": 60.46,
+     "supConstruidaInterior": 70.27,
+     "espejadas": [],
+     "referencia": "431",
+     "similitudMinima": null,
+     "transformaciones": {
+      "431": "igual"
+     }
+    }
+   ],
    "renders": {
     "cenitales": 1,
-    "cenitalesSinEspejo": 1,
+    "cenitalesSinVoltear": 1,
     "p360Interior": 6,
     "p360Terraza": 2
-   }
+   },
+   "familia": "F23"
   },
   {
    "codigo": "E-02",
@@ -5432,25 +5682,34 @@
     "432": "igual"
    },
    "similitudMinima": null,
-   "margenQuiralidad": null,
-   "variantes": [
-    {
-     "terraza": 18.01,
-     "ids": [
-      "432"
-     ],
-     "espejadas": []
-    }
-   ],
+   "margenEspejo": null,
    "ventanas": [
     "suelo-techo"
    ],
+   "variantes": [
+    {
+     "grupoPlantas": "ático",
+     "ids": [
+      "432"
+     ],
+     "codigo": "E-02a",
+     "terraza": 18.01,
+     "supConstruidaInterior": 34.8,
+     "espejadas": [],
+     "referencia": "432",
+     "similitudMinima": null,
+     "transformaciones": {
+      "432": "igual"
+     }
+    }
+   ],
    "renders": {
     "cenitales": 1,
-    "cenitalesSinEspejo": 1,
+    "cenitalesSinVoltear": 1,
     "p360Interior": 2,
     "p360Terraza": 1
-   }
+   },
+   "familia": "F24"
   },
   {
    "codigo": "E-03",
@@ -5505,28 +5764,37 @@
     "433": "igual"
    },
    "similitudMinima": null,
-   "margenQuiralidad": null,
-   "variantes": [
-    {
-     "terraza": 18.01,
-     "ids": [
-      "433"
-     ],
-     "espejadas": []
-    }
-   ],
+   "margenEspejo": null,
    "ventanas": [
     "suelo-techo"
    ],
+   "variantes": [
+    {
+     "grupoPlantas": "ático",
+     "ids": [
+      "433"
+     ],
+     "codigo": "E-03a",
+     "terraza": 18.01,
+     "supConstruidaInterior": 33.93,
+     "espejadas": [],
+     "referencia": "433",
+     "similitudMinima": null,
+     "transformaciones": {
+      "433": "igual"
+     }
+    }
+   ],
    "renders": {
     "cenitales": 1,
-    "cenitalesSinEspejo": 1,
+    "cenitalesSinVoltear": 1,
     "p360Interior": 2,
     "p360Terraza": 1
-   }
+   },
+   "familia": "F24"
   },
   {
-   "codigo": "2D-18",
+   "codigo": "2D-15",
    "ids": [
     "434"
    ],
@@ -5622,28 +5890,37 @@
     "434": "igual"
    },
    "similitudMinima": null,
-   "margenQuiralidad": null,
-   "variantes": [
-    {
-     "terraza": 35.11,
-     "ids": [
-      "434"
-     ],
-     "espejadas": []
-    }
-   ],
+   "margenEspejo": null,
    "ventanas": [
     "suelo-techo"
    ],
+   "variantes": [
+    {
+     "grupoPlantas": "ático",
+     "ids": [
+      "434"
+     ],
+     "codigo": "2D-15a",
+     "terraza": 35.11,
+     "supConstruidaInterior": 63.65,
+     "espejadas": [],
+     "referencia": "434",
+     "similitudMinima": null,
+     "transformaciones": {
+      "434": "igual"
+     }
+    }
+   ],
    "renders": {
     "cenitales": 1,
-    "cenitalesSinEspejo": 1,
+    "cenitalesSinVoltear": 1,
     "p360Interior": 4,
     "p360Terraza": 1
-   }
+   },
+   "familia": "F25"
   },
   {
-   "codigo": "2D-19",
+   "codigo": "2D-16",
    "ids": [
     "435"
    ],
@@ -5739,28 +6016,37 @@
     "435": "igual"
    },
    "similitudMinima": null,
-   "margenQuiralidad": null,
-   "variantes": [
-    {
-     "terraza": 35.11,
-     "ids": [
-      "435"
-     ],
-     "espejadas": []
-    }
-   ],
+   "margenEspejo": null,
    "ventanas": [
     "suelo-techo"
    ],
+   "variantes": [
+    {
+     "grupoPlantas": "ático",
+     "ids": [
+      "435"
+     ],
+     "codigo": "2D-16a",
+     "terraza": 35.11,
+     "supConstruidaInterior": 60.32,
+     "espejadas": [],
+     "referencia": "435",
+     "similitudMinima": null,
+     "transformaciones": {
+      "435": "igual"
+     }
+    }
+   ],
    "renders": {
     "cenitales": 1,
-    "cenitalesSinEspejo": 1,
+    "cenitalesSinVoltear": 1,
     "p360Interior": 4,
     "p360Terraza": 1
-   }
+   },
+   "familia": "F26"
   },
   {
-   "codigo": "1D-30",
+   "codigo": "1D-22",
    "ids": [
     "436"
    ],
@@ -5823,25 +6109,34 @@
     "436": "igual"
    },
    "similitudMinima": null,
-   "margenQuiralidad": null,
-   "variantes": [
-    {
-     "terraza": 23.8,
-     "ids": [
-      "436"
-     ],
-     "espejadas": []
-    }
-   ],
+   "margenEspejo": null,
    "ventanas": [
     "suelo-techo"
    ],
+   "variantes": [
+    {
+     "grupoPlantas": "ático",
+     "ids": [
+      "436"
+     ],
+     "codigo": "1D-22a",
+     "terraza": 23.8,
+     "supConstruidaInterior": 39.0,
+     "espejadas": [],
+     "referencia": "436",
+     "similitudMinima": null,
+     "transformaciones": {
+      "436": "igual"
+     }
+    }
+   ],
    "renders": {
     "cenitales": 1,
-    "cenitalesSinEspejo": 1,
+    "cenitalesSinVoltear": 1,
     "p360Interior": 3,
     "p360Terraza": 1
-   }
+   },
+   "familia": "F27"
   }
  ]
 }

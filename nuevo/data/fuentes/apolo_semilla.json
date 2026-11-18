@@ -82,6 +82,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 101",
+   "variante": "2D-01a",
    "tipologia": "2D-01",
    "transformacionPlano": "igual"
   },
@@ -154,6 +155,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 102",
+   "variante": "2D-02a",
    "tipologia": "2D-02",
    "transformacionPlano": "igual"
   },
@@ -226,6 +228,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 103",
+   "variante": "2D-03a",
    "tipologia": "2D-03",
    "transformacionPlano": "igual"
   },
@@ -298,6 +301,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 104",
+   "variante": "2D-04a",
    "tipologia": "2D-04",
    "transformacionPlano": "igual"
   },
@@ -370,6 +374,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 105",
+   "variante": "2D-05a",
    "tipologia": "2D-05",
    "transformacionPlano": "igual"
   },
@@ -442,6 +447,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 106",
+   "variante": "2D-06a",
    "tipologia": "2D-06",
    "transformacionPlano": "igual"
   },
@@ -499,6 +505,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 107",
+   "variante": "1D-01a",
    "tipologia": "1D-01",
    "transformacionPlano": "igual"
   },
@@ -556,6 +563,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 108",
+   "variante": "1D-01a",
    "tipologia": "1D-01",
    "transformacionPlano": "espejoV"
   },
@@ -616,6 +624,7 @@
     "estancias"
    ],
    "fuenteDatos": "ficha 211",
+   "variante": "1D-02a",
    "tipologia": "1D-02",
    "transformacionPlano": "igual"
   },
@@ -686,10 +695,15 @@
    ],
    "poligonoArea": 56.65,
    "avisos": [
-    "units.json dice 1 dormitorios y la ficha 2."
+    "units.json (listado V.01) dice 1 dormitorio y la ficha 2 dormitorios: se usa la ficha.",
+    "Su precio (3.630 €/m²) casa con la tarifa de las de 1 dormitorio (3.634 €/m²) y no con la de las de 2 dormitorios (3.558 €/m²): confirmar el precio en el Pricing."
    ],
-   "revisar": [],
+   "revisar": [
+    "dormitorios",
+    "precio"
+   ],
    "fuenteDatos": "ficha 110",
+   "variante": "2D-07a",
    "tipologia": "2D-07",
    "transformacionPlano": "igual"
   },
@@ -762,6 +776,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 111",
+   "variante": "2D-08a",
    "tipologia": "2D-08",
    "transformacionPlano": "igual"
   },
@@ -834,6 +849,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 112",
+   "variante": "2D-08a",
    "tipologia": "2D-08",
    "transformacionPlano": "espejoH"
   },
@@ -906,6 +922,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 113",
+   "variante": "2D-08a",
    "tipologia": "2D-08",
    "transformacionPlano": "espejoH"
   },
@@ -954,6 +971,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 114",
+   "variante": "1D-03a",
    "tipologia": "1D-03",
    "transformacionPlano": "igual"
   },
@@ -1002,6 +1020,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 115",
+   "variante": "1D-03a",
    "tipologia": "1D-03",
    "transformacionPlano": "espejoV"
   },
@@ -1059,6 +1078,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 116",
+   "variante": "1D-01a",
    "tipologia": "1D-01",
    "transformacionPlano": "igual"
   },
@@ -1116,6 +1136,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 117",
+   "variante": "1D-01a",
    "tipologia": "1D-01",
    "transformacionPlano": "espejoV"
   },
@@ -1188,6 +1209,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 118",
+   "variante": "2D-08a",
    "tipologia": "2D-08",
    "transformacionPlano": "igual"
   },
@@ -1260,8 +1282,9 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 119",
-   "tipologia": "2D-09",
-   "transformacionPlano": "igual"
+   "variante": "2D-08b",
+   "tipologia": "2D-08",
+   "transformacionPlano": "espejoH"
   },
   "120": {
    "id": "120",
@@ -1332,6 +1355,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 120",
+   "variante": "2D-08a",
    "tipologia": "2D-08",
    "transformacionPlano": "espejoH"
   },
@@ -1380,6 +1404,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 121",
+   "variante": "1D-03a",
    "tipologia": "1D-03",
    "transformacionPlano": "igual"
   },
@@ -1428,6 +1453,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 122",
+   "variante": "1D-03a",
    "tipologia": "1D-03",
    "transformacionPlano": "espejoV"
   },
@@ -1485,6 +1511,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 123",
+   "variante": "1D-01a",
    "tipologia": "1D-01",
    "transformacionPlano": "igual"
   },
@@ -1542,6 +1569,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 124",
+   "variante": "1D-01a",
    "tipologia": "1D-01",
    "transformacionPlano": "espejoV"
   },
@@ -1614,6 +1642,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 125",
+   "variante": "2D-08a",
    "tipologia": "2D-08",
    "transformacionPlano": "igual"
   },
@@ -1686,6 +1715,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 126",
+   "variante": "2D-08a",
    "tipologia": "2D-08",
    "transformacionPlano": "espejoH"
   },
@@ -1766,7 +1796,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 127",
-   "tipologia": "2D-10",
+   "variante": "2D-09a",
+   "tipologia": "2D-09",
    "transformacionPlano": "igual"
   },
   "128": {
@@ -1838,7 +1869,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 128",
-   "tipologia": "2D-11",
+   "variante": "2D-10a",
+   "tipologia": "2D-10",
    "transformacionPlano": "igual"
   },
   "129": {
@@ -1886,6 +1918,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 129",
+   "variante": "1D-04a",
    "tipologia": "1D-04",
    "transformacionPlano": "igual"
   },
@@ -1934,8 +1967,9 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 130",
-   "tipologia": "1D-05",
-   "transformacionPlano": "igual"
+   "variante": "1D-01b",
+   "tipologia": "1D-01",
+   "transformacionPlano": "giro180"
   },
   "131": {
    "id": "131",
@@ -1982,8 +2016,9 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 131",
-   "tipologia": "1D-05",
-   "transformacionPlano": "espejoV"
+   "variante": "1D-01b",
+   "tipologia": "1D-01",
+   "transformacionPlano": "espejoH"
   },
   "132": {
    "id": "132",
@@ -2030,7 +2065,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 132",
-   "tipologia": "1D-06",
+   "variante": "1D-05a",
+   "tipologia": "1D-05",
    "transformacionPlano": "igual"
   },
   "133": {
@@ -2086,7 +2122,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 133",
-   "tipologia": "1D-07",
+   "variante": "1D-06a",
+   "tipologia": "1D-06",
    "transformacionPlano": "igual"
   },
   "134": {
@@ -2142,7 +2179,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 134",
-   "tipologia": "1D-08",
+   "variante": "1D-07a",
+   "tipologia": "1D-07",
    "transformacionPlano": "igual"
   },
   "135": {
@@ -2198,7 +2236,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 135",
-   "tipologia": "1D-09",
+   "variante": "1D-08a",
+   "tipologia": "1D-08",
    "transformacionPlano": "igual"
   },
   "136": {
@@ -2254,7 +2293,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 136",
-   "tipologia": "1D-10",
+   "variante": "1D-09a",
+   "tipologia": "1D-09",
    "transformacionPlano": "igual"
   },
   "137": {
@@ -2310,7 +2350,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 137",
-   "tipologia": "1D-11",
+   "variante": "1D-10a",
+   "tipologia": "1D-10",
    "transformacionPlano": "igual"
   },
   "138": {
@@ -2366,7 +2407,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 138",
-   "tipologia": "1D-12",
+   "variante": "1D-11a",
+   "tipologia": "1D-11",
    "transformacionPlano": "igual"
   },
   "201": {
@@ -2438,6 +2480,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 201",
+   "variante": "2D-01b",
    "tipologia": "2D-01",
    "transformacionPlano": "igual"
   },
@@ -2510,7 +2553,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 202",
-   "tipologia": "2D-12",
+   "variante": "2D-02b",
+   "tipologia": "2D-02",
    "transformacionPlano": "igual"
   },
   "203": {
@@ -2582,6 +2626,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 203",
+   "variante": "2D-03b",
    "tipologia": "2D-03",
    "transformacionPlano": "igual"
   },
@@ -2654,6 +2699,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 204",
+   "variante": "2D-04b",
    "tipologia": "2D-04",
    "transformacionPlano": "igual"
   },
@@ -2726,7 +2772,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 205",
-   "tipologia": "2D-13",
+   "variante": "2D-05b",
+   "tipologia": "2D-05",
    "transformacionPlano": "igual"
   },
   "206": {
@@ -2798,6 +2845,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 206",
+   "variante": "2D-06b",
    "tipologia": "2D-06",
    "transformacionPlano": "igual"
   },
@@ -2870,7 +2918,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 207",
-   "tipologia": "2D-14",
+   "variante": "2D-11a",
+   "tipologia": "2D-11",
    "transformacionPlano": "igual"
   },
   "208": {
@@ -2926,6 +2975,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 208",
+   "variante": "1D-02b",
    "tipologia": "1D-02",
    "transformacionPlano": "espejoV"
   },
@@ -2983,7 +3033,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 209",
-   "tipologia": "1D-13",
+   "variante": "1D-01c",
+   "tipologia": "1D-01",
    "transformacionPlano": "igual"
   },
   "210": {
@@ -3040,7 +3091,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 210",
-   "tipologia": "1D-13",
+   "variante": "1D-01c",
+   "tipologia": "1D-01",
    "transformacionPlano": "espejoV"
   },
   "211": {
@@ -3096,6 +3148,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 211",
+   "variante": "1D-02c",
    "tipologia": "1D-02",
    "transformacionPlano": "igual"
   },
@@ -3168,6 +3221,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 212",
+   "variante": "2D-07b",
    "tipologia": "2D-07",
    "transformacionPlano": "igual"
   },
@@ -3240,6 +3294,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 213",
+   "variante": "2D-08c",
    "tipologia": "2D-08",
    "transformacionPlano": "igual"
   },
@@ -3312,6 +3367,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 214",
+   "variante": "2D-08c",
    "tipologia": "2D-08",
    "transformacionPlano": "espejoH"
   },
@@ -3384,6 +3440,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 215",
+   "variante": "2D-08c",
    "tipologia": "2D-08",
    "transformacionPlano": "igual"
   },
@@ -3456,6 +3513,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 216",
+   "variante": "2D-08c",
    "tipologia": "2D-08",
    "transformacionPlano": "espejoH"
   },
@@ -3511,11 +3569,14 @@
    ],
    "poligonoArea": 39.64,
    "avisos": [
-    "units.json dice 2 dormitorios y la ficha 1."
+    "units.json (listado V.01) dice 2 dormitorios y la ficha 1 dormitorio: se usa la ficha."
    ],
-   "revisar": [],
+   "revisar": [
+    "dormitorios"
+   ],
    "fuenteDatos": "ficha 217",
-   "tipologia": "1D-14",
+   "variante": "1D-03b",
+   "tipologia": "1D-03",
    "transformacionPlano": "igual"
   },
   "218": {
@@ -3570,11 +3631,14 @@
    ],
    "poligonoArea": 39.64,
    "avisos": [
-    "units.json dice 2 dormitorios y la ficha 1."
+    "units.json (listado V.01) dice 2 dormitorios y la ficha 1 dormitorio: se usa la ficha."
    ],
-   "revisar": [],
+   "revisar": [
+    "dormitorios"
+   ],
    "fuenteDatos": "ficha 218",
-   "tipologia": "1D-14",
+   "variante": "1D-03b",
+   "tipologia": "1D-03",
    "transformacionPlano": "espejoV"
   },
   "219": {
@@ -3629,11 +3693,14 @@
    ],
    "poligonoArea": 37.76,
    "avisos": [
-    "units.json dice 2 dormitorios y la ficha 1."
+    "units.json (listado V.01) dice 2 dormitorios y la ficha 1 dormitorio: se usa la ficha."
    ],
-   "revisar": [],
+   "revisar": [
+    "dormitorios"
+   ],
    "fuenteDatos": "ficha 219",
-   "tipologia": "1D-13",
+   "variante": "1D-01c",
+   "tipologia": "1D-01",
    "transformacionPlano": "igual"
   },
   "220": {
@@ -3688,11 +3755,14 @@
    ],
    "poligonoArea": 37.76,
    "avisos": [
-    "units.json dice 2 dormitorios y la ficha 1."
+    "units.json (listado V.01) dice 2 dormitorios y la ficha 1 dormitorio: se usa la ficha."
    ],
-   "revisar": [],
+   "revisar": [
+    "dormitorios"
+   ],
    "fuenteDatos": "ficha 220",
-   "tipologia": "1D-13",
+   "variante": "1D-01c",
+   "tipologia": "1D-01",
    "transformacionPlano": "espejoV"
   },
   "221": {
@@ -3764,6 +3834,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 221",
+   "variante": "2D-08c",
    "tipologia": "2D-08",
    "transformacionPlano": "igual"
   },
@@ -3836,6 +3907,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 222",
+   "variante": "2D-08d",
    "tipologia": "2D-08",
    "transformacionPlano": "espejoH"
   },
@@ -3908,6 +3980,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 223",
+   "variante": "2D-08e",
    "tipologia": "2D-08",
    "transformacionPlano": "igual"
   },
@@ -3980,6 +4053,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 224",
+   "variante": "2D-08c",
    "tipologia": "2D-08",
    "transformacionPlano": "espejoH"
   },
@@ -4035,11 +4109,14 @@
    ],
    "poligonoArea": 39.66,
    "avisos": [
-    "units.json dice 2 dormitorios y la ficha 1."
+    "units.json (listado V.01) dice 2 dormitorios y la ficha 1 dormitorio: se usa la ficha."
    ],
-   "revisar": [],
+   "revisar": [
+    "dormitorios"
+   ],
    "fuenteDatos": "ficha 225",
-   "tipologia": "1D-14",
+   "variante": "1D-03b",
+   "tipologia": "1D-03",
    "transformacionPlano": "igual"
   },
   "226": {
@@ -4094,11 +4171,14 @@
    ],
    "poligonoArea": 39.66,
    "avisos": [
-    "units.json dice 2 dormitorios y la ficha 1."
+    "units.json (listado V.01) dice 2 dormitorios y la ficha 1 dormitorio: se usa la ficha."
    ],
-   "revisar": [],
+   "revisar": [
+    "dormitorios"
+   ],
    "fuenteDatos": "ficha 226",
-   "tipologia": "1D-14",
+   "variante": "1D-03b",
+   "tipologia": "1D-03",
    "transformacionPlano": "espejoV"
   },
   "227": {
@@ -4153,11 +4233,14 @@
    ],
    "poligonoArea": 37.59,
    "avisos": [
-    "units.json dice 2 dormitorios y la ficha 1."
+    "units.json (listado V.01) dice 2 dormitorios y la ficha 1 dormitorio: se usa la ficha."
    ],
-   "revisar": [],
+   "revisar": [
+    "dormitorios"
+   ],
    "fuenteDatos": "ficha 227",
-   "tipologia": "1D-13",
+   "variante": "1D-01c",
+   "tipologia": "1D-01",
    "transformacionPlano": "igual"
   },
   "228": {
@@ -4212,11 +4295,14 @@
    ],
    "poligonoArea": 37.55,
    "avisos": [
-    "units.json dice 2 dormitorios y la ficha 1."
+    "units.json (listado V.01) dice 2 dormitorios y la ficha 1 dormitorio: se usa la ficha."
    ],
-   "revisar": [],
+   "revisar": [
+    "dormitorios"
+   ],
    "fuenteDatos": "ficha 228",
-   "tipologia": "1D-13",
+   "variante": "1D-01c",
+   "tipologia": "1D-01",
    "transformacionPlano": "espejoV"
   },
   "229": {
@@ -4286,10 +4372,15 @@
    ],
    "poligonoArea": 50.96,
    "avisos": [
-    "units.json dice 1 dormitorios y la ficha 2."
+    "units.json (listado V.01) dice 1 dormitorio y la ficha 2 dormitorios: se usa la ficha.",
+    "Su precio (3.629 €/m²) casa con la tarifa de las de 1 dormitorio (3.642 €/m²) y no con la de las de 2 dormitorios (3.558 €/m²): confirmar el precio en el Pricing."
    ],
-   "revisar": [],
+   "revisar": [
+    "dormitorios",
+    "precio"
+   ],
    "fuenteDatos": "ficha 229",
+   "variante": "2D-08c",
    "tipologia": "2D-08",
    "transformacionPlano": "igual"
   },
@@ -4360,10 +4451,15 @@
    ],
    "poligonoArea": 50.84,
    "avisos": [
-    "units.json dice 1 dormitorios y la ficha 2."
+    "units.json (listado V.01) dice 1 dormitorio y la ficha 2 dormitorios: se usa la ficha.",
+    "Su precio (3.629 €/m²) casa con la tarifa de las de 1 dormitorio (3.642 €/m²) y no con la de las de 2 dormitorios (3.558 €/m²): confirmar el precio en el Pricing."
    ],
-   "revisar": [],
+   "revisar": [
+    "dormitorios",
+    "precio"
+   ],
    "fuenteDatos": "ficha 230",
+   "variante": "2D-08c",
    "tipologia": "2D-08",
    "transformacionPlano": "espejoH"
   },
@@ -4436,6 +4532,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 231",
+   "variante": "2D-08c",
    "tipologia": "2D-08",
    "transformacionPlano": "igual"
   },
@@ -4516,7 +4613,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 232",
-   "tipologia": "2D-10",
+   "variante": "2D-09b",
+   "tipologia": "2D-09",
    "transformacionPlano": "igual"
   },
   "233": {
@@ -4588,7 +4686,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 233",
-   "tipologia": "2D-11",
+   "variante": "2D-10b",
+   "tipologia": "2D-10",
    "transformacionPlano": "igual"
   },
   "234": {
@@ -4636,6 +4735,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 234",
+   "variante": "1D-04b",
    "tipologia": "1D-04",
    "transformacionPlano": "igual"
   },
@@ -4693,7 +4793,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 235",
-   "tipologia": "1D-13",
+   "variante": "1D-01c",
+   "tipologia": "1D-01",
    "transformacionPlano": "giro180"
   },
   "236": {
@@ -4750,7 +4851,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 236",
-   "tipologia": "1D-13",
+   "variante": "1D-01c",
+   "tipologia": "1D-01",
    "transformacionPlano": "espejoH"
   },
   "237": {
@@ -4798,7 +4900,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 237",
-   "tipologia": "1D-06",
+   "variante": "1D-05b",
+   "tipologia": "1D-05",
    "transformacionPlano": "igual"
   },
   "238": {
@@ -4834,16 +4937,16 @@
      "puntos360": 1
     },
     {
-     "nombre": "Dormitorio secundario 2",
-     "sup": 7.66,
+     "nombre": "Dormitorio secundario",
+     "sup": 6.98,
      "tipo": "dormitorio",
      "codigo": "D2",
      "tiene360": true,
      "puntos360": 1
     },
     {
-     "nombre": "Dormitorio secundario",
-     "sup": 6.98,
+     "nombre": "Dormitorio secundario 2",
+     "sup": 7.66,
      "tipo": "dormitorio",
      "codigo": "D3",
      "tiene360": true,
@@ -4878,6 +4981,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 238",
+   "variante": "3D-01a",
    "tipologia": "3D-01",
    "transformacionPlano": "igual"
   },
@@ -4934,7 +5038,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 239",
-   "tipologia": "1D-07",
+   "variante": "1D-06b",
+   "tipologia": "1D-06",
    "transformacionPlano": "igual"
   },
   "240": {
@@ -4990,7 +5095,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 240",
-   "tipologia": "1D-15",
+   "variante": "1D-07b",
+   "tipologia": "1D-07",
    "transformacionPlano": "igual"
   },
   "241": {
@@ -5046,7 +5152,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 241",
-   "tipologia": "1D-09",
+   "variante": "1D-08b",
+   "tipologia": "1D-08",
    "transformacionPlano": "igual"
   },
   "242": {
@@ -5102,7 +5209,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 242",
-   "tipologia": "1D-10",
+   "variante": "1D-09b",
+   "tipologia": "1D-09",
    "transformacionPlano": "igual"
   },
   "243": {
@@ -5158,7 +5266,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 243",
-   "tipologia": "1D-11",
+   "variante": "1D-10b",
+   "tipologia": "1D-10",
    "transformacionPlano": "igual"
   },
   "244": {
@@ -5214,7 +5323,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 244",
-   "tipologia": "1D-12",
+   "variante": "1D-11b",
+   "tipologia": "1D-11",
    "transformacionPlano": "igual"
   },
   "245": {
@@ -5270,7 +5380,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 245",
-   "tipologia": "1D-16",
+   "variante": "1D-12a",
+   "tipologia": "1D-12",
    "transformacionPlano": "igual"
   },
   "246": {
@@ -5342,7 +5453,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 246",
-   "tipologia": "2D-15",
+   "variante": "2D-12a",
+   "tipologia": "2D-12",
    "transformacionPlano": "igual"
   },
   "301": {
@@ -5414,6 +5526,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 301",
+   "variante": "2D-01b",
    "tipologia": "2D-01",
    "transformacionPlano": "igual"
   },
@@ -5486,7 +5599,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 302",
-   "tipologia": "2D-12",
+   "variante": "2D-02b",
+   "tipologia": "2D-02",
    "transformacionPlano": "igual"
   },
   "303": {
@@ -5558,6 +5672,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 303",
+   "variante": "2D-03b",
    "tipologia": "2D-03",
    "transformacionPlano": "igual"
   },
@@ -5630,6 +5745,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 304",
+   "variante": "2D-04b",
    "tipologia": "2D-04",
    "transformacionPlano": "igual"
   },
@@ -5702,7 +5818,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 305",
-   "tipologia": "2D-13",
+   "variante": "2D-05b",
+   "tipologia": "2D-05",
    "transformacionPlano": "igual"
   },
   "306": {
@@ -5774,6 +5891,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 306",
+   "variante": "2D-06b",
    "tipologia": "2D-06",
    "transformacionPlano": "igual"
   },
@@ -5846,7 +5964,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 307",
-   "tipologia": "2D-14",
+   "variante": "2D-11a",
+   "tipologia": "2D-11",
    "transformacionPlano": "igual"
   },
   "308": {
@@ -5902,6 +6021,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 308",
+   "variante": "1D-02b",
    "tipologia": "1D-02",
    "transformacionPlano": "espejoV"
   },
@@ -5959,7 +6079,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 309",
-   "tipologia": "1D-13",
+   "variante": "1D-01c",
+   "tipologia": "1D-01",
    "transformacionPlano": "igual"
   },
   "310": {
@@ -6016,7 +6137,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 310",
-   "tipologia": "1D-13",
+   "variante": "1D-01c",
+   "tipologia": "1D-01",
    "transformacionPlano": "espejoV"
   },
   "311": {
@@ -6072,6 +6194,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 311",
+   "variante": "1D-02c",
    "tipologia": "1D-02",
    "transformacionPlano": "igual"
   },
@@ -6144,6 +6267,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 312",
+   "variante": "2D-07b",
    "tipologia": "2D-07",
    "transformacionPlano": "igual"
   },
@@ -6216,6 +6340,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 313",
+   "variante": "2D-08c",
    "tipologia": "2D-08",
    "transformacionPlano": "igual"
   },
@@ -6288,6 +6413,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 314",
+   "variante": "2D-08c",
    "tipologia": "2D-08",
    "transformacionPlano": "espejoH"
   },
@@ -6360,6 +6486,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 315",
+   "variante": "2D-08c",
    "tipologia": "2D-08",
    "transformacionPlano": "igual"
   },
@@ -6432,6 +6559,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 316",
+   "variante": "2D-08c",
    "tipologia": "2D-08",
    "transformacionPlano": "espejoH"
   },
@@ -6487,11 +6615,14 @@
    ],
    "poligonoArea": 39.64,
    "avisos": [
-    "units.json dice 2 dormitorios y la ficha 1."
+    "units.json (listado V.01) dice 2 dormitorios y la ficha 1 dormitorio: se usa la ficha."
    ],
-   "revisar": [],
+   "revisar": [
+    "dormitorios"
+   ],
    "fuenteDatos": "ficha 317",
-   "tipologia": "1D-14",
+   "variante": "1D-03b",
+   "tipologia": "1D-03",
    "transformacionPlano": "igual"
   },
   "318": {
@@ -6546,11 +6677,14 @@
    ],
    "poligonoArea": 39.64,
    "avisos": [
-    "units.json dice 2 dormitorios y la ficha 1."
+    "units.json (listado V.01) dice 2 dormitorios y la ficha 1 dormitorio: se usa la ficha."
    ],
-   "revisar": [],
+   "revisar": [
+    "dormitorios"
+   ],
    "fuenteDatos": "ficha 318",
-   "tipologia": "1D-14",
+   "variante": "1D-03b",
+   "tipologia": "1D-03",
    "transformacionPlano": "espejoV"
   },
   "319": {
@@ -6605,11 +6739,14 @@
    ],
    "poligonoArea": 37.76,
    "avisos": [
-    "units.json dice 2 dormitorios y la ficha 1."
+    "units.json (listado V.01) dice 2 dormitorios y la ficha 1 dormitorio: se usa la ficha."
    ],
-   "revisar": [],
+   "revisar": [
+    "dormitorios"
+   ],
    "fuenteDatos": "ficha 319",
-   "tipologia": "1D-13",
+   "variante": "1D-01c",
+   "tipologia": "1D-01",
    "transformacionPlano": "igual"
   },
   "320": {
@@ -6664,11 +6801,14 @@
    ],
    "poligonoArea": 37.76,
    "avisos": [
-    "units.json dice 2 dormitorios y la ficha 1."
+    "units.json (listado V.01) dice 2 dormitorios y la ficha 1 dormitorio: se usa la ficha."
    ],
-   "revisar": [],
+   "revisar": [
+    "dormitorios"
+   ],
    "fuenteDatos": "ficha 320",
-   "tipologia": "1D-13",
+   "variante": "1D-01c",
+   "tipologia": "1D-01",
    "transformacionPlano": "espejoV"
   },
   "321": {
@@ -6740,6 +6880,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 321",
+   "variante": "2D-08c",
    "tipologia": "2D-08",
    "transformacionPlano": "igual"
   },
@@ -6810,12 +6951,13 @@
    ],
    "poligonoArea": 50.84,
    "avisos": [
-    "units.json da 56.52 m² construidos y la ficha 57.52; el precio 201.000 € puede estar calculado con la superficie errónea (la 222, gemela, cuesta 205.000 €)."
+    "units.json da 56,52 m² construidos y la ficha 57,52; el precio 201.000 € puede estar calculado con la superficie errónea (la 222, gemela, cuesta 205.000 €)."
    ],
    "revisar": [
     "precio"
    ],
    "fuenteDatos": "ficha 322",
+   "variante": "2D-08d",
    "tipologia": "2D-08",
    "transformacionPlano": "espejoH"
   },
@@ -6888,6 +7030,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 323",
+   "variante": "2D-08e",
    "tipologia": "2D-08",
    "transformacionPlano": "igual"
   },
@@ -6960,6 +7103,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 324",
+   "variante": "2D-08c",
    "tipologia": "2D-08",
    "transformacionPlano": "espejoH"
   },
@@ -7015,11 +7159,14 @@
    ],
    "poligonoArea": 39.66,
    "avisos": [
-    "units.json dice 2 dormitorios y la ficha 1."
+    "units.json (listado V.01) dice 2 dormitorios y la ficha 1 dormitorio: se usa la ficha."
    ],
-   "revisar": [],
+   "revisar": [
+    "dormitorios"
+   ],
    "fuenteDatos": "ficha 325",
-   "tipologia": "1D-14",
+   "variante": "1D-03b",
+   "tipologia": "1D-03",
    "transformacionPlano": "igual"
   },
   "326": {
@@ -7074,11 +7221,14 @@
    ],
    "poligonoArea": 39.66,
    "avisos": [
-    "units.json dice 2 dormitorios y la ficha 1."
+    "units.json (listado V.01) dice 2 dormitorios y la ficha 1 dormitorio: se usa la ficha."
    ],
-   "revisar": [],
+   "revisar": [
+    "dormitorios"
+   ],
    "fuenteDatos": "ficha 326",
-   "tipologia": "1D-14",
+   "variante": "1D-03b",
+   "tipologia": "1D-03",
    "transformacionPlano": "espejoV"
   },
   "327": {
@@ -7133,11 +7283,14 @@
    ],
    "poligonoArea": 37.59,
    "avisos": [
-    "units.json dice 2 dormitorios y la ficha 1."
+    "units.json (listado V.01) dice 2 dormitorios y la ficha 1 dormitorio: se usa la ficha."
    ],
-   "revisar": [],
+   "revisar": [
+    "dormitorios"
+   ],
    "fuenteDatos": "ficha 327",
-   "tipologia": "1D-13",
+   "variante": "1D-01c",
+   "tipologia": "1D-01",
    "transformacionPlano": "igual"
   },
   "328": {
@@ -7192,11 +7345,14 @@
    ],
    "poligonoArea": 37.55,
    "avisos": [
-    "units.json dice 2 dormitorios y la ficha 1."
+    "units.json (listado V.01) dice 2 dormitorios y la ficha 1 dormitorio: se usa la ficha."
    ],
-   "revisar": [],
+   "revisar": [
+    "dormitorios"
+   ],
    "fuenteDatos": "ficha 328",
-   "tipologia": "1D-13",
+   "variante": "1D-01c",
+   "tipologia": "1D-01",
    "transformacionPlano": "espejoV"
   },
   "329": {
@@ -7266,10 +7422,15 @@
    ],
    "poligonoArea": 50.95,
    "avisos": [
-    "units.json dice 1 dormitorios y la ficha 2."
+    "units.json (listado V.01) dice 1 dormitorio y la ficha 2 dormitorios: se usa la ficha.",
+    "Su precio (3.629 €/m²) casa con la tarifa de las de 1 dormitorio (3.642 €/m²) y no con la de las de 2 dormitorios (3.558 €/m²): confirmar el precio en el Pricing."
    ],
-   "revisar": [],
+   "revisar": [
+    "dormitorios",
+    "precio"
+   ],
    "fuenteDatos": "ficha 329",
+   "variante": "2D-08c",
    "tipologia": "2D-08",
    "transformacionPlano": "igual"
   },
@@ -7340,10 +7501,15 @@
    ],
    "poligonoArea": 50.83,
    "avisos": [
-    "units.json dice 1 dormitorios y la ficha 2."
+    "units.json (listado V.01) dice 1 dormitorio y la ficha 2 dormitorios: se usa la ficha.",
+    "Su precio (3.629 €/m²) casa con la tarifa de las de 1 dormitorio (3.642 €/m²) y no con la de las de 2 dormitorios (3.558 €/m²): confirmar el precio en el Pricing."
    ],
-   "revisar": [],
+   "revisar": [
+    "dormitorios",
+    "precio"
+   ],
    "fuenteDatos": "ficha 330",
+   "variante": "2D-08c",
    "tipologia": "2D-08",
    "transformacionPlano": "espejoH"
   },
@@ -7416,6 +7582,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 331",
+   "variante": "2D-08c",
    "tipologia": "2D-08",
    "transformacionPlano": "igual"
   },
@@ -7496,7 +7663,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 332",
-   "tipologia": "2D-10",
+   "variante": "2D-09b",
+   "tipologia": "2D-09",
    "transformacionPlano": "igual"
   },
   "333": {
@@ -7568,7 +7736,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 333",
-   "tipologia": "2D-11",
+   "variante": "2D-10b",
+   "tipologia": "2D-10",
    "transformacionPlano": "igual"
   },
   "334": {
@@ -7616,6 +7785,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 334",
+   "variante": "1D-04b",
    "tipologia": "1D-04",
    "transformacionPlano": "igual"
   },
@@ -7673,7 +7843,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 335",
-   "tipologia": "1D-13",
+   "variante": "1D-01c",
+   "tipologia": "1D-01",
    "transformacionPlano": "giro180"
   },
   "336": {
@@ -7735,8 +7906,9 @@
     "estancias"
    ],
    "fuenteDatos": "ficha 236",
+   "variante": "1D-01c",
    "tipologia": "1D-01",
-   "transformacionPlano": "sin plano"
+   "transformacionPlano": "espejoH (plano de la 236)"
   },
   "337": {
    "id": "337",
@@ -7783,7 +7955,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 337",
-   "tipologia": "1D-06",
+   "variante": "1D-05b",
+   "tipologia": "1D-05",
    "transformacionPlano": "igual"
   },
   "338": {
@@ -7819,16 +7992,16 @@
      "puntos360": 1
     },
     {
-     "nombre": "Dormitorio secundario 2",
-     "sup": 7.66,
+     "nombre": "Dormitorio secundario",
+     "sup": 6.98,
      "tipo": "dormitorio",
      "codigo": "D2",
      "tiene360": true,
      "puntos360": 1
     },
     {
-     "nombre": "Dormitorio secundario",
-     "sup": 6.98,
+     "nombre": "Dormitorio secundario 2",
+     "sup": 7.66,
      "tipo": "dormitorio",
      "codigo": "D3",
      "tiene360": true,
@@ -7863,6 +8036,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 338",
+   "variante": "3D-01a",
    "tipologia": "3D-01",
    "transformacionPlano": "igual"
   },
@@ -7919,7 +8093,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 339",
-   "tipologia": "1D-07",
+   "variante": "1D-06b",
+   "tipologia": "1D-06",
    "transformacionPlano": "igual"
   },
   "340": {
@@ -7975,7 +8150,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 340",
-   "tipologia": "1D-15",
+   "variante": "1D-07b",
+   "tipologia": "1D-07",
    "transformacionPlano": "igual"
   },
   "341": {
@@ -8031,7 +8207,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 341",
-   "tipologia": "1D-09",
+   "variante": "1D-08b",
+   "tipologia": "1D-08",
    "transformacionPlano": "igual"
   },
   "342": {
@@ -8087,7 +8264,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 342",
-   "tipologia": "1D-10",
+   "variante": "1D-09b",
+   "tipologia": "1D-09",
    "transformacionPlano": "igual"
   },
   "343": {
@@ -8143,7 +8321,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 343",
-   "tipologia": "1D-11",
+   "variante": "1D-10b",
+   "tipologia": "1D-10",
    "transformacionPlano": "igual"
   },
   "344": {
@@ -8199,7 +8378,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 344",
-   "tipologia": "1D-12",
+   "variante": "1D-11b",
+   "tipologia": "1D-11",
    "transformacionPlano": "igual"
   },
   "345": {
@@ -8255,7 +8435,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 345",
-   "tipologia": "1D-16",
+   "variante": "1D-12a",
+   "tipologia": "1D-12",
    "transformacionPlano": "igual"
   },
   "346": {
@@ -8327,7 +8508,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 346",
-   "tipologia": "2D-15",
+   "variante": "2D-12a",
+   "tipologia": "2D-12",
    "transformacionPlano": "igual"
   },
   "401": {
@@ -8384,7 +8566,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 401",
-   "tipologia": "1D-17",
+   "variante": "1D-13a",
+   "tipologia": "1D-13",
    "transformacionPlano": "igual"
   },
   "402": {
@@ -8441,7 +8624,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 402",
-   "tipologia": "1D-18",
+   "variante": "1D-14a",
+   "tipologia": "1D-14",
    "transformacionPlano": "igual"
   },
   "403": {
@@ -8498,7 +8682,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 403",
-   "tipologia": "1D-19",
+   "variante": "1D-15a",
+   "tipologia": "1D-15",
    "transformacionPlano": "igual"
   },
   "404": {
@@ -8555,7 +8740,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 404",
-   "tipologia": "1D-20",
+   "variante": "1D-16a",
+   "tipologia": "1D-16",
    "transformacionPlano": "igual"
   },
   "405": {
@@ -8620,7 +8806,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 405",
-   "tipologia": "2D-16",
+   "variante": "2D-13a",
+   "tipologia": "2D-13",
    "transformacionPlano": "igual"
   },
   "406": {
@@ -8677,7 +8864,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 406",
-   "tipologia": "1D-21",
+   "variante": "1D-17a",
+   "tipologia": "1D-17",
    "transformacionPlano": "igual"
   },
   "407": {
@@ -8734,7 +8922,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 407",
-   "tipologia": "1D-22",
+   "variante": "1D-01d",
+   "tipologia": "1D-01",
    "transformacionPlano": "igual"
   },
   "408": {
@@ -8791,7 +8980,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 408",
-   "tipologia": "1D-13",
+   "variante": "1D-01d",
+   "tipologia": "1D-01",
    "transformacionPlano": "espejoV"
   },
   "409": {
@@ -8856,7 +9046,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 409",
-   "tipologia": "2D-17",
+   "variante": "2D-14a",
+   "tipologia": "2D-14",
    "transformacionPlano": "igual"
   },
   "410": {
@@ -8913,7 +9104,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 410",
-   "tipologia": "1D-23",
+   "variante": "1D-18a",
+   "tipologia": "1D-18",
    "transformacionPlano": "igual"
   },
   "411": {
@@ -8970,7 +9162,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 411",
-   "tipologia": "1D-23",
+   "variante": "1D-18a",
+   "tipologia": "1D-18",
    "transformacionPlano": "espejoH"
   },
   "412": {
@@ -9027,7 +9220,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 412",
-   "tipologia": "1D-24",
+   "variante": "1D-19a",
+   "tipologia": "1D-19",
    "transformacionPlano": "igual"
   },
   "413": {
@@ -9084,7 +9278,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 413",
-   "tipologia": "1D-14",
+   "variante": "1D-03c",
+   "tipologia": "1D-03",
    "transformacionPlano": "igual"
   },
   "414": {
@@ -9141,7 +9336,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 414",
-   "tipologia": "1D-14",
+   "variante": "1D-03c",
+   "tipologia": "1D-03",
    "transformacionPlano": "espejoV"
   },
   "415": {
@@ -9198,7 +9394,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 415",
-   "tipologia": "1D-25",
+   "variante": "1D-01d",
+   "tipologia": "1D-01",
    "transformacionPlano": "igual"
   },
   "416": {
@@ -9255,7 +9452,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 416",
-   "tipologia": "1D-13",
+   "variante": "1D-01d",
+   "tipologia": "1D-01",
    "transformacionPlano": "espejoV"
   },
   "417": {
@@ -9312,7 +9510,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 417",
-   "tipologia": "1D-23",
+   "variante": "1D-18b",
+   "tipologia": "1D-18",
    "transformacionPlano": "espejoH"
   },
   "418": {
@@ -9369,7 +9568,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 418",
-   "tipologia": "1D-23",
+   "variante": "1D-18b",
+   "tipologia": "1D-18",
    "transformacionPlano": "igual"
   },
   "419": {
@@ -9426,7 +9626,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 419",
-   "tipologia": "1D-14",
+   "variante": "1D-03c",
+   "tipologia": "1D-03",
    "transformacionPlano": "igual"
   },
   "420": {
@@ -9483,7 +9684,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 420",
-   "tipologia": "1D-14",
+   "variante": "1D-03c",
+   "tipologia": "1D-03",
    "transformacionPlano": "espejoV"
   },
   "421": {
@@ -9540,7 +9742,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 421",
-   "tipologia": "1D-13",
+   "variante": "1D-01d",
+   "tipologia": "1D-01",
    "transformacionPlano": "igual"
   },
   "422": {
@@ -9597,8 +9800,9 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 422",
-   "tipologia": "1D-26",
-   "transformacionPlano": "igual"
+   "variante": "1D-01d",
+   "tipologia": "1D-01",
+   "transformacionPlano": "espejoV"
   },
   "423": {
    "id": "423",
@@ -9654,7 +9858,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 423",
-   "tipologia": "1D-24",
+   "variante": "1D-19a",
+   "tipologia": "1D-19",
    "transformacionPlano": "espejoH"
   },
   "424": {
@@ -9711,7 +9916,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 424",
-   "tipologia": "1D-27",
+   "variante": "1D-19a",
+   "tipologia": "1D-19",
    "transformacionPlano": "igual"
   },
   "425": {
@@ -9768,7 +9974,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 425",
-   "tipologia": "1D-27",
+   "variante": "1D-19a",
+   "tipologia": "1D-19",
    "transformacionPlano": "espejoH"
   },
   "426": {
@@ -9825,7 +10032,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 426",
-   "tipologia": "1D-28",
+   "variante": "1D-20a",
+   "tipologia": "1D-20",
    "transformacionPlano": "igual"
   },
   "427": {
@@ -9882,7 +10090,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 427",
-   "tipologia": "1D-29",
+   "variante": "1D-21a",
+   "tipologia": "1D-21",
    "transformacionPlano": "igual"
   },
   "428": {
@@ -9929,10 +10138,13 @@
    ],
    "poligonoArea": 29.24,
    "avisos": [
-    "units.json dice 1 dormitorios y la ficha 0."
+    "units.json (listado V.01) dice 1 dormitorio y la ficha estudio (0 dormitorios): se usa la ficha."
    ],
-   "revisar": [],
+   "revisar": [
+    "dormitorios"
+   ],
    "fuenteDatos": "ficha 428",
+   "variante": "E-01a",
    "tipologia": "E-01",
    "transformacionPlano": "igual"
   },
@@ -9990,7 +10202,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 429",
-   "tipologia": "1D-13",
+   "variante": "1D-01d",
+   "tipologia": "1D-01",
    "transformacionPlano": "giro180"
   },
   "430": {
@@ -10047,7 +10260,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 430",
-   "tipologia": "1D-13",
+   "variante": "1D-01d",
+   "tipologia": "1D-01",
    "transformacionPlano": "espejoH"
   },
   "431": {
@@ -10136,6 +10350,7 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 431",
+   "variante": "3D-02a",
    "tipologia": "3D-02",
    "transformacionPlano": "igual"
   },
@@ -10183,10 +10398,13 @@
    ],
    "poligonoArea": 31.1,
    "avisos": [
-    "units.json dice 1 dormitorios y la ficha 0."
+    "units.json (listado V.01) dice 1 dormitorio y la ficha estudio (0 dormitorios): se usa la ficha."
    ],
-   "revisar": [],
+   "revisar": [
+    "dormitorios"
+   ],
    "fuenteDatos": "ficha 432",
+   "variante": "E-02a",
    "tipologia": "E-02",
    "transformacionPlano": "igual"
   },
@@ -10234,10 +10452,13 @@
    ],
    "poligonoArea": 30.2,
    "avisos": [
-    "units.json dice 1 dormitorios y la ficha 0."
+    "units.json (listado V.01) dice 1 dormitorio y la ficha estudio (0 dormitorios): se usa la ficha."
    ],
-   "revisar": [],
+   "revisar": [
+    "dormitorios"
+   ],
    "fuenteDatos": "ficha 433",
+   "variante": "E-03a",
    "tipologia": "E-03",
    "transformacionPlano": "igual"
   },
@@ -10319,7 +10540,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 434",
-   "tipologia": "2D-18",
+   "variante": "2D-15a",
+   "tipologia": "2D-15",
    "transformacionPlano": "igual"
   },
   "435": {
@@ -10400,7 +10622,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 435",
-   "tipologia": "2D-19",
+   "variante": "2D-16a",
+   "tipologia": "2D-16",
    "transformacionPlano": "igual"
   },
   "436": {
@@ -10457,7 +10680,8 @@
    "avisos": [],
    "revisar": [],
    "fuenteDatos": "ficha 436",
-   "tipologia": "1D-30",
+   "variante": "1D-22a",
+   "tipologia": "1D-22",
    "transformacionPlano": "igual"
   }
  }
