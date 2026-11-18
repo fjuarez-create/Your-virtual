@@ -733,6 +733,11 @@ async function recorrido({ lista, entrega, repasos: repasosAlAbrir }) {
         titulo: FRASES.borrarFirma(trozo.texto),
         ok: FRASES_DE_FIRMA.borrar, icono: 'trash', rojo: true,
         conservar: FRASES_DE_FIRMA.cancelar, iconoConservar: 'x',
+        // Su «Borrar» rojo puede nacer justo bajo el dedo que tocó el
+        // «Borrar» del recuadro: sorda sus primeros 700 ms, como la
+        // pregunta del segundo firmante, para que un segundo toque no
+        // se lleve la firma.
+        sorda: REPOSO,
       });
       // Mientras se preguntaba, el documento pudo irse o repintarse.
       if (si && !cerrada && paso === 'documento' && recuadros.includes(recuadro)) recuadro.motor?.borrar();
