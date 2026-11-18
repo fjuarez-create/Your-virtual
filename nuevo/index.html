@@ -37,6 +37,8 @@
       transition: background-color .2s, color .2s;
     }
     a.cta:hover, a.cta:focus-visible { background: var(--tinta); color: var(--fondo); outline: none; }
+    footer .corto { display: none; }
+    @media (max-width: 560px) { footer .largo { display: none; } footer .corto { display: inline; } }
   </style>
 </head>
 <body>
@@ -46,6 +48,9 @@
     <p>Versión nueva, construida con renders y vídeo. En desarrollo.</p>
     <a class="cta" href="./estilos/">Propuestas de diseño <span aria-hidden="true">→</span></a>
   </main>
-  <footer><span>Edificio Apolo · 166 viviendas</span><span>/nuevo</span></footer>
+  <footer>
+    <span>Residencial Serenea</span>
+    <span><span class="largo">Apolo · Zeus · Atenea · Hera · Hermes</span><span class="corto">5 edificios</span></span>
+  </footer>
 </body>
 </html>
