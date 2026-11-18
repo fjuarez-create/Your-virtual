@@ -20,7 +20,8 @@
 
 set -u
 
-DIR=gestion
+# Carpeta a revisar: por defecto el panel actual; el de /nuevo pasa la suya.
+DIR="${1:-gestion}"
 LIMPIO=$(mktemp -d)
 trap 'rm -rf "$LIMPIO"' EXIT
 fallos=0

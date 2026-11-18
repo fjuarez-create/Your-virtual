@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow">
+  <title>SERENEA · Showroom</title>
+  <link rel="icon" href="../assets/icono/favicon.ico">
+  <style>
+    /* Provisional: Neue Haas Grotesk con los ficheros de prueba del repositorio.
+       Antes de abrir la web al público hace falta su licencia web. */
+    @font-face { font-family: "NHG Display"; src: url("../assets/fonts/neuehaasgrotdisp-45light.ttf") format("truetype"); font-weight: 300; font-display: swap; }
+    @font-face { font-family: "NHG Display"; src: url("../assets/fonts/neuehaasgrotdisp-55roman.ttf") format("truetype"); font-weight: 400; font-display: swap; }
+
+    :root { --fondo: #f3f1ec; --tinta: #141414; --tenue: #6e6b66; --filete: #141414; }
+    @media (prefers-color-scheme: dark) {
+      :root { --fondo: #101010; --tinta: #f0eee9; --tenue: #9a968f; --filete: #f0eee9; }
+    }
+    * { box-sizing: border-box; margin: 0; }
+    html, body { height: 100%; }
+    body {
+      background: var(--fondo); color: var(--tinta);
+      font: 400 16px/1.45 "NHG Display", "Helvetica Neue", Helvetica, Arial, sans-serif;
+      display: grid; grid-template-rows: auto 1fr auto; min-height: 100dvh;
+      padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+    }
+    @media (min-width: 720px) { body { padding: 32px 48px; } }
+    header, footer { display: flex; justify-content: space-between; gap: 16px; font-size: 13px; letter-spacing: .02em; }
+    header { border-bottom: 1px solid var(--filete); padding-bottom: 12px; }
+    footer { border-top: 1px solid var(--filete); padding-top: 12px; color: var(--tenue); }
+    main { align-self: end; padding: 48px 0; }
+    h1 { font-weight: 300; font-size: clamp(56px, 13vw, 168px); line-height: .92; letter-spacing: -.035em; }
+    p { max-width: 34ch; margin-top: 24px; font-size: 18px; color: var(--tenue); }
+    a.cta {
+      display: inline-flex; align-items: center; gap: 12px; margin-top: 32px; min-height: 44px;
+      padding: 0 20px; border: 1px solid var(--filete); color: var(--tinta); text-decoration: none; font-size: 15px;
+      transition: background-color .2s, color .2s;
+    }
+    a.cta:hover, a.cta:focus-visible { background: var(--tinta); color: var(--fondo); outline: none; }
+  </style>
+</head>
+<body>
+  <header><span>SERENEA by Unik</span><span>Las Huesas · Telde</span></header>
+  <main>
+    <h1>Showroom<br>SERENEA</h1>
+    <p>Versión nueva, construida con renders y vídeo. En desarrollo.</p>
+    <a class="cta" href="./estilos/">Propuestas de diseño <span aria-hidden="true">→</span></a>
+  </main>
+  <footer><span>Edificio Apolo · 166 viviendas</span><span>/nuevo</span></footer>
+</body>
+</html>

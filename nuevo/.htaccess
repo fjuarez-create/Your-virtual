@@ -1,0 +1,9 @@
+# /nuevo: el showroom de renders, en desarrollo.
+DirectoryIndex index.html index.php
+
+# Mientras esté en desarrollo, que no lo indexe ningún buscador. Las
+# directivas van dentro de IfModule: sueltas, en un Apache sin mod_headers
+# provocarían un error 500 en toda la carpeta.
+<IfModule mod_headers.c>
+  Header set X-Robots-Tag "noindex, nofollow"
+</IfModule>

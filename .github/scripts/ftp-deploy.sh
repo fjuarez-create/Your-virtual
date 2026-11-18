@@ -19,7 +19,7 @@
 
 set -eu
 
-WHAT="${1:?uso: ftp-deploy.sh assets|code|new|gestion|index|check}"
+WHAT="${1:?uso: ftp-deploy.sh assets|code|new|gestion|index|check|nuevo|check-nuevo}"
 
 for name in FTP_SERVER FTP_USERNAME FTP_PASSWORD; do
   eval "value=\${$name:-}"
@@ -92,6 +92,28 @@ remote_size() {
   run_lftp "$OPTS" "cd \"$DIR\"; ls \"$1\"" 2>/dev/null \
     | tr -d '\r' | awk 'NF >= 5 && $5 ~ /^[0-9]+$/ { print $5; exit }'
 }
+
+# /nuevo (el showroom de renders) se publica con su propio workflow,
+# deploy-nuevo.yml, y solo comprueba lo suyo.
+if [ "$WHAT" = check-nuevo ]; then
+  fallos=0
+  for f in nuevo/index.html nuevo/.htaccess nuevo/gestion/datos/.htaccess; do
+    if [ "$(remote_count "$f")" -ge 1 ]; then
+      echo "ok  $f"
+    else
+      echo "FALTA  $f"
+      fallos=$((fallos + 1))
+    fi
+  done
+  local_n=$(find publish/nuevo -type f | wc -l)
+  echo "nuevo/: $local_n ficheros en la publicación"
+  if [ "$fallos" -gt 0 ]; then
+    echo "La subida de /nuevo está incompleta: $fallos comprobaciones fallidas." >&2
+    exit 1
+  fi
+  echo "/nuevo subido."
+  exit 0
+fi
 
 if [ "$WHAT" = check ]; then
   echo "Raíz de la sesión FTP:"
@@ -177,6 +199,16 @@ case "$WHAT" in
   new)
     CMDS="cd \"$DIR\";
       mirror -R --transfer-all --delete --no-perms -v publish/new new;"
+    ;;
+  # El showroom nuevo, en /nuevo. Va con --delete, salvo nuevo/gestion/datos/,
+  # que guarda en el servidor el estado vivo, los tokens del panel, el
+  # registro de cambios y las copias: nada de eso está en el repositorio. Su
+  # .htaccess (que impide leer la carpeta por URL) se sube aparte.
+  nuevo)
+    CMDS="cd \"$DIR\";
+      mirror -R --transfer-all --delete --no-perms -v --exclude ^gestion/datos/ publish/nuevo nuevo;
+      mkdir -p -f nuevo/gestion/datos;
+      put publish/nuevo/gestion/datos/.htaccess -o nuevo/gestion/datos/.htaccess;"
     ;;
   *)
     echo "Parte desconocida: $WHAT" >&2

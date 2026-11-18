@@ -1,0 +1,84 @@
+name: Deploy de /nuevo (showroom de renders)
+
+# Publica SOLO la carpeta nuevo/ en https://showroom.unikdi.com/nuevo/ en cada
+# push a la rama de trabajo del showroom nuevo. No toca la raíz, /gestion ni
+# nada de lo que publica deploy-hosting.yml desde su propia rama.
+#
+# Usa los mismos secretos FTP del repositorio (FTP_SERVER, FTP_USERNAME,
+# FTP_PASSWORD y, opcional, FTP_SERVER_DIR): ningún secreto nuevo.
+#
+# nuevo/gestion/datos/ vive solo en el servidor (estado vivo, tokens del panel,
+# registro de cambios y copias) y el deploy nunca lo borra: ver la parte
+# "nuevo" de .github/scripts/ftp-deploy.sh.
+
+on:
+  push:
+    branches: [claude/busy-pasteur-6daj36]
+    paths:
+      - 'nuevo/**'
+      - '.github/workflows/deploy-nuevo.yml'
+      - '.github/scripts/ftp-deploy.sh'
+      - '.github/scripts/comprobar-php56.sh'
+  workflow_dispatch:
+
+# Grupo propio: un deploy de /nuevo no cancela nunca el de la web principal.
+concurrency:
+  group: hosting-nuevo
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    # Los commits con "[wip]" en el mensaje no se publican.
+    if: ${{ !contains(github.event.head_commit.message, '[wip]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      # El panel nuevo también tiene que compilar en el PHP 7.0.33 del hosting.
+      - name: Comprobar el panel de /nuevo contra PHP 5.6
+        run: |
+          if [ -n "$(find nuevo/gestion -name '*.php' 2>/dev/null | head -1)" ]; then
+            bash .github/scripts/comprobar-php56.sh nuevo/gestion
+          else
+            echo "Aún no hay PHP en nuevo/gestion: nada que comprobar."
+          fi
+
+      # Los documentos internos, las herramientas y las plantillas de trabajo
+      # se quedan en el repositorio: a la web solo va lo que la web usa.
+      - name: Preparar carpeta de publicación
+        run: |
+          set -eu
+          # Las páginas que referencian sus módulos con ?v=__BUILD__ quedan
+          # selladas con el commit: HTML y JS se cachean como conjunto.
+          sellar=$(grep -rl "__BUILD__" nuevo --include='*.html' || true)
+          [ -z "$sellar" ] || sed -i "s/__BUILD__/${GITHUB_SHA::8}/g" $sellar
+          rm -rf publish && mkdir -p publish
+          rsync -a --exclude 'docs/' --exclude 'tools/' --exclude 'plantilla/' --exclude '.gitkeep' nuevo/ publish/nuevo/
+          mkdir -p publish/nuevo/gestion/datos
+          test -f publish/nuevo/gestion/datos/.htaccess
+          du -sh publish/nuevo
+          find publish/nuevo -type f | sort
+
+      - name: Instalar lftp
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq lftp
+
+      - name: Subir /nuevo
+        timeout-minutes: 15
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_SERVER_DIR: ${{ secrets.FTP_SERVER_DIR }}
+        run: bash .github/scripts/ftp-deploy.sh nuevo
+
+      - name: Comprobar la subida
+        timeout-minutes: 5
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_SERVER_DIR: ${{ secrets.FTP_SERVER_DIR }}
+        run: |
+          bash .github/scripts/ftp-deploy.sh check-nuevo
+          echo "Publicado en https://showroom.unikdi.com/nuevo/"
