@@ -1,0 +1,10 @@
+Cada línea nueva de este fichero lanza una medición de la bajada de cambios
+(ver .github/workflows/medir-repasos.yml). No publica nada.
+
+2026-11-11 · primera medición, antes de la bajada por recepción: cuántas tandas ocupa hoy la base.
+2026-11-11 12:05 UTC · nada más desplegar la bajada por recepción (despliegue 167): tiene que seguir la marca de siempre.
+2026-11-11 12:17 UTC · pasados los diez minutos del despliegue 167: la marca tiene que venir ya con «+00:00».
+2026-11-11 13:15 UTC · una hora después de encender: ¿lo que el equipo apunta se numera y baja?
+2026-11-11 15:33 UTC · por la tarde: ¿ha bajado ya algún apunte nuevo del equipo (más de 3.913 filas)?
+2026-11-11 17:17 UTC · tras el despliegue 171 (bajas del directorio, almacén del taller, guardia): pasados los diez minutos, tiene que volver a encenderse.
+2026-11-11 20:40 UTC · antes de publicar la convivencia con el taller: qué cookie de sesión pone hoy cada una (el taller, todavía la de la app de verdad).

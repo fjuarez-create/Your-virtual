@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maqueta · Cinco nombres para la reunión pasada de la portada</title>
+<link rel="stylesheet" href="../../css/app.css">
+<style>
+  body { background: #d9d6d0; margin: 0; padding: 24px; display: grid; gap: 40px; justify-content: center; }
+  .telefono {
+    width: 430px; box-sizing: border-box;
+    padding: 12px 12px 24px; background: var(--d-fondo);
+    border-radius: 24px; overflow: hidden;
+  }
+  .m-rotulo { font: 600 13px/1 var(--d-font); color: #6d6a64; margin: 0 0 8px 6px; letter-spacing: 0.04em; text-transform: uppercase; }
+</style>
+</head>
+<body>
+  <!-- La pregunta de Fran: la de HOY se llama «Reunión de obra», con
+       su punto vivo. ¿Y cuando la última reunión es de un día pasado?
+       Cinco nombres para el título, todos sobre el ejemplo de la
+       reunión del viernes 21 de agosto, terminada a las 9:31, vista
+       un lunes. Sin punto: pasada, ya no está viva. -->
+  <div><p class="m-rotulo">1 · Reunión del viernes</p><div class="telefono pantalla-diseno" id="p1"></div></div>
+  <div><p class="m-rotulo">2 · Última reunión</p><div class="telefono pantalla-diseno" id="p2"></div></div>
+  <div><p class="m-rotulo">3 · Acta del viernes</p><div class="telefono pantalla-diseno" id="p3"></div></div>
+  <div><p class="m-rotulo">4 · Reunión cerrada</p><div class="telefono pantalla-diseno" id="p4"></div></div>
+  <div><p class="m-rotulo">5 · La fecha de título</p><div class="telefono pantalla-diseno" id="p5"></div></div>
+
+<script type="module">
+import { h, icon, anillo, grupoAvatares } from '../../js/ui.js';
+
+const GENTE = [
+  { nombre: 'Francisco Juárez del Dago' },
+  { nombre: 'Alba García' },
+  { nombre: 'Felipe Remacha' },
+];
+
+const tarjeta = ({ cuando, titulo }) => h('button.d-tarjeta.tramo-ambar', null,
+  h('span.d-mordida'), h('span.d-mordida-esquina'),
+  h('div.d-tarjeta-cab', null,
+    icon('grua'),
+    h('span', null, cuando),
+    h('span.d-tarjeta-caras', null, grupoAvatares(GENTE, { tam: 36, max: 3, solape: 12 }))),
+  h('div.d-tarjeta-titulo', null, titulo),
+  h('div.d-tarjeta-pie', null,
+    h('span.d-chip.grande', null, icon('listaChecks'), '6 / 9'),
+    h('span.d-chip.grande.ambar', null, icon('fuego'), '67%'),
+  ),
+  h('span.d-tarjeta-anillo', null, anillo(67, { tam: 55, grosor: 5, etiqueta: false })),
+);
+
+const monta = (id, t) => document.getElementById(id).append(
+  h('p.d-epigrafe', null, 'Última reunión de obra'),
+  t,
+);
+
+monta('p1', tarjeta({ cuando: '21 agosto, 2026', titulo: 'Reunión del viernes' }));
+monta('p2', tarjeta({ cuando: '21 agosto, 2026', titulo: 'Última reunión' }));
+monta('p3', tarjeta({ cuando: '21 agosto, 2026', titulo: 'Acta del viernes' }));
+monta('p4', tarjeta({ cuando: '21 agosto, 2026', titulo: 'Reunión cerrada' }));
+monta('p5', tarjeta({ cuando: 'Terminada a las 9:31', titulo: 'Viernes 21 de agosto' }));
+</script>
+</body>
+</html>

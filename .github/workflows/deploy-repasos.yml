@@ -1,0 +1,447 @@
+name: Publicar UNIK repasos
+
+# Publica la carpeta repasos/ en repasos.unikdi.com en cuanto se empuja un
+# cambio suyo. Sustituye al viaje por el Codespace y por el repositorio
+# unik-repasos: lo que se sube aquí es lo que queda publicado.
+#
+# Secretos necesarios (Settings → Secrets and variables → Actions):
+#   REPASOS_FTP_SERVER      host FTP del panel
+#   REPASOS_FTP_USERNAME    usuario FTP DEL SUBDOMINIO de repasos
+#   REPASOS_FTP_PASSWORD    su contraseña
+#   REPASOS_FTP_SERVER_DIR  (opcional) carpeta destino; vacío = se detecta
+#
+# Llevan el prefijo REPASOS_ a propósito: los FTP_* de este mismo
+# repositorio son los del showroom y apuntan a otro sitio. Compartir
+# nombre sería publicar una cosa encima de la otra.
+
+on:
+  push:
+    branches: [claude/uniq-repasos-app-2ja8y2]
+    paths:
+      - 'repasos/**'
+      - '.github/workflows/deploy-repasos.yml'
+      - '.github/scripts/comprobar-recepcion.mjs'
+  workflow_dispatch:
+    inputs:
+      primera_instalacion:
+        description: 'El subdominio está vacío y hay que instalar por primera vez (se exigirá que lo esté)'
+        type: boolean
+        default: false
+
+# Grupo propio: un despliegue de repasos no debe cancelar uno del showroom,
+# que usa el grupo «hosting».
+concurrency:
+  group: hosting-repasos
+  cancel-in-progress: true
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: repasos
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Comprobar que están los secretos
+        env:
+          SERVER: ${{ secrets.REPASOS_FTP_SERVER }}
+          USERNAME: ${{ secrets.REPASOS_FTP_USERNAME }}
+          PASSWORD: ${{ secrets.REPASOS_FTP_PASSWORD }}
+        run: |
+          set -eu
+          falta=0
+          # Los nombres del bucle son los de los secretos de verdad: si el
+          # mensaje nombrara otra cosa, mandaría a crear un secreto que no
+          # se lee en ningún sitio y el fallo parecería no arreglarse nunca.
+          for n in SERVER USERNAME PASSWORD; do
+            eval "v=\${$n:-}"
+            [ -n "$v" ] || { echo "Falta el secreto REPASOS_FTP_${n}." >&2; falta=1; }
+          done
+          if [ "$falta" = 1 ]; then
+            echo "" >&2
+            echo "Añádelos en Settings → Secrets and variables → Actions." >&2
+            exit 1
+          fi
+          echo "Los tres secretos están puestos."
+
+      # La lista de ficheros que el service worker guarda para funcionar
+      # sin cobertura se escribe a mano, y una vez se quedó corta: cuatro
+      # módulos se pedían a la red en mitad de la sesión, o sea al último
+      # despliegue, mientras el resto de la app iba con la versión del
+      # móvil. Media aplicación de cada. Esto lo cuenta antes de subir.
+      - name: Comprobar que el service worker guarda todo el código
+        run: python3 ../.github/scripts/comprobar-armazon.py .
+
+      # La bajada de cambios se guía por «recibido», el número de orden
+      # que el servidor le pone a cada fila al llegar. Toda escritura en
+      # una de las siete tablas que bajan a los móviles tiene que dejar
+      # la fila con recibido = ''. Un UPDATE que se olvide no da ningún
+      # error: ese cambio, sencillamente, no le baja nunca a quien ya
+      # pasó por esa fila. Como no avisa él, esto lee el PHP de la API y
+      # lo caza antes de subir nada (y antes se prueba a sí mismo, para
+      # no dar un visto bueno a ciegas).
+      #
+      # No tiene interruptor, a propósito. Con el código de antes de la
+      # recepción falla siempre: si un día hay que VOLVER a él, este paso
+      # se quita en ese mismo commit, y su mensaje de fallo dice qué hay
+      # que leer antes. Su guion va en los «paths» de arriba para que
+      # arreglar solo la guardia vuelva a lanzar el despliegue.
+      - name: Comprobar que ninguna escritura se salta la recepción
+        run: node ../.github/scripts/comprobar-recepcion.mjs .
+
+      # El SHA sella la versión en index.html y en sw.js. Al cambiar, el
+      # service worker tira su caché entera y ningún móvil se queda con
+      # media versión vieja y media nueva.
+      - name: Sellar la versión
+        run: |
+          set -eu
+          BUILD="${GITHUB_SHA::8}"
+          sed -i "s/__BUILD__/${BUILD}/g" index.html sw.js
+          echo "Versión: ${BUILD}"
+
+      - name: Preparar carpeta de publicación
+        run: |
+          set -eu
+          rm -rf publish && mkdir publish
+          # Todas las páginas sueltas de la raíz, no solo el index: la de
+          # privacidad se quedó sin subir el día que se escribió porque
+          # aquí había una lista a mano y nadie se acordó de añadirla.
+          cp *.html sw.js manifest.webmanifest .htaccess publish/
+          cp -r css js assets publish/
+
+          mkdir -p publish/api
+          cp -r api/. publish/api/
+
+          # Las carpetas de fotos y de base de datos viajan VACÍAS pero CON
+          # su .htaccess: es lo que impide pedir una foto por su URL sin
+          # haber entrado en la app. Si viajaran borradas del todo, PHP las
+          # recrearía al vuelo y quedarían abiertas.
+          for carpeta in uploads datos; do
+            find "publish/api/$carpeta" -mindepth 1 \
+              ! -name '.htaccess' ! -name '.gitkeep' -delete 2>/dev/null || true
+          done
+          test -f publish/api/uploads/.htaccess || { echo "Falta el .htaccess de uploads." >&2; exit 1; }
+          test -f publish/api/datos/.htaccess   || { echo "Falta el .htaccess de datos." >&2; exit 1; }
+
+          # config.php lo crea el instalador y vive solo en el servidor.
+          rm -f publish/api/config.php publish/api/config.example.php
+
+          # La cuenta temporal para la revisión de Apple. La contraseña
+          # nunca pasa por el repositorio —es público— ni por ninguna
+          # conversación: va de los secretos de GitHub a este fichero y
+          # de ahí al servidor, por el mismo camino que el FTP.
+          #
+          # Es un .php porque el servidor los ejecuta y jamás los sirve
+          # como texto; un .json colgando de api/ se podría pedir desde
+          # el navegador y leer la contraseña.
+          #
+          # Si los secretos no están, el fichero no se escribe y el paso
+          # de limpieza lo retira del servidor: la cuenta se desactiva
+          # sola en el siguiente arranque.
+          if [ -n "${REVISION_EMAIL:-}" ] && [ -n "${REVISION_PASSWORD:-}" ]; then
+            php -r '
+              $f = "publish/api/revision-cuenta.php";
+              $d = [
+                "email"    => getenv("REVISION_EMAIL"),
+                "password" => getenv("REVISION_PASSWORD"),
+                "nombre"   => getenv("REVISION_NOMBRE") ?: "Revisión de Apple",
+                "empresa"  => getenv("REVISION_EMPRESA") ?: "DO — Arquitecto",
+              ];
+              file_put_contents($f,
+                "<?php\n// Generado por el despliegue. NO está en el repositorio.\nreturn "
+                . var_export($d, true) . ";\n");
+            '
+            php -l publish/api/revision-cuenta.php > /dev/null
+            echo "Cuenta de revisión: se publica (${REVISION_EMAIL})."
+          else
+            echo "Cuenta de revisión: sin secretos, no se publica."
+          fi
+
+          # actualizar.php ya no hace falta arriba: el esquema se pone al
+          # día solo. Ni él ni el instalador piden contraseña, así que
+          # dejarlos publicados sería dejar dos puertas abiertas.
+          # El instalador viaja únicamente en la primera puesta en marcha,
+          # que es cuando todavía no hay config.php que crear.
+          rm -f publish/api/actualizar.php
+          if [ "${PRIMERA}" = "true" ]; then
+            echo "Primera instalación: se publica api/install.php."
+          else
+            rm -f publish/api/install.php
+          fi
+
+          du -sh publish
+          find publish -type f | wc -l
+        env:
+          PRIMERA: ${{ inputs.primera_instalacion }}
+          REVISION_EMAIL: ${{ secrets.REVISION_EMAIL }}
+          REVISION_PASSWORD: ${{ secrets.REVISION_PASSWORD }}
+          REVISION_NOMBRE: ${{ secrets.REVISION_NOMBRE }}
+          REVISION_EMPRESA: ${{ secrets.REVISION_EMPRESA }}
+
+      - name: Comprobar que no viaja ningún secreto
+        env:
+          PRIMERA: ${{ inputs.primera_instalacion }}
+        run: |
+          set -eu
+          prohibidos="api/config.php api/actualizar.php"
+          [ "${PRIMERA}" = "true" ] || prohibidos="$prohibidos api/install.php"
+          for f in $prohibidos; do
+            if [ -f "publish/$f" ]; then
+              echo "$f no debe publicarse." >&2
+              exit 1
+            fi
+          done
+          # revision-cuenta.php queda fuera de este barrido a propósito y
+          # es la ÚNICA excepción: ese fichero existe justo para llevar
+          # una contraseña al servidor, viene de los secretos de GitHub y
+          # nunca está en el repositorio. Se comprueba aparte, abajo.
+          if grep -rIl --exclude-dir=assets --exclude=revision-cuenta.php \
+               -E "password'\s*=>\s*'[^']+'" publish/api 2>/dev/null | grep -q .; then
+            echo "Hay credenciales en los ficheros a publicar." >&2
+            exit 1
+          fi
+
+          # Y que la excepción sea de verdad lo que dice ser: un PHP que
+          # devuelve un array y no imprime nada. Si algún día alguien lo
+          # convirtiera en un .json o le metiera un echo, la contraseña
+          # se podría leer desde el navegador.
+          if [ -f publish/api/revision-cuenta.php ]; then
+            head -1 publish/api/revision-cuenta.php | grep -q '^<?php' \
+              || { echo "revision-cuenta.php no empieza por <?php: se serviría como texto." >&2; exit 1; }
+            [ -z "$(php -r 'include "publish/api/revision-cuenta.php";')" ] \
+              || { echo "revision-cuenta.php imprime algo: filtraría la contraseña." >&2; exit 1; }
+            echo "La cuenta de revisión viaja como PHP mudo, correcto."
+          fi
+          # Lo mismo con la precarga de las entregas (api/precarga-entregas.php,
+          # en el repositorio): solo puede viajar como PHP mudo.
+          if [ -f publish/api/precarga-entregas.php ]; then
+            head -1 publish/api/precarga-entregas.php | grep -q '^<?php' \
+              || { echo "precarga-entregas.php no empieza por <?php: se serviría como texto." >&2; exit 1; }
+            [ -z "$(php -r 'include "publish/api/precarga-entregas.php";')" ] \
+              || { echo "precarga-entregas.php imprime algo: filtraría los nombres." >&2; exit 1; }
+            echo "La precarga de entregas viaja como PHP mudo, correcto."
+          fi
+          if ls publish/api/*.json > /dev/null 2>&1; then
+            echo "Hay ficheros .json colgando de api/: se servirían como texto." >&2
+            exit 1
+          fi
+          echo "Sin credenciales ni páginas de instalación en la carpeta de publicación."
+
+      # lftp es con lo que se sube todo, y la imagen del runner no lo
+      # trae: había que bajarlo de los servidores de paquetes de Ubuntu
+      # en cada despliegue. El 11-11-2026 esos servidores estuvieron
+      # unos cuarenta minutos caídos vistos desde GitHub («Temporary
+      # failure resolving 'security.ubuntu.com'») y tres despliegues
+      # seguidos murieron aquí, agotando los seis minutos del paso. No
+      # se subió nada, pero en ese rato no se habría podido publicar un
+      # arreglo urgente.
+      #
+      # Ahora lo instala una acción de la casa, la misma para el
+      # despliegue, el taller y la copia nocturna: la primera vez, con
+      # apt como siempre, y guarda los paquetes en la caché de GitHub;
+      # las siguientes, de lo guardado y sin tocar la red. Sin caché (va
+      # por rama, caduca a los siete días sin uso) hace lo de siempre.
+      # El detalle, en .github/actions/instalar-lftp/.
+      - name: Instalar lftp
+        timeout-minutes: 6
+        uses: ./.github/actions/instalar-lftp
+
+      # Antes de escribir nada: comprobar que la carpeta a la que apuntan
+      # los secretos es la de repasos. Es la red que evita el peor
+      # accidente posible: publicar repasos encima del showroom.
+      #
+      # Este paso NO se salta nunca, ni en la primera instalación. Marcar
+      # esa casilla no exime de comprobar el destino: cambia lo que hay
+      # que demostrar, y a algo más estricto (que la carpeta esté vacía).
+      # Justo en el primer despliegue es cuando los secretos acaban de
+      # escribirse y nadie los ha probado todavía.
+      - name: Comprobar que el destino es el correcto
+        timeout-minutes: 5
+        env:
+          FTP_SERVER: ${{ secrets.REPASOS_FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.REPASOS_FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.REPASOS_FTP_PASSWORD }}
+          FTP_SERVER_DIR: ${{ secrets.REPASOS_FTP_SERVER_DIR }}
+          PRIMERA_INSTALACION: ${{ inputs.primera_instalacion }}
+        run: bash .github/scripts/ftp-deploy.sh destino
+
+      - name: Subir código y backend
+        timeout-minutes: 12
+        env:
+          FTP_SERVER: ${{ secrets.REPASOS_FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.REPASOS_FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.REPASOS_FTP_PASSWORD }}
+          FTP_SERVER_DIR: ${{ secrets.REPASOS_FTP_SERVER_DIR }}
+        run: bash .github/scripts/ftp-deploy.sh subir
+
+      # api/ se sincroniza sin --delete para no rozar las fotos, así que
+      # lo que se deja de publicar hay que retirarlo del servidor aparte.
+      - name: Retirar las páginas de instalación del servidor
+        if: ${{ inputs.primera_instalacion != true }}
+        timeout-minutes: 5
+        env:
+          FTP_SERVER: ${{ secrets.REPASOS_FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.REPASOS_FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.REPASOS_FTP_PASSWORD }}
+          FTP_SERVER_DIR: ${{ secrets.REPASOS_FTP_SERVER_DIR }}
+        run: bash .github/scripts/ftp-deploy.sh limpiar
+
+      - name: Subir index.html y sw.js
+        timeout-minutes: 5
+        env:
+          FTP_SERVER: ${{ secrets.REPASOS_FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.REPASOS_FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.REPASOS_FTP_PASSWORD }}
+          FTP_SERVER_DIR: ${{ secrets.REPASOS_FTP_SERVER_DIR }}
+        run: bash .github/scripts/ftp-deploy.sh arranque
+
+      - name: Comprobar la subida
+        timeout-minutes: 6
+        env:
+          FTP_SERVER: ${{ secrets.REPASOS_FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.REPASOS_FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.REPASOS_FTP_PASSWORD }}
+          FTP_SERVER_DIR: ${{ secrets.REPASOS_FTP_SERVER_DIR }}
+        run: |
+          bash .github/scripts/ftp-deploy.sh comprobar
+          echo "Publicado en https://repasos.unikdi.com/"
+
+      # La comprobación de arriba dice que los ficheros están en el
+      # servidor. Esta dice algo más difícil de saber y más importante:
+      # que lo que el servidor SIRVE es lo de ahora. Se le pide la
+      # portada y se mira que traiga el sello de esta compilación; si el
+      # hosting estuviera devolviendo una copia vieja, se ve aquí y no
+      # tres días después en el móvil de alguien.
+      - name: Comprobar que lo que se sirve es lo de ahora
+        timeout-minutes: 3
+        run: |
+          set -eu
+          BUILD="${GITHUB_SHA::8}"
+          PORTADA=""
+          for intento in 1 2 3 4 5; do
+            PORTADA="$(curl -fsS --max-time 20 "https://repasos.unikdi.com/index.html?v=${BUILD}" || true)"
+            case "$PORTADA" in
+              *"$BUILD"*)
+                echo "La portada que sirve el servidor lleva el sello ${BUILD}."
+                exit 0
+                ;;
+            esac
+            echo "Intento ${intento}: todavía no aparece el sello ${BUILD}."
+            sleep $((intento * 5))
+          done
+          if [ -z "$PORTADA" ]; then
+            # Que no se pueda preguntar no es lo mismo que estar mal
+            # subido: la subida ya se ha verificado por FTP. Se avisa y
+            # se sigue, en vez de teñir de rojo un despliegue correcto.
+            echo "::warning::No se ha podido pedir la portada al servidor para comprobar el sello ${BUILD}."
+            exit 0
+          fi
+          echo "::error::El servidor sigue sirviendo una portada sin el sello ${BUILD}. Puede ser una caché del hosting."
+          exit 1
+
+      # La comprobación que decide si Apple aprueba o rechaza: que el
+      # revisor pueda ENTRAR. Que el fichero de la cuenta esté subido no
+      # basta —la cuenta la crea el servidor al arrancar, leyéndolo— y si
+      # algo fallara por el camino nos enteraríamos por un rechazo tres
+      # días después, sin saber de qué.
+      #
+      # La contraseña va de los secretos al servidor y no se escribe en
+      # ningún sitio: ni en el registro, ni en un fichero, ni en la
+      # línea de órdenes.
+      - name: Comprobar que el revisor de Apple puede entrar
+        timeout-minutes: 3
+        env:
+          REVISION_EMAIL: ${{ secrets.REVISION_EMAIL }}
+          REVISION_PASSWORD: ${{ secrets.REVISION_PASSWORD }}
+        run: |
+          set -eu
+          if [ -z "${REVISION_EMAIL:-}" ] || [ -z "${REVISION_PASSWORD:-}" ]; then
+            echo "::warning::La cuenta del revisor de Apple NO está publicada: faltan los secretos REVISION_EMAIL y REVISION_PASSWORD. Mientras sigan vacíos, el servidor mantiene esa cuenta desactivada; si la app se enviara a revisión ahora, el revisor no podría entrar y la rechazarían."
+            {
+              echo "## Ojo: el revisor de Apple no podría entrar"
+              echo ""
+              echo "Faltan los secretos \`REVISION_EMAIL\` y \`REVISION_PASSWORD\`, así que"
+              echo "el servidor mantiene la cuenta del revisor desactivada. No envíes la"
+              echo "app a revisión hasta que estén puestos y este paso salga en verde."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          CUERPO="$(python3 -c 'import json,os; print(json.dumps({"email": os.environ["REVISION_EMAIL"], "password": os.environ["REVISION_PASSWORD"]}))')"
+          CODIGO=000
+          for intento in 1 2 3; do
+            CODIGO=$(printf '%s' "$CUERPO" | curl -s -o respuesta.json -c galletas.txt -w '%{http_code}' \
+              --max-time 25 -X POST -H 'Content-Type: application/json' \
+              --data-binary @- "https://repasos.unikdi.com/api/auth/login" || echo 000)
+            [ "$CODIGO" = 200 ] && break
+            echo "Intento ${intento}: el servidor ha contestado ${CODIGO}."
+            sleep $((intento * 5))
+          done
+
+          if [ "$CODIGO" != 200 ]; then
+            echo "::error::El revisor de Apple NO puede entrar: el servidor contesta ${CODIGO}. No envíes la app a revisión hasta arreglarlo."
+            exit 1
+          fi
+
+          python3 - <<'PY'
+          import json, os, sys
+
+          d = (json.load(open("respuesta.json")) or {}).get("usuario") or {}
+          esperado = os.environ["REVISION_EMAIL"].strip().lower()
+          if (d.get("email") or "").strip().lower() != esperado:
+              sys.exit("::error::Ha entrado alguien, pero no es la cuenta de revisión.")
+          # Sin permiso de verificación el revisor no ve los botones de
+          # verificar ni de rechazar, que son media aplicación, y se lleva
+          # la impresión de que la app no hace nada.
+          if int(d.get("verifica") or 0) != 1:
+              sys.exit("::error::El revisor entra pero sin permiso de verificación: no vería media aplicación.")
+          print("El revisor de Apple entra y ve la aplicación entera.")
+          PY
+
+          # Y, ya dentro, el directorio: quién lleva el chip «Comercial»
+          # (lo pone la precarga, api/lib/precarga.php). Solo nombres.
+          curl -s -o directorio.json --max-time 25 -b galletas.txt "https://repasos.unikdi.com/api/cambios?desde=" || true
+          python3 - <<'PY'
+          import json
+          try:
+              personas = (json.load(open("directorio.json")) or {}).get("personas") or []
+          except Exception:
+              personas = []
+          comerciales = [p.get("nombre") for p in personas if p.get("comercial")]
+          if comerciales:
+              print("Con el chip «Comercial»: " + ", ".join(comerciales) + ".")
+          else:
+              print("::warning::Nadie lleva el chip «Comercial» todavía.")
+          PY
+          rm -f respuesta.json galletas.txt directorio.json
+
+      # Lo que NO puede cambiar nunca: la cookie de la sesión de la app
+      # de verdad, «repasos_sesion» con camino «/». El equipo lleva
+      # meses con la sesión abierta en el móvil; con otro nombre u otro
+      # camino se quedarían todos fuera a la vez, y hay quien no
+      # recuerda su contraseña. Desde que el taller lleva su propia
+      # cookie (noviembre de 2026), cuál pone cada uno lo decide una
+      # línea de api/lib/auth.php que mira desde qué carpeta se sirve.
+      # Si un día se tuerce no da ningún error, así que aquí se entra
+      # con la cuenta de revisión en lo recién publicado y se mira. Del
+      # valor de la cookie no se escribe nada.
+      #
+      # Va la ÚLTIMA, detrás de la comprobación del revisor de Apple: a
+      # estas alturas la app ya está publicada y comprobada, y este paso
+      # es nuevo. Si un día diera una falsa alarma, que no se lleve por
+      # delante un paso que ya existía (delante del revisor, ese día no
+      # se sabría si puede entrar). Si no se puede preguntar (sin red,
+      # sin los secretos de la cuenta), avisa y sigue: el rojo es solo
+      # para una cookie que se ha visto y no es la de siempre.
+      - name: Comprobar que la cookie de la sesión es la de siempre
+        timeout-minutes: 3
+        uses: ./.github/actions/comprobar-sesion
+        with:
+          api: https://repasos.unikdi.com/api/
+          nombre: repasos_sesion
+          camino: /
+          de-quien: la app de verdad
+          email: ${{ secrets.REVISION_EMAIL }}
+          password: ${{ secrets.REVISION_PASSWORD }}

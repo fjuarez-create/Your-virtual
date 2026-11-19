@@ -1,0 +1,213 @@
+name: Publicar la app de iPhone
+
+# Compila UNIK Works y la sube a App Store Connect, para que aparezca en
+# TestFlight. NO la envía a revisión: eso lo hace Fran desde la web de
+# Apple cuando quiera, con un botón.
+#
+# La app es un envoltorio: por dentro abre repasos.unikdi.com. Así, cada
+# mejora de la web llega sola a todos los móviles y no hay que volver a
+# pasar por la tienda. Solo hay que volver a compilar cuando cambie algo
+# del propio envoltorio: un permiso nuevo del móvil, el icono, la
+# pantalla de arranque o las notificaciones.
+#
+# NO HACE FALTA NI UN MAC NI UN CERTIFICADO.
+#
+# Firmar una app de iOS necesita un certificado de distribución y un
+# perfil de aprovisionamiento. Lo normal es sacarlos a mano desde un Mac
+# y guardarlos aquí. Fran no tiene Mac, y una clave privada no puede
+# viajar por un chat, así que este robot se los crea él solo en cada
+# compilación y retira los de la vez anterior. Está explicado en
+# movil/fastlane/Fastfile.
+#
+# Secretos necesarios (Settings → Secrets and variables → Actions).
+# Los tres salen de la clave de App Store Connect y se copian y pegan
+# tal cual. El Team ID no está aquí porque no es un secreto: vive en
+# movil/fastlane/Appfile.
+#
+#   APPSTORE_CLAVE_ID    el Key ID de la clave de App Store Connect
+#   APPSTORE_EMISOR_ID   el Issuer ID, en la misma página
+#   APPSTORE_CLAVE_P8    el contenido del fichero .p8, pegado entero,
+#                        con sus líneas BEGIN y END
+#
+# En movil/README.md está de dónde sale cada uno.
+
+# Se dispara al empujar su fichero-señal, igual que los otros robots.
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/uniq-repasos-app-2ja8y2]
+    paths: ['movil/LANZAR-APP-IOS.txt']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: app-ios-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Si todavía no están puestos los secretos se dice claramente y no se
+  # arranca la máquina de Apple, que se paga por minutos. Es mejor eso
+  # que reventar veinte minutos después con un error de firma que no
+  # explica nada.
+  mirar-secretos:
+    runs-on: ubuntu-latest
+    outputs:
+      seguir: ${{ steps.repaso.outputs.seguir }}
+    steps:
+      - id: repaso
+        env:
+          CLAVE_ID: ${{ secrets.APPSTORE_CLAVE_ID }}
+          EMISOR: ${{ secrets.APPSTORE_EMISOR_ID }}
+          CLAVE_P8: ${{ secrets.APPSTORE_CLAVE_P8 }}
+        run: |
+          FALTAN=""
+          [ -z "$CLAVE_ID" ] && FALTAN="$FALTAN APPSTORE_CLAVE_ID"
+          [ -z "$EMISOR" ]   && FALTAN="$FALTAN APPSTORE_EMISOR_ID"
+          [ -z "$CLAVE_P8" ] && FALTAN="$FALTAN APPSTORE_CLAVE_P8"
+          if [ -n "$FALTAN" ]; then
+            echo "seguir=no" >> "$GITHUB_OUTPUT"
+            {
+              echo "## Todavía no se puede compilar la app"
+              echo ""
+              echo "Faltan estos secretos en **Settings → Secrets and variables → Actions**:"
+              echo ""
+              for s in $FALTAN; do echo "- \`$s\`"; done
+              echo ""
+              echo "Los tres salen de la clave de App Store Connect que creaste en la web de Apple."
+              echo "Está explicado paso a paso en \`movil/README.md\`."
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            # Un fallo tonto que cuesta media hora de buscar: pegar el .p8
+            # sin las líneas BEGIN/END, o pegado en base64.
+            case "$CLAVE_P8" in
+              *"BEGIN PRIVATE KEY"*) echo "seguir=si" >> "$GITHUB_OUTPUT" ;;
+              *)
+                echo "seguir=no" >> "$GITHUB_OUTPUT"
+                {
+                  echo "## La clave de App Store Connect no tiene buena pinta"
+                  echo ""
+                  echo "\`APPSTORE_CLAVE_P8\` tiene que ser el contenido del fichero .p8"
+                  echo "**pegado entero**, empezando por \`-----BEGIN PRIVATE KEY-----\`."
+                  echo "Ábrelo con el Bloc de notas, selecciona todo y pégalo."
+                } >> "$GITHUB_STEP_SUMMARY"
+                ;;
+            esac
+          fi
+
+  compilar:
+    needs: mirar-secretos
+    if: needs.mirar-secretos.outputs.seguir == 'si'
+    runs-on: macos-15
+    timeout-minutes: 45
+
+    steps:
+      # Apple rechaza en la subida cualquier app compilada con un juego
+      # de herramientas viejo: exige el de iOS 26, que viene dentro de
+      # Xcode 26. La máquina trae varios Xcode instalados y arranca con
+      # uno antiguo, así que aquí se elige el más nuevo. Va lo primero,
+      # antes de nada: si esta máquina no lo tuviera, se sabe en medio
+      # minuto y no después de compilar entera la app.
+      - name: Elegir el Xcode más nuevo de la máquina
+        run: |
+          set -euo pipefail
+          echo "Xcode instalados en esta máquina:"
+          ELEGIDO=""
+          MAYOR=0
+          for X in /Applications/Xcode*.app; do
+            [ -d "$X" ] || continue
+            V="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$X/Contents/Info.plist" 2>/dev/null || echo 0)"
+            echo "  - $X → $V"
+            N="${V%%.*}"
+            case "$N" in ''|*[!0-9]*) N=0 ;; esac
+            if [ "$N" -gt "$MAYOR" ]; then MAYOR="$N"; ELEGIDO="$X"; fi
+          done
+          if [ "$MAYOR" -lt 26 ]; then
+            echo "::error::Esta máquina no tiene Xcode 26, y Apple no admite compilaciones con nada anterior. Hay que cambiar la imagen del runner por una más nueva."
+            exit 1
+          fi
+          sudo xcode-select -s "$ELEGIDO/Contents/Developer"
+          xcodebuild -version
+
+      - name: Traer el repositorio
+        uses: actions/checkout@v4
+
+      - name: Preparar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # 3.3 y no 3.2: alguna de las piezas de fastlane ya exige 3.3, y
+      # con la anterior el «bundle install» se planta antes de empezar.
+      - name: Preparar Ruby y fastlane
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+          working-directory: movil
+
+      - name: Instalar lo que necesita el envoltorio
+        working-directory: movil
+        run: npm ci
+
+      - name: Sincronizar el proyecto de iOS
+        working-directory: movil
+        run: npx cap sync ios
+
+      - name: Instalar las dependencias nativas
+        working-directory: movil/ios/App
+        run: pod install --repo-update
+
+      # El certificado que se cree hay que meterlo en algún llavero, y no
+      # en el de la máquina: este se crea aquí, se borra al acabar y no
+      # sobrevive a la compilación.
+      - name: Preparar un llavero de usar y tirar
+        run: |
+          set -euo pipefail
+          LLAVERO="$RUNNER_TEMP/firma.keychain-db"
+          CLAVE="$(uuidgen)"
+          security create-keychain -p "$CLAVE" "$LLAVERO"
+          security set-keychain-settings -lut 3600 "$LLAVERO"
+          security unlock-keychain -p "$CLAVE" "$LLAVERO"
+          security list-keychain -d user -s "$LLAVERO" $(security list-keychain -d user | tr -d '"')
+          echo "LLAVERO_RUTA=$LLAVERO" >> "$GITHUB_ENV"
+          echo "LLAVERO_CLAVE=$CLAVE" >> "$GITHUB_ENV"
+
+      - name: Firmar, compilar y subir a TestFlight
+        working-directory: movil
+        env:
+          APPSTORE_CLAVE_ID: ${{ secrets.APPSTORE_CLAVE_ID }}
+          APPSTORE_EMISOR_ID: ${{ secrets.APPSTORE_EMISOR_ID }}
+          APPSTORE_CLAVE_P8: ${{ secrets.APPSTORE_CLAVE_P8 }}
+          FASTLANE_SKIP_UPDATE_CHECK: '1'
+          FASTLANE_HIDE_CHANGELOG: '1'
+          # Sin esto fastlane se queda esperando una respuesta que nadie
+          # va a escribir, y el trabajo muere por tiempo agotado.
+          FASTLANE_DISABLE_COLORS: '1'
+        run: bundle exec fastlane ios publicar
+
+      - name: Guardar el .ipa por si acaso
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unik-works-ios
+          path: ${{ runner.temp }}/salida/*.ipa
+          if-no-files-found: ignore
+          retention-days: 14
+
+      # Si algo falla, el registro de fastlane dice mucho más que la
+      # pantalla de GitHub.
+      - name: Guardar el registro de fastlane
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: registro-fastlane
+          path: |
+            movil/fastlane/report.xml
+            ~/Library/Logs/gym/*.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Recoger el llavero
+        if: always()
+        run: security delete-keychain "$RUNNER_TEMP/firma.keychain-db" || true

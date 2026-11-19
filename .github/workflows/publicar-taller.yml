@@ -1,0 +1,483 @@
+name: Publicar el taller
+
+# Publica la rama de taller en https://repasos.unikdi.com/taller — la
+# misma app, en una carpeta aparte, con su propio banco de pruebas
+# SQLite. Ahí Fran toca lo nuevo desde el móvil sin que los datos
+# reales se enteren y sin rozar la app que Apple está revisando: la de
+# verdad vive en la raíz, este robot solo escribe dentro de taller/.
+#
+# EL LOGIN DEL TALLER ES EL DE SIEMPRE. Al sembrar el banco, el robot
+# copia de la app real las cuentas del equipo CON SUS HUELLAS CIFRADAS
+# (password_hash), que no se pueden deshacer: cada uno entra al taller
+# con su usuario y su contraseña de siempre, y ninguna contraseña viaja
+# por ningún sitio. Las cuentas salen por la misma puerta con llave de
+# un solo uso que usa la copia nocturna (api/copia).
+#
+# El banco se siembra una vez y se conserva entre despliegues, para que
+# lo que Fran esté probando no se esfume a cada empujón. Se resiembra
+# lanzando el robot a mano con la casilla marcada (y entonces también
+# se refrescan las cuentas copiadas).
+#
+# Secretos: los REPASOS_FTP_* del despliegue, y REVISION_EMAIL y
+# REVISION_PASSWORD, la cuenta con la que el robot comprueba que el
+# taller respira (dentro del taller es administradora; en la app real
+# no).
+
+on:
+  push:
+    branches: [claude/obra-en-taller]
+    paths:
+      - 'repasos/**'
+      - '.github/workflows/publicar-taller.yml'
+      - '.github/scripts/sembrar-taller.php'
+      - '.github/scripts/comprobar-recepcion.mjs'
+  workflow_dispatch:
+    inputs:
+      resembrar:
+        description: 'Borrar el banco de pruebas del taller y sembrarlo de cero (refresca también las cuentas)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# cancel-in-progress NO: cancelar un despliegue en mitad del
+# intercambio de carpetas dejaría el taller descabalado. Los empujones
+# seguidos se ponen a la cola y listo, que cada uno tarda un minuto.
+concurrency:
+  group: hosting-taller
+  cancel-in-progress: false
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DOMINIO: https://repasos.unikdi.com
+    defaults:
+      run:
+        working-directory: repasos
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Comprobar que están los secretos
+        env:
+          SERVER: ${{ secrets.REPASOS_FTP_SERVER }}
+          USERNAME: ${{ secrets.REPASOS_FTP_USERNAME }}
+          PASSWORD: ${{ secrets.REPASOS_FTP_PASSWORD }}
+          ENTRADA_EMAIL: ${{ secrets.REVISION_EMAIL }}
+          ENTRADA_PASSWORD: ${{ secrets.REVISION_PASSWORD }}
+        run: |
+          set -eu
+          falta=""
+          [ -n "$SERVER" ]           || falta="$falta REPASOS_FTP_SERVER"
+          [ -n "$USERNAME" ]         || falta="$falta REPASOS_FTP_USERNAME"
+          [ -n "$PASSWORD" ]         || falta="$falta REPASOS_FTP_PASSWORD"
+          [ -n "$ENTRADA_EMAIL" ]    || falta="$falta REVISION_EMAIL"
+          [ -n "$ENTRADA_PASSWORD" ] || falta="$falta REVISION_PASSWORD"
+          if [ -n "$falta" ]; then
+            echo "Faltan secretos:$falta" >&2
+            exit 1
+          fi
+          echo "Los cinco secretos están puestos."
+
+      - name: Comprobar que el service worker guarda todo el código
+        run: python3 ../.github/scripts/comprobar-armazon.py .
+
+      # La misma guardia que lleva el despliegue de la app de verdad
+      # (deploy-repasos.yml cuenta el porqué entero): toda escritura del
+      # servidor en una de las siete tablas que bajan a los móviles
+      # tiene que dejar la fila con recibido = '', o ese cambio no le
+      # baja nunca a quien ya pasó por esa fila, y sin dar ningún error.
+      # El taller también tiene móviles que sincronizan, y es donde lo
+      # nuevo se prueba PRIMERO: una escritura que se salte la recepción
+      # tiene que pararse aquí, antes de subir nada, y no llegar a
+      # probarse a medias. Su guion va en los «paths» de arriba para que
+      # arreglar solo la guardia vuelva a publicar el taller.
+      - name: Comprobar que ninguna escritura se salta la recepción
+        run: node ../.github/scripts/comprobar-recepcion.mjs .
+
+      - name: Sellar la versión
+        run: |
+          set -eu
+          BUILD="taller-${GITHUB_SHA::8}"
+          sed -i "s/__BUILD__/${BUILD}/g" index.html sw.js
+          echo "Versión: ${BUILD}"
+
+      # El «taller-» de delante del sello NO es un adorno: repasos/sw.js
+      # reparte las cachés del navegador por ese prefijo (las del taller
+      # son las «unik-repasos-taller-…»; todo lo demás es de la app de
+      # verdad, que vive en el mismo origen). Con otro sello, el taller
+      # dejaría de limpiar sus versiones viejas (2,3 MB cada una) y la
+      # app de verdad se las llevaría todas, también la vigente, en su
+      # siguiente despliegue. Se mira lo que ha quedado ESCRITO en los
+      # ficheros que se van a subir, no la variable del paso de arriba.
+      - name: Comprobar que el sello es el del taller
+        run: |
+          set -eu
+          if ! grep -q "^const VERSION = 'taller-[^']\+';" sw.js; then
+            echo "::error::El sello de sw.js no empieza por «taller-»: sw.js reparte las cachés del navegador por ese prefijo, y con otro el taller y la app de verdad se pisarían las suyas. No se sube nada."
+            exit 1
+          fi
+          if ! grep -q "build: 'taller-[^']\+'," index.html; then
+            echo "::error::El sello de index.html no empieza por «taller-»: no es el mismo que el de sw.js. No se sube nada."
+            exit 1
+          fi
+          echo "El sello empieza por «taller-»: las cachés del taller y las de la app de verdad no se mezclan."
+
+      - name: Preparar la carpeta del taller
+        run: |
+          set -eu
+          rm -rf publish-taller && mkdir publish-taller
+          cp *.html sw.js manifest.webmanifest .htaccess publish-taller/
+          cp -r css js assets publish-taller/
+
+          mkdir -p publish-taller/api
+          cp -r api/. publish-taller/api/
+          for carpeta in uploads datos; do
+            find "publish-taller/api/$carpeta" -mindepth 1 \
+              ! -name '.htaccess' ! -name '.gitkeep' -delete 2>/dev/null || true
+          done
+          test -f publish-taller/api/uploads/.htaccess || { echo "Falta el .htaccess de uploads." >&2; exit 1; }
+          test -f publish-taller/api/datos/.htaccess   || { echo "Falta el .htaccess de datos." >&2; exit 1; }
+
+          # La API del taller vive en /taller/api, y su .htaccess trae la
+          # base de reescritura clavada en /api: sin este ajuste, Apache
+          # contesta 404 a todas las rutas (le pasó al primer despliegue).
+          sed -i 's|RewriteBase /api/|RewriteBase /taller/api/|' publish-taller/api/.htaccess
+          grep -q 'RewriteBase /taller/api/' publish-taller/api/.htaccess \
+            || { echo "No se pudo ajustar la base de reescritura del taller." >&2; exit 1; }
+
+          # Las páginas de instalación no pintan nada en el taller, y la
+          # configuración se escribe aquí: SQLite, sin una credencial.
+          rm -f publish-taller/api/config.php publish-taller/api/config.example.php
+          rm -f publish-taller/api/actualizar.php publish-taller/api/install.php
+          rm -f publish-taller/api/revision-cuenta.php
+          cat > publish-taller/api/config.php <<'CONFIG'
+          <?php
+          // El taller: banco SQLite propio, nada de datos reales. Lo
+          // escribe el robot de publicación; no está en el repositorio.
+          return [
+              'db' => [
+                  'driver'  => 'sqlite',
+                  'fichero' => __DIR__ . '/datos/repasos.sqlite',
+              ],
+              'cookie_segura' => true,
+              'carpeta_medios' => 'uploads',
+              'max_fichero' => 83886080,
+          ];
+          CONFIG
+          php -l publish-taller/api/config.php > /dev/null
+
+          # Que los buscadores no huelan el taller.
+          {
+            echo ''
+            echo '# El taller no debe salir en buscadores.'
+            echo '<IfModule mod_headers.c>'
+            echo '  Header set X-Robots-Tag "noindex, nofollow"'
+            echo '</IfModule>'
+          } >> publish-taller/.htaccess
+
+          du -sh publish-taller
+          find publish-taller -type f | wc -l
+
+      - name: Comprobar que no viaja ninguna credencial
+        run: |
+          set -eu
+          # La configuración del taller es SQLite: ni host, ni usuario,
+          # ni contraseña. Si algún día alguien la cambiara a MySQL con
+          # credenciales dentro, esto lo para antes de subir nada.
+          grep -q "'driver'  => 'sqlite'" publish-taller/api/config.php \
+            || { echo "La configuración del taller ya no es SQLite: revísala." >&2; exit 1; }
+          if grep -rIl --exclude-dir=assets --exclude-dir=datos \
+               -E "password'\s*=>\s*'[^']+'" publish-taller/api 2>/dev/null | grep -q .; then
+            echo "Hay credenciales en los ficheros a publicar." >&2
+            exit 1
+          fi
+          if ls publish-taller/api/*.json > /dev/null 2>&1; then
+            echo "Hay ficheros .json colgando de api/: se servirían como texto." >&2
+            exit 1
+          fi
+          echo "Sin credenciales en la carpeta del taller."
+
+      # Con la acción de la casa, la misma que usan el despliegue y la
+      # copia nocturna: la primera vez instala lftp con apt, como
+      # siempre, y guarda los paquetes en la caché de GitHub; las
+      # siguientes, de lo guardado y sin red. Es para que una caída de
+      # los servidores de paquetes de Ubuntu (el 11-11-2026, cuarenta
+      # minutos y tres despliegues muertos en este paso) no impida
+      # publicar. La caché va por rama: la del taller es la suya.
+      - name: Instalar lftp
+        timeout-minutes: 6
+        uses: ./.github/actions/instalar-lftp
+
+      # Las mismas mañas que el resto de robots FTP de la casa, en un
+      # fichero compartido: varios pasos las necesitan, incluida la
+      # limpieza que corre aunque algo falle.
+      - name: Preparar el camino al servidor
+        env:
+          FTP_SERVER: ${{ secrets.REPASOS_FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.REPASOS_FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.REPASOS_FTP_PASSWORD }}
+          FTP_SERVER_DIR: ${{ secrets.REPASOS_FTP_SERVER_DIR }}
+        run: |
+          set -eu
+          cat > "$RUNNER_TEMP/ftp.sh" <<'FTPSH'
+          SETTINGS='
+            set ssl:verify-certificate no;
+            set ftp:passive-mode true;
+            set net:timeout 20;
+            set net:max-retries 3;
+            set net:reconnect-interval-base 4;
+            set net:reconnect-interval-multiplier 2;
+            set mirror:parallel-transfer-count 8;
+            set xfer:clobber on;
+            set cmd:fail-exit true;
+          '
+          TLS="$SETTINGS set ftp:ssl-allow true; set ftp:ssl-force true; set ftp:ssl-protect-data false;"
+          PLAIN="$SETTINGS set ftp:ssl-allow false;"
+
+          run_lftp() {
+            printf '%s\nopen -u "%s","%s" "%s"\n%s\nbye\n' \
+              "$1" "$FTP_USERNAME" "$FTP_PASSWORD" "$FTP_SERVER" "$2" | lftp
+          }
+
+          elegir_camino() {
+            if run_lftp "$TLS" "pwd" >/dev/null 2>&1; then
+              echo tls > "$RUNNER_TEMP/ftp-modo"
+            else
+              echo "El servidor no aceptó FTPS; se usa FTP plano."
+              echo plain > "$RUNNER_TEMP/ftp-modo"
+            fi
+          }
+
+          cargar_camino() {
+            case "$(cat "$RUNNER_TEMP/ftp-modo" 2>/dev/null || echo tls)" in
+              plain) OPTS="$PLAIN" ;;
+              *)     OPTS="$TLS" ;;
+            esac
+            DIR="$(cat "$RUNNER_TEMP/ftp-dir" 2>/dev/null || echo .)"
+          }
+
+          buscar_carpeta() {
+            DIR="${FTP_SERVER_DIR:-}"
+            case "$DIR" in "" | "." | "./") DIR="" ;; esac
+            if [ -z "$DIR" ]; then
+              if run_lftp "$OPTS" "cls -1" 2>/dev/null | tr -d '\r/' | grep -qx httpdocs; then
+                DIR=httpdocs
+              else
+                DIR=.
+              fi
+            fi
+            echo "$DIR" > "$RUNNER_TEMP/ftp-dir"
+            echo "Carpeta del dominio: $DIR"
+          }
+          FTPSH
+          . "$RUNNER_TEMP/ftp.sh"
+          elegir_camino
+          cargar_camino
+          buscar_carpeta
+
+      # Solo cuando toca (primer despliegue o resembrado): las cuentas
+      # del equipo salen de la app real por la puerta de la copia, con
+      # su llave de un solo uso, y el banco del taller nace con ellas.
+      # Si la copia nocturna corriera justo en este instante, la llave
+      # de uno pisaría la del otro y una de las dos daría 403: se
+      # relanza y ya, es una carrera de una vez cada mucho.
+      - name: Sembrar el banco si hace falta
+        env:
+          FTP_SERVER: ${{ secrets.REPASOS_FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.REPASOS_FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.REPASOS_FTP_PASSWORD }}
+          TALLER_EMAIL: ${{ secrets.REVISION_EMAIL }}
+          TALLER_PASSWORD: ${{ secrets.REVISION_PASSWORD }}
+          RESEMBRAR: ${{ inputs.resembrar }}
+        run: |
+          set -eu
+          . "$RUNNER_TEMP/ftp.sh"
+          cargar_camino
+
+          HAY_BANCO=no
+          if run_lftp "$OPTS" "cd \"$DIR\"; cls -1 taller/api/datos/repasos.sqlite" 2>/dev/null | grep -q repasos.sqlite; then
+            HAY_BANCO=si
+          fi
+          if [ "$HAY_BANCO" = si ] && [ "${RESEMBRAR:-false}" != "true" ]; then
+            echo "El banco del taller ya estaba: se conserva con lo que haya dentro."
+            echo "SEMBRADO=no" >> "$GITHUB_ENV"
+            exit 0
+          fi
+
+          TOKEN="$(openssl rand -hex 32)"
+          printf '%s\n' "$TOKEN" > "$RUNNER_TEMP/copia.clave"
+          run_lftp "$OPTS" "cd \"$DIR\"; put \"$RUNNER_TEMP/copia.clave\" -o api/datos/copia.clave"
+          curl -fsS --retry 3 --retry-delay 5 --max-time 120 \
+            -H "X-Clave-Copia: $TOKEN" \
+            -o volcado.json "$DOMINIO/api/copia"
+          run_lftp "$OPTS" "cd \"$DIR\"; rm api/datos/copia.clave"
+          echo "Llave retirada."
+
+          jq -e '.tablas.usuarios | type == "array" and length > 0' volcado.json > /dev/null \
+            || { echo "El volcado no trae usuarios." >&2; exit 1; }
+          jq '.tablas.usuarios' volcado.json > usuarios.json
+          echo "Cuentas de la app real: $(jq 'length' usuarios.json)."
+
+          php ../.github/scripts/sembrar-taller.php publish-taller/api usuarios.json
+          rm -f volcado.json usuarios.json
+          echo "SEMBRADO=si" >> "$GITHUB_ENV"
+
+      # Corre AUNQUE algo haya fallado antes: una llave olvidada en el
+      # servidor es una puerta que se queda abierta.
+      - name: Retirar la llave del servidor
+        if: always()
+        env:
+          FTP_SERVER: ${{ secrets.REPASOS_FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.REPASOS_FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.REPASOS_FTP_PASSWORD }}
+        run: |
+          set -u
+          [ -n "${FTP_SERVER:-}" ] || { echo "Sin secretos, no hay llave que retirar."; exit 0; }
+          [ -f "$RUNNER_TEMP/ftp.sh" ] || { echo "No se llegó a abrir el camino FTP."; exit 0; }
+          [ -f "$RUNNER_TEMP/copia.clave" ] || { echo "No se llegó a poner ninguna llave."; exit 0; }
+          . "$RUNNER_TEMP/ftp.sh"
+          cargar_camino
+          if run_lftp "$OPTS" "cd \"$DIR\"; cls -1 api/datos/copia.clave" 2>/dev/null | grep -q copia.clave; then
+            run_lftp "$OPTS" "cd \"$DIR\"; rm api/datos/copia.clave" 2>/dev/null \
+              && echo "Llave retirada en la limpieza." \
+              || echo "::warning::No se ha podido retirar api/datos/copia.clave del servidor. Sin ella la puerta no se abre igualmente, pero conviene borrarla a mano."
+          else
+            echo "La llave ya estaba retirada."
+          fi
+
+      # ANTES esto reescribía el taller VIVO fichero a fichero: durante
+      # el minuto que tardaba, quien estuviera usando la app pillaba
+      # 404 con la WiFi perfecta (le pasó a Fran el 25-08-2026 a las
+      # 8:04, grabando una reunión). Ahora todo sube a una carpeta
+      # aparte y al final se INTERCAMBIAN las carpetas: un puñado de
+      # renombrados, cosa de un segundo.
+      - name: Subir el taller a una carpeta aparte e intercambiar
+        timeout-minutes: 12
+        env:
+          FTP_SERVER: ${{ secrets.REPASOS_FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.REPASOS_FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.REPASOS_FTP_PASSWORD }}
+        run: |
+          set -eu
+          . "$RUNNER_TEMP/ftp.sh"
+          cargar_camino
+
+          # Restos de un intento anterior muerto a medias, fuera.
+          run_lftp "$OPTS" "cd \"$DIR\"; rm -r -f taller-nuevo; rm -r -f taller-viejo" 2>/dev/null || true
+
+          # 1) La subida larga, contra taller-nuevo: el taller vivo ni
+          #    se entera. El banco y las fotos no viajan (cruzan luego
+          #    por renombrado), salvo banco recién sembrado, que va en
+          #    la carpeta.
+          if [ "${SEMBRADO:-no}" = si ]; then
+            run_lftp "$OPTS" "cd \"$DIR\"; mirror -R --no-perms publish-taller taller-nuevo"
+          else
+            run_lftp "$OPTS" "cd \"$DIR\";
+              mirror -R --no-perms -x ^api/datos/ -x ^api/uploads/ publish-taller taller-nuevo"
+          fi
+
+          # 2) El intercambio. Si hay taller vivo, su banco y sus fotos
+          #    pasan a la carpeta nueva por renombrado (un instante, no
+          #    una copia) y las carpetas se permutan.
+          HAY_TALLER=no
+          if run_lftp "$OPTS" "cd \"$DIR\"; cls -1 -d taller" 2>/dev/null | tr -d '\r/' | grep -qx taller; then
+            HAY_TALLER=si
+          fi
+          ORDENES="cd \"$DIR\";"
+          if [ "$HAY_TALLER" = si ]; then
+            if [ "${SEMBRADO:-no}" != si ]; then
+              ORDENES="$ORDENES mkdir -p taller/api/datos taller/api/uploads;"
+              ORDENES="$ORDENES mv taller/api/datos taller-nuevo/api/datos;"
+              ORDENES="$ORDENES mv taller/api/uploads taller-nuevo/api/uploads;"
+            fi
+            ORDENES="$ORDENES mv taller taller-viejo;"
+          fi
+          ORDENES="$ORDENES mv taller-nuevo taller;"
+          run_lftp "$OPTS" "$ORDENES"
+          echo "Intercambio hecho: el taller nuevo está sirviendo."
+
+          # Cinturón: los .htaccess de datos/ y uploads/ tienen que
+          # estar pase lo que pase (sin ellos, el banco sería público).
+          run_lftp "$OPTS" "cd \"$DIR\";
+            put publish-taller/api/datos/.htaccess -o taller/api/datos/.htaccess;
+            put publish-taller/api/uploads/.htaccess -o taller/api/uploads/.htaccess;"
+
+          # 3) Lo viejo ya no lo mira nadie: fuera.
+          if [ "$HAY_TALLER" = si ]; then
+            run_lftp "$OPTS" "cd \"$DIR\"; rm -r -f taller-viejo" \
+              || echo "::warning::taller-viejo se ha quedado en el servidor: bórralo a mano cuando quieras."
+          fi
+
+      - name: Comprobar que el taller respira
+        timeout-minutes: 4
+        env:
+          ENTRADA_EMAIL: ${{ secrets.REVISION_EMAIL }}
+          ENTRADA_PASSWORD: ${{ secrets.REVISION_PASSWORD }}
+        run: |
+          set -eu
+          BUILD="taller-${GITHUB_SHA::8}"
+          for intento in 1 2 3 4 5; do
+            PORTADA="$(curl -fsS --max-time 20 "https://repasos.unikdi.com/taller/index.html?v=${BUILD}" || true)"
+            case "$PORTADA" in *"$BUILD"*) break ;; esac
+            echo "Intento ${intento}: la portada del taller aún no lleva el sello ${BUILD}."
+            PORTADA=""
+            sleep $((intento * 5))
+          done
+          [ -n "$PORTADA" ] || { echo "::error::El taller no sirve la versión recién subida." >&2; exit 1; }
+          echo "La portada del taller lleva el sello ${BUILD}."
+
+          CUERPO="$(python3 -c 'import json,os; print(json.dumps({"email": os.environ["ENTRADA_EMAIL"], "password": os.environ["ENTRADA_PASSWORD"]}))')"
+          RESPUESTA="$(printf '%s' "$CUERPO" | curl -fsS --max-time 25 -X POST \
+            -H 'Content-Type: application/json' --data-binary @- \
+            "https://repasos.unikdi.com/taller/api/auth/login")"
+          echo "$RESPUESTA" | grep -q '"rol":"admin"' \
+            || { echo "::error::La cuenta del taller no entra como administradora." >&2; exit 1; }
+          echo "La cuenta del taller entra y es administradora."
+
+      - name: Contarlo en el resumen
+        run: |
+          {
+            echo "## El taller está publicado"
+            echo ""
+            echo "- Se abre en **https://repasos.unikdi.com/taller**"
+            echo "- Se entra con el usuario y la contraseña DE SIEMPRE de cada uno: las cuentas del equipo van copiadas de la app real (solo sus huellas cifradas; ninguna contraseña viaja)."
+            if [ "${SEMBRADO:-no}" = "si" ]; then
+              echo "- El banco de pruebas se ha sembrado de cero. Los partes de ejemplo se crean desde Ajustes."
+            else
+              echo "- El banco de pruebas se ha conservado con lo que hubiera dentro."
+            fi
+            echo "- Nada de esto toca la app de la raíz ni sus datos: carpeta aparte, banco aparte, caché aparte."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # El taller vive en el mismo dominio que la app de verdad, y una
+      # cookie con camino «/» es de todo el dominio: mientras compartían
+      # la de la sesión, entrar en el taller sacaba de la app de verdad
+      # (y al revés). Desde noviembre de 2026 el taller lleva la SUYA
+      # (api/lib/auth.php): «repasos_sesion_taller» con camino
+      # «/taller/», que ni siquiera viaja a la app de verdad. Lo decide
+      # una línea de PHP que mira desde qué carpeta se sirve; si un día
+      # se tuerce, el taller volvería a pisar la sesión del equipo sin
+      # dar ningún error. Aquí se entra en el taller recién publicado,
+      # se mira qué cookie pone y se comprueba que con ella una petición
+      # con sesión contesta. Del valor de la cookie no se escribe nada.
+      #
+      # Va el ÚLTIMO, detrás del resumen: a estas alturas el taller ya
+      # está publicado, y este paso es nuevo. Si un día diera una falsa
+      # alarma, que no deje sin escribir el resumen de siempre.
+      #
+      # Si un día hubiera que publicar en el taller un código anterior a
+      # noviembre de 2026, este paso se quita en ese mismo commit: ese
+      # código pone la cookie de la app de verdad, y aquí saldría rojo.
+      - name: Comprobar que el taller lleva su propia cookie de sesión
+        timeout-minutes: 3
+        uses: ./.github/actions/comprobar-sesion
+        with:
+          api: https://repasos.unikdi.com/taller/api/
+          nombre: repasos_sesion_taller
+          camino: /taller/
+          de-quien: el taller
+          email: ${{ secrets.REVISION_EMAIL }}
+          password: ${{ secrets.REVISION_PASSWORD }}

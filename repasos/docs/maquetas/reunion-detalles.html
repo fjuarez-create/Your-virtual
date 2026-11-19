@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maqueta · El bloque de fecha y los estados de las grabaciones</title>
+<link rel="stylesheet" href="../../css/app.css">
+<style>
+  body { background: #d9d6d0; margin: 0; padding: 24px; display: grid; gap: 40px; justify-content: center; }
+  .telefono {
+    width: 430px; box-sizing: border-box;
+    padding: 12px 12px 24px; background: var(--d-fondo);
+    border-radius: 24px; overflow: hidden;
+  }
+  .telefono > * + * { margin-top: 14px; }
+  .m-rotulo { font: 600 13px/1 var(--d-font); color: #6d6a64; margin: 0 0 8px 6px; letter-spacing: 0.04em; text-transform: uppercase; }
+
+  /* Piezas SOLO de maqueta */
+  /* F2: la fecha en dos líneas, la primera con peso. */
+  .m-fecha-linea1 { margin: 0 6px; font: 500 15px/1.4 var(--d-font); color: var(--d-tinta); }
+  .m-fecha-linea2 { margin: 2px 6px 0; font: 400 12.5px/1.5 var(--d-font); color: var(--d-gris); }
+  /* F3: la tarjeta de tres casillas. */
+  .m-datos { background: #fff; border-radius: var(--d-radio); display: flex; padding: 12px 4px; }
+  .m-dato { flex: 1; text-align: center; }
+  .m-dato + .m-dato { border-left: 1px solid #eceae6; }
+  .m-dato b { display: block; font: 600 10.5px/1 var(--d-font); letter-spacing: 0.06em; color: var(--d-gris); text-transform: uppercase; }
+  .m-dato span { display: block; margin-top: 6px; font: 500 15px/1.2 var(--d-font); color: var(--d-tinta); }
+  /* E: las bolas de estado. */
+  .m-bola-ok { width: 36px; height: 36px; flex: none; border-radius: 999px; background: var(--d-beige-tinta); color: #fff; display: grid; place-items: center; }
+  .m-bola-ok svg { width: 20px; height: 20px; }
+  .m-bola-cola { width: 36px; height: 36px; flex: none; border-radius: 999px; background: var(--d-gris-suave); display: grid; place-items: center; }
+  .m-bola-mal { width: 36px; height: 36px; flex: none; border-radius: 999px; background: var(--d-rojo-suave); color: #651d17; display: grid; place-items: center; font: 700 18px/1 var(--d-font); }
+  .m-chip-icono svg { width: 14px; height: 14px; }
+</style>
+</head>
+<body>
+  <div><p class="m-rotulo">F1 · La línea limpia: todo en una</p><div class="telefono pantalla-diseno" id="f1"></div></div>
+  <div><p class="m-rotulo">F2 · Dos líneas: la fecha con peso, las horas debajo</p><div class="telefono pantalla-diseno" id="f2"></div></div>
+  <div><p class="m-rotulo">F3 · Las tres casillas</p><div class="telefono pantalla-diseno" id="f3"></div></div>
+  <div><p class="m-rotulo">E1 · La bola de la izquierda cuenta el estado</p><div class="telefono pantalla-diseno" id="e1"></div></div>
+  <div><p class="m-rotulo">E2 · El micro se queda; el estado, en bola a la derecha</p><div class="telefono pantalla-diseno" id="e2"></div></div>
+  <div><p class="m-rotulo">E3 · El chip de siempre, con su dibujo dentro</p><div class="telefono pantalla-diseno" id="e3"></div></div>
+
+<script type="module">
+import { h, icon, avatar } from '../../js/ui.js';
+
+const F = { nombre: 'Francisco Juárez del Dago' };
+const A = { nombre: 'Alba García' };
+
+const cab = () => h('div.d-cab.dentro', null,
+  h('button.d-bola', null, icon('arrowLeft')),
+  h('div.d-titulo', null, 'Reunión de hoy'),
+  h('span.d-cab-hueco'),
+);
+
+const mesa = () => [
+  h('p.d-epigrafe', null, 'Asistentes'),
+  h('div.d-mesa', null,
+    avatar(F, { tam: 48 }),
+    avatar(A, { tam: 48 }),
+    h('span.d-invitado', null, 'Marisa (invitado)'),
+    h('button.d-mesa-mas', null, icon('plus')),
+  ),
+];
+
+/* ─── El bloque de fecha: tres trajes ─── */
+document.getElementById('f1').append(cab(),
+  h('p.d-nota-pie', { style: { margin: '0 6px' } }, 'Lunes 24 de agosto de 2026 · de 9:04 a 9:36 h'),
+  ...mesa());
+
+document.getElementById('f2').append(cab(),
+  h('div', null,
+    h('p.m-fecha-linea1', null, 'Lunes 24 de agosto de 2026'),
+    h('p.m-fecha-linea2', null, 'Empezada a las 9:04 h · terminada a las 9:36 h'),
+  ),
+  ...mesa());
+
+document.getElementById('f3').append(cab(),
+  h('div.m-datos', null,
+    h('div.m-dato', null, h('b', null, 'Fecha'), h('span', null, 'Lun 24 ago')),
+    h('div.m-dato', null, h('b', null, 'Empezada'), h('span', null, '9:04 h')),
+    h('div.m-dato', null, h('b', null, 'Terminada'), h('span', null, '9:36 h')),
+  ),
+  ...mesa());
+
+/* ─── Los estados de las grabaciones: tres trajes ─── */
+const fila = (izq, texto, sub, der) => h('div.d-encargo', null,
+  izq,
+  h('div.grow', null,
+    h('div.d-encargo-texto', null, texto),
+    h('div.d-encargo-sub', null, sub),
+  ),
+  der,
+);
+const micro = () => h('div.d-grab-fila-icono', null, icon('mic', 20));
+const bolaOk = () => h('span.m-bola-ok', null, icon('check'));
+const bolaCola = () => h('span.m-bola-cola', null, h('span.d-giro'));
+const bolaMal = () => h('span.m-bola-mal', null, '!');
+
+document.getElementById('e1').append(
+  h('p.d-epigrafe', null, 'La grabación'),
+  fila(bolaOk(), 'Grabación de las 9:08 h', '18 min', null),
+  fila(bolaCola(), 'Grabación de las 9:27 h', '12 min', null),
+  fila(bolaMal(), 'Grabación de las 9:40 h', '3 min · no hay clave de OpenAI puesta', h('button.d-chip.ambar', null, 'Reintentar')),
+);
+
+document.getElementById('e2').append(
+  h('p.d-epigrafe', null, 'La grabación'),
+  fila(micro(), 'Grabación de las 9:08 h', '18 min', bolaOk()),
+  fila(micro(), 'Grabación de las 9:27 h', '12 min', bolaCola()),
+  fila(micro(), 'Grabación de las 9:40 h', '3 min · no hay clave de OpenAI puesta', bolaMal()),
+);
+
+document.getElementById('e3').append(
+  h('p.d-epigrafe', null, 'La grabación'),
+  fila(micro(), 'Grabación de las 9:08 h', '18 min',
+    h('span.d-chip.verde.m-chip-icono', null, icon('check'), 'transcrita')),
+  fila(micro(), 'Grabación de las 9:27 h', '12 min',
+    h('span.d-chip.ambar.m-chip-icono', null, h('span.d-giro', { style: { width: '13px', height: '13px' } }), 'en cola')),
+  fila(micro(), 'Grabación de las 9:40 h', '3 min · no hay clave de OpenAI puesta',
+    h('span.d-chip.rojo', null, 'a medias')),
+);
+</script>
+</body>
+</html>

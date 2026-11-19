@@ -1,0 +1,50 @@
+name: Medir la bajada de repasos
+
+# No publica nada y no cambia nada. Entra en repasos.unikdi.com con la
+# cuenta de revisión —la misma con la que el despliegue comprueba que el
+# revisor de Apple puede entrar— y mide la bajada de cambios: cuántas
+# tandas hacen falta para bajarlo todo, cuántas filas hay de cada tipo y
+# con qué forma viene la marca de sincronización.
+#
+# Para qué: la bajada «por recepción» (api/index.php) se enciende sola
+# diez minutos después de publicarse, y desde fuera solo se nota en la
+# forma de la marca. Esto es lo que permite comprobarlo sin volver a
+# publicar (volver a publicar pondría la espera otra vez a cero) y sin
+# pedirle a nadie que mire nada a mano.
+#
+# En el registro quedan solo números. La contraseña va de los secretos
+# al servidor y no se escribe en ningún sitio.
+#
+# Cómo se lanza: a mano, o empujando un cambio en .github/medir-repasos.txt
+# (una línea con la fecha y el motivo basta).
+
+on:
+  push:
+    branches: [claude/uniq-repasos-app-2ja8y2]
+    paths:
+      - '.github/medir-repasos.txt'
+      - '.github/workflows/medir-repasos.yml'
+      - '.github/scripts/medir-bajada.py'
+  workflow_dispatch:
+
+# Grupo propio y sin cancelar a nadie: una medición no tiene que
+# llevarse por delante un despliegue, ni al revés.
+concurrency:
+  group: medir-repasos
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  medir:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Medir la bajada de cambios
+        env:
+          REVISION_EMAIL: ${{ secrets.REVISION_EMAIL }}
+          REVISION_PASSWORD: ${{ secrets.REVISION_PASSWORD }}
+        run: python3 .github/scripts/medir-bajada.py

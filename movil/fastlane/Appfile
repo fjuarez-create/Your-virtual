@@ -1,0 +1,11 @@
+# Los datos fijos de la app.
+#
+# El Team ID va aquí y no en los secretos porque NO es un secreto: viaja
+# dentro de cada app publicada en la App Store y aparece a la vista en
+# la web de Apple, al lado del nombre de la empresa. Guardarlo como
+# secreto solo añadía un paso más que dar de alta a mano.
+#
+# Lo que sí es secreto —la clave de App Store Connect— llega por los
+# secretos de GitHub y no está en ningún fichero del repositorio.
+app_identifier("com.unikdi.repasos")
+team_id("M8KKGDT273")
