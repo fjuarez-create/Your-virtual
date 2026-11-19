@@ -192,6 +192,31 @@ lo decidió Fran el 16-11-2026:
   bandera `posventa` (el chip «Postventa» de Usuarios), que no da nada
   más.
 
+## El calendario de Google (noviembre de 2026)
+
+Las firmas y las visitas salen en el Google Calendar del administrador
+por dos enlaces privados (`…/api/calendario/<clave>/firmas` y
+`…/visitas`), que Google vuelve a leer él solo varias veces al día. Lo
+pidió Fran el 19-11-2026: «es solo para mí».
+
+- **La clave no viaja nunca.** Vive en su tabla, `calendario_enlaces`
+  (esquema 25), que no es de las que bajan a los móviles. NUNCA en una
+  columna de `usuarios`: el directorio viaja entero a todos los móviles
+  (ver arriba) y la clave iría con él.
+- **Solo el administrador**, por su rol, comprobado en el servidor en
+  cada lectura: si deja de serlo, se le da de baja o se le desactiva, su
+  enlace da 404.
+- **Las reglas van duplicadas.** Qué sale en el calendario lo deciden
+  `hitosDe()` (`js/entregas.js`) y `visitasDelCalendario()`
+  (`js/posventa.js`) en la app, y su copia en PHP, en
+  `api/lib/calendario.php`. Quien cambie unas cambia las otras. Si se
+  activa otra promoción, hay que añadirla también en
+  `CALENDARIO_PROMOCIONES`.
+- **La API, solo por https.** `api/.htaccess` lleva su propia
+  redirección: la de la raíz no le llega (en Apache, una carpeta con su
+  propio RewriteEngine no hereda las reglas de arriba), y la clave del
+  calendario va en la dirección. La medición lo comprueba.
+
 ## Lo que no se hace nunca
 
 - **No se cambia la contraseña de Fran** (f.juarez@unikdi.com). Lo ha

@@ -388,6 +388,12 @@ export function tarjetaDeCita(situacion) {
  *           empezada y sin firmar no está hecha y no sale.
  *
  * No escribe nada ni decide colores: eso es de js/entregas.js.
+ *
+ * OJO, REGLAS DUPLICADAS: el calendario en Google del administrador
+ * (api/lib/calendario.php, calendario_posventa_de()) repite en PHP esta
+ * función, citaPendiente(), firmadoEl(), firmantesDe() y diaDeConforme().
+ * Si se cambia una aquí, hay que cambiarla allí (y al revés), y volver a
+ * pasar su prueba de paridad.
  */
 export function visitasDelCalendario(fichas) {
   const salida = new Map();

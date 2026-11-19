@@ -2181,6 +2181,47 @@ html.imprimiendo, html.imprimiendo body { overflow: hidden; }
 .d-item input[type='checkbox']:checked { background: var(--d-tinta); }
 .d-item input[type='checkbox']:checked::after { transform: translateX(18px); }
 
+/* «Tu calendario en Google» (solo el administrador): una frase, dos
+   filas —Firmas y Visitas— con sus dos botones, la ayuda en pequeño y
+   «Anular mis enlaces», discreto, al final. Los botones bajan de línea
+   solos cuando no caben (a 320 px, o con la letra grande). El punto de
+   cada fila lleva el color de la app: negro las firmas y mostaza las
+   visitas de repasos, que es lo que se le sugiere poner en Google. */
+.cal-google-frase { font-size: 14px; line-height: 1.4; color: var(--d-tinta); margin: 2px 0 6px; }
+.cal-google-fila { padding: 10px 0 12px; border-top: 1px solid var(--d-gris-suave); }
+.cal-google-fila:first-of-type { border-top: 0; }
+.cal-google-cab { display: flex; align-items: flex-start; gap: 12px; font-size: 16px; font-weight: 500; line-height: 1.3; }
+.cal-google-cab .grow { flex: 1; min-width: 0; }
+/* El punto, a la altura del rótulo (no en medio de las dos líneas). */
+.cal-google-punto { width: 12px; height: 12px; border-radius: 50%; flex: none; margin-top: .3em; background: var(--d-tinta); }
+.cal-google-punto.visitas { background: var(--d-visita); }
+.cal-google-botones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.cal-google-boton {
+  flex: 1 1 auto; min-height: 44px; padding: 8px 14px; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  background: var(--d-gris-suave); color: var(--d-tinta);
+  font-family: var(--d-font); font-size: 15px; font-weight: 500; line-height: 1.2;
+  text-decoration: none; text-align: center;
+}
+.cal-google-boton.principal { background: var(--d-tinta); color: #fff; }
+.cal-google-boton svg { width: 18px; height: 18px; flex: none; }
+.cal-google-boton:active { filter: brightness(0.93); }
+.cal-google-a-mano { margin-top: 10px; }
+.cal-google-a-mano[hidden] { display: none; }
+.cal-google-a-mano-dice { font-size: 13px; color: var(--d-rojo); margin: 0 0 6px; }
+.cal-google-enlace {
+  width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 12px;
+  border: 1px solid #d9d9d9; background: #fff; color: var(--d-tinta);
+  font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px;
+}
+.cal-google-ayuda { font-size: 13px; line-height: 1.4; color: var(--d-gris); margin: 4px 0 8px; }
+.cal-google-anular {
+  display: block; margin: 0 0 8px; padding: 8px 0; min-height: 40px;
+  background: none; border: 0; font-family: var(--d-font); font-size: 14px;
+  color: var(--d-gris); text-decoration: underline; text-underline-offset: 3px;
+}
+.cal-google-aviso { font-size: 14px; color: var(--d-gris); margin: 4px 0 10px; }
+
 /* ─── El login del rediseño: UNIK CHECK ─────────────────────────────
    Calcado del Figma (nodos 4106): la marca en dos imágenes a un
    cuarto de pantalla, los campos en pastilla blanca de 48 con radio

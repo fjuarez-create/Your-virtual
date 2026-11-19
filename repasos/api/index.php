@@ -26,6 +26,12 @@ require __DIR__ . '/lib/constancia.php';
 if (is_file(__DIR__ . '/lib/posventa.php')) {
     require_once __DIR__ . '/lib/posventa.php';
 }
+// El calendario en Google (esquema 25): los enlaces privados de las
+// firmas y las visitas. Con la misma red que posventa.php: toda llamada
+// a lo de lib/calendario.php va detrás de function_exists().
+if (is_file(__DIR__ . '/lib/calendario.php')) {
+    require_once __DIR__ . '/lib/calendario.php';
+}
 
 /**
  * Tipos admitidos y extensión con la que se guardan. Las funciones se
@@ -446,6 +452,27 @@ function despachar(string $metodo, array $p): void
             responder_error(503, 'Todavía no se pueden guardar conformes. Vuelve a intentarlo en un momento.', 'esquema');
         }
         subir_conforme();
+    }
+
+    // El calendario en Google (lib/calendario.php). Pedir y renovar los
+    // enlaces es del administrador, con su sesión. Leer un calendario
+    // (calendario/<clave>/firmas o …/visitas) va SIN sesión: lo pide
+    // Google desde sus máquinas, con la clave en la dirección.
+    if ($r0 === 'calendario') {
+        if (!function_exists('calendario_servir')) {
+            responder_error(503, 'Todavía no está el calendario. Vuelve a intentarlo en un momento.', 'esquema');
+        }
+        $r1 = $p[1] ?? '';
+        if ($r1 === 'enlaces' && $metodo === 'POST' && !isset($p[2])) {
+            calendario_mis_enlaces();
+        }
+        if ($r1 === 'enlaces' && ($p[2] ?? '') === 'renovar' && $metodo === 'POST' && !isset($p[3])) {
+            calendario_renovar_enlaces();
+        }
+        if (($metodo === 'GET' || $metodo === 'HEAD') && isset($p[2]) && !isset($p[3])) {
+            calendario_servir($r1, $p[2], $metodo);
+        }
+        calendario_no_hay();
     }
 
     responder_error(404, 'Ruta desconocida.');
@@ -1036,6 +1063,14 @@ function editar_usuario(string $id): void
 
     bd()->prepare('UPDATE usuarios SET ' . implode(', ', $campos) . ' WHERE id = ?')->execute($valores);
 
+    // Quien deja de ser administrador, o se desactiva, pierde el enlace
+    // de su calendario en Google (lib/calendario.php): es solo del
+    // administrador. Cada lectura lo vuelve a mirar igualmente.
+    if (function_exists('calendario_olvidar')
+        && ((isset($d['rol']) && $d['rol'] !== 'admin') || (isset($d['activo']) && !booleano($d, 'activo')))) {
+        calendario_olvidar($id);
+    }
+
     // Cambiarle la contraseña a alguien echa a ese alguien de sus sesiones.
     if (isset($d['password'])) {
         bd()->prepare('DELETE FROM sesiones WHERE usuario_id = ?')->execute([$id]);
@@ -1071,6 +1106,10 @@ function borrar_usuario(string $id): void
     // repasos no se pierde aunque la cuenta desaparezca.
     // Y las reuniones de obra en las que se sentó, su nombre de hoy.
     apuntar_nombre_antes_de_la_baja($id);
+    // Y el enlace de su calendario en Google, si tenía (lib/calendario.php).
+    if (function_exists('calendario_olvidar')) {
+        calendario_olvidar($id);
+    }
     bd()->prepare('DELETE FROM usuarios WHERE id = ?')->execute([$id]);
     responder(['ok' => true]);
 }

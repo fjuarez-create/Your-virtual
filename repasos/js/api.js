@@ -354,6 +354,16 @@ export const constanciaAjustar = (unidadId, datos, opciones) =>
 export const constanciaSellar = (unidadId, datos, opciones) =>
   pedirConstancia(unidadId, 'sellar', datos, opciones);
 
+/* ─── El calendario en Google ─────────────────────────────────────
+   Los dos enlaces privados del administrador (las firmas y las
+   visitas), para suscribirse a ellos desde Google Calendar. El servidor
+   los da relativos a la carpeta de la API: enlaceCompleto() les pone
+   delante la dirección de esta app (la de verdad o el taller). Pedirlos
+   los crea si aún no hay; renovarlos deja sin valor los de antes. */
+export const calendarioEnlaces = () => pedir('calendario/enlaces', { metodo: 'POST' });
+export const calendarioRenovar = () => pedir('calendario/enlaces/renovar', { metodo: 'POST' });
+export const enlaceCompleto = (relativo) => new URL(API_BASE + relativo, location.href).href;
+
 /* ─── Claude ──────────────────────────────────────────────────────
    La clave vive en el servidor y no vuelve nunca: de aquí solo sale
    si hay una puesta y sus cuatro últimos caracteres, para reconocerla. */

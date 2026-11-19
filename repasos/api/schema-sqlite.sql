@@ -384,3 +384,16 @@ CREATE TABLE IF NOT EXISTS miradas (
   creado    TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_miradas_tarea ON miradas (tarea_id);
+
+-- El enlace privado del calendario de cada administrador (esquema 25):
+-- las firmas y las visitas de la app, para su Google Calendar. Una fila
+-- por persona, con la clave que va dentro del enlace. NO viaja a los
+-- móviles: no es ninguna de las siete tablas que bajan, y la clave no
+-- va nunca en la tabla de personas (el directorio viaja entero a todos
+-- los móviles). Sin clave ajena a propósito: la baja borra la fila a
+-- mano (lib/calendario.php) y cada lectura vuelve a mirar a la persona.
+CREATE TABLE IF NOT EXISTS calendario_enlaces (
+  usuario_id TEXT NOT NULL PRIMARY KEY,
+  clave      TEXT NOT NULL UNIQUE,
+  creado     TEXT NOT NULL
+);

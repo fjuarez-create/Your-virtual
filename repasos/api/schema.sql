@@ -451,3 +451,21 @@ CREATE TABLE IF NOT EXISTS miradas (
   PRIMARY KEY (medio_id),
   KEY ix_miradas_tarea (tarea_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- El enlace privado del calendario de cada administrador (esquema 25):
+-- las firmas y las visitas de la app, para su Google Calendar. Una fila
+-- por persona, con la clave que va dentro del enlace (48 cifras
+-- hexadecimales, en minúscula). NO viaja a los móviles: no es ninguna
+-- de las siete tablas que bajan, y la clave no va nunca en la tabla de
+-- personas (el directorio viaja entero a todos los móviles). Sin clave
+-- ajena a propósito: una que no se dejara crear (otra colación en la
+-- tabla de personas del hosting) dejaría la migración reintentándose en
+-- cada petición. La baja borra la fila a mano (lib/calendario.php) y
+-- cada lectura vuelve a mirar a la persona.
+CREATE TABLE IF NOT EXISTS calendario_enlaces (
+  usuario_id CHAR(36) NOT NULL,
+  clave      CHAR(48) NOT NULL,
+  creado     CHAR(24) NOT NULL,
+  PRIMARY KEY (usuario_id),
+  UNIQUE KEY uq_calendario_clave (clave)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

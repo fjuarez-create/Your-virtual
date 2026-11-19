@@ -429,6 +429,14 @@ export const esVisitaDeRepasos = (hito) => hito?.tipo === 'visita' || hito?.tipo
  *
  * Una cita de visita de repasos con el día ya pasado y sin hacer lleva
  * `sinConfirmar`, como la firma.
+ *
+ * OJO, REGLAS DUPLICADAS: el calendario en Google del administrador
+ * (api/lib/calendario.php, calendario_hitos_de() y sus vecinas) repite
+ * en PHP estas reglas, y también las de revisionHecha(), visitaMarcada(),
+ * todasLasVisitas() y diaEntregada(). Si se cambia una aquí, hay que
+ * cambiarla allí (y al revés), y volver a pasar su prueba de paridad,
+ * que compara en el navegador lo que pinta el Día con los dos
+ * calendarios de Google.
  */
 export function hitosDe(entregas, { incidencias = new Map(), hoy = hoyIso(), posventa = new Map() } = {}) {
   const hitos = [];

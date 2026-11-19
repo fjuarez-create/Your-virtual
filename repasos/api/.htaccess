@@ -2,6 +2,15 @@
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /api/
+  # Solo por https, como la raíz. Su regla NO vale aquí: en Apache, una
+  # carpeta con su propio RewriteEngine deja de heredar las reglas de la
+  # de arriba. Sin esto la API se servía también por http, sin cifrar: y
+  # el calendario de Google lleva su clave en la dirección (Google lo
+  # vuelve a leer él solo, varias veces al día). Va con %{REQUEST_URI} y
+  # no con $1, que aquí llega sin «/api/» (y en el taller, sin «/taller/api/»).
+  RewriteCond %{HTTPS} !=on
+  RewriteCond %{HTTP:X-Forwarded-Proto} !https
+  RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
   RewriteRule ^install\.php$ - [L]
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteRule ^(.*)$ index.php [QSA,L]

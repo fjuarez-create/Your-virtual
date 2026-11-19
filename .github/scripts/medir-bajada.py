@@ -361,6 +361,54 @@ def mirar_reconocimiento():
         return "%s no se ha podido mirar (%s); la medición sigue igual." % (rotulo, type(e).__name__)
 
 
+class _SinSeguir(urllib.request.HTTPRedirectHandler):
+    """Un abridor que NO sigue las redirecciones: se quiere ver el 301."""
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def mirar_https_y_calendario():
+    """La API solo por https y el calendario de Google cerrado a quien no
+    tiene la clave (api/.htaccess y api/lib/calendario.php, noviembre de
+    2026). En la app de verdad y en el taller:
+
+    - por http, auth/me tiene que dar un 301 a la MISMA dirección por https;
+    - un calendario con una clave inventada (48 ceros, que nunca sale del
+      servidor) tiene que dar 404 y no dejar ninguna cookie.
+
+    Sin sesión y sin seguir redirecciones. Solo escribe códigos y síes o
+    noes: ninguna dirección con clave, porque no se usa ninguna de verdad.
+    No pone la medición en rojo: lo dice en una línea y sigue."""
+    lineas = []
+    suelto = urllib.request.build_opener(_SinSeguir())
+    for nombre, base in (("LA APP", BASE), ("EL TALLER", BASE_TALLER)):
+        try:
+            segura = base + "auth/me"
+            llana = "http://" + segura.split("://", 1)[1]
+            try:
+                with suelto.open(urllib.request.Request(llana), timeout=20) as r:
+                    codigo, destino = r.status, r.headers.get("Location", "")
+            except urllib.error.HTTPError as e:
+                codigo, destino = e.code, e.headers.get("Location", "")
+            a_la_misma = destino == segura
+            inventada = base + "calendario/" + "0" * 48 + "/firmas"
+            try:
+                with suelto.open(urllib.request.Request(inventada), timeout=20) as r:
+                    codigo_cal, galleta = r.status, bool(r.headers.get("Set-Cookie"))
+            except urllib.error.HTTPError as e:
+                codigo_cal, galleta = e.code, bool(e.headers.get("Set-Cookie"))
+            bien = codigo in (301, 308) and a_la_misma and codigo_cal == 404 and not galleta
+            lineas.append(
+                "%s, SOLO POR HTTPS Y EL CALENDARIO CERRADO: por http contesta %s%s; "
+                "un calendario con una clave inventada contesta %s, %s.%s"
+                % (nombre, codigo, " a la misma dirección por https" if a_la_misma else " (no lleva a la misma dirección por https)",
+                   codigo_cal, "deja una cookie" if galleta else "sin cookie",
+                   " Bien." if bien else " OJO: algo no es lo esperado."))
+        except Exception as e:  # sin red, tarda, corte…: se dice y se sigue
+            lineas.append("%s, SOLO POR HTTPS: no se ha podido mirar (%s)." % (nombre, type(e).__name__))
+    return lineas
+
+
 def main():
     correo = os.environ.get("REVISION_EMAIL", "").strip()
     clave = os.environ.get("REVISION_PASSWORD", "")
@@ -514,6 +562,10 @@ def main():
     # 5 · Las fotos, por su dirección directa y sin sesión. Solo dice lo
     #     que contesta el servidor, y tampoco pone la medición en rojo.
     lineas.append(mirar_ficheros(todo.get("muestra")))
+
+    # 6 · La API solo por https y el calendario de Google cerrado a quien
+    #     no tiene la clave, en la app y en el taller.
+    lineas.extend(mirar_https_y_calendario())
 
     pedir("auth/logout", {})
 

@@ -70,8 +70,12 @@ declare(strict_types=1);
     el 17-11-2026: la tienen todas las villas). Solo cuatro
     columnas en la ficha de entrega, como las de la domótica: el día de
     la cita con el instalador (`fotovoltaica`), su sello y su autor. No
-    arregla ninguna fila: nacen vacías. */
-const ESQUEMA_VERSION = 24;
+    arregla ninguna fila: nacen vacías.
+    La 25 trae el calendario en Google (pedido el 19-11-2026): la tabla
+    `calendario_enlaces`, con la clave del enlace privado de cada
+    administrador (lib/calendario.php). Solo una tabla nueva, que no
+    viaja a los móviles: no toca ninguna fila de las que ya había. */
+const ESQUEMA_VERSION = 25;
 
 /**
  * Tablas que tienen que existir para dar la versión por puesta. Si
@@ -81,7 +85,7 @@ const ESQUEMA_VERSION = 24;
  * sellar la versión dejaría la base coja para siempre (pasó con la 13).
  * Sin sellar, la siguiente petición lo vuelve a intentar.
  */
-const ESQUEMA_TABLAS = ['entregas', 'suscripciones_push', 'constancias', 'miradas'];
+const ESQUEMA_TABLAS = ['entregas', 'suscripciones_push', 'constancias', 'miradas', 'calendario_enlaces'];
 
 /**
  * Campos que tienen que existir, por tabla, con el tipo que usa MySQL.

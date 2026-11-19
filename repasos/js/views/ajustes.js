@@ -1,6 +1,6 @@
 /* Ajustes: cuenta, sincronización, administración de usuarios y datos
    guardados en el dispositivo. */
-import { h, icon, sheet, toast, confirmSheet, avatar, pesoLegible } from '../ui.js';
+import { h, icon, sheet, toast, confirmSheet, confirmar, avatar, pesoLegible } from '../ui.js';
 import * as store from '../store.js';
 import * as api from '../api.js';
 import * as db from '../db.js';
@@ -30,6 +30,12 @@ export async function render() {
   // Si el servidor es viejo y todavía no conoce la ruta, la fila se
   // enseña igual como «sin poner»: es lo que hay, y al pulsarla dirá
   // qué falta en vez de desaparecer sin explicación.
+  // Los dos enlaces del calendario en Google, solo del administrador.
+  // Pedirlos los crea la primera vez; sin conexión no hay enlaces. Se
+  // piden ya, a la vez que lo demás, y se esperan más abajo: así no le
+  // suman una vuelta de red más a la pantalla.
+  const pidiendoCalendario = admin && api.HAY_SERVIDOR && !u.local ? enlacesDelCalendario() : null;
+
   let claude = null;
   let oido = null;
   let voces = null;
@@ -40,6 +46,8 @@ export async function render() {
     try { voces = await api.vocesEstado(); } catch { voces = { puesta: false, final: '' }; }
     try { obra = (await api.ajustesObra()).ajustes; } catch { obra = null; }
   }
+
+  const calendario = pidiendoCalendario ? await pidiendoCalendario : null;
 
   // La voz propia, para la fila del entrenador: si ya está aprendida,
   // se dice ahí mismo sin tener que entrar a mirar.
@@ -203,6 +211,10 @@ export async function render() {
         }) : null,
       ) : null,
 
+      // Las firmas y las visitas de la app, en el Google Calendar del
+      // administrador (es solo suyo: el servidor dice que no a los demás).
+      calendario ? seccionCalendario(calendario) : null,
+
       h('div.d-grupo', null,
         h('p.d-grupo-titulo', null, 'Datos y sincronización'),
         barraSync(),
@@ -283,6 +295,132 @@ export async function render() {
       chivatoDeLetra(),
     ],
   };
+}
+
+/* ─── Tu calendario en Google ───────────────────────────────────
+   Las firmas y las visitas de la app, en el Google Calendar de quien
+   administra (lo pidió la casa el 19-11-2026; «es solo para mí»). No se
+   manda nada a Google: Google se suscribe a un enlace privado y lo
+   vuelve a leer él solo varias veces al día (api/lib/calendario.php).
+   Son DOS enlaces, «Firmas» y «Visitas», para que en Google cada uno
+   lleve su color.
+
+   Cada enlace lleva dentro una clave que abre ese calendario sin entrar
+   en la app: por eso aquí se dice «tu enlace» y no se enseña en ningún
+   otro sitio, y por eso se puede anular (los de ahora dejan de valer y
+   el servidor da otros). */
+
+/** Los enlaces, ya completos con la dirección de esta app; o por qué no hay. */
+async function enlacesDelCalendario() {
+  if (navigator.onLine === false) return { estado: 'sin-conexion' };
+  try {
+    const r = await api.calendarioEnlaces();
+    return { estado: 'listo', firmas: api.enlaceCompleto(r.firmas), visitas: api.enlaceCompleto(r.visitas) };
+  } catch (e) {
+    return { estado: e?.codigo === 'red' ? 'sin-conexion' : 'fallo' };
+  }
+}
+
+/** La dirección que abre Google Calendar con el enlace ya puesto para suscribirse. */
+export function enlaceDeGoogle(enlace) {
+  const u = new URL(enlace);
+  return 'https://calendar.google.com/calendar/render?cid=' + encodeURIComponent(`webcal://${u.host}${u.pathname}`);
+}
+
+const CALENDARIOS = [
+  { id: 'firmas', rotulo: 'Firmas', sub: 'Las firmas en la notaría y las entregas' },
+  { id: 'visitas', rotulo: 'Visitas', sub: 'Las revisiones con el cliente y las visitas de repasos' },
+];
+
+function seccionCalendario(cal) {
+  const fila = ({ id, rotulo, sub }) => {
+    const enlace = cal[id];
+    // Si el portapapeles no deja copiar (un navegador sin permiso, una
+    // página sin https), el enlace queda a la vista para copiarlo a mano.
+    const campo = h('input.cal-google-enlace', {
+      type: 'text', readonly: true, value: enlace, 'aria-label': `Tu enlace de ${rotulo}`,
+      onfocus: (e) => e.currentTarget.select(),
+    });
+    const aMano = h('div.cal-google-a-mano', { hidden: true },
+      h('p.cal-google-a-mano-dice', null, 'No se ha podido copiar. El enlace ya está seleccionado: cópialo a mano (en el móvil, mantén el dedo encima).'),
+      campo,
+    );
+    const copiar = async () => {
+      try {
+        await navigator.clipboard.writeText(enlace);
+        toast('Enlace copiado', '', { icono: 'copy', detalle: `${rotulo}: pégalo en Google Calendar` });
+      } catch {
+        aMano.hidden = false;
+        campo.focus();
+        campo.select();
+      }
+    };
+    return h('div.cal-google-fila', { 'data-calendario': id },
+      h('div.cal-google-cab', null,
+        h('span.cal-google-punto', { class: id, 'aria-hidden': 'true' }),
+        h('span.grow', null, rotulo, h('span.d-item-sub', null, sub)),
+      ),
+      h('div.cal-google-botones', null,
+        h('a.cal-google-boton.principal', {
+          href: enlaceDeGoogle(enlace), target: '_blank', rel: 'noopener',
+          'aria-label': `Añadir ${rotulo} a Google Calendar`,
+          // Dentro de la app de iPhone (el envoltorio), lo de fuera se
+          // abre con su navegador, como hace abrirPagina(); en un
+          // navegador de verdad, el enlace va solo a otra pestaña.
+          onclick: (e) => {
+            if (window.Capacitor?.Plugins?.Browser?.open) {
+              e.preventDefault();
+              abrirPagina(e.currentTarget.href);
+            }
+          },
+        }, icon('calendario'), h('span', null, 'Añadir a Google Calendar')),
+        h('button.cal-google-boton', {
+          type: 'button', 'aria-label': `Copiar el enlace de ${rotulo}`, onclick: copiar,
+        }, icon('copy'), h('span', null, 'Copiar el enlace')),
+      ),
+      aMano,
+    );
+  };
+
+  let anulando = false;
+  const anular = async () => {
+    if (anulando) return;
+    const seguro = await confirmar({
+      titulo: '¿Anular tus enlaces?',
+      texto: 'Los enlaces de ahora dejarán de funcionar y te daré otros. En Google, quita los dos calendarios de antes y añade los nuevos.',
+      ok: 'Anular mis enlaces', icono: 'refresh', rojo: true,
+      conservar: 'Dejarlos como están', iconoConservar: 'check',
+    });
+    if (!seguro) return;
+    if (navigator.onLine === false) { toast('Para anular tus enlaces hace falta conexión.', 'err'); return; }
+    anulando = true;
+    try {
+      await api.calendarioRenovar();
+      toast('Enlaces anulados', '', { detalle: 'En Google, quita los dos de antes y añade estos' });
+      refrescar();
+    } catch (e) {
+      toast(e?.codigo === 'red' ? 'Para anular tus enlaces hace falta conexión.' : (e?.message || 'No se han podido anular'), 'err');
+    } finally {
+      anulando = false;
+    }
+  };
+
+  return h('div.d-grupo.cal-google', { 'data-estado': cal.estado },
+    h('p.d-grupo-titulo', null, 'Tu calendario en Google'),
+    h('p.cal-google-frase', null,
+      'Las firmas y las visitas de la app, en tu Google Calendar. Se ponen solas; Google las vuelve a leer '
+      + 'varias veces al día, así que un cambio puede tardar unas horas en verse allí.'),
+    cal.estado === 'listo' ? [
+      ...CALENDARIOS.map(fila),
+      h('p.cal-google-ayuda', null,
+        'Hazlo desde el ordenador: en el móvil, Google no deja añadir calendarios por enlace. '
+        + 'También vale en calendar.google.com: Otros calendarios → + → Desde URL, y pega el enlace. '
+        + 'En el móvil, después, activa ese calendario en los ajustes de la app de Google Calendar.'),
+      h('button.cal-google-anular', { type: 'button', onclick: anular }, 'Anular mis enlaces'),
+    ] : h('p.cal-google-aviso', null, cal.estado === 'sin-conexion'
+      ? 'Para ver tus enlaces hace falta conexión.'
+      : 'Ahora no se pueden pedir tus enlaces. Vuelve a probar en un rato.'),
+  );
 }
 
 /**
