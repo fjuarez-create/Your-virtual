@@ -28,6 +28,7 @@ jobs:
       - name: Mirar el candado de la web (el certificado)
         continue-on-error: true
         run: |
+          set +e
           for H in repasos.unikdi.com unikdi.com www.unikdi.com; do
             echo "══ $H"
             n=$(getent ahosts "$H" | awk '{print $1}' | sort -u | wc -l)
