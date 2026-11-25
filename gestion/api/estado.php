@@ -32,14 +32,18 @@
    No hay clave: el estado comercial es justo lo que el visor público ya
    enseña. Lo que sí está protegido es escribirlo, que es cosa del panel. */
 
+/* Antes del require: un aviso de PHP al compilar lib.php también saldría antes
+   de las cabeceras. lib.php lo repite para el resto de páginas. */
+if (function_exists('ini_set')) { ini_set('display_errors', '0'); ini_set('log_errors', '1'); }
+
 require dirname(__DIR__) . '/lib.php';
 
 $doc = leer_estado();
 $sello = (string) dato($doc, 'sello', '');
 
 registrar_equipo(
-  (string) dato($_GET, 'equipo', ''),
-  (string) dato($_GET, 'version', ''),
+  texto($_GET, 'equipo'),
+  texto($_GET, 'version'),
   $sello
 );
 
