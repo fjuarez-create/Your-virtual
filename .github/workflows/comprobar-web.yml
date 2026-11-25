@@ -19,6 +19,35 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      # El candado de la web (el certificado). Va primero y nunca se pone
+      # en rojo: su trabajo es contar qué certificado da el servidor, de
+      # quién es, hasta cuándo vale y si un navegador lo aceptaría. Lo
+      # que sale es público (cualquiera lo ve al abrir la web); la
+      # dirección IP NO se escribe, porque puede ser la misma máquina
+      # que el FTP.
+      - name: Mirar el candado de la web (el certificado)
+        continue-on-error: true
+        run: |
+          for H in repasos.unikdi.com unikdi.com www.unikdi.com; do
+            echo "══ $H"
+            n=$(getent ahosts "$H" | awk '{print $1}' | sort -u | wc -l)
+            echo "   direcciones que da el DNS: $n"
+            echo | timeout 20 openssl s_client -connect "$H:443" -servername "$H" -verify_return_error 2>/tmp/err >/tmp/out
+            echo "   salida de openssl: $?"
+            grep -m1 "Verify return code" /tmp/out | sed 's/^/   /' || true
+            grep -m2 -i "verify error\|errno\|connect:" /tmp/err | sed 's/^/   /' || true
+            echo | timeout 20 openssl s_client -connect "$H:443" -servername "$H" 2>/dev/null \
+              | openssl x509 -noout -subject -issuer -startdate -enddate -ext subjectAltName 2>/dev/null \
+              | sed 's/^/   /' || echo "   (no llegó ningún certificado)"
+            echo -n "   cadena que manda el servidor (certificados): "
+            echo | timeout 20 openssl s_client -connect "$H:443" -servername "$H" -showcerts 2>/dev/null | grep -c "BEGIN CERTIFICATE" || true
+            curl -s -o /dev/null --max-time 20 -w "   curl con verificación: estado %{http_code}\n" "https://$H/" || echo "   curl con verificación: falla con el código $?"
+            curl -sk -o /dev/null --max-time 20 -w "   curl SIN verificar: estado %{http_code}\n" "https://$H/" || echo "   curl SIN verificar: falla con el código $?"
+          done
+          echo "══ la puerta por donde se renueva el certificado (http, sin candado)"
+          curl -s -o /tmp/acme --max-time 20 -w "   estado %{http_code} · tipo %{content_type} · redirige a %{redirect_url}\n" \
+            "http://repasos.unikdi.com/.well-known/acme-challenge/prueba-de-ruta" || echo "   falla con el código $?"
+          head -c 120 /tmp/acme | tr -c '[:print:]\n' '.' | sed 's/^/   primeros bytes: /'; echo
       - name: Pedir los ficheros clave y contar qué llega
         run: |
           BASE="https://repasos.unikdi.com"
