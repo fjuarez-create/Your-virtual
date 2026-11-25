@@ -11,6 +11,10 @@
    IMPORTANTE: entra a crearla en cuanto se publique, porque hasta entonces
    cualquiera que dé con la URL podría crearla él. */
 
+/* Antes del require: un aviso de PHP al compilar lib.php saldría antes de la
+   cookie de sesión, y sin ella no se puede entrar. */
+if (function_exists('ini_set')) { ini_set('display_errors', '0'); ini_set('log_errors', '1'); }
+
 require __DIR__ . '/lib.php';
 
 $https = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== '' && $_SERVER['HTTPS'] !== 'off')
@@ -19,9 +23,13 @@ $https = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== '' && $_SERVER['HTTP
 /* La forma con array —la única que admite SameSite— es de PHP 7.3 en adelante.
    En una versión anterior hay que pasar los parámetros sueltos, y SameSite se
    queda fuera; la cookie sigue siendo httponly y secure, que es lo que de
-   verdad la protege. */
+   verdad la protege. Las dos ramas fijan lo mismo (lifetime, path, domain):
+   si no, en 8.x se tomarían del php.ini que traiga esa versión. */
 if (PHP_VERSION_ID >= 70300) {
   session_set_cookie_params(array(
+    'lifetime' => 0,
+    'path'     => '/',
+    'domain'   => '',
     'httponly' => true,
     'samesite' => 'Lax',
     'secure'   => $https,
@@ -40,7 +48,7 @@ function testigo() {
 }
 function testigo_valido() {
   return isset($_POST['testigo'], $_SESSION['testigo'])
-    && hash_equals((string) $_SESSION['testigo'], (string) $_POST['testigo']);
+    && hash_equals((string) $_SESSION['testigo'], texto($_POST, 'testigo'));
 }
 
 function hay_clave() { return is_file(ruta_clave()); }
@@ -76,13 +84,13 @@ $error = null;
 
 /* ── Acciones ─────────────────────────────────────────────────────────────── */
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-  $accion = (string) dato($_POST, 'accion', '');
+  $accion = texto($_POST, 'accion');
 
   if (!testigo_valido()) {
     $error = 'La sesión ha caducado. Vuelve a intentarlo.';
   } elseif ($accion === 'crear' && !hay_clave()) {
-    $c1 = (string) dato($_POST, 'clave', '');
-    $c2 = (string) dato($_POST, 'clave2', '');
+    $c1 = texto($_POST, 'clave');
+    $c2 = texto($_POST, 'clave2');
     if (strlen($c1) < 8)        $error = 'La contraseña necesita al menos 8 caracteres.';
     elseif ($c1 !== $c2)        $error = 'Las dos contraseñas no coinciden.';
     elseif (!guardar_clave($c1)) $error = 'No se ha podido guardar. Comprueba los permisos de escritura de gestion/datos.';
@@ -91,13 +99,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   } elseif ($accion === 'entrar' && hay_clave()) {
     if (bloqueado_hasta() > time()) {
       $error = 'Demasiados intentos. Prueba de nuevo en ' . ceil((bloqueado_hasta() - time()) / 60) . ' minutos.';
-    } elseif (password_verify((string) dato($_POST, 'clave', ''), hash_guardado())) {
+    } elseif (password_verify(texto($_POST, 'clave'), hash_guardado())) {
       session_regenerate_id(true);
       limpiar_fallos();
       $_SESSION['dentro'] = true;
       $dentro = true;
     } else {
-      usleep(400000);
+      if (function_exists('usleep')) usleep(400000);   /* en PHP 8, desactivada sería un error fatal */
       anotar_fallo();
       $error = 'Contraseña incorrecta.';
     }

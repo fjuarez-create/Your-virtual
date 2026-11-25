@@ -23,7 +23,23 @@
 
    Nada de `declare(strict_types=1)`, ni tipos en parámetros o retornos, ni el
    operador `??`, ni funciones flecha. La comodidad de escribirlo no compensa
-   el rato de encontrarlo. */
+   el rato de encontrarlo.
+
+   Y tiene que funcionar IGUAL en el PHP 7.0 de hoy y en el 8.2–8.4 que se
+   elija en Plesk, para poder cambiar de versión y volver atrás sin tocar el
+   código (docs/PANEL_Y_EJECUTABLE.md, «Versión de PHP del hosting»). */
+
+/* Ningún aviso de PHP puede salir en la respuesta: en el endpoint iría antes
+   de las cabeceras, y el visor y el ejecutable recibirían HTML en vez de JSON;
+   en el panel, antes de la cookie de sesión. Van al log del dominio. Con
+   function_exists porque en PHP 8 una función de disable_functions no da un
+   aviso: es un error fatal. */
+if (function_exists('ini_set')) { ini_set('display_errors', '0'); ini_set('log_errors', '1'); }
+
+/* La hora que se guarda y se enseña no puede depender del php.ini que Plesk
+   ponga a cada versión de PHP (sin date.timezone, PHP usa UTC). Es la de
+   Canarias, donde están la promoción y la oficina de ventas. */
+if (function_exists('date_default_timezone_set')) date_default_timezone_set('Atlantic/Canary');
 
 define('ESTADO_POR_DEFECTO', 'disponible');
 
@@ -42,6 +58,15 @@ function ruta_unidades()  { return dirname(__DIR__) . '/data/units.json'; }
 /* Valor de un array con valor por defecto. Sustituye a `??`, que es de PHP 7. */
 function dato($arr, $clave, $porDefecto = null) {
   return (is_array($arr) && isset($arr[$clave])) ? $arr[$clave] : $porDefecto;
+}
+
+/* Un parámetro de la petición como texto. Si llega como array (?equipo[]=x)
+   cuenta como ausente: un (string) sobre un array da un aviso, que en PHP 8
+   pasó de Notice a Warning, y una función de cadena que lo reciba lanza un
+   error. Para $_GET y $_POST, siempre esto y no (string) dato(...). */
+function texto($arr, $clave, $porDefecto = '') {
+  $v = dato($arr, $clave, $porDefecto);
+  return is_scalar($v) ? (string) $v : (string) $porDefecto;
 }
 
 /* hash_equals llegó en PHP 5.6. Si faltara, una comparación en tiempo
@@ -114,7 +139,9 @@ function escribir_json($ruta, $datos) {
   if (defined('JSON_UNESCAPED_SLASHES')) $opciones |= JSON_UNESCAPED_SLASHES;
   $txt = json_encode($datos, $opciones);
   if ($txt === false) return false;
-  $tmp = $ruta . '.' . getmypid() . '.tmp';
+  /* getmypid() solo si existe: hay hostings que la desactivan, y en PHP 8 eso
+     tumbaría toda escritura (guardar, sembrar, anotar el equipo). */
+  $tmp = $ruta . '.' . (function_exists('getmypid') ? getmypid() : 0) . '-' . mt_rand() . '.tmp';
   if (@file_put_contents($tmp, $txt . "\n", LOCK_EX) === false) return false;
   if (!@rename($tmp, $ruta)) { @unlink($tmp); return false; }
   return true;
@@ -129,7 +156,10 @@ function normalizar_estado($valor) {
    ejecutable pueda preguntar "¿ha cambiado?" sin descargar nada, y para que el
    panel enseñe de un vistazo si la oficina tiene la versión buena. */
 function sellar($viviendas) {
-  ksort($viviendas);
+  /* SORT_STRING y no el orden por defecto: con claves mixtas (101 y A03) el
+     orden por defecto cambió en PHP 8.2, y con él cambiaría el sello. Con
+     las claves de hoy, todas de tres cifras, da exactamente lo mismo. */
+  ksort($viviendas, SORT_STRING);
   return substr(hash('sha256', (string) json_encode($viviendas)), 0, 12);
 }
 

@@ -149,3 +149,82 @@ vivienda corresponde.
 Como refuerzo se puede añadir, en Plesk, protección por contraseña del
 directorio `/gestion` (Sitios web y dominios → Directorios protegidos). No
 sustituye a la contraseña del panel, se suma a ella.
+
+## Versión de PHP del hosting
+
+Loading avisó en noviembre de 2026 de que el PHP 7.0.33 del dominio ya no
+recibe parches. El panel (`gestion/`, lo único con PHP de la web) funciona
+**igual en 7.0.33 y en 8.2, 8.3 y 8.4**, así que la versión se puede cambiar en
+Plesk y volver atrás sin tocar el código. Lo que lo hace independiente de la
+versión:
+
+- Sigue escrito en el subconjunto de PHP 5.6.
+- No depende del php.ini de cada versión: `lib.php` fija la zona horaria
+  (`Atlantic/Canary`, la hora de la oficina de ventas) y apaga `display_errors`. Las páginas que no cargan
+  `lib.php`, o que lo cargan después, también lo apagan antes. Un aviso de PHP
+  impreso en el endpoint saldría antes de las cabeceras, y el visor y el
+  ejecutable recibirían HTML en vez de JSON.
+- `getmypid()`, `usleep()` e `ini_set()` solo se llaman si existen. En PHP 8,
+  una función que esté en `disable_functions` es un error fatal, no un aviso.
+- Los parámetros de la petición se leen con `texto()`: con un `?equipo[]=x` no
+  sale ningún aviso.
+- El sello se ordena con `SORT_STRING`, que da lo mismo en todas las versiones.
+- La cookie de sesión fija lifetime, path y domain en las dos ramas.
+
+El guardián del deploy (`.github/scripts/comprobar-php56.sh`) vigila tanto la
+sintaxis 5.6 como lo que falla o cambia de resultado en PHP 8.
+
+**Cómo se comprobó (25-nov-2026).**
+
+- **PHP 8.3.6, ejecutando el panel entero.** Se usó `php -S` en 7
+  configuraciones:
+  - `display_errors` activado y desactivado;
+  - `output_buffering` a 0 y a 4096;
+  - sin `date.timezone` y con UTC;
+  - sin opcache;
+  - con `getmypid`, `usleep`, `ini_set`, `date_default_timezone_set` y
+    `random_bytes` desactivadas.
+
+  En cada una se hicieron unas 150 comprobaciones. No salió ningún error, aviso
+  ni deprecación, ni en el log ni en la salida. El endpoint es idéntico byte a
+  byte al del código anterior (salvo `actualizado`), con el mismo sello.
+- **7.0, 8.2 y 8.4.** No se pudieron ejecutar en el entorno de desarrollo. Se
+  revisaron con PHPCompatibility (7.0–8.4, sin hallazgos) y con el changelog
+  de PHP.
+
+**El día del cambio:**
+
+1. Comprobar que el código de este apartado ya está desplegado. En 7.0 se
+   comporta igual que el anterior.
+2. En Plesk (Sitios web y dominios → showroom.unikdi.com → Configuración de
+   PHP), apuntar la versión y el manejador actuales, porque son la vuelta atrás.
+3. Elegir **8.3 u 8.4 con «FPM application served by Apache»** (o FastCGI
+   servido por Apache). No elegir «served by nginx»: con él los `.htaccess` no
+   se aplican y `gestion/datos/` queda legible por URL.
+4. En la misma pantalla, dejar `display_errors` desactivado.
+5. Lanzar el workflow **Diagnóstico del panel** (`diagnostico-panel.yml`, acción
+   `mirar`). Si no aparece «Run workflow», basta con subir un cambio de
+   `.github/scripts/ftp-diagnostico.sh` a la rama de trabajo. Tiene que dar:
+   - En **Veredicto**: `TODO CORRECTO` y `endpoint: "total": 166`.
+   - En **Leer la comprobación entera**:
+     - «Todo correcto»;
+     - «Versión de PHP» con la versión nueva y el manejador (`fpm-fcgi`,
+       `cgi-fcgi` o `apache2handler`);
+     - «Servidor web» Apache;
+     - «Funciones de PHP» sin ninguna en «faltan».
+
+     Si falta alguna imprescindible, hay que quitarla de `disable_functions` en
+     Plesk.
+   - En el log de errores del final: ninguna línea nueva `PHP Fatal`,
+     `PHP Warning` ni `PHP Deprecated`.
+6. Entrar al panel y guardar un cambio, por ejemplo marcar y desmarcar una
+   vivienda. El comercial tendrá que volver a entrar, porque las sesiones de la
+   versión anterior no pasan a la nueva.
+7. Al día siguiente, comprobar en «Oficina de ventas» que el ejecutable sigue
+   anotándose.
+
+**Volver atrás:** en la misma pantalla de Plesk, elegir otra vez 7.0.33 con el
+manejador apuntado y repetir el workflow. No hay nada que deshacer en el código
+ni en `gestion/datos/`: `estado.json`, `equipos.json` y `clave.php` valen en
+las dos direcciones. Una contraseña creada en 8.4 (bcrypt de coste 12) también
+se verifica en 7.0.

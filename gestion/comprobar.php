@@ -9,6 +9,12 @@
    No enseña ninguna contraseña ni ningún hash: solo si los ficheros están y si
    se puede escribir. */
 
+/* Lo primero, cómo viene display_errors del php.ini (se enseña abajo), y
+   apagarlo: ningún aviso de PHP dentro de la página. Como en lib.php, con
+   function_exists, porque en PHP 8 una función desactivada es un error fatal. */
+$verErrores = function_exists('ini_get') ? strtolower(trim((string) ini_get('display_errors'))) : '';
+if (function_exists('ini_set')) { ini_set('display_errors', '0'); ini_set('log_errors', '1'); }
+
 header('Content-Type: text/html; charset=utf-8');
 
 $dirDatos  = __DIR__ . '/datos';
@@ -25,8 +31,40 @@ $versionOk = PHP_VERSION_ID >= 50600;
 $hayJson   = function_exists('json_encode');
 $hayHash   = function_exists('password_hash');
 
+/* Lo que puede cambiar al elegir otra versión de PHP en Plesk: el manejador,
+   las funciones desactivadas, display_errors y la zona horaria del php.ini. */
+$servidor  = isset($_SERVER['SERVER_SOFTWARE']) ? (string) $_SERVER['SERVER_SOFTWARE'] : '';
+$soloNginx = stripos($servidor, 'nginx') !== false;
+/* Las que el panel llama sin red: si falta una, en PHP 8 la página da un 500. */
+$imprescindibles = array('json_encode', 'json_decode', 'password_hash', 'password_verify', 'hash',
+  'session_start', 'session_regenerate_id', 'session_destroy', 'preg_replace', 'file_get_contents',
+  'file_put_contents', 'rename', 'unlink', 'mkdir', 'is_writable', 'http_response_code',
+  'header', 'strtotime', 'date', 'bin2hex', 'var_export', 'mt_rand', 'htmlspecialchars');
+/* Las que el panel solo usa si existen: sin ellas sigue funcionando. */
+$opcionales = array('ini_set', 'getmypid', 'usleep', 'date_default_timezone_set', 'random_bytes');
+$faltan = array();
+foreach ($imprescindibles as $fn) { if (!function_exists($fn)) { $faltan[] = $fn; } }
+$faltanOpc = array();
+foreach ($opcionales as $fn) { if (!function_exists($fn)) { $faltanOpc[] = $fn; } }
+$errVisibles = $verErrores !== '' && $verErrores !== '0' && $verErrores !== 'off' && $verErrores !== 'stderr';
+$zonaIni = function_exists('ini_get') ? trim((string) ini_get('date.timezone')) : '';
+
+$textoFunciones = $faltan ? 'faltan: ' . implode(', ', $faltan) : 'todas disponibles';
+if ($faltanOpc) {
+  $textoFunciones = ($faltan ? $textoFunciones : 'las imprescindibles, todas')
+    . ' · desactivadas, el panel sigue sin ellas: ' . implode(', ', $faltanOpc);
+}
+/* Con display_errors activado y sin ini_set no hay forma de apagarlo desde aquí. */
+$puedeApagar = function_exists('ini_set');
+$textoErrores = 'desactivados';
+if ($errVisibles) { $textoErrores = $puedeApagar ? 'activados en el php.ini; el panel los apaga por su cuenta' : 'ACTIVADOS, y sin ini_set el panel no puede apagarlos'; }
+
 $filas = array(
-  array('Versión de PHP', PHP_VERSION, $versionOk, 'El panel está escrito para PHP 5.6 en adelante. En Plesk: PHP Settings del dominio.'),
+  array('Versión de PHP', PHP_VERSION . ' · ' . PHP_SAPI, $versionOk, 'El panel está escrito para PHP 5.6 en adelante y vale igual con 7.0 que con 8.2–8.4. En Plesk: PHP Settings del dominio.'),
+  array('Servidor web', $servidor !== '' ? $servidor : 'desconocido', !$soloNginx, $soloNginx ? 'Con PHP servido por nginx los .htaccess no se aplican y gestion/datos/ se puede leer por URL. En Plesk: PHP Settings → «FPM application served by Apache».' : ''),
+  array('Funciones de PHP', $textoFunciones, !$faltan, $faltan ? 'Están en disable_functions del php.ini de esta versión. En PHP 8 llamar a una de ellas tumba la página: hay que quitarlas de la lista en Plesk.' : ''),
+  array('Avisos de PHP en la página (display_errors)', $textoErrores, !$errVisibles || $puedeApagar, ($errVisibles && !$puedeApagar) ? 'Un aviso saldría dentro del JSON del endpoint. En Plesk: PHP Settings → display_errors desactivado.' : ''),
+  array('Zona horaria del php.ini', $zonaIni !== '' ? $zonaIni : 'sin definir (PHP usaría UTC)', true, $zonaIni === 'Atlantic/Canary' ? '' : 'El panel usa la hora de Canarias (Atlantic/Canary) por su cuenta, sea cual sea esta.'),
   array('json_encode disponible', $hayJson ? 'sí' : 'no', $hayJson, 'Sin la extensión JSON el panel no puede guardar nada.'),
   array('password_hash disponible', $hayHash ? 'sí' : 'no', $hayHash, 'Es lo que cifra la contraseña del panel.'),
   array('Carpeta gestion/datos', $hayDir ? 'existe' : 'todavía no existe', true, $hayDir ? '' : 'Se crea sola en la primera visita al panel, si hay permiso de escritura.'),
