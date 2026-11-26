@@ -161,6 +161,7 @@ def bajar(desde):
     conformes_con_datos = set()   # conformes (medios de tipo documento) con sus datos guardados
     repasos_por_lista = {}  # cuántos repasos distintos tiene cada lista
     por_dia = {}  # día del último cambio (reloj del móvil) → tabla → filas distintas
+    hechos_por_dia = {}  # día en que se HIZO cada foto o documento (su «creado») → cuántos
     while tandas < TOPE_TANDAS:
         antes = time.monotonic()
         codigo, peso, r = pedir("cambios?desde=" + urllib.parse.quote(marca, safe=""))
@@ -185,6 +186,13 @@ def bajar(desde):
                     despues[t].add(fila.get("id"))
                 if DESDE_DIA <= cuando[:10] <= HOY:
                     por_dia.setdefault(cuando[:10], {}).setdefault(t, set()).add(fila.get("id"))
+                # A una foto el servidor le pone como «actualizado» la hora
+                # a la que SUBE (subir_medio); cuándo se hizo lo dice su
+                # «creado», que viene del móvil. Tras una caída son días
+                # distintos, y lo que se quiere saber es el segundo.
+                hecho = str(fila.get("creado") or "")[:10] if t == "medios" and isinstance(fila, dict) else ""
+                if hecho and DESDE_DIA <= hecho <= HOY and not fila.get("borrada"):
+                    hechos_por_dia.setdefault(hecho, set()).add(fila.get("id"))
                 if t == "listas" and isinstance(fila, dict) and str(fila.get("creado") or "")[:10] == HOY:
                     hoy_listas[fila.get("id")] = (
                         str(fila.get("fase") or ""), str(fila.get("unidadId") or ""),
@@ -235,6 +243,7 @@ def bajar(desde):
         "fichas_con_postventa": len(fichas_con_postventa), "conformes_con_datos": len(conformes_con_datos),
         "fichas_con_fotovoltaica": len(fichas_con_fotovoltaica),
         "por_dia": {d: {t: len(ids) for t, ids in tablas.items()} for d, tablas in por_dia.items()},
+        "hechos_por_dia": {d: len(ids) for d, ids in hechos_por_dia.items()},
     }
 
 
@@ -272,15 +281,29 @@ def mirar_listas_de_hoy(b):
 def decir_por_dia(por_dia):
     """La línea del recuento por días: solo números, del más antiguo a hoy."""
     trozos = []
-    dia = DESDE_DIA
-    while dia <= HOY:
+    for dia in dias_del_recuento():
         tablas = por_dia.get(dia) or {}
         total = sum(tablas.values())
         trozos.append("%s: %d%s" % (dia, total, "" if not total else " (" + ", ".join(
             "%s %d" % (t, tablas[t]) for t in TABLAS if tablas.get(t)) + ")"))
+    return "POR DÍAS (último cambio de cada fila, reloj del móvil): " + " · ".join(trozos) + "."
+
+
+def dias_del_recuento():
+    """Los cuatro días del recuento, del más antiguo a hoy."""
+    dias = []
+    dia = DESDE_DIA
+    while dia <= HOY:
+        dias.append(dia)
         dia = time.strftime("%Y-%m-%d", time.gmtime(
             time.mktime(time.strptime(dia + " 12", "%Y-%m-%d %H")) + 86400))
-    return "POR DÍAS (último cambio de cada fila, reloj del móvil): " + " · ".join(trozos) + "."
+    return dias
+
+
+def decir_hechos_por_dia(hechos):
+    """Fotos y documentos sin borrar, por el día en que se hicieron."""
+    return ("FOTOS Y DOCUMENTOS, POR EL DÍA EN QUE SE HICIERON (reloj del móvil): "
+            + " · ".join("%s: %d" % (d, hechos.get(d, 0)) for d in dias_del_recuento()) + ".")
 
 
 def contar(b):
@@ -521,6 +544,7 @@ def main():
     # fecha del día en que se apuntó, no con la del día en que subió.
     # (Una fila apuntada un día y retocada otro cuenta en el del retoque.)
     lineas.append(decir_por_dia(todo["por_dia"]))
+    lineas.append(decir_hechos_por_dia(todo["hechos_por_dia"]))
     if todo["completa"]:
         sincronizaciones = -(-todo["tandas"] // 25)
         lineas.append("Un móvil que tenga que bajarlo todo necesita %d sincronizaci%s (25 tandas cada una)."
