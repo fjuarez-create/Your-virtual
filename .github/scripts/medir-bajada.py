@@ -45,6 +45,8 @@ TOPE_TANDAS = 600
 DESPUES_DE = os.environ.get("MEDIR_DESPUES_DE", "2026-11-11T12:14:00")
 # El día de hoy (UTC = Canarias en invierno), para contar las listas creadas hoy.
 HOY = time.strftime("%Y-%m-%d", time.gmtime())
+# Para el recuento por días: desde hace tres días (cuatro con hoy).
+DESDE_DIA = time.strftime("%Y-%m-%d", time.gmtime(time.time() - 3 * 86400))
 # Las fases que pone la app; cualquier otra palabra se cuenta como «otra».
 FASES_CONOCIDAS = ("pre", "post", "unica", "visita")
 
@@ -158,6 +160,7 @@ def bajar(desde):
     fichas_con_fotovoltaica = set()  # de ellas, las que tienen guardado el quinto botón (esquema 24)
     conformes_con_datos = set()   # conformes (medios de tipo documento) con sus datos guardados
     repasos_por_lista = {}  # cuántos repasos distintos tiene cada lista
+    por_dia = {}  # día del último cambio (reloj del móvil) → tabla → filas distintas
     while tandas < TOPE_TANDAS:
         antes = time.monotonic()
         codigo, peso, r = pedir("cambios?desde=" + urllib.parse.quote(marca, safe=""))
@@ -180,6 +183,8 @@ def bajar(desde):
                     ultimo = cuando
                 if cuando >= DESPUES_DE:
                     despues[t].add(fila.get("id"))
+                if DESDE_DIA <= cuando[:10] <= HOY:
+                    por_dia.setdefault(cuando[:10], {}).setdefault(t, set()).add(fila.get("id"))
                 if t == "listas" and isinstance(fila, dict) and str(fila.get("creado") or "")[:10] == HOY:
                     hoy_listas[fila.get("id")] = (
                         str(fila.get("fase") or ""), str(fila.get("unidadId") or ""),
@@ -229,6 +234,7 @@ def bajar(desde):
         "hoy_listas": hoy_listas, "repasos_por_lista": repasos_por_lista,
         "fichas_con_postventa": len(fichas_con_postventa), "conformes_con_datos": len(conformes_con_datos),
         "fichas_con_fotovoltaica": len(fichas_con_fotovoltaica),
+        "por_dia": {d: {t: len(ids) for t, ids in tablas.items()} for d, tablas in por_dia.items()},
     }
 
 
@@ -261,6 +267,20 @@ def mirar_listas_de_hoy(b):
                len(viviendas), len(por_persona), max(por_persona.values()),
                max(por_vivienda_y_fase.values()),
                ", ".join("%sh %d" % (h or "?", n) for h, n in sorted(por_hora.items()))))
+
+
+def decir_por_dia(por_dia):
+    """La línea del recuento por días: solo números, del más antiguo a hoy."""
+    trozos = []
+    dia = DESDE_DIA
+    while dia <= HOY:
+        tablas = por_dia.get(dia) or {}
+        total = sum(tablas.values())
+        trozos.append("%s: %d%s" % (dia, total, "" if not total else " (" + ", ".join(
+            "%s %d" % (t, tablas[t]) for t in TABLAS if tablas.get(t)) + ")"))
+        dia = time.strftime("%Y-%m-%d", time.gmtime(
+            time.mktime(time.strptime(dia + " 12", "%Y-%m-%d %H")) + 86400))
+    return "POR DÍAS (último cambio de cada fila, reloj del móvil): " + " · ".join(trozos) + "."
 
 
 def contar(b):
@@ -495,6 +515,12 @@ def main():
                      "ya se ha numerado algo llegado después de encender"
                      if todo["marca"][:19] >= DESPUES_DE else
                      "todavía no se ha numerado nada llegado después de encender"))
+    # Lo mismo, por días: cuántas filas tienen su ÚLTIMO cambio en cada
+    # uno de los cuatro últimos días (por el reloj del móvil). Sirve
+    # después de una caída: lo apuntado sin poder subir llega con la
+    # fecha del día en que se apuntó, no con la del día en que subió.
+    # (Una fila apuntada un día y retocada otro cuenta en el del retoque.)
+    lineas.append(decir_por_dia(todo["por_dia"]))
     if todo["completa"]:
         sincronizaciones = -(-todo["tandas"] // 25)
         lineas.append("Un móvil que tenga que bajarlo todo necesita %d sincronizaci%s (25 tandas cada una)."
