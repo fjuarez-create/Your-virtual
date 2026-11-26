@@ -1,0 +1,9 @@
+Este fichero NO envía la app a revisión. Empujarlo solo sirve para
+que GitHub dé de alta el robot «Enviar la app a revisión», que de
+otro modo nunca arrancaría: solo se dispara a mano, y GitHub no
+deja disparar a mano lo que todavía no ha visto correr.
+
+Enviar de verdad se hace desde Actions → Enviar la app a revisión →
+Run workflow, escribiendo ENVIAR en la casilla.
+
+Último toque: 2026-08-23 — alta del robot.

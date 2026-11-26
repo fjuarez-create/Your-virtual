@@ -1,0 +1,16 @@
+# Credenciales, fotos subidas y base de datos viven SOLO en el servidor.
+# Al repositorio solo van los .htaccess que cierran esas carpetas y un
+# .gitkeep para que existan al desplegar.
+api/config.php
+api/uploads/*
+!api/uploads/.gitkeep
+!api/uploads/.htaccess
+api/datos/*
+!api/datos/.gitkeep
+!api/datos/.htaccess
+
+# Carpeta que arma el despliegue.
+publish/
+
+node_modules/
+.DS_Store

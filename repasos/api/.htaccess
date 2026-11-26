@@ -1,0 +1,40 @@
+# Todo el tráfico de la API entra por index.php, salvo el instalador.
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /api/
+  # Solo por https, como la raíz. Su regla NO vale aquí: en Apache, una
+  # carpeta con su propio RewriteEngine deja de heredar las reglas de la
+  # de arriba. Sin esto la API se servía también por http, sin cifrar: y
+  # el calendario de Google lleva su clave en la dirección (Google lo
+  # vuelve a leer él solo, varias veces al día). Va con %{REQUEST_URI} y
+  # no con $1, que aquí llega sin «/api/» (y en el taller, sin «/taller/api/»).
+  RewriteCond %{HTTPS} !=on
+  RewriteCond %{HTTP:X-Forwarded-Proto} !https
+  RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
+  RewriteRule ^install\.php$ - [L]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteRule ^(.*)$ index.php [QSA,L]
+</IfModule>
+
+# Nada de esta carpeta debe poder leerse directamente salvo los scripts.
+<FilesMatch "\.(sql|md|example\.php)$">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+  </IfModule>
+</FilesMatch>
+
+<Files "config.php">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+  </IfModule>
+</Files>
+
+Options -Indexes

@@ -1,0 +1,58 @@
+name: Esperar a que vuelva el candado de la web
+
+# El 25-11-2026, entre las 4:07 y las 8:40 (hora canaria), el servidor
+# dejó de dar el certificado de Let's Encrypt de unikdi.com y sus
+# subdominios y pasó a dar el de fábrica de Plesk (autofirmado y
+# caducado en 2010). Con ese candado ningún móvil acepta hablar con la
+# API: la app abre con lo que tiene guardado, pero no sube ni baja nada
+# y no enseña las fotos que no tenía ya.
+#
+# Este robot mira cada tres minutos si el candado ya es bueno, como lo
+# mira un navegador (curl con verificación), y termina en VERDE en
+# cuanto lo es, contando de quién es el certificado nuevo y hasta
+# cuándo vale. Si en seis horas no vuelve, termina en rojo. No toca el
+# servidor ni escribe ninguna dirección IP.
+#
+# Se lanza al empujar su propio fichero (los flujos nuevos de una rama
+# de trabajo no se pueden lanzar a mano por la API hasta que han
+# corrido una vez) o a mano.
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/uniq-repasos-app-2ja8y2]
+    paths: ['.github/workflows/esperar-candado.yml']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: esperar-candado
+  cancel-in-progress: true
+
+jobs:
+  esperar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 365
+    steps:
+      - name: Mirar el candado cada tres minutos hasta que sea bueno
+        run: |
+          set +e
+          H=repasos.unikdi.com
+          for i in $(seq 1 120); do
+            if curl -s -o /dev/null --max-time 20 "https://$H/"; then
+              echo "$(date -u +%H:%M) UTC · el candado ya es bueno:"
+              echo | timeout 20 openssl s_client -connect "$H:443" -servername "$H" 2>/dev/null \
+                | openssl x509 -noout -subject -issuer -enddate 2>/dev/null | sed 's/^/   /'
+              for otro in unikdi.com www.unikdi.com; do
+                curl -s -o /dev/null --max-time 20 "https://$otro/" \
+                  && echo "   $otro: bueno también" || echo "   $otro: TODAVÍA NO"
+              done
+              exit 0
+            fi
+            emisor=$(echo | timeout 20 openssl s_client -connect "$H:443" -servername "$H" 2>/dev/null \
+              | openssl x509 -noout -issuer 2>/dev/null | sed 's/.*CN *= *//; s/,.*//')
+            echo "$(date -u +%H:%M) UTC · sigue el candado malo (emisor: ${emisor:-ninguno})"
+            sleep 180
+          done
+          echo "::error::En seis horas no ha vuelto el candado bueno."
+          exit 1

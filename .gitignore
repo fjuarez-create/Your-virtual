@@ -2,3 +2,11 @@ node_modules/
 .DS_Store
 publish/
 index.local.html
+
+# La cuenta temporal para la revisión de Apple. La escribe el despliegue
+# desde los secretos de GitHub y va directa al servidor: si alguna vez
+# aparece aquí es que se ha colado, y lleva una contraseña dentro.
+repasos/api/revision-cuenta.php
+
+# El log del servidor PHP de pruebas locales: ruido de esta máquina.
+php-8099.log

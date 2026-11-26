@@ -1,0 +1,154 @@
+name: Bajar el diseño de Figma
+
+# Baja del archivo de Figma de UNIK repasos todo lo que hace falta para
+# reproducir el diseño al píxel: el JSON con colores, tipografías y
+# medidas de cada pantalla, la imagen PNG de cada una para poder
+# compararlas, y las imágenes sueltas (las fotos de los gremios).
+#
+# Existe porque el conector de Figma del chat no siempre está
+# disponible, y el diseño no puede depender de eso. El token viaja por
+# el mismo circuito seguro que el FTP: del bloc de notas de Fran a los
+# secretos de GitHub, sin pasar por ninguna conversación.
+#
+# Secreto necesario (Settings → Secrets and variables → Actions):
+#   FIGMA_TOKEN   token personal de Figma con lectura de ficheros
+#
+# Se lanza a mano. Deja todo en diseno-figma/ y lo empuja a la rama;
+# esa carpeta está fuera de repasos/, así que no dispara publicación.
+
+# Se dispara al empujar su fichero-señal (los flujos de una rama de
+# trabajo no se pueden lanzar a mano por la API hasta estar en la rama
+# principal).
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/uniq-repasos-app-2ja8y2]
+    paths: ['diseno-figma/LANZAR-BAJADA.txt']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: figma-bajar-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ARCHIVO: VlGqIJA4ZR7e8vmvELKPsB
+
+jobs:
+  bajar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Traer el repositorio
+        uses: actions/checkout@v4
+
+      - name: Comprobar el token
+        run: |
+          if [ -z "${{ secrets.FIGMA_TOKEN }}" ]; then
+            echo "::error::Falta el secreto FIGMA_TOKEN. Crear un token en Figma (Settings → Security → Personal access tokens) y guardarlo en Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          # Se prueba contra el archivo de verdad, no contra «quién
+          # soy»: un token con permiso solo de lectura de ficheros tiene
+          # vetada esa otra puerta y daría un fallo falso.
+          CODIGO=$(curl -s -o /tmp/prueba.json -w "%{http_code}" -H "X-Figma-Token: ${{ secrets.FIGMA_TOKEN }}" "https://api.figma.com/v1/files/$ARCHIVO?depth=1")
+          if [ "$CODIGO" != "200" ]; then
+            echo "::error::Figma contesta $CODIGO al abrir el archivo con este token: $(head -c 200 /tmp/prueba.json)"
+            exit 1
+          fi
+          echo "Token aceptado: el archivo se abre."
+
+      - name: Descubrir las pantallas del archivo
+        run: |
+          mkdir -p diseno-figma
+          # Las pantallas se descubren del propio archivo en cada
+          # bajada: así, cuando Fran añade pantallas nuevas —el login,
+          # por ejemplo—, entran solas sin tocar nada aquí. Se saltan
+          # las notas y los marcos de decoración.
+          curl -sf -H "X-Figma-Token: ${{ secrets.FIGMA_TOKEN }}" \
+            "https://api.figma.com/v1/files/$ARCHIVO?depth=2" -o /tmp/arbol.json
+          jq -r '
+            [.document.children[] | .children[]?
+             | select(.type == "FRAME")
+             | select(.name | startswith("Nota:") | not)
+             | select(.name != "-" and .name != "Slice 1")
+             | .id] | join(",")' /tmp/arbol.json > /tmp/ids.txt
+          echo "pantallas descubiertas: $(tr ',' '\n' < /tmp/ids.txt | wc -l)"
+          # La lista con nombres, para el que lea la carpeta.
+          jq -r '
+            .document.children[] | .children[]?
+            | select(.type == "FRAME")
+            | select(.name | startswith("Nota:") | not)
+            | select(.name != "-" and .name != "Slice 1")
+            | "\(.id)\t\(.name)"' /tmp/arbol.json > diseno-figma/pantallas.txt
+
+      - name: Bajar el detalle de cada pantalla (colores, tipografías, medidas)
+        run: |
+          IDS=$(cat /tmp/ids.txt)
+          curl -sf -H "X-Figma-Token: ${{ secrets.FIGMA_TOKEN }}" \
+            "https://api.figma.com/v1/files/$ARCHIVO/nodes?ids=$IDS" \
+            -o diseno-figma/nodos.json
+          echo "nodos.json: $(wc -c < diseno-figma/nodos.json) bytes"
+
+      - name: Bajar la imagen de cada pantalla, para comparar al píxel
+        run: |
+          mkdir -p diseno-figma/pantallas
+          IDS=$(cat /tmp/ids.txt)
+          curl -sf -H "X-Figma-Token: ${{ secrets.FIGMA_TOKEN }}" \
+            "https://api.figma.com/v1/images/$ARCHIVO?ids=$IDS&format=png&scale=2" \
+            -o /tmp/urls.json
+          # Figma devuelve una dirección temporal por pantalla; se bajan
+          # una a una con el identificador como nombre de fichero.
+          jq -r '.images | to_entries[] | "\(.key)\t\(.value)"' /tmp/urls.json | while IFS=$'\t' read -r id url; do
+            [ "$url" = "null" ] && continue
+            curl -sf "$url" -o "diseno-figma/pantallas/$(echo "$id" | tr ':' '-').png" || echo "no bajó $id"
+          done
+          ls diseno-figma/pantallas/ | wc -l
+
+      # Un icono no se copia de un PNG: hace falta su trazado. Las
+      # pantallas cuyo nombre empieza por «ICONO» se bajan también en
+      # SVG, listas para pasar su path a iconos.js.
+      - name: Bajar en SVG las pantallas de iconos («ICONO …»)
+        run: |
+          mkdir -p diseno-figma/iconos
+          IDS_ICONOS=$(awk -F'\t' '$2 ~ /^ICONO/ {print $1}' diseno-figma/pantallas.txt | paste -sd, -)
+          if [ -z "$IDS_ICONOS" ]; then
+            echo "No hay pantallas ICONO en el archivo."
+          else
+            curl -sf -H "X-Figma-Token: ${{ secrets.FIGMA_TOKEN }}" \
+              "https://api.figma.com/v1/images/$ARCHIVO?ids=$IDS_ICONOS&format=svg" \
+              -o /tmp/svgs.json
+            jq -r '.images | to_entries[] | "\(.key)\t\(.value)"' /tmp/svgs.json | while IFS=$'\t' read -r id url; do
+              [ "$url" = "null" ] && continue
+              curl -sf "$url" -o "diseno-figma/iconos/$(echo "$id" | tr ':' '-').svg" || echo "no bajó $id"
+            done
+            ls diseno-figma/iconos/
+          fi
+
+      - name: Bajar las imágenes sueltas del archivo (las fotos de los gremios)
+        run: |
+          mkdir -p diseno-figma/imagenes
+          curl -sf -H "X-Figma-Token: ${{ secrets.FIGMA_TOKEN }}" \
+            "https://api.figma.com/v1/files/$ARCHIVO/images" \
+            -o /tmp/imagenes.json
+          jq -r '.meta.images | to_entries[] | "\(.key)\t\(.value)"' /tmp/imagenes.json | while IFS=$'\t' read -r ref url; do
+            [ "$url" = "null" ] && continue
+            curl -sf "$url" -o "diseno-figma/imagenes/$ref.png" || echo "no bajó $ref"
+          done
+          ls diseno-figma/imagenes/ | wc -l
+
+      - name: Guardar todo en la rama
+        run: |
+          git config user.name "Robot de Figma"
+          git config user.email "noreply@unikdi.com"
+          git add diseno-figma/
+          if git diff --cached --quiet; then
+            echo "Nada nuevo que guardar."
+            exit 0
+          fi
+          git commit -m "Bajar el diseño de Figma (pantallas, estilos e imágenes)"
+          # La rama puede haberse movido mientras se bajaba; el robot se
+          # incorpora encima de lo nuevo en vez de chocar.
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push

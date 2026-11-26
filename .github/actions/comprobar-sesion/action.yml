@@ -1,0 +1,71 @@
+name: Comprobar la cookie de la sesión
+description: >-
+  Después de publicar, entra con la cuenta de revisión y mira que la API
+  guarde la sesión en la cookie que tiene que ser (nombre y camino). Del
+  valor de la cookie no escribe nada.
+
+# POR QUÉ EXISTE. La app de verdad y el taller viven en el mismo dominio
+# y cada una lleva su cookie de sesión (api/lib/auth.php, noviembre de
+# 2026). La de la app de verdad —«repasos_sesion» con camino «/»— no
+# puede cambiar NUNCA: el equipo lleva meses con la sesión abierta, y con
+# otro nombre u otro camino se quedarían todos fuera a la vez. Y la del
+# taller tiene que ser OTRA, o entrar en el taller saca de la app de
+# verdad. Lo decide una línea de PHP, y si se tuerce no avisa nadie: esto
+# lo mira en el servidor recién publicado. El detalle, en sesion.py.
+#
+# CÓMO SE USA. Es una acción LOCAL: el robot tiene que haber hecho antes
+# su «actions/checkout».
+#
+#       - name: Comprobar que la cookie de la sesión es la de siempre
+#         timeout-minutes: 3
+#         uses: ./.github/actions/comprobar-sesion
+#         with:
+#           api: https://repasos.unikdi.com/api/
+#           nombre: repasos_sesion
+#           camino: /
+#           de-quien: la app de verdad
+#           email: ${{ secrets.REVISION_EMAIL }}
+#           password: ${{ secrets.REVISION_PASSWORD }}
+#
+# Los secretos entran como «with» y pasan al guion por variables de
+# entorno: nunca por la línea de órdenes, que es lo que se ve en el
+# registro.
+
+inputs:
+  api:
+    description: 'La API que se mira, acabada en «/».'
+    required: true
+  nombre:
+    description: 'El nombre que tiene que llevar la cookie de sesión.'
+    required: true
+  camino:
+    description: 'El camino (path) que tiene que llevar.'
+    required: true
+  de-quien:
+    description: 'Cómo llamarla en los mensajes: «la app de verdad» o «el taller».'
+    required: false
+    default: 'esta API'
+  email:
+    description: 'El correo de la cuenta de revisión. Vacío: solo se mira al pedir salir.'
+    required: false
+    default: ''
+  password:
+    description: 'Su contraseña (de los secretos).'
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Entrar, mirar la cookie y salir
+      shell: bash
+      env:
+        SESION_API: ${{ inputs.api }}
+        SESION_NOMBRE: ${{ inputs.nombre }}
+        SESION_CAMINO: ${{ inputs.camino }}
+        SESION_DE_QUIEN: ${{ inputs.de-quien }}
+        SESION_EMAIL: ${{ inputs.email }}
+        SESION_PASSWORD: ${{ inputs.password }}
+        # Que python no deje un __pycache__ en la carpeta de la acción.
+        PYTHONDONTWRITEBYTECODE: '1'
+      run: python3 "$GITHUB_ACTION_PATH/sesion.py"
