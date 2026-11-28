@@ -14,8 +14,15 @@ name: Deploy de /nuevo (showroom de renders)
 on:
   push:
     branches: [claude/busy-pasteur-6daj36]
+    # Lo que no se publica (documentos, herramientas, plantillas) no lanza
+    # una subida. Las exclusiones van después del patrón general: el último
+    # que casa es el que manda.
     paths:
       - 'nuevo/**'
+      - '!nuevo/docs/**'
+      - '!nuevo/tools/**'
+      - '!nuevo/plantilla/**'
+      - '!nuevo/CLAUDE.md'
       - '.github/workflows/deploy-nuevo.yml'
       - '.github/scripts/ftp-deploy.sh'
       - '.github/scripts/comprobar-php56.sh'

@@ -27,6 +27,7 @@ Vive solo en `nuevo/` y se publica en https://showroom.unikdi.com/nuevo/.
 
 ## Documentos
 
+- `docs/DECISIONES.md`: lo que Fran ha decidido, con fecha. Leerlo primero.
 - `docs/ARQUITECTURA.md`, `docs/DATOS.md`, `docs/PRODUCCION_IMAGENES.md`,
   `docs/REFERENTES_Y_FLUJO.md`.
 - `tools/captura/LEEME.md`: capturas, máscaras y 360 desde el BIM.
