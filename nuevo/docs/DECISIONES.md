@@ -50,6 +50,23 @@ digan los demás documentos de esta carpeta cuando no coincidan.
   en la rama publicada (`claude/hopeful-faraday-7y80bt`) antes de cambiar la
   versión de PHP en Plesk.
 
+## 28-nov-2026 (tarde), tras ver la prueba del 360 de la 238
+
+Fran no valida la prueba: al salón le falta una ventana (el plano tiene dos
+en esa fachada y el modelo 3D del 17-09 solo una). Reglas nuevas, para todos
+los 360 y renders:
+
+- **Fidelidad total a las carpinterías.** Ventanas y puertas, las del plano:
+  número, posición y tamaño. Si el modelo 3D no coincide con el plano, manda
+  el plano y se corrige la geometría antes de generar nada.
+- **Todas las puertas abiertas a 90°, siempre.** Desde cada estancia se ve
+  el interior de las contiguas, que tienen que estar completas y amuebladas.
+- **Downlights pequeños empotrados, de unos 8 cm de diámetro,** en los techos.
+- **Las cocinas se rematan a techo, siempre** (muebles altos hasta el techo).
+- **Mobiliario y cocinas, los mismos de los renders y vídeos ya hechos**
+  (renders de Memorable y films de noviembre), con esa calidad de
+  visualización arquitectónica.
+
 ## Pendiente de Fran
 
 - Ver la prueba del 360 del salón de la 238 y decir si la calidad vale como
